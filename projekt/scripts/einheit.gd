@@ -19,6 +19,7 @@ var _punkte: Array[Vector2] = []   # Wegpunkte in Weltkoordinaten
 var _abkling := 0.0
 var _plan_in := 0.0
 var _posten_check := 1.0           # Sekunden bis zur nächsten Suche nach einer frei gewordenen Stellung
+var ausgewaehlt := false           # angeklickt: Reichweite anzeigen
 var _marschziel := Karte.KEINE     # Feld, zu dem diese Bodentruppe marschiert: verlorener Checkpoint oder HQ
 var _versatz := Vector2.ZERO       # damit Truppen nicht exakt aufeinander stehen
 var _sprite: Figur
@@ -105,6 +106,8 @@ func _process(delta: float) -> void:
 	_abkling -= delta
 	_treffer -= delta
 	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else Color.WHITE
+	if ausgewaehlt:
+		queue_redraw()
 
 	match zustand:
 		Zustand.ZUM_POSTEN:
@@ -229,7 +232,16 @@ func nimm_schaden(menge: float) -> void:
 		spiel.einheit_gefallen(self)
 
 
+## Reichweite in Feldern, so wie sie gerade gilt (in der Stellung mit Bonus).
+func reichweite_jetzt() -> float:
+	return daten["reichweite"] + (Werte.POSTEN_REICHWEITE_BONUS if zustand == Zustand.AUF_POSTEN else 0.0)
+
+
 func _draw() -> void:
+	if ausgewaehlt and zustand != Zustand.IN_BATTERIE:
+		var r := reichweite_jetzt() * Werte.ZELLE
+		draw_circle(Vector2.ZERO, r, Color(0.5, 0.88, 1.0, 0.08))
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 96, Color(0.5, 0.88, 1.0, 0.8), 2.0)
 	if leben < max_leben:
 		draw_rect(Rect2(-16, -46, 32, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-14, -44, 28.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("7fe0ff"))

@@ -40,6 +40,7 @@ var _btn_start: Button
 var _btn_tempo: Button
 var _neu_grund: ColorRect           # Ansage "Neu in dieser Runde"
 var _lbl_neu: Label
+var _auswahl: Einheit               # angeklickte Einheit (zeigt ihre Reichweite)
 var _ende: Control
 var _ende_text: Label
 
@@ -296,6 +297,7 @@ func _welle_geschafft() -> void:
 	einheiten.clear()
 	for z: Vector2i in fabriken:
 		(fabriken[z]["einheiten"] as Array).clear()
+	_auswahl = null
 	karte.posten.clear()
 	karte.besatzung.clear()
 	karte.fortschritt.clear()
@@ -639,6 +641,31 @@ func reisse_ab(z: Vector2i) -> bool:
 	return true
 
 
+## Klick ohne Bauwerkzeug: Einheit, Turm oder Batterie auswählen und ihre Reichweite zeigen.
+## Ein Klick ins Leere hebt die Auswahl auf. Gibt true zurück, wenn etwas ausgewählt wurde.
+func _waehle_aus(maus: Vector2, z: Vector2i) -> bool:
+	if is_instance_valid(_auswahl):
+		_auswahl.ausgewaehlt = false
+		_auswahl.queue_redraw()
+	_auswahl = null
+	karte.auswahl = Karte.KEINE
+	var beste := 34.0
+	for e in einheiten:
+		var d := maus.distance_to(e.position + Vector2(0, -8))
+		if d < beste and not e.in_batterie():
+			beste = d
+			_auswahl = e
+	if _auswahl != null:
+		_auswahl.ausgewaehlt = true
+		var d: Dictionary = _auswahl.daten
+		melde("%s: Reichweite %s%s, Schaden %s alle %s s." % [d["name"], d["reichweite"], " (+%s in der Stellung)" % Werte.POSTEN_REICHWEITE_BONUS, d["schaden"], d["abklingzeit"]], 4.0)
+		return true
+	if karte.ausbau.get(z, Karte.FREI) == Karte.TURM or karte.inhalt(z) == Karte.BATTERIE:
+		karte.auswahl = z
+		return true
+	return false
+
+
 ## Klick auf eine Fabrik (ohne Bauwerkzeug): nächste Einheit aus der Liste wählen.
 func wechsle_einheit(z: Vector2i) -> void:
 	if phase != Phase.BAU or not fabriken.has(z):
@@ -696,7 +723,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if werkzeug != Karte.FREI:
 				baue(z, werkzeug)
-			else:
+			elif not _waehle_aus(get_global_mouse_position(), z):
 				wechsle_einheit(z)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if not reisse_ab(z):

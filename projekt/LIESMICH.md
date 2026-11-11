@@ -6,6 +6,7 @@
 - **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie (2–5 ab Welle 2), **Esc** abwählen
 - **Linksklick** bauen (Erdwälle: Maustaste halten und ziehen)
 - **Linksklick auf eine Fabrik** (ohne Werkzeug): Einheit wechseln (Technogunner / Scharfschütze / Plasmawerfer)
+- **Linksklick auf eine Truppe, einen Turm oder eine Batterie** (ohne Werkzeug): Reichweite anzeigen
 - **Rechtsklick** abreißen (zwischen den Wellen, 75 % des Preises zurück)
 - **Leertaste** Welle starten, **F** Tempo ×2, **R** Neustart nach Niederlage
 

@@ -35,6 +35,7 @@ var zeige_angriff := false         # letzte Runde: Fußweg der eigenen Truppen z
 var angriffs_pfad: Array[Vector2i] = []
 var zeige_pfad_kraeftig := true    # Bauphase: deutlich, Kampf: blass
 
+var auswahl := KEINE               # angeklickter Turm oder angeklickte Batterie: Reichweite anzeigen
 var vorschau_zelle := KEINE
 var vorschau_typ := FREI
 var vorschau_ok := false
@@ -656,6 +657,18 @@ func _draw() -> void:
 			draw_rect(Rect2(o + Vector2(2, 2), Vector2(zg - 4, zg - 4)), Color(1.0, 0.6, 0.1, 0.5 + 0.5 * puls), false, 4.0)
 			draw_rect(Rect2(o + Vector2(28, 14), Vector2(8, 22)), Color("ff9a1f"))
 			draw_rect(Rect2(o + Vector2(28, 40), Vector2(8, 8)), Color("ff9a1f"))
+
+	# Reichweite des angeklickten Turms bzw. der angeklickten Batterie
+	if auswahl != KEINE:
+		var weite := 0.0
+		if ausbau.get(auswahl, FREI) == TURM:
+			weite = Werte.TURM["reichweite"]
+		elif inhalt(auswahl) == BATTERIE:
+			weite = Werte.BATTERIE["reichweite"]
+		if weite > 0.0:
+			var m := (Vector2(auswahl) + Vector2(0.5, 0.5)) * zg
+			draw_circle(m, weite * zg, Color(0.5, 0.88, 1.0, 0.08))
+			draw_arc(m, weite * zg, 0.0, TAU, 96, Color(0.5, 0.88, 1.0, 0.8), 2.0)
 
 	# Bauvorschau unter dem Mauszeiger
 	if vorschau_typ == TURM:
