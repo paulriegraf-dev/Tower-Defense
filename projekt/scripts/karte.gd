@@ -31,6 +31,14 @@ var schild := true                 # Schutzschild über der Zone des Gegners (f�
 var zeige_schwachstelle := false   # Bauphase: den Erdwall markieren, den ein Sprenger anpeilen würde
 var _ersparnis: Dictionary = {}    # Wall-Zelle -> so viel kürzer wird der Gegnerweg ohne diesen Wall
 var _ersparnis_gueltig := false
+var _stueck_von: Dictionary = {}   # Wall-Zelle -> Nummer ihres Wallstücks
+var _stuecke_gueltig := false
+var _sicht_an := false             # Anzeige der nicht treffbaren Felder für die Auswahl
+var _sicht_von := Vector2.ZERO
+var _sicht_wall := KEINE
+var _sicht_weite := 0.0
+var _sicht_in := 0.0
+var _sicht_blind: Array[Vector2i] = []
 var zeige_angriff := false         # letzte Runde: Fußweg der eigenen Truppen zum HQ zeigen
 var angriffs_pfad: Array[Vector2i] = []
 var zeige_pfad_kraeftig := true    # Bauphase: deutlich, Kampf: blass
@@ -52,7 +60,11 @@ func _ready() -> void:
 	_astar_einheiten = _neues_astar()
 	for typ: String in Werte.GEGNER:
 		_astar_gegner[typ] = _neues_astar()
-	for z in Werte.CHECKPOINTS:
+	for i in Werte.CHECKPOINTS.size():
+		var z := Werte.CHECKPOINTS[i]
+		if Werte.CHECKPOINTS_ZUFAELLIG and i < Werte.CHECKPOINT_BEREICHE.size():
+			var b := Werte.CHECKPOINT_BEREICHE[i]
+			z = b.position + Vector2i(randi() % b.size.x, randi() % b.size.y)
 		checkpoints.append(z)
 		cp_feind.append(false)
 		cp_fortschritt.append(0.0)
@@ -63,7 +75,42 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_zeit += delta
+	if _sicht_an:
+		_sicht_in -= delta
+		if _sicht_in <= 0.0:
+			_sicht_in = 0.25
+			_berechne_blinde_felder()
 	queue_redraw()
+
+
+## Für die angeklickte Truppe / den angeklickten Turm zeigen, welche Felder in Reichweite sie NICHT treffen kann.
+## `von` = Standpunkt in Weltkoordinaten, `wall` = Erdwall, auf dem sie steht (KEINE = am Boden), `weite` in Feldern.
+func zeige_sicht(an: bool, von: Vector2 = Vector2.ZERO, wall: Vector2i = KEINE, weite: float = 0.0) -> void:
+	if an and (not _sicht_an or wall != _sicht_wall or not is_equal_approx(weite, _sicht_weite)):
+		_sicht_in = 0.0   # neue Auswahl: sofort rechnen
+	_sicht_an = an
+	_sicht_von = von
+	_sicht_wall = wall
+	_sicht_weite = weite
+	if not an:
+		_sicht_blind.clear()
+
+
+func _berechne_blinde_felder() -> void:
+	_sicht_blind.clear()
+	var mitte_zelle := zelle_bei(_sicht_von)
+	var r := int(ceil(_sicht_weite)) + 1
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var z := mitte_zelle + Vector2i(dx, dy)
+			if not ist_frei(z):
+				continue   # nur Felder, auf denen ein Gegner stehen kann
+			var punkt := mitte(z)
+			if _sicht_von.distance_to(punkt) > _sicht_weite * Werte.ZELLE:
+				continue
+			var sichtbar := sicht_von_wall(_sicht_wall, _sicht_von, punkt) if _sicht_wall != KEINE else sicht_frei(_sicht_von, punkt)
+			if not sichtbar:
+				_sicht_blind.append(z)
 
 
 # ---------------------------------------------------------------- Raster
@@ -304,6 +351,7 @@ func gegner_weg_mit(gegner_typ: String, z: Vector2i, typ: int) -> Array[Vector2i
 func aktualisiere_pfad() -> void:
 	pfad = _route("hund")
 	_ersparnis_gueltig = false
+	_stuecke_gueltig = false
 	# Gegner kommen über die ganze Höhe der Zone: zusätzlich den Weg vom oberen und unteren Rand zeigen
 	neben_pfade.clear()
 	if start_index() < 0:
@@ -362,8 +410,10 @@ func freier_nachbar(z: Vector2i) -> Vector2i:
 func finde_posten(von: Vector2i, sucher: Einheit) -> Dictionary:
 	var bester := {}
 	var beste_laenge := 1 << 30
+	# Kampftruppen gehen nur in Stellungen, Piloten nur in Batterien.
+	var pilot: bool = sucher.daten.get("pilot", false)
 	for w: Vector2i in ausbau:
-		if ausbau[w] != STELLUNG:
+		if pilot or ausbau[w] != STELLUNG:
 			continue
 		var weg := _weg_auf_wall(von, w)
 		if weg.is_empty() or weg.size() >= beste_laenge:
@@ -376,16 +426,41 @@ func finde_posten(von: Vector2i, sucher: Einheit) -> Dictionary:
 		bester = {"wall": w, "weg": weg}
 	# Batterien zählen wie Stellungen mit mehreren Plätzen
 	for b: Vector2i in feld:
-		if feld[b] != BATTERIE:
+		if not pilot or feld[b] != BATTERIE:
 			continue
 		var mannschaft: Array = besatzung.get(b, [])
-		if mannschaft.size() >= int(Werte.BATTERIE["plaetze"]) or mannschaft.has(sucher):
+		if mannschaft.has(sucher):
 			continue
 		var weg := _weg_auf_wall(von, b)
-		if not weg.is_empty() and weg.size() < beste_laenge:
+		if weg.is_empty() or weg.size() >= beste_laenge:
+			continue
+		if mannschaft.size() < int(Werte.BATTERIE["plaetze"]):
 			beste_laenge = weg.size()
 			bester = {"wall": b, "weg": weg}
+			continue
+		# Alle Plätze vergeben: Wer näher dran ist, übernimmt den Platz dessen, der noch am weitesten unterwegs ist.
+		var fernster: Einheit = null
+		for e: Einheit in mannschaft:
+			if e.unterwegs_weiter_als(weg.size()) and (fernster == null or e.rest_punkte() > fernster.rest_punkte()):
+				fernster = e
+		if fernster != null:
+			beste_laenge = weg.size()
+			bester = {"wall": b, "weg": weg, "statt": fernster}
 	return bester
+
+
+## Wie _weg_auf_wall, aber ohne die Felder in `gefahr` zu betreten (Felder nahe an Gegnern).
+## Leer, wenn es gerade keinen sicheren Weg gibt.
+func sicherer_weg_auf_wall(von: Vector2i, w: Vector2i, gefahr: Dictionary) -> Array[Vector2i]:
+	var gesperrt: Array[Vector2i] = []
+	for z: Vector2i in gefahr:
+		if z != von and ist_frei(z):
+			_astar_einheiten.set_point_solid(z, true)
+			gesperrt.append(z)
+	var weg := _weg_auf_wall(von, w)
+	for z in gesperrt:
+		_astar_einheiten.set_point_solid(z, false)
+	return weg
 
 
 func _weg_auf_wall(fabrik: Vector2i, w: Vector2i) -> Array[Vector2i]:
@@ -435,16 +510,73 @@ func ersparnisse() -> Dictionary:
 	return _ersparnis
 
 
+## Die Erdwälle mit der größten Ersparnis, die lohnendste zuerst (höchstens `anzahl`).
+func schwachstellen(anzahl: int) -> Array:
+	var alle := ersparnisse()
+	var waelle: Array = alle.keys()
+	waelle.sort_custom(func(x, y): return alle[x] > alle[y])
+	return waelle.slice(0, anzahl)
+
+
 ## Der Erdwall mit der größten Ersparnis (KEINE, wenn kein Wall eine Abkürzung öffnet).
 func schwachstelle() -> Vector2i:
-	var beste := KEINE
-	var bester_gewinn := 0.0
-	var alle := ersparnisse()
-	for w: Vector2i in alle:
-		if alle[w] > bester_gewinn:
-			bester_gewinn = alle[w]
-			beste = w
-	return beste
+	var beste := schwachstellen(1)
+	return KEINE if beste.is_empty() else beste[0]
+
+
+## Nummer des Wallstücks, zu dem der Erdwall `z` gehört (-1 = kein Erdwall).
+func stueck_nr(z: Vector2i) -> int:
+	if not _stuecke_gueltig:
+		_stuecke_gueltig = true
+		_stueck_von = {}
+		var nr := 0
+		for w: Vector2i in feld:
+			if feld[w] == WALL and not _stueck_von.has(w):
+				for teil in wallstueck(w):
+					_stueck_von[teil] = nr
+				nr += 1
+	return _stueck_von.get(z, -1)
+
+
+## Sicht aus einer Stellung oder von einem Turm auf dem Erdwall `wall`:
+## Über das eigene Wallstück wird hinweggeschossen, jeder fremde Erdwall versperrt die Sicht.
+## Fabriken und Batterien stehen am Boden und verdecken nichts.
+func sicht_von_wall(wall: Vector2i, von: Vector2, nach: Vector2) -> bool:
+	var eigen := stueck_nr(wall)
+	var ziel := zelle_bei(nach)
+	var vorher := KEINE
+	var schritte := int(von.distance_to(nach) / 4.0) + 1
+	for i in range(1, schritte):
+		var z := zelle_bei(von.lerp(nach, float(i) / schritte))
+		if z == vorher:
+			continue
+		vorher = z
+		if z != ziel and feld.get(z, FREI) == WALL and stueck_nr(z) != eigen:
+			return false
+	return true
+
+
+## Kosten des Restwegs ab `z`, wenn als Nächstes Ziel Nummer `i` angesteuert wird (danach alle weiteren bis zur Basis).
+func _rest_kosten(z: Vector2i, i: int) -> float:
+	var summe := 0.0
+	var von := z
+	for k in range(i, checkpoints.size() + 1):
+		summe += _weg_kosten("hund", gegner_weg("hund", von, ziel_zelle(k)))
+		von = ziel_zelle(k)
+	return summe
+
+
+## Welches Ziel steuert ein Gegner an, der auf `z` landet? Das, von dem aus der Restweg am kürzesten ist –
+## so läuft niemand zu einem Checkpoint zurück, der schon hinter ihm liegt.
+func bestes_ziel_ab(z: Vector2i, ab: int) -> int:
+	var bestes := ab
+	var beste_kosten := INF
+	for i in range(ab, checkpoints.size() + 1):
+		var kosten := _rest_kosten(z, i)
+		if kosten < beste_kosten:
+			beste_kosten = kosten
+			bestes = i
+	return bestes
 
 
 ## Ziel eines Sprengers ab `von`: der erreichbare Erdwall mit der größten Ersparnis.
@@ -552,13 +684,13 @@ func absprung(von: Vector2i) -> Vector2i:
 func landefeld(von: Vector2i, weite: float) -> Vector2i:
 	var bestes := KEINE
 	var beste_kosten := INF
-	var ziel := ziel_zelle(erstes_ziel())
+	var ab := erstes_ziel()
 	for y in Werte.ZEILEN:
 		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
 			var z := Vector2i(x, y)
 			if not ist_frei(z) or Vector2(z - von).length() > weite:
 				continue
-			var kosten := _weg_kosten("hund", gegner_weg("hund", z, ziel))
+			var kosten := _rest_kosten(z, bestes_ziel_ab(z, ab))
 			if kosten < beste_kosten:
 				beste_kosten = kosten
 				bestes = z
@@ -650,24 +782,39 @@ func _draw() -> void:
 
 	# Schwachstelle: der Erdwall, den ein Sprenger anpeilen würde
 	if zeige_schwachstelle and zeige_pfad_kraeftig:
-		var schwach := schwachstelle()
-		if schwach != KEINE:
+		var rang := 0
+		for schwach: Vector2i in schwachstellen(3):
+			# die lohnendste Stelle kräftig und pulsierend, die nächsten beiden blasser
 			var puls := 0.5 + 0.5 * sin(_zeit * 5.0)
+			var deckung := (0.5 + 0.5 * puls) if rang == 0 else 0.45
 			var o := Vector2(schwach) * zg
-			draw_rect(Rect2(o + Vector2(2, 2), Vector2(zg - 4, zg - 4)), Color(1.0, 0.6, 0.1, 0.5 + 0.5 * puls), false, 4.0)
-			draw_rect(Rect2(o + Vector2(28, 14), Vector2(8, 22)), Color("ff9a1f"))
-			draw_rect(Rect2(o + Vector2(28, 40), Vector2(8, 8)), Color("ff9a1f"))
+			draw_rect(Rect2(o + Vector2(2, 2), Vector2(zg - 4, zg - 4)), Color(1.0, 0.6, 0.1, deckung), false, 4.0)
+			draw_rect(Rect2(o + Vector2(28, 14), Vector2(8, 22)), Color(1.0, 0.6, 0.12, 1.0 if rang == 0 else 0.6))
+			draw_rect(Rect2(o + Vector2(28, 40), Vector2(8, 8)), Color(1.0, 0.6, 0.12, 1.0 if rang == 0 else 0.6))
+			rang += 1
 
-	# Reichweite des angeklickten Turms bzw. der angeklickten Batterie
+	# Felder in Reichweite, die die Auswahl nicht treffen kann: rot schraffiert
+	for z in _sicht_blind:
+		var o := Vector2(z) * zg
+		draw_rect(Rect2(o, Vector2(zg, zg)), Color(0.85, 0.1, 0.15, 0.3))
+		for k in 4:
+			draw_line(o + Vector2(k * 16.0, 0), o + Vector2(0, k * 16.0), Color(0.95, 0.2, 0.2, 0.55), 2.0)
+			draw_line(o + Vector2(zg, k * 16.0 + 16.0), o + Vector2(k * 16.0 + 16.0, zg), Color(0.95, 0.2, 0.2, 0.55), 2.0)
+
+	# Reichweite des angeklickten Turms, der angeklickten Batterie oder Stellung
 	if auswahl != KEINE:
-		var weite := 0.0
+		var kreise: Array[float] = []
 		if ausbau.get(auswahl, FREI) == TURM:
-			weite = Werte.TURM["reichweite"]
+			kreise = [Werte.TURM["reichweite"]]
+		elif ausbau.get(auswahl, FREI) == STELLUNG:
+			# leere Stellung in der Bauphase: innen Technogunner, außen Scharfschütze
+			for typ: String in ["technogunner", "scharfschuetze"]:
+				kreise.append(Werte.EINHEITEN[typ]["reichweite"] + Werte.stellung_bonus(Werte.EINHEITEN[typ]))
 		elif inhalt(auswahl) == BATTERIE:
-			weite = Werte.BATTERIE["reichweite"]
-		if weite > 0.0:
-			var m := (Vector2(auswahl) + Vector2(0.5, 0.5)) * zg
-			draw_circle(m, weite * zg, Color(0.5, 0.88, 1.0, 0.08))
+			kreise = [Werte.BATTERIE["reichweite"]]
+		var m := (Vector2(auswahl) + Vector2(0.5, 0.5)) * zg
+		for weite in kreise:
+			draw_circle(m, weite * zg, Color(0.5, 0.88, 1.0, 0.06))
 			draw_arc(m, weite * zg, 0.0, TAU, 96, Color(0.5, 0.88, 1.0, 0.8), 2.0)
 
 	# Bauvorschau unter dem Mauszeiger

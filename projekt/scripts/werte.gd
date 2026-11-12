@@ -17,20 +17,31 @@ const ZONE_SPALTEN: int = 3
 const HQ_LEBEN: float = 4000.0
 const ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
 const LETZTE_RUNDE: int = 15           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
-const ENDKAMPF_PAUSE: float = 10.0     # Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
+const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
+const ENDKAMPF_PAUSE: float = 3.0     # Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
 const ENDKAMPF_WIE_WELLE: int = 9      # Stärke und Zusammensetzung der Trupps in der letzten Runde
 # Schleudern stehen in der Zone und werfen auf Truppen in Stellungen und auf Fabriken in Reichweite.
 # art: "schleuder" wirft Steine auf Stellungen und Fabriken, "wurf" wirft Hunde über die ersten Wälle,
 #      "laser" schießt flach auf Bodentruppen (Wälle geben Deckung).
 const ZONENBAUTEN: Array = [
 	{"art": "schleuder", "zelle": Vector2i(1, 2), "ab_welle": 5},
-	{"art": "wurf", "zelle": Vector2i(1, 7), "ab_welle": 10},
-	{"art": "laser", "zelle": Vector2i(2, 5), "ab_welle": 10},
+	{"art": "schleuder", "zelle": Vector2i(1, 7), "ab_welle": 8},
+	{"art": "wurf", "zelle": Vector2i(0, 7), "ab_welle": 10},
+	{"art": "wurf", "zelle": Vector2i(0, 2), "ab_welle": 13},
+	{"art": "laser", "zelle": Vector2i(2, 2), "ab_welle": 15},   # Laser gibt es nur zur Verteidigung in der letzten Runde
+	{"art": "laser", "zelle": Vector2i(2, 5), "ab_welle": 15},
+	{"art": "laser", "zelle": Vector2i(2, 7), "ab_welle": 15},
 ]
+# Stein-Schleudern wechseln ihren Platz: vor jeder Runde (sichtbar in der Bauphase) und alle paar Sekunden während der Runde.
+const SCHLEUDER_PLAETZE: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 6), Vector2i(1, 7), Vector2i(1, 8), Vector2i(1, 9)]
+const SCHLEUDER_UMZUG_SEK: float = 20.0
+const SCHLEUDER_TEMPO: float = 0.8     # Felder pro Sekunde beim Umziehen (dabei wirft sie nicht)
 const WURF := {
 	"reichweite": 6.0,          # so weit (Felder) fliegt ein geworfener Hund höchstens
 	"abklingzeit": 7.0,
 	"flugzeit": 1.5,
+	"rudel": 4,                 # so viele Hunde wirft sie kurz hintereinander an dieselbe Stelle
+	"abstand": 0.25,            # Sekunden zwischen zwei Würfen eines Rudels
 }
 const LASER := {
 	"blatt": "res://assets/sprites/laser.webp",
@@ -58,8 +69,8 @@ const NEUHEITEN := {
 	3: "Neu: Battlesphäre. Fernkämpfer, schießt im Laufen auf Truppen in Stellungen und sichtbare Bodentruppen.",
 	5: "Neu: Checkpoints (Fahnen) und eine Schleuder in der Zone. Der Gegnerweg führt durch beide Fahnen. Die Schleuder wirft auf Stellungen und Fabriken im pinken Kreis.",
 	6: "Neu: Fahnenträger. Sein Trupp stürmt in seinem Tempo, er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Fällt er, wird der Trupp langsam.",
-	8: "Neu: Sprenger. Er sucht den Erdwall, dessen Wegfall die größte Abkürzung bringt (orange markiert), und sprengt ihn. Erdwälle mit Turm sind sicher.",
-	10: "Neu in der Zone: Wurf-Schleuder (wirft Hunde über die ersten Wälle) und Laser (schießt flach auf Bodentruppen nahe der Zone, Wälle geben Deckung).",
+	8: "Neu: Sprenger. Sie kommen als Erste und sprengen nacheinander die Erdwälle, deren Wegfall die größte Abkürzung bringt (orange markiert). Erdwälle mit Turm sind sicher. Dazu eine zweite Schleuder; beide wechseln ab jetzt ihren Platz.",
+	10: "Neu in der Zone: Wurf-Schleuder. Sie wirft ein ganzes Rudel Hunde über die ersten Wälle (oranger Kreis). Ab Runde 13 steht dort eine zweite.",
 	11: "Neu: Rauchwerfer. Sein Rauch nimmt Truppen für einige Sekunden die Sicht – am liebsten dort, wo viele Stellungen beieinander liegen. Türme schießen weiter.",
 	12: "Neu: Belagerungsturm. Er fährt zum Wallstück mit den meisten Stellungen und dockt an. Seine Truppen laufen auf den Wällen und greifen Stellungen im Nahkampf an.",
 }
@@ -82,9 +93,14 @@ const BASIS_ZELLE := Vector2i(19, 5)   # hier wollen sie hin
 # Der Gegnerweg führt der Reihe nach durch alle Checkpoints. Gegner bleiben auf einem Checkpoint stehen, bis sie ihn
 # eingenommen haben; danach gehört er dem Gegner, und die nächste Welle startet dort. Eigene Bodentruppen holen ihn zurück, indem sie darauf stehen bleiben –
 # das geht nur, solange die Welle läuft.
+# Halb zufällig: Jeder Checkpoint liegt in jeder Partie auf einem zufälligen Feld seines Bereichs
+# (Rect2i = linke obere Ecke x, y und Breite, Höhe in Feldern). Die Felder stehen ab Runde 1 fest und sind sichtbar.
+const CHECKPOINT_BEREICHE: Array[Rect2i] = [Rect2i(5, 1, 4, 8), Rect2i(11, 1, 5, 8)]
+const CHECKPOINTS_ZUFAELLIG: bool = true   # false = immer die festen Felder der nächsten Zeile
 const CHECKPOINTS: Array[Vector2i] = [Vector2i(6, 4), Vector2i(13, 5)]
 const CHECKPOINTS_AB_WELLE: int = 5    # vorher sind die Felder nur freigehalten (nicht bebaubar)
 const EINNAHME_SEK: float = 3.0        # so lange muss der Gegner einen Checkpoint halten
+const CHECKPOINT_RUHE: float = 3.5     # Truppen gehen einen Checkpoint erst zurückholen, wenn in diesem Umkreis (Felder) kein Gegner ist
 const RUECKEROBERUNG_SEK: float = 4.0  # so lange muss eine Bodentruppe den Checkpoint halten
 
 # --- Tempo -------------------------------------------------------------
@@ -102,7 +118,14 @@ const KOSTEN_STELLUNG: int = 25    # Ausbau eines Erdwalls: Platz für eine Einh
 const KOSTEN_TURM: int = 75        # Ausbau eines Erdwalls an einer Kreuzung
 const KOSTEN_BATTERIE: int = 150   # Railgun-Batterie: feuert erst, wenn sie voll bemannt ist
 const WAELLE_AB_WELLE: int = 2     # Runde 1: nur Fabriken, danach Erdwälle
-const BONUS_JE_WELLE: int = 30     # Budget nach jeder überstandenen Welle
+# Einkommen nach dem Muster von Bloons TD 6: Der feste Bonus am Rundenende ist der größere, planbare Teil,
+# Prämien für besiegte Gegner kommen obendrauf.
+const BONUS_JE_WELLE: int = 100    # Budget nach jeder überstandenen Welle
+const BONUS_JE_CHECKPOINT: int = 0     # zusätzlich je Checkpoint, der am Rundenende dir gehört (0 = aus)
+# Zinsen wie in Teamfight Tactics: Für je ZINS_SCHRITT Budget, das am Rundenende noch da ist, gibt es ZINS_JE_SCHRITT dazu.
+const ZINS_SCHRITT: int = 100
+const ZINS_JE_SCHRITT: int = 10
+const ZINS_STUFEN: int = 5         # höchstens so viele Schritte zählen (also höchstens 50 Zinsen)
 const BONUS_ZUWACHS: int = 5       # ... plus so viel je Wellennummer
 
 # --- Gebäude -----------------------------------------------------------
@@ -111,11 +134,11 @@ const LEBEN_FABRIK: float = 300.0
 const PRODUKTION_SEK: float = 5.0  # Sekunden je Einheit
 const MAX_JE_FABRIK: int = 3       # so viele Einheiten hält eine Fabrik am Leben
 const MAX_JE_FABRIK_ENDKAMPF: int = 5  # ... und so viele in der letzten Runde
-const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plasmawerfer"]  # Klick auf die Fabrik wechselt
+const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plasmawerfer", "pilot"]  # Klick auf die Fabrik wechselt
 
 # --- Railgun-Batterie ------------------------------------------------------
-# Eigenes Gebäude am Boden (versperrt den Weg wie eine Fabrik). Truppen laufen hinein wie in eine Stellung –
-# immer zum nächsten freien Platz nach Fußweg. Sie feuert nur, solange alle Plätze besetzt sind.
+# Eigenes Gebäude am Boden (versperrt den Weg wie eine Fabrik). Nur Piloten bemannen sie – immer den nächsten
+# freien Platz nach Fußweg. Sie feuert nur, solange alle Plätze besetzt sind.
 const BATTERIE := {
 	"blatt": "res://assets/sprites/batterie.png",
 	"zelle": 48,
@@ -127,8 +150,11 @@ const BATTERIE := {
 	"abklingzeit": 4.0,
 }
 
+# --- Weg zur Stellung ------------------------------------------------------
+const GEFAHR_RADIUS: float = 2.0   # Felder: Truppen auf dem Weg zu Stellung/Batterie meiden Felder so nah an Gegnern
+
 # --- Stellungen und Türme ------------------------------------------------
-const POSTEN_REICHWEITE_BONUS: float = 1.0 # Extra-Reichweite von oben
+const POSTEN_REICHWEITE_BONUS: float = 1.0 # Extra-Reichweite von oben, falls eine Einheit keinen eigenen Wert hat ("stellung_bonus")
 const TURM_NACHBARN: int = 3               # so viele angrenzende Erdwälle braucht ein Turm (T-Stück oder Kreuzung)
 const TURM := {
 	"reichweite": 3.5,
@@ -165,9 +191,26 @@ const EINHEITEN := {
 		"leben": 70.0,
 		"tempo": 1.4,
 		"reichweite": 2.6,
-		"schaden": 9.0,
+		"stellung_bonus": 0.0,      # Plasma fliegt von oben nicht weiter: in der Stellung nur der Schuss über Wälle
+		"schaden": 13.0,
 		"flaeche": 1.2,             # trifft alle Gegner in diesem Radius (Felder) um das Ziel
 		"abklingzeit": 1.4,
+	},
+	"pilot": {
+		"name": "Pilot",
+		"pilot": true,              # kämpft nicht, bemannt Batterien
+		"info": "Pilot: kämpft nicht. Bemannt die nächste Batterie mit freiem Platz und wartet sonst an der Fabrik.",
+		"blatt": "res://assets/sprites/pilot.png",
+		"zelle": 48,
+		"bilder": [4, 8, 9],
+		"angriff_dauer": 1.6,
+		"massstab": 2.0,
+		"schussfarbe": "7fe0ff",
+		"leben": 50.0,
+		"tempo": 1.5,
+		"reichweite": 0.0,
+		"schaden": 0.0,
+		"abklingzeit": 1.0,
 	},
 	"scharfschuetze": {
 		"name": "Scharfschütze",
@@ -180,6 +223,7 @@ const EINHEITEN := {
 		"leben": 40.0,
 		"tempo": 1.3,
 		"reichweite": 5.0,
+		"stellung_bonus": 1.5,      # der Scharfschütze profitiert am meisten von der Höhe
 		"schaden": 30.0,
 		"abklingzeit": 2.2,
 	},
@@ -234,7 +278,7 @@ const GEGNER := {
 	"fahne": {
 		"name": "Fahnenträger", "kurz": "Fahne", "art": "führt den Trupp", "rolle": "fahne", "fernkampf": false,
 		"blatt": "res://assets/sprites/fahnentraeger.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 1.8, "massstab": 1.1,
-		"leben": 90.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
+		"leben": 135.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
 		"wall_kosten": 30.0, "fabrik_kosten": 60.0, "praemie": 8,
 	},
 	"sprenger": {
@@ -270,7 +314,7 @@ static func welle(nr: int) -> Dictionary:
 	var hunde := 4 + 2 * nr
 	var sphaeren := int((nr - 1) / 2.0) if nr >= 3 else 0   # Runde 3: 1, Runde 5: 2, Runde 7: 3 ...
 	var fahnen := 0 if nr < 6 else (1 if nr < 11 else 2)
-	var sprenger := 0 if nr < 8 else (1 if nr < 12 else 2)
+	var sprenger := 0 if nr < 8 else (2 if nr < 12 else 3)
 	var rauch := 0 if nr < 11 else 1
 	var belagerung := 0 if nr < 12 else (1 if nr < 14 else 2)
 
@@ -299,15 +343,19 @@ static func welle(nr: int) -> Dictionary:
 			trupp.append("hund")
 		rest -= trupp.size()
 		rudel.append(trupp)
-	var einzeln: Array = []    # Sprenger und Belagerungstürme kommen allein
-	for i in sprenger:
-		einzeln.append(["sprenger"])
+	var vorhut: Array = []     # Sprenger kommen gemeinsam als Erste und öffnen den Weg für alle danach
+	if sprenger > 0:
+		var trupp: Array = []
+		for i in sprenger:
+			trupp.append("sprenger")
+		vorhut.append(trupp)
+	var einzeln: Array = []    # Belagerungstürme kommen allein
 	for i in belagerung:
 		einzeln.append(["belagerung"])
 
-	# Reihenfolge: reihum Rudel, Sturmtrupp, gemischter Trupp, Einzelgänger ...
+	# Reihenfolge: zuerst die Sprenger, dann reihum Rudel, Sturmtrupp, gemischter Trupp, Einzelgänger ...
 	var trupps: Array = []
-	var listen: Array = [rudel, sturm, gemischt, einzeln]
+	var listen: Array = [vorhut, rudel, sturm, gemischt, einzeln]
 	var uebrig := true
 	while uebrig:
 		uebrig = false
@@ -327,9 +375,18 @@ static func welle(nr: int) -> Dictionary:
 	return {
 		"gruppen": gruppen,
 		"trupps": trupps,
-		"leben_faktor": 1.0 + 0.2 * (nr - 1),
+		"leben_faktor": 1.0 + 0.3 * (nr - 1),
 		"abstand": 0.7,            # Sekunden zwischen zwei Gegnern
 	}
+
+
+## Extra-Reichweite einer Einheit in der Stellung (je Einheit verschieden).
+static func stellung_bonus(daten: Dictionary) -> float:
+	return daten.get("stellung_bonus", POSTEN_REICHWEITE_BONUS)
+
+
+static func zinsen(budget: int) -> int:
+	return mini(int(budget / float(ZINS_SCHRITT)), ZINS_STUFEN) * ZINS_JE_SCHRITT
 
 
 static func wellen_bonus(nr: int) -> int:

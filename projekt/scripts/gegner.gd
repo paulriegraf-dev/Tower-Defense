@@ -76,6 +76,14 @@ func tempo() -> float:
 	return t
 
 
+## Wie weit ist dieser Gegner noch von der Basis entfernt? Kleiner = weiter vorn auf der Hauptlinie.
+## (Erst zählt, wie viele Checkpoints noch vor ihm liegen, dann die Felder bis zum nächsten Ziel.)
+func rest_weg() -> int:
+	if _auf_wall:
+		return 1 << 20
+	return maxi(karte.checkpoints.size() - _ziel, 0) * 1000 + (_weg.size() - _index)
+
+
 ## Weg ab dem aktuellen Feld neu berechnen (z. B. nachdem ein Wall gefallen ist).
 func plane_neu() -> void:
 	_weg = karte.gegner_weg(typ, karte.zelle_bei(position), karte.ziel_zelle(_ziel))

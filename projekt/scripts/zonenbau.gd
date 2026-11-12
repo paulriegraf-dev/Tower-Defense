@@ -17,6 +17,9 @@ var _abkling := 0.0
 var _sprite: Figur
 var _treffer := 0.0
 var _zeit := 0.0
+var _umzug_in := 0.0               # Stein-Schleuder: Sekunden bis zum nächsten Platzwechsel in der Runde
+var _faehrt := false
+var _fahrziel := Vector2.ZERO
 
 
 func start(p_spiel: Node, p_karte: Karte, p_art: String, p_zelle: Vector2i) -> void:
@@ -34,6 +37,7 @@ func start(p_spiel: Node, p_karte: Karte, p_art: String, p_zelle: Vector2i) -> v
 		_:
 			max_leben = Werte.SCHLEUDER["leben"]
 			_abkling = Werte.SCHLEUDER["abklingzeit"] * 0.5
+			_umzug_in = Werte.SCHLEUDER_UMZUG_SEK
 			_figur(Werte.SCHLEUDER)
 	leben = max_leben
 
@@ -51,6 +55,20 @@ func _process(delta: float) -> void:
 	queue_redraw()
 	if not spiel.im_kampf():
 		return
+	if art == "schleuder" and spiel.welle >= Werte.SPRENGER_AB_WELLE:
+		# Platzwechsel während der Runde: hinfahren, dabei wird nicht geworfen
+		if _faehrt:
+			_sprite.bewegt(true)
+			_sprite.flip_h = false
+			position = position.move_toward(_fahrziel, Werte.SCHLEUDER_TEMPO * Werte.ZELLE * delta)
+			if position == _fahrziel:
+				_faehrt = false
+				_sprite.bewegt(false)
+			return
+		_umzug_in -= delta
+		if _umzug_in <= 0.0:
+			spiel.schleuder_umzug(self, false)
+			return
 	_abkling -= delta
 	if _abkling > 0.0:
 		return
@@ -74,7 +92,17 @@ func _process(delta: float) -> void:
 			opfer.nimm_schaden(Werte.LASER["schaden"])
 
 
-## Wurf-Schleuder: bereit für den nächsten Hund?
+## Auf ein anderes Feld der Zone wechseln: sofort (zwischen den Runden) oder hinfahren (in der Runde).
+func versetze(neue_zelle: Vector2i, sofort: bool) -> void:
+	zelle = neue_zelle
+	_umzug_in = Werte.SCHLEUDER_UMZUG_SEK
+	_fahrziel = karte.mitte(zelle)
+	_faehrt = not sofort
+	if sofort:
+		position = _fahrziel
+
+
+## Wurf-Schleuder: bereit für das nächste Rudel?
 func wurfbereit() -> bool:
 	return art == "wurf" and _abkling <= 0.0
 

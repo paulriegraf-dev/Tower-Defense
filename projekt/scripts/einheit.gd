@@ -20,6 +20,7 @@ var _abkling := 0.0
 var _plan_in := 0.0
 var _posten_check := 1.0           # Sekunden bis zur nächsten Suche nach einer frei gewordenen Stellung
 var ausgewaehlt := false           # angeklickt: Reichweite anzeigen
+var _wartet := false               # auf dem Weg zur Stellung: kein sicherer Weg, also abwarten
 var _marschziel := Karte.KEINE     # Feld, zu dem diese Bodentruppe marschiert: verlorener Checkpoint oder HQ
 var _versatz := Vector2.ZERO       # damit Truppen nicht exakt aufeinander stehen
 var _sprite: Figur
@@ -63,6 +64,10 @@ func _suche_posten() -> void:
 	if zur_batterie:
 		if not karte.besatzung.has(posten_zelle):
 			karte.besatzung[posten_zelle] = []
+		if fund.has("statt"):
+			# Platz von einer Einheit übernehmen, die noch weiter weg ist
+			bisher = fund["statt"]
+			(karte.besatzung[posten_zelle] as Array).erase(bisher)
 		(karte.besatzung[posten_zelle] as Array).append(self)
 	else:
 		bisher = karte.posten.get(posten_zelle)
@@ -76,9 +81,37 @@ func _suche_posten() -> void:
 		bisher.verdraengt()
 
 
+## Führt der restliche Weg zur Stellung an Gegnern vorbei? Dann einen sicheren Umweg nehmen – oder warten.
+func _pruefe_weg_zur_stellung() -> void:
+	var gefahr: Dictionary = spiel.gefahrenzellen()
+	var bedroht := false
+	for i in _punkte.size() - 1:   # der letzte Punkt ist die Stellung selbst
+		if gefahr.has(karte.zelle_bei(_punkte[i])):
+			bedroht = true
+			break
+	if not bedroht and not _wartet:
+		return
+	var hier := karte.zelle_bei(position)
+	var weg := karte.sicherer_weg_auf_wall(hier, posten_zelle, gefahr)
+	_wartet = weg.is_empty()
+	if _wartet:
+		return
+	var zur_batterie := karte.inhalt(posten_zelle) == Karte.BATTERIE
+	_punkte.clear()
+	for i in weg.size():
+		if i == 0 and weg[i] == hier and weg.size() > 1:
+			continue   # das eigene Feld
+		var oben := Vector2.ZERO if zur_batterie else Vector2(0, -12)
+		_punkte.append(karte.mitte(weg[i]) + (_versatz if i < weg.size() - 1 else oben))
+
+
 ## Ist diese Einheit noch zu ihrer Stellung unterwegs und hat dabei mehr als `felder` Felder vor sich?
 func unterwegs_weiter_als(felder: int) -> bool:
 	return zustand == Zustand.ZUM_POSTEN and _punkte.size() > felder
+
+
+func rest_punkte() -> int:
+	return _punkte.size()
 
 
 ## Eine nähere Einheit hat die Stellung übernommen: neue suchen.
@@ -111,6 +144,21 @@ func _process(delta: float) -> void:
 
 	match zustand:
 		Zustand.ZUM_POSTEN:
+			# Die Stellung ist ein Nebenauftrag: erst schießen, was in Reichweite und Sicht ist ...
+			if karte.ist_frei(karte.zelle_bei(position)):
+				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, daten["reichweite"] * Werte.ZELLE, true)
+				if gegner_nah != null:
+					_sprite.bewegt(false)
+					_feuere_auf(gegner_nah)
+					return
+			# ... und nicht durch Gegner hindurchlaufen: sicheren Weg suchen oder warten.
+			_plan_in -= delta
+			if _plan_in <= 0.0:
+				_plan_in = 0.4
+				_pruefe_weg_zur_stellung()
+			if _wartet:
+				_sprite.bewegt(false)
+				return
 			if _gehe(delta):
 				if karte.inhalt(posten_zelle) == Karte.BATTERIE:
 					zustand = Zustand.IN_BATTERIE
@@ -120,12 +168,12 @@ func _process(delta: float) -> void:
 		Zustand.IN_BATTERIE:
 			pass   # die Batterie feuert (siehe main.gd)
 		Zustand.AUF_POSTEN:
-			# Von oben: mehr Reichweite, Wälle versperren die Sicht nicht.
-			var weite: float = (daten["reichweite"] + Werte.POSTEN_REICHWEITE_BONUS) * Werte.ZELLE
+			# Von oben: mehr Reichweite und Schuss über das eigene Wallstück hinweg. Fremde Erdwälle versperren die Sicht.
+			var weite: float = (daten["reichweite"] + Werte.stellung_bonus(daten)) * Werte.ZELLE
 			_sprite.bewegt(false)
-			var oben_ziel: Node2D = spiel.gegner_in_reichweite(position, weite, false)
+			var oben_ziel: Node2D = spiel.gegner_in_reichweite(position, weite, false, posten_zelle)
 			if oben_ziel == null:
-				oben_ziel = spiel.zonenbau_in_reichweite(position, weite, false)
+				oben_ziel = spiel.zonenbau_in_reichweite(position, weite, false, posten_zelle)
 			_feuere_auf(oben_ziel)
 		Zustand.BODEN:
 			if not karte.ist_frei(karte.zelle_bei(position)):
@@ -139,34 +187,47 @@ func _process(delta: float) -> void:
 					_marschziel = Karte.KEINE
 					_suche_posten()
 					return
-			# Ziel wählen: ein verlorener Checkpoint geht vor, in der letzten Runde dann das HQ, sonst dem Gegner entgegen.
-			_plan_in -= delta
-			if _plan_in <= 0.0:
-				_plan_in = 0.3
-				var hier := karte.zelle_bei(position)
-				_marschziel = karte.naechster_feind_checkpoint(hier)
-				if _marschziel == Karte.KEINE and spiel.im_endkampf():
-					# Letzte Runde: zum gegnerischen HQ – sofern es einen Fußweg gibt
-					if hier == Werte.ANGRIFFS_ZELLE or not karte.einheiten_weg(hier, Werte.ANGRIFFS_ZELLE).is_empty():
-						_marschziel = Werte.ANGRIFFS_ZELLE
-				if _marschziel != Karte.KEINE:
-					_plane_zur_zelle(_marschziel)
-				else:
-					var naechster: Gegner = spiel.naechster_gegner(position)
-					if naechster != null:
-						_plane_zur_zelle(karte.zelle_bei(naechster.position))
+			if daten.get("pilot", false):
+				_gehe(delta)   # Piloten kämpfen nicht: an der Fabrik warten, bis eine Batterie einen Platz hat
+				return
+			# 1) Wer schießen kann, bleibt stehen und schießt. Das geht immer vor – es wird nicht blind weitergelaufen.
 			var weite: float = daten["reichweite"] * Werte.ZELLE
 			var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true)
 			if ziel == null:
 				ziel = spiel.zonenbau_in_reichweite(position, weite, true)
-			if ziel != null and _marschziel == Karte.KEINE:
-				# normaler Kampf: stehen bleiben und schießen
+			if ziel != null:
 				_sprite.bewegt(false)
 				_feuere_auf(ziel)
 				return
-			# Auf dem Marsch (Checkpoint, HQ) wird im Laufen geschossen, nicht angehalten.
+			# 2) Sonst ein Ziel wählen und hingehen.
+			_plan_in -= delta
+			if _plan_in <= 0.0:
+				_plan_in = 0.3
+				_waehle_marschziel()
 			_gehe(delta)
-			_feuere_auf(ziel)
+
+
+## Wohin geht eine Bodentruppe, wenn sie gerade nichts beschießen kann?
+##   a) zu einem verlorenen Checkpoint – aber nur, wenn dort gerade kein Gegner in der Nähe ist
+##   b) in der letzten Runde zum HQ des Gegners
+##   c) sonst der Spitze des Gegners auf der Hauptlinie entgegen, erst danach zu Gegnern abseits davon
+func _waehle_marschziel() -> void:
+	var hier := karte.zelle_bei(position)
+	_marschziel = Karte.KEINE
+	var cp := karte.naechster_feind_checkpoint(hier)
+	if cp != Karte.KEINE and spiel.ist_ruhig(karte.mitte(cp), Werte.CHECKPOINT_RUHE * Werte.ZELLE):
+		_marschziel = cp
+	elif spiel.im_endkampf() and (hier == Werte.ANGRIFFS_ZELLE or not karte.einheiten_weg(hier, Werte.ANGRIFFS_ZELLE).is_empty()):
+		_marschziel = Werte.ANGRIFFS_ZELLE
+	if _marschziel != Karte.KEINE:
+		_plane_zur_zelle(_marschziel)
+		return
+	var spitze: Gegner = spiel.vorderster_gegner()
+	if spitze != null and _plane_zur_zelle(karte.zelle_bei(spitze.position)):
+		return
+	var naechster: Gegner = spiel.naechster_gegner(position)
+	if naechster != null:
+		_plane_zur_zelle(karte.zelle_bei(naechster.position))
 
 
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
@@ -205,13 +266,17 @@ func _gehe(delta: float) -> bool:
 	return _punkte.is_empty()
 
 
-func _plane_zur_zelle(ziel: Vector2i) -> void:
+## Plant den Fußweg zu `ziel`. false, wenn es keinen gibt.
+func _plane_zur_zelle(ziel: Vector2i) -> bool:
 	var hier := karte.zelle_bei(position)
 	var weg := karte.einheiten_weg(hier, ziel)
+	if weg.is_empty() and hier != ziel:
+		return false
 	_punkte.clear()
 	# Das erste Feld ist das eigene – außer die Einheit steckt noch in der Fabrik.
 	for i in range(1 if karte.ist_frei(hier) else 0, weg.size()):
 		_punkte.append(karte.mitte(weg[i]) + _versatz)
+	return true
 
 
 ## Der Wall unter der Einheit wurde eingerissen: sie kämpft am Boden weiter.
@@ -234,11 +299,11 @@ func nimm_schaden(menge: float) -> void:
 
 ## Reichweite in Feldern, so wie sie gerade gilt (in der Stellung mit Bonus).
 func reichweite_jetzt() -> float:
-	return daten["reichweite"] + (Werte.POSTEN_REICHWEITE_BONUS if zustand == Zustand.AUF_POSTEN else 0.0)
+	return daten["reichweite"] + (Werte.stellung_bonus(daten) if zustand == Zustand.AUF_POSTEN else 0.0)
 
 
 func _draw() -> void:
-	if ausgewaehlt and zustand != Zustand.IN_BATTERIE:
+	if ausgewaehlt and zustand != Zustand.IN_BATTERIE and reichweite_jetzt() > 0.5:
 		var r := reichweite_jetzt() * Werte.ZELLE
 		draw_circle(Vector2.ZERO, r, Color(0.5, 0.88, 1.0, 0.08))
 		draw_arc(Vector2.ZERO, r, 0.0, TAU, 96, Color(0.5, 0.88, 1.0, 0.8), 2.0)
