@@ -96,6 +96,8 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
+	if rolle == "sprenger":
+		queue_redraw()   # Warnzeichen blinkt
 	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else Color.WHITE
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
 
@@ -188,10 +190,12 @@ func _zum_wall(delta: float) -> bool:
 		return true
 	# Ziel wählen (neu, sobald sich die Karte ändert oder das Ziel verschwunden ist)
 	_sonder_plan_in -= delta
-	if _sonder_plan_in <= 0.0 or (_sonderziel != Karte.KEINE and karte.inhalt(_sonderziel) != Karte.WALL):
+	var ziel_weg := _sonderziel != Karte.KEINE and karte.inhalt(_sonderziel) != Karte.WALL
+	# Ein Sprenger bleibt bei seinem Ziel, solange der Wall steht; der Belagerungsturm plant laufend neu.
+	if ziel_weg or (_sonder_plan_in <= 0.0 and (rolle != "sprenger" or _sonderziel == Karte.KEINE)):
 		_sonder_plan_in = 2.0
 		var hier := karte.zelle_bei(position)
-		var fund: Dictionary = karte.sprengziel(hier) if rolle == "sprenger" else karte.andockziel(hier)
+		var fund: Dictionary = karte.sprengziel(hier, spiel.sprenger_stuecke(self)) if rolle == "sprenger" else karte.andockziel(hier)
 		if fund.is_empty():
 			_sonderziel = Karte.KEINE
 		else:
@@ -300,7 +304,19 @@ func nimm_schaden(menge: float) -> void:
 		spiel.gegner_besiegt(self)
 
 
+## Der Erdwall, den dieser Sprenger gerade anpeilt (KEINE, wenn er keinen hat).
+func sprengt() -> Vector2i:
+	return _sonderziel if rolle == "sprenger" else Karte.KEINE
+
+
 func _draw() -> void:
+	if rolle == "sprenger":
+		# Warnzeichen über dem Kopf, blinkend
+		var an := fmod(Time.get_ticks_msec() / 1000.0, 0.6) < 0.4
+		var farbe := Color("ffb347") if an else Color("ff5a1f")
+		draw_colored_polygon(PackedVector2Array([Vector2(0, -78), Vector2(-13, -56), Vector2(13, -56)]), farbe)
+		draw_rect(Rect2(-2, -72, 4, 9), Color("2a1608"))
+		draw_rect(Rect2(-2, -61, 4, 3), Color("2a1608"))
 	if rolle == "fahne":
 		draw_rect(Rect2(-2, -84, 4, 40), Color("3a2a1c"))
 		draw_rect(Rect2(2, -84, 22, 14), Color("ff5ad0"))

@@ -31,6 +31,10 @@ var schild := true                 # Schutzschild über der Zone des Gegners (f�
 var zeige_schwachstelle := false   # Bauphase: den Erdwall markieren, den ein Sprenger anpeilen würde
 var _ersparnis: Dictionary = {}    # Wall-Zelle -> so viel kürzer wird der Gegnerweg ohne diesen Wall
 var _ersparnis_gueltig := false
+var _sprengvorschau: Array = []
+var _sprengvorschau_gueltig := false
+var _sprengvorschau_von := KEINE
+var sprengziele_aktiv: Array[Vector2i] = []   # Kampf: Erdwälle, auf die gerade ein Sprenger zuläuft (blinken)
 var _stueck_von: Dictionary = {}   # Wall-Zelle -> Nummer ihres Wallstücks
 var _stuecke_gueltig := false
 var _sicht_an := false             # Anzeige der nicht treffbaren Felder für die Auswahl
@@ -496,6 +500,7 @@ func ersparnisse() -> Dictionary:
 	if _ersparnis_gueltig:
 		return _ersparnis
 	_ersparnis_gueltig = true
+	_sprengvorschau_gueltig = false
 	_ersparnis = {}
 	var a := _astar_gegner["hund"] as AStarGrid2D
 	var basis := _weg_kosten("hund", _route("hund"))
@@ -581,15 +586,51 @@ func bestes_ziel_ab(z: Vector2i, ab: int) -> int:
 
 ## Ziel eines Sprengers ab `von`: der erreichbare Erdwall mit der größten Ersparnis.
 ## Ergebnis: {"wall": Zelle, "weg": Felder bis zum Nachbarfeld des Walls} oder {}.
-func sprengziel(von: Vector2i) -> Dictionary:
+func sprengziel(von: Vector2i, belegt: Array = []) -> Dictionary:
 	var alle := ersparnisse()
-	var waelle: Array = alle.keys()
-	waelle.sort_custom(func(x, y): return alle[x] > alle[y])
-	for w: Vector2i in waelle:
-		var weg := _weg_an_wall(von, w)
-		if not weg.is_empty():
-			return {"wall": w, "weg": weg}
-	return {}
+	var bester := {}
+	var beste_wertung := -INF
+	var fern := {}          # Notlösung: der am weitesten entfernte Wall, falls alle zu nah am Start liegen
+	# Zweiter Durchgang ohne die Sperre, falls nur noch Wallstücke übrig sind, die schon ein anderer Sprenger anpeilt
+	for durchgang in 2:
+		for w: Vector2i in alle:
+			if durchgang == 0 and belegt.has(stueck_nr(w)):
+				continue
+			var weg := _weg_an_wall(von, w)
+			if weg.is_empty():
+				continue
+			if fern.is_empty() or weg.size() > (fern["weg"] as Array).size():
+				fern = {"wall": w, "weg": weg}
+			# Die vorderste Front lässt er stehen: erst Wälle ab einem Mindestanmarsch kommen in Frage
+			if weg.size() < Werte.SPRENGER_MIN_WEG:
+				continue
+			# Abkürzung zählt, ein langer Anmarsch kostet
+			var wertung: float = alle[w] - Werte.SPRENGER_WEG_GEWICHT * weg.size()
+			if wertung > beste_wertung:
+				beste_wertung = wertung
+				bester = {"wall": w, "weg": weg}
+		if not bester.is_empty():
+			break
+	return bester if not bester.is_empty() else fern
+
+
+## Bauphase: die Erdwälle, die die nächsten Sprenger vom Start aus anpeilen würden (jeder ein anderes Wallstück).
+func sprengvorschau(anzahl: int) -> Array:
+	ersparnisse()
+	var von := start_zelle()
+	if _sprengvorschau_gueltig and _sprengvorschau_von == von:
+		return _sprengvorschau
+	_sprengvorschau_gueltig = true
+	_sprengvorschau_von = von
+	_sprengvorschau = []
+	var belegt: Array = []
+	for i in anzahl:
+		var fund := sprengziel(von, belegt)
+		if fund.is_empty() or _sprengvorschau.has(fund["wall"]):
+			break
+		_sprengvorschau.append(fund["wall"])
+		belegt.append(stueck_nr(fund["wall"]))
+	return _sprengvorschau
 
 
 ## Kürzester Fußweg von `von` auf ein freies Nachbarfeld des Walls `w` (leer = unerreichbar).
@@ -780,10 +821,18 @@ func _draw() -> void:
 
 	_markiere_durchbrueche(pfad if not zeige_neu else vorschau_pfad, KEINE if not zeige_neu else vorschau_zelle)
 
+	# Kampf: das Ziel eines Sprengers blinkt
+	for ziel: Vector2i in sprengziele_aktiv:
+		if fmod(_zeit, 0.6) < 0.4:
+			var oz := Vector2(ziel) * zg
+			draw_rect(Rect2(oz + Vector2(2, 2), Vector2(zg - 4, zg - 4)), Color(1.0, 0.45, 0.1, 0.95), false, 5.0)
+			draw_rect(Rect2(oz + Vector2(28, 12), Vector2(8, 24)), Color(1.0, 0.5, 0.12))
+			draw_rect(Rect2(oz + Vector2(28, 42), Vector2(8, 8)), Color(1.0, 0.5, 0.12))
+
 	# Schwachstelle: der Erdwall, den ein Sprenger anpeilen würde
 	if zeige_schwachstelle and zeige_pfad_kraeftig:
 		var rang := 0
-		for schwach: Vector2i in schwachstellen(3):
+		for schwach: Vector2i in sprengvorschau(3):
 			# die lohnendste Stelle kräftig und pulsierend, die nächsten beiden blasser
 			var puls := 0.5 + 0.5 * sin(_zeit * 5.0)
 			var deckung := (0.5 + 0.5 * puls) if rang == 0 else 0.45

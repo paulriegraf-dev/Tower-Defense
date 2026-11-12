@@ -22,7 +22,7 @@
 - **Letzte Runde (Runde 15): Gegenangriff.** Der Schild fällt, Gegner kommen ohne Ende, jede Fabrik hält 5 statt 3 Truppen. Truppen ohne Stellung marschieren zum HQ des
   Gegners; die blaue Linie zeigt ihren Fußweg durch dein eigenes Labyrinth. Ohne Fußweg kommen sie nicht an.
   Sieg, wenn das HQ zerstört ist.
-- Erdwälle lenken den Weg um. Gibt es keinen (lohnenden) Umweg, reißen die Gegner das rot markierte Feld ein.
+- Erdwälle lenken den Weg um, egal wie lang der Umweg wird. Nur wenn es gar keinen Weg mehr gibt, reißen die Gegner das rot markierte Feld ein.
 - **Stellung** = Ausbau eines Erdwalls. Nur dort können Truppen hinauf: ein Platz je Stellung, mehr Reichweite,
   für Nahkämpfer unerreichbar.
 - **Sicht von oben** (Stellungen und Türme): Über das eigene Wallstück – alle Erdwälle, die über Kanten mit dem

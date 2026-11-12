@@ -39,6 +39,7 @@ const SCHLEUDER_TEMPO: float = 0.8     # Felder pro Sekunde beim Umziehen (dabei
 const WURF := {
 	"reichweite": 6.0,          # so weit (Felder) fliegt ein geworfener Hund höchstens
 	"abklingzeit": 7.0,
+	"wartet": 10.0,             # so lange (Sekunden nach Rundenbeginn) hält sie sich zurück, bis die eigenen Truppen vorgerückt sind
 	"flugzeit": 1.5,
 	"rudel": 4,                 # so viele Hunde wirft sie kurz hintereinander an dieselbe Stelle
 	"abstand": 0.25,            # Sekunden zwischen zwei Würfen eines Rudels
@@ -63,6 +64,8 @@ const ENTERER_JE_TURM: int = 4
 const ENTERER_ABSTAND: float = 2.0     # Sekunden zwischen zwei Turmtruppen
 const FAHNE_EINNAHME_FAKTOR: float = 2.0   # Fahnenträger nehmen Checkpoints so viel schneller ein
 const SPRENGER_AB_WELLE: int = 8       # ab hier wird die Schwachstelle in der Bauphase markiert
+const SPRENGER_WEG_GEWICHT: float = 0.3   # so stark zählt der Anmarsch: Abkürzung minus Gewicht x Weglänge. 0 = immer der Wall mit der größten Abkürzung
+const SPRENGER_MIN_WEG: int = 10          # Erdwälle, die der Sprenger in weniger Schritten erreicht, lässt er aus: die vorderste Front bleibt stehen, und die Verteidigung hat Zeit zum Schießen
 
 # Ansage in der Bauphase vor der Runde, in der etwas zum ersten Mal auftritt.
 const NEUHEITEN := {
@@ -100,8 +103,10 @@ const CHECKPOINTS_ZUFAELLIG: bool = true   # false = immer die festen Felder der
 const CHECKPOINTS: Array[Vector2i] = [Vector2i(6, 4), Vector2i(13, 5)]
 const CHECKPOINTS_AB_WELLE: int = 5    # vorher sind die Felder nur freigehalten (nicht bebaubar)
 const EINNAHME_SEK: float = 3.0        # so lange muss der Gegner einen Checkpoint halten
-const CHECKPOINT_RUHE: float = 3.5     # Truppen gehen einen Checkpoint erst zurückholen, wenn in diesem Umkreis (Felder) kein Gegner ist
+const CHECKPOINT_RUHE: float = 1.5     # die zugeteilte Truppe geht einen Checkpoint zurückholen, solange in diesem Umkreis (Felder) kein Gegner ist
 const RUECKEROBERUNG_SEK: float = 4.0  # so lange muss eine Bodentruppe den Checkpoint halten
+const NACHSPIEL_MAX: float = 15.0     # so lange läuft die Runde nach dem letzten Gegner höchstens weiter, damit die zugeteilte Truppe den Checkpoint zurückholt
+const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen, wenn in diesem Umkreis (Felder) kein Gegner ist
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
@@ -230,7 +235,7 @@ const EINHEITEN := {
 }
 
 # --- Gegner --------------------------------------------------------------
-# wall_kosten: Ein Wall "kostet" den Gegner so viel wie so viele Felder Umweg.
+# wall_kosten: Ein Wall "kostet" den Gegner so viel wie so viele Felder Umweg. 1000 = praktisch nie: eingerissen wird nur, wenn es gar keinen Weg mehr gibt.
 # Ist der Umweg länger (oder gibt es keinen Weg), reißt er den Wall ein.
 # fernkampf: schießt auf Truppen in Stellungen und auf sichtbare Bodentruppen (Türme sind vorerst unangreifbar).
 const GEGNER := {
@@ -250,8 +255,8 @@ const GEGNER := {
 		"reichweite": 1.1,
 		"schaden": 10.0,
 		"abklingzeit": 0.8,
-		"wall_kosten": 30.0,
-		"fabrik_kosten": 60.0,
+		"wall_kosten": 1000.0,
+		"fabrik_kosten": 2000.0,
 		"praemie": 2,
 	},
 	"sphaere": {
@@ -270,8 +275,8 @@ const GEGNER := {
 		"reichweite": 3.5,
 		"schaden": 14.0,
 		"abklingzeit": 1.6,
-		"wall_kosten": 30.0,
-		"fabrik_kosten": 60.0,
+		"wall_kosten": 1000.0,
+		"fabrik_kosten": 2000.0,
 		"praemie": 8,
 	},
 	# rolle = Sonderregel (siehe gegner.gd). schaden 0 = kämpft nicht selbst.
@@ -279,31 +284,31 @@ const GEGNER := {
 		"name": "Fahnenträger", "kurz": "Fahne", "art": "führt den Trupp", "rolle": "fahne", "fernkampf": false,
 		"blatt": "res://assets/sprites/fahnentraeger.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 1.8, "massstab": 1.1,
 		"leben": 135.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
-		"wall_kosten": 30.0, "fabrik_kosten": 60.0, "praemie": 8,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 8,
 	},
 	"sprenger": {
 		"name": "Sprenger", "kurz": "Sprenger", "art": "sprengt Erdwälle", "rolle": "sprenger", "fernkampf": false,
 		"blatt": "res://assets/sprites/sprenger.webp", "zelle": 48, "bilder": [9, 13, 17], "angriff_dauer": 2.2, "massstab": 1.3,
 		"leben": 45.0, "tempo": 1.5, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
-		"wall_kosten": 30.0, "fabrik_kosten": 60.0, "praemie": 6,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 6,
 	},
 	"rauch": {
 		"name": "Rauchwerfer", "kurz": "Rauch", "art": "nimmt die Sicht", "rolle": "rauch", "fernkampf": false,
 		"blatt": "res://assets/sprites/rauchwerfer.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.6, "massstab": 1.1,
 		"leben": 80.0, "tempo": 1.0, "reichweite": 5.0, "schaden": 0.0, "abklingzeit": 9.0,
-		"wall_kosten": 30.0, "fabrik_kosten": 60.0, "praemie": 8,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 8,
 	},
 	"belagerung": {
 		"name": "Belagerungsturm", "kurz": "Bel.-Turm", "art": "entert Wälle", "rolle": "belagerung", "fernkampf": false,
 		"blatt": "res://assets/sprites/belagerungsturm.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.6, "massstab": 1.4,
 		"leben": 450.0, "tempo": 0.6, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
-		"wall_kosten": 30.0, "fabrik_kosten": 60.0, "praemie": 15,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 15,
 	},
 	"enterer": {
 		"name": "Turmtruppe", "kurz": "Turmtruppe", "art": "Nahkampf auf Wällen", "rolle": "enterer", "fernkampf": false,
 		"blatt": "res://assets/sprites/enterer.webp", "zelle": 48, "bilder": [9, 9, 9], "angriff_dauer": 0.9, "massstab": 1.2,
 		"leben": 35.0, "tempo": 1.6, "reichweite": 1.1, "schaden": 10.0, "abklingzeit": 0.8,
-		"wall_kosten": 30.0, "fabrik_kosten": 60.0, "praemie": 2,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 2,
 	},
 }
 

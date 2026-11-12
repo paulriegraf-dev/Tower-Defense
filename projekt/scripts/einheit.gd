@@ -20,6 +20,7 @@ var _abkling := 0.0
 var _plan_in := 0.0
 var _posten_check := 1.0           # Sekunden bis zur nächsten Suche nach einer frei gewordenen Stellung
 var ausgewaehlt := false           # angeklickt: Reichweite anzeigen
+var _marsch_in := 0.0
 var _wartet := false               # auf dem Weg zur Stellung: kein sicherer Weg, also abwarten
 var _marschziel := Karte.KEINE     # Feld, zu dem diese Bodentruppe marschiert: verlorener Checkpoint oder HQ
 var _versatz := Vector2.ZERO       # damit Truppen nicht exakt aufeinander stehen
@@ -93,8 +94,11 @@ func _pruefe_weg_zur_stellung() -> void:
 		return
 	var hier := karte.zelle_bei(position)
 	var weg := karte.sicherer_weg_auf_wall(hier, posten_zelle, gefahr)
+	var vorher := _wartet
 	_wartet = weg.is_empty()
 	if _wartet:
+		if not vorher:
+			_punkte.clear()   # der alte Weg führt durch die Gefahr
 		return
 	var zur_batterie := karte.inhalt(posten_zelle) == Karte.BATTERIE
 	_punkte.clear()
@@ -157,7 +161,15 @@ func _process(delta: float) -> void:
 				_plan_in = 0.4
 				_pruefe_weg_zur_stellung()
 			if _wartet:
-				_sprite.bewegt(false)
+				# Kein sicherer Weg zur Stellung: nicht herumstehen, sondern solange am Boden mitkämpfen.
+				if daten.get("pilot", false):
+					_sprite.bewegt(false)
+					return
+				_marsch_in -= delta
+				if _marsch_in <= 0.0:
+					_marsch_in = 0.3
+					_waehle_marschziel()
+				_gehe(delta)
 				return
 			if _gehe(delta):
 				if karte.inhalt(posten_zelle) == Karte.BATTERIE:
@@ -215,7 +227,8 @@ func _waehle_marschziel() -> void:
 	var hier := karte.zelle_bei(position)
 	_marschziel = Karte.KEINE
 	var cp := karte.naechster_feind_checkpoint(hier)
-	if cp != Karte.KEINE and spiel.ist_ruhig(karte.mitte(cp), Werte.CHECKPOINT_RUHE * Werte.ZELLE):
+	# Nur die zugeteilte Truppe geht. Steht sie schon auf dem Checkpoint, bleibt sie dort, auch wenn Gegner näher kommen.
+	if cp != Karte.KEINE and spiel.darf_checkpoint_holen(self, cp) and (hier == cp or spiel.ist_ruhig(karte.mitte(cp), Werte.CHECKPOINT_RUHE * Werte.ZELLE)):
 		_marschziel = cp
 	elif spiel.im_endkampf() and (hier == Werte.ANGRIFFS_ZELLE or not karte.einheiten_weg(hier, Werte.ANGRIFFS_ZELLE).is_empty()):
 		_marschziel = Werte.ANGRIFFS_ZELLE
