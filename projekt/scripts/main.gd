@@ -40,6 +40,7 @@ var _protokoll_datei := ""
 var _runde_start_ms := 0
 var _leben_vor_runde := 0
 var _cp_verloren := 0
+var _nachschlag: Nachschlag          # Nachschlagekarte mit Formationen [H]
 var _nachspiel := 0.0               # Sekunden, die nach dem letzten Gegner noch für die Rückeroberung liefen
 var _kampf_sek := 0.0               # Spielzeit seit Rundenbeginn
 var _im_flug := 0                   # geworfene Hunde, die noch in der Luft sind
@@ -83,7 +84,7 @@ func _ready() -> void:
 
 # -------------------------------------------------------------- Bauprotokoll
 
-const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie"}
+const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor"}
 
 
 func _beginne_protokoll() -> void:
@@ -850,6 +851,8 @@ func kosten(typ: int) -> int:
 			return Werte.KOSTEN_STELLUNG
 		Karte.TURM:
 			return Werte.KOSTEN_TURM
+		Karte.TOR:
+			return Werte.KOSTEN_TOR
 		Karte.BATTERIE:
 			return Werte.KOSTEN_BATTERIE
 	# Fabriken werden teurer, je mehr schon stehen
@@ -857,7 +860,7 @@ func kosten(typ: int) -> int:
 
 
 func _ist_ausbau(typ: int) -> bool:
-	return typ == Karte.STELLUNG or typ == Karte.TURM
+	return typ == Karte.STELLUNG or typ == Karte.TURM or typ == Karte.TOR
 
 
 ## Leerer Text = Bauen erlaubt, sonst der Grund, warum nicht.
@@ -1019,9 +1022,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				waehle(Karte.TURM)
 			KEY_5:
 				waehle(Karte.BATTERIE)
+			KEY_6:
+				waehle(Karte.TOR)
 			KEY_SPACE:
 				starte_welle()
+			KEY_H:
+				_nachschlag.umschalten()
 			KEY_ESCAPE:
+				if _nachschlag.visible:
+					_nachschlag.umschalten()
 				werkzeug = Karte.FREI
 			KEY_F:
 				_tempo_umschalten()
@@ -1162,11 +1171,12 @@ func _baue_hud() -> void:
 	ebene.add_child(unten)
 	var x := 8.0
 	for eintrag: Array in [
-		[Karte.FABRIK, "[1] Fabrik  %d" % Werte.KOSTEN_FABRIK, 130],
-		[Karte.WALL, "[2] Erdwall  %d" % Werte.KOSTEN_WALL, 130],
-		[Karte.STELLUNG, "[3] Stellung  %d" % Werte.KOSTEN_STELLUNG, 140],
-		[Karte.TURM, "[4] Turm  %d" % Werte.KOSTEN_TURM, 120],
-		[Karte.BATTERIE, "[5] Batterie  %d" % Werte.KOSTEN_BATTERIE, 150],
+		[Karte.FABRIK, "[1] Fabrik  %d" % Werte.KOSTEN_FABRIK, 112],
+		[Karte.WALL, "[2] Erdwall  %d" % Werte.KOSTEN_WALL, 112],
+		[Karte.STELLUNG, "[3] Stellung  %d" % Werte.KOSTEN_STELLUNG, 122],
+		[Karte.TURM, "[4] Turm  %d" % Werte.KOSTEN_TURM, 100],
+		[Karte.BATTERIE, "[5] Batterie  %d" % Werte.KOSTEN_BATTERIE, 132],
+		[Karte.TOR, "[6] Tor  %d" % Werte.KOSTEN_TOR, 92],
 	]:
 		var typ: int = eintrag[0]
 		var b := _knopf(unten, x, eintrag[2], waehle.bind(typ), true)
@@ -1212,6 +1222,10 @@ func _baue_hud() -> void:
 	_lbl_neu = _label(_neu_grund, Vector2(12, 4), 15, Color("ffe9a8"))
 	_lbl_neu.size = Vector2(breite - 224, 46)
 	_lbl_neu.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_label(oben, Vector2(breite - 158, 11), 15, Color("a79fb3")).text = "[H] Formationen"
+	_nachschlag = Nachschlag.new()
+	ebene.add_child(_nachschlag)
 
 	_ende = ColorRect.new()
 	(_ende as ColorRect).color = Color(0, 0, 0, 0.75)

@@ -3,7 +3,7 @@
 Öffnen: Godot starten → **Importieren** → diesen Ordner (`project.godot`) wählen → **F5** spielt.
 
 ## Steuerung
-- **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie (2–5 ab Welle 2), **Esc** abwählen
+- **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie, **6** Tor (2–6 ab Welle 2), **Esc** abwählen
 - **Linksklick** bauen (Erdwälle: Maustaste halten und ziehen)
 - **Linksklick auf eine Fabrik** (ohne Werkzeug): Einheit wechseln (Technogunner / Scharfschütze / Plasmawerfer / Pilot)
 - **Linksklick auf eine Truppe, einen Turm, eine Stellung oder eine Batterie** (ohne Werkzeug): Reichweite anzeigen.
@@ -59,6 +59,8 @@
   Der Plasmawerfer gewinnt in der Stellung keine Reichweite, schießt von dort aber über Wälle hinweg.
 - **Pilot:** kämpft nicht. Piloten bemannen Batterien, immer den nächsten freien Platz nach Fußweg, und warten
   sonst an ihrer Fabrik. Kampftruppen gehen nicht in Batterien, Piloten nicht in Stellungen.
+- **Tor** (Taste 6, 40 Budget): Ausbau eines Erdwalls. Für den Gegner bleibt es ein Erdwall (Weg, Sicht, Sprenger),
+  eigene Truppen gehen hindurch. So kommen Truppen aus einem eingemauerten Kern heraus.
 - **Railgun-Batterie** (Taste 5): Gebäude am Boden, versperrt den Weg wie eine Fabrik. Die Kästchen zeigen die
   Besatzung. Sie feuert nur mit drei Piloten, dann weit, über Wälle hinweg und flächig. Eine Fabrik hält drei
   Truppen, eine Pilotenfabrik neben der Batterie ist also genau eine Besatzung. Wer darin sitzt, kann nicht getroffen werden;
@@ -107,3 +109,19 @@ Alle Werte (Kosten, Leben, Tempo, Wellen) stehen in `scripts/werte.gd`.
 - `scripts/figur.gd` Animation aus den Terrain-Conquester-Blättern
 - `scripts/zonenbau.gd` HQ und Schleudern in der Zone des Gegners
 - `assets/sprites/` Kopien aus Terrain-Conquester (Technogunner und Scharfschütze alt, Hund, Battlesphäre)
+
+## Formationen
+
+**H** öffnet im Spiel eine Nachschlagekarte mit neun Erdwall-Formationen als Skizze, je mit Stärke und Schwäche.
+Sie dient nur der Ideenfindung, gebaut wird weiter von Hand.
+
+`werkzeuge/schaubild.gd` baut feste Erdwall-Formationen mit unbegrenztem Budget auf (ohne Gegner) und speichert je ein Bild:
+
+    godot --path . --rendering-driver opengl3 -s werkzeuge/schaubild.gd -- <Zielordner>
+
+Die Pläne stehen in `werkzeuge/plaene.gd` als Zeichenraster und lassen sich dort ändern oder ergänzen.
+
+`werkzeuge/formtest.gd` lässt dieselben Pläne gegen die 15 Runden laufen und schreibt je Lauf eine JSON-Zeile
+(`frei` = ganze Formation ab Runde 2, `budget` = Teilausbau mit echtem Budget):
+
+    godot --headless --path . --fixed-fps 60 -s werkzeuge/formtest.gd -- <Ausgabedatei> <frei|budget> <Läufe> [Plan ...]

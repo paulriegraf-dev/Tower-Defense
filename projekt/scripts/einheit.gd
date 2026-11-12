@@ -78,7 +78,7 @@ func _suche_posten() -> void:
 		# letzter Punkt = oben in der Stellung bzw. mitten in der Batterie, ohne Versatz
 		var oben := Vector2.ZERO if zur_batterie else Vector2(0, -12)
 		_punkte.append(karte.mitte(weg[i]) + (_versatz if i < weg.size() - 1 else oben))
-	if bisher != null and bisher != self:
+	if is_instance_valid(bisher) and bisher != self:
 		bisher.verdraengt()
 
 
@@ -149,7 +149,7 @@ func _process(delta: float) -> void:
 	match zustand:
 		Zustand.ZUM_POSTEN:
 			# Die Stellung ist ein Nebenauftrag: erst schießen, was in Reichweite und Sicht ist ...
-			if karte.ist_frei(karte.zelle_bei(position)):
+			if karte.ist_begehbar(karte.zelle_bei(position)):
 				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, daten["reichweite"] * Werte.ZELLE, true)
 				if gegner_nah != null:
 					_sprite.bewegt(false)
@@ -188,7 +188,7 @@ func _process(delta: float) -> void:
 				oben_ziel = spiel.zonenbau_in_reichweite(position, weite, false, posten_zelle)
 			_feuere_auf(oben_ziel)
 		Zustand.BODEN:
-			if not karte.ist_frei(karte.zelle_bei(position)):
+			if not karte.ist_begehbar(karte.zelle_bei(position)):
 				_gehe(delta)   # noch in der Fabrik: erst heraustreten, dann kämpfen
 				return
 			# Nachrücken: Ist eine Stellung frei geworden (oder näher als für den, der dorthin unterwegs ist)?
@@ -287,7 +287,7 @@ func _plane_zur_zelle(ziel: Vector2i) -> bool:
 		return false
 	_punkte.clear()
 	# Das erste Feld ist das eigene – außer die Einheit steckt noch in der Fabrik.
-	for i in range(1 if karte.ist_frei(hier) else 0, weg.size()):
+	for i in range(1 if karte.ist_begehbar(hier) else 0, weg.size()):
 		_punkte.append(karte.mitte(weg[i]) + _versatz)
 	return true
 

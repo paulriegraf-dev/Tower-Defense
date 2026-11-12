@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/replay.gd -- <partie.json> [Anzahl Läufe] [frei]
 ## "frei" = unbegrenztes Budget (jeder aufgezeichnete Zug klappt, auch wenn das Geld diesmal nicht gereicht hätte).
 
-const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE}
+const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR}
 
 var partie: Dictionary
 var laeufe := 5

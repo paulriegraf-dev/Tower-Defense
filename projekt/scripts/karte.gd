@@ -5,14 +5,14 @@ extends Node2D
 signal zerstoert(zelle: Vector2i, typ: int)
 
 ## FREI/WALL/FABRIK stehen im Raster; STELLUNG und TURM sind Ausbauten eines Erdwalls.
-enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE }
+enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE, TOR }
 
 const NACHBARN: Array[Vector2i] = [Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN, Vector2i.RIGHT]
 const KEINE := Vector2i(-1, -1)
 
 var feld: Dictionary = {}          # Zelle -> WALL / FABRIK
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
-var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM
+var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
 var posten: Dictionary = {}        # Stellungs-Zelle -> Einheit, die darauf steht
 var besatzung: Dictionary = {}     # Batterie-Zelle -> Einheiten, die dorthin gehören (unterwegs oder schon drin)
 var fabrik_typ: Dictionary = {}    # Fabrik-Zelle -> Einheitentyp, den sie baut
@@ -263,6 +263,19 @@ func ausbau_hindernis(z: Vector2i, typ: int) -> String:
 
 func baue_aus(z: Vector2i, typ: int) -> void:
 	ausbau[z] = typ
+	if typ == TOR:
+		_gewichte_fuer(z)
+		aktualisiere_pfad()
+
+
+## Ein Erdwall mit Tor: Gegner müssen außen herum, eigene Truppen gehen hindurch.
+func ist_tor(z: Vector2i) -> bool:
+	return ausbau.get(z, FREI) == TOR
+
+
+## Kann eine eigene Truppe auf diesem Feld stehen und kämpfen (freies Feld oder Tor)?
+func ist_begehbar(z: Vector2i) -> bool:
+	return ist_frei(z) or ist_tor(z)
 
 
 ## Freie Sicht zwischen zwei Punkten am Boden? Wälle und Gebäude versperren sie.
@@ -315,7 +328,8 @@ func _gewicht(gegner_typ: String, was: int) -> float:
 
 func _gewichte_fuer(z: Vector2i) -> void:
 	var was := inhalt(z)
-	_astar_einheiten.set_point_solid(z, was != FREI)
+	# Ein Tor ist für den Gegner ein Erdwall, eigene Truppen gehen hindurch
+	_astar_einheiten.set_point_solid(z, was != FREI and not ist_tor(z))
 	for typ: String in _astar_gegner:
 		(_astar_gegner[typ] as AStarGrid2D).set_point_weight_scale(z, _gewicht(typ, was))
 
@@ -422,6 +436,9 @@ func finde_posten(von: Vector2i, sucher: Einheit) -> Dictionary:
 		var weg := _weg_auf_wall(von, w)
 		if weg.is_empty() or weg.size() >= beste_laenge:
 			continue
+		if posten.has(w) and not is_instance_valid(posten[w]):
+			# Sicherheitsnetz: Eintrag einer Truppe, die es nicht mehr gibt
+			posten.erase(w)
 		if posten.has(w):
 			var inhaber: Einheit = posten[w]
 			if inhaber == sucher or not inhaber.unterwegs_weiter_als(weg.size()):
@@ -876,6 +893,8 @@ func _draw() -> void:
 		var rahmen := Rect2(Vector2(vorschau_zelle) * zg + Vector2(2, 2), Vector2(zg - 4, zg - 4))
 		if not vorschau_ok:
 			draw_rect(rahmen, WARNUNG, false, 4.0)
+		elif vorschau_typ == TOR:
+			_zeichne_ausbau(vorschau_zelle, TOR, 0.7)
 		elif vorschau_typ == STELLUNG or vorschau_typ == TURM:
 			_zeichne_ausbau(vorschau_zelle, vorschau_typ, 0.7)
 			var radius: float = Werte.TURM["reichweite"] if vorschau_typ == TURM else 3.0 + Werte.POSTEN_REICHWEITE_BONUS
@@ -903,6 +922,15 @@ func _zeichne_ausbau(z: Vector2i, typ: int, alpha: float) -> void:
 		_r(z, 8, 6, 12, 6, STEIN_DUNKEL * a)
 		_r(z, 26, 6, 12, 6, STEIN_DUNKEL * a)
 		_r(z, 44, 6, 12, 6, STEIN_DUNKEL * a)
+	elif typ == TOR:
+		# Durchgang im Wall: zwei Pfosten, dunkle Öffnung, heller Sturz
+		_r(z, 6, 2, 52, 60, STEIN_DUNKEL * a)
+		_r(z, 16, 12, 32, 50, Color("1b1722") * a)
+		_r(z, 6, 2, 52, 10, STEIN * a)
+		_r(z, 6, 12, 10, 50, STEIN * a)
+		_r(z, 48, 12, 10, 50, STEIN * a)
+		_r(z, 26, 4, 12, 6, TECH_LICHT * a)
+		_r(z, 20, 52, 24, 4, TECH_LICHT * Color(1, 1, 1, 0.6 * alpha))
 	else:
 		_r(z, 12, 2, 40, 42, TECH_DUNKEL * a)
 		_r(z, 14, 4, 36, 38, TECH * a)
