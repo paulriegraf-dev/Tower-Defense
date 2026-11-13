@@ -881,11 +881,23 @@ func andockziel(von: Vector2i) -> Dictionary:
 		stuecke.append([stellungen, stueck])
 	stuecke.sort_custom(func(x, y): return x[0] > y[0])
 	for eintrag: Array in stuecke:
+		# Innerhalb des Stücks: dort andocken, wo die meisten Stellungen in der Nähe sind (mitten ins Gefecht),
+		# bei Gleichstand am nächsten erreichbaren Feld.
 		var bestes := {}
+		var beste_nester := -1
 		for w: Vector2i in eintrag[1]:
+			var nester := 0
+			for z: Vector2i in eintrag[1]:
+				if ausbau.get(z, FREI) == STELLUNG and Vector2(z - w).length() <= 2.3:
+					nester += 1
+			if nester < beste_nester:
+				continue
 			var weg := _weg_an_wall(von, w)
-			if not weg.is_empty() and (bestes.is_empty() or weg.size() < (bestes["weg"] as Array).size()):
+			if weg.is_empty():
+				continue
+			if nester > beste_nester or weg.size() < (bestes["weg"] as Array).size():
 				bestes = {"wall": w, "weg": weg}
+				beste_nester = nester
 		if not bestes.is_empty():
 			return bestes
 	return {}

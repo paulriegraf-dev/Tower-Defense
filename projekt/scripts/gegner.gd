@@ -259,6 +259,8 @@ func _zum_wall(delta: float) -> bool:
 	else:
 		_angedockt = 0.0
 		spiel.belagerung_dockt(self)
+		if OS.get_environment("TD_WURF_LOG") != "":
+			print("DOCK R%d an %s %s" % [spiel.welle, karte.zelle_bei(position), _dock_wall_text()])
 	return true
 
 
@@ -396,3 +398,13 @@ func _draw() -> void:
 		var y := -92.0 if rolle == "fahne" else (-66.0 if rolle == "belagerung" else -46.0)
 		draw_rect(Rect2(-16, y, 32, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-14, y + 2, 28.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("ff5a4d"))
+
+
+## Nur für das Testprotokoll: wie viele Stellungen liegen auf dem Wallstück neben dem Andockpunkt, und wie viele nah dran?
+func _dock_wall_text() -> String:
+	var hier := karte.zelle_bei(position)
+	var nah := 0
+	for z: Vector2i in karte.ausbau:
+		if karte.ausbau[z] == Karte.STELLUNG and Vector2(z - hier).length() <= 2.5:
+			nah += 1
+	return "(Stellungen in 2,5 Feldern: %d)" % nah
