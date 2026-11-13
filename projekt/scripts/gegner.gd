@@ -11,6 +11,7 @@ extends Node2D
 ##   "belagerung" – fährt zum Wallstück mit den meisten Stellungen, dockt an, setzt Turmtruppen ab
 ##   "enterer"    – Turmtruppe: läuft auf den Wällen und greift Stellungen im Nahkampf an
 
+var _ziel_ist_fabrik := false       # Sprenger ohne lohnenden Erdwall: sein Ziel ist eine Fabrik
 var spiel: Node
 var karte: Karte
 var typ := ""
@@ -89,6 +90,33 @@ func _tempo_ungebremst() -> float:
 	return t
 
 
+var _stand := 0.0
+var _stand_pos := Vector2.INF
+
+func steht() -> bool:
+	return _stand >= 0.7
+
+
+## Die nächsten Felder, über die dieser Gegner laufen wird (ab seinem jetzigen Feld), auch über das nächste Ziel hinaus.
+func kommender_weg(hoechstens: int) -> Array[Vector2i]:
+	var felder: Array[Vector2i] = []
+	if _auf_wall:
+		return felder
+	for i in range(maxi(_index - 1, 0), _weg.size()):
+		felder.append(_weg[i])
+		if felder.size() >= hoechstens:
+			return felder
+	var von: Vector2i = felder[-1] if not felder.is_empty() else karte.zelle_bei(position)
+	for k in range(_ziel + 1, karte.checkpoints.size() + 1):
+		var stueck: Array[Vector2i] = karte.gegner_weg("hund", von, karte.ziel_zelle(k))
+		for i in range(1, stueck.size()):
+			felder.append(stueck[i])
+			if felder.size() >= hoechstens:
+				return felder
+		von = karte.ziel_zelle(k)
+	return felder
+
+
 ## Wie weit ist dieser Gegner noch von der Basis entfernt? Kleiner = weiter vorn auf der Hauptlinie.
 ## (Erst zählt, wie viele Checkpoints noch vor ihm liegen, dann die Felder bis zum nächsten Ziel.)
 func rest_weg() -> int:
@@ -109,6 +137,12 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
+	# Steht er (nimmt einen Checkpoint ein, kämpft)? Dann warten Abfänger nicht am Treffpunkt, sondern kommen zu ihm.
+	if position.distance_to(_stand_pos) < 2.0:
+		_stand += delta
+	else:
+		_stand = 0.0
+		_stand_pos = position
 	if rolle == "sprenger":
 		queue_redraw()   # Warnzeichen blinkt
 	if markiert > 0.0 or gebremst > 0.0:
@@ -229,13 +263,19 @@ func _zum_wall(delta: float) -> bool:
 		return true
 	# Ziel wählen (neu, sobald sich die Karte ändert oder das Ziel verschwunden ist)
 	_sonder_plan_in -= delta
-	var ziel_weg := _sonderziel != Karte.KEINE and karte.inhalt(_sonderziel) != Karte.WALL
+	var ziel_weg := _sonderziel != Karte.KEINE and karte.inhalt(_sonderziel) != (Karte.FABRIK if _ziel_ist_fabrik else Karte.WALL)
+	if _ziel_ist_fabrik and karte.ausgefallen.has(_sonderziel):
+		ziel_weg = true
 	# Ein Sprenger bleibt bei seinem Ziel, solange der Wall steht; der Belagerungsturm plant laufend neu.
 	if ziel_weg or (_sonder_plan_in <= 0.0 and (rolle != "sprenger" or _sonderziel == Karte.KEINE)):
 		_sonder_plan_in = 2.0
 		var hier := karte.zelle_bei(position)
 		# Ein geworfener Sprenger steht schon hinter der Front: für ihn gilt kein Mindestanmarsch.
 		var fund: Dictionary = karte.sprengziel(hier, spiel.sprenger_stuecke(self), 0 if geworfen else Werte.SPRENGER_MIN_WEG) if rolle == "sprenger" else karte.andockziel(hier)
+		_ziel_ist_fabrik = false
+		if fund.is_empty() and rolle == "sprenger":
+			fund = karte.fabrikziel(hier)   # kein lohnender Erdwall: dann eine Fabrik
+			_ziel_ist_fabrik = not fund.is_empty()
 		if fund.is_empty():
 			_sonderziel = Karte.KEINE
 		else:
@@ -255,7 +295,10 @@ func _zum_wall(delta: float) -> bool:
 	_sprite.flip_h = karte.mitte(_sonderziel).x < position.x
 	if rolle == "sprenger":
 		_tot = true
-		spiel.sprengung(self, _sonderziel)
+		if _ziel_ist_fabrik:
+			spiel.sprengung_fabrik(self, _sonderziel)
+		else:
+			spiel.sprengung(self, _sonderziel)
 	else:
 		_angedockt = 0.0
 		spiel.belagerung_dockt(self)
@@ -286,6 +329,7 @@ func _setze_truppen_ab(delta: float) -> void:
 	_abgesetzt = faellig
 	_sprite.angriff(1.0)
 	_brut.append(spiel.setze_enterer_ab(_sonderziel, leben_faktor, _ziel))
+	spiel.turmtruppe_abgesetzt(self)
 
 
 # ------------------------------------------------------------- Turmtruppe

@@ -35,7 +35,12 @@ var _gefahr: Dictionary = {}        # Felder nahe an Gegnern (Zwischenspeicher f
 var _gefahr_stand := -1
 var _zins_felder: Array[ColorRect] = []
 var _lbl_zins: Label
-var _wurf_schlange: Array = []      # Trupps zu vier, die die Wurf-Schleuder in dieser Welle noch wirft
+var _wurf_schlange: Array = []      # Würfe dieser Welle: {"typen", "nach", "wenn"}
+var _pausen: Array = []             # zu _schlange: Sekunden mehr/weniger Pause vor dem Trupp
+var _trupp_nr := 0                  # so viele Lauf-Trupps dieses Durchgangs sind schon unterwegs
+var _durchgang := 0                 # letzte Runde: der wievielte Durchgang der Welle
+var _wurf_nahe := Vector2.INF       # der nächste Wurf landet hier in der Nähe (Zange am Belagerungsturm)
+var _abgesetzt: Dictionary = {}     # Belagerungsturm -> so viele Turmtruppen hat er schon abgesetzt
 var _wurf_aktiv: Array = []         # der Trupp, der gerade fliegt (Rest)
 var _wurf_takt := 0.0
 var _wurf_bau: Zonenbau
@@ -214,6 +219,8 @@ func _neuer_zonenbau(art: String, zelle: Vector2i) -> Zonenbau:
 func _spawn_zelle() -> Vector2i:
 	if _start_zelle != Werte.START_ZELLE:
 		return _start_zelle
+	if welle <= Werte.HAUPTLINIE_BIS:
+		return Werte.START_ZELLE   # die ersten Runden: alle über die Hauptlinie, nichts verteilt sich
 	return Vector2i(randi() % Werte.ZONE_SPALTEN, randi() % Werte.ZEILEN)
 
 
@@ -229,8 +236,7 @@ func _process(delta: float) -> void:
 
 	if endkampf and _schlange.is_empty():
 		# letzte Runde: nach kurzer Pause beginnt dieselbe Reihe Trupps von vorn
-		_schlange = (_welle["trupps"] as Array).duplicate(true)
-		_wurf_schlange.append_array((_welle["wurf"] as Array).duplicate(true))
+		_lade_durchgang()
 		_spawn_in = Werte.ENDKAMPF_PAUSE
 	if not _schlange.is_empty():
 		_spawn_in -= delta
@@ -241,13 +247,28 @@ func _process(delta: float) -> void:
 			g.trupp = _trupp
 			_trupp.append(g)
 			if typen.is_empty():
-				# Trupp vollständig: nach einer Pause kommt der nächste
+				# Trupp vollständig: nach einer Pause kommt der nächste (der Plan kann sie verlängern oder kürzen)
 				_schlange.pop_front()
+				_pausen.pop_front()
 				_trupp = []
+				_trupp_nr += 1
 				_spawn_in += Werte.ENDKAMPF_TRUPP_PAUSE if endkampf else Werte.TRUPP_PAUSE
+				if not _pausen.is_empty():
+					_spawn_in = maxf(_spawn_in + float(_pausen[0]), 0.6)
 			else:
 				_spawn_in += _welle["abstand"]
 	_wurf_tick(delta)
+	if OS.get_environment("TD_CP_LOG") != "" and welle == int(OS.get_environment("TD_CP_LOG")) and Engine.get_process_frames() % 240 == 0:
+		var zeilen := []
+		for e in einheiten:
+			zeilen.append("%s%s@%s->%s%s" % [e.daten["name"].substr(0, 4), ["Z", "P", "B", "I"][e.zustand], karte.zelle_bei(e.position), e._marschziel, "*" if ist_einnehmer(e) else ""])
+		print("CP t=%.0f feind=%s ruhig=%s gegner=%d | %s" % [_kampf_sek, karte.cp_feind, karte.checkpoints.map(func(c): return ist_ruhig(karte.mitte(c), Werte.CHECKPOINT_RUHE * Werte.ZELLE)), gegner.size(), " ".join(zeilen)])
+	for z: Vector2i in _ausfall_zeit.keys():
+		_ausfall_zeit[z] = float(_ausfall_zeit[z]) - delta
+		if _ausfall_zeit[z] <= 0.0 or not karte.ausgefallen.has(z):
+			_ausfall_zeit.erase(z)
+			if karte.ausgefallen.has(z):
+				repariere(z, true)
 
 	for z: Vector2i in fabriken:
 		var f: Dictionary = fabriken[z]
@@ -288,6 +309,11 @@ func _process(delta: float) -> void:
 				melde("Eine Truppe holt den verlorenen Checkpoint zurück ...", 4.0)
 			_nachspiel += delta
 			return
+		if OS.get_environment("TD_CP_LOG") != "" and karte.cp_feind.has(true):
+			var zeilen := []
+			for e in einheiten:
+				zeilen.append("%s%s@%s->%s%s L%d" % [e.daten["name"].substr(0, 4), ["Z", "P", "B", "I"][e.zustand], karte.zelle_bei(e.position), e._marschziel, "*" if ist_einnehmer(e) else "", e.leben])
+			print("ENDE R%d nachspiel=%.1f feind=%s kann=%s | %s" % [welle, _nachspiel, karte.cp_feind, _truppe_kann_checkpoint_holen(), " ".join(zeilen)])
 		_welle_geschafft()
 
 
@@ -299,12 +325,19 @@ func _truppe_kann_checkpoint_holen() -> bool:
 		if not karte.cp_feind[i]:
 			continue
 		for e in einheiten:
-			if e.zustand != Einheit.Zustand.BODEN or e.daten.get("pilot", false):
+			# Sind alle Gegner weg, darf auch eine Truppe aus einer Stellung gehen (siehe raeumen()).
+			if e.in_batterie() or e.daten.get("pilot", false):
 				continue
 			var hier := karte.zelle_bei(e.position)
 			if hier == karte.checkpoints[i] or not karte.einheiten_weg(hier, karte.checkpoints[i]).is_empty():
 				return true
 	return false
+
+
+## Kein Gegner mehr auf dem Feld und keiner mehr unterwegs: Jetzt holt die nächste Truppe einen verlorenen Checkpoint
+## zurück – notfalls verlässt sie dafür ihre Stellung. Sonst startet die nächste Welle von dort.
+func raeumen() -> bool:
+	return phase == Phase.KAMPF and not endkampf and gegner.is_empty() and _schlange.is_empty() and _wurf_schlange.is_empty() and _wurf_aktiv.is_empty() and _im_flug == 0
 
 
 ## Pro verlorenem Checkpoint geht nur eine Truppe zurückholen (die nächste Bodentruppe); die anderen kämpfen weiter.
@@ -315,18 +348,26 @@ func darf_checkpoint_holen(e: Einheit, cp: Vector2i) -> bool:
 	if i < 0:
 		return false
 	var amt = _cp_einnehmer.get(i)
-	if amt != null and is_instance_valid(amt) and einheiten.has(amt) and amt.am_boden():
+	var alle := raeumen()
+	if amt != null and is_instance_valid(amt) and einheiten.has(amt) and (amt.am_boden() or (alle and amt.in_stellung())):
 		return amt == e
 	var bester: Einheit = null
-	var beste_weite := INF
+	var beste_weite := 1 << 30
 	for u in einheiten:
 		# Auch wer gerade zu einer Stellung unterwegs ist, kommt in Frage: der Checkpoint geht vor.
-		if not u.am_boden() or u.daten.get("pilot", false):
+		if not (u.am_boden() or (alle and u.in_stellung())) or u.daten.get("pilot", false):
+			continue
+		# Wer schon einen anderen Checkpoint zurückholt, bleibt dabei: jeder verlorene Checkpoint bekommt seine eigene Truppe.
+		var vergeben := false
+		for k in _cp_einnehmer:
+			if k != i and _cp_einnehmer[k] == u and k < karte.checkpoints.size() and karte.cp_feind[k]:
+				vergeben = true
+		if vergeben:
 			continue
 		var hier := karte.zelle_bei(u.position)
-		if hier != cp and karte.einheiten_weg(hier, cp).is_empty():
+		var w := 0 if hier == cp else karte.einheiten_weg(hier, cp).size()   # Fußweg, nicht Luftlinie
+		if hier != cp and w == 0:
 			continue
-		var w := u.position.distance_to(karte.mitte(cp))
 		if w < beste_weite:
 			beste_weite = w
 			bester = u
@@ -598,10 +639,15 @@ func starte_welle() -> void:
 	_braende.clear()
 	karte.zeige_pfad_kraeftig = false
 	_welle = naechste_welle()
-	_schlange = (_welle["trupps"] as Array).duplicate(true)
 	_trupp = []
 	_im_flug = 0
-	_wurf_schlange = (_welle["wurf"] as Array).duplicate(true)
+	_wurf_schlange = []
+	_durchgang = 0
+	_abgesetzt.clear()
+	_ausfall_zeit.clear()
+	_reparaturen.clear()
+	_wurf_nahe = Vector2.INF
+	_lade_durchgang()
 	_wurf_aktiv = []
 	_wurf_sofort = false
 	_wurf_meiden = Vector2.INF
@@ -609,7 +655,7 @@ func starte_welle() -> void:
 		# Wer sich hinter einer dicken Mauer verschanzt, bekommt ein Rudel Hunde zusätzlich über die Mauer geworfen.
 		for b in zonenbauten:
 			if b.art == "wurf" and karte.wurf_mauer(b.zelle) >= Werte.WURF_MAUER_EXTRA:
-				_wurf_schlange.append(["hund", "hund", "hund", "hund"])
+				_wurf_schlange.append({"typen": ["hund", "hund", "hund", "hund"], "nach": 0, "wenn": ""})
 				melde("Die Wurf-Schleuder nimmt eure Mauer ins Visier.", 4.0)
 				break
 	if variante > 0 or welle >= Werte.WELLEN_VARIANTEN_AB:
@@ -622,9 +668,33 @@ func starte_welle() -> void:
 		fabriken[z]["timer"] = Werte.PRODUKTION_SEK - 0.5   # erste Einheit kommt sofort
 
 
+## Füllt die Schlangen mit dem nächsten Durchgang der Welle (in normalen Runden gibt es nur einen).
+func _lade_durchgang() -> void:
+	_durchgang += 1
+	_schlange = []
+	_pausen = []
+	_trupp_nr = 0
+	var trupps: Array = _welle["trupps"]
+	var jeder: Array = _welle.get("jeder", [])
+	var pausen: Array = _welle.get("pausen", [])
+	for i in trupps.size():
+		if i < jeder.size() and int(jeder[i]) > 1 and _durchgang % int(jeder[i]) != 0:
+			continue
+		_schlange.append((trupps[i] as Array).duplicate())
+		_pausen.append(float(pausen[i]) if i < pausen.size() else 0.0)
+	var info: Array = _welle.get("wurf_info", [])
+	var wuerfe: Array = _welle["wurf"]
+	for i in wuerfe.size():
+		var eintrag := {"typen": (wuerfe[i] as Array).duplicate(), "nach": 0, "wenn": ""}
+		if i < info.size():
+			eintrag["nach"] = int(info[i]["nach"])
+			eintrag["wenn"] = String(info[i]["wenn"])
+		_wurf_schlange.append(eintrag)
+
+
 ## Die Welle, die als Nächstes kommt – in der Sandbox mit den dort eingestellten Gegnerzahlen.
 func naechste_welle() -> Dictionary:
-	var w := Werte.welle(Werte.ENDKAMPF_WIE_WELLE if endkampf else welle, variante, Werte.LETZTE_RUNDE if endkampf else -1)
+	var w := Werte.welle(welle)
 	if not sandbox or sandbox_gegner.is_empty():
 		return w
 	var anzahl := {}
@@ -659,6 +729,11 @@ func naechste_welle() -> Dictionary:
 				uebrig = true
 	w["gruppen"] = gruppen
 	w["trupps"] = trupps
+	w["pausen"] = []
+	w["jeder"] = []
+	w["wurf"] = []
+	w["wurf_info"] = []
+	w["name"] = "Eigene Welle"
 	return w
 
 
@@ -732,7 +807,7 @@ func _welle_geschafft() -> void:
 		karte.schild = false
 		karte.zeige_angriff = true
 		karte.aktualisiere_pfad()
-		melde("Letzte Runde: Der Schild ist gefallen! Truppen ohne Stellung marschieren zum HQ. Gib ihnen einen Fußweg (blaue Linie).", 10.0)
+		melde("Letzte Runde: Der Schild ist gefallen! Sie reißen eure Verteidigung Stück für Stück ein – zerstört das HQ, bevor nichts mehr steht. Gebt euren Truppen einen Fußweg (blaue Linie).", 12.0)
 	phase = Phase.BAU
 	karte.zeige_pfad_kraeftig = true
 	for e in einheiten:
@@ -789,6 +864,110 @@ func vorderster_gegner() -> Gegner:
 			kleinster = rest
 			bester = g
 	return bester
+
+
+## Wo fängt diese Bodentruppe einen Gegner ab? Ein Feld auf dem Weg eines Gegners, an dem sie VOR ihm ankommt.
+## Sie läuft also entgegen (auch durch ein Tor), nie hinterher. Karte.KEINE = niemand ist abzufangen: stehen bleiben.
+func abfangfeld(e: Einheit) -> Vector2i:
+	var hier := karte.zelle_bei(e.position)
+	var grenze := Werte.ZONE_SPALTEN + (0 if endkampf else Werte.ZONE_ABSTAND)
+	for cp: Vector2i in karte.checkpoints:
+		grenze = mini(grenze, cp.x)   # ein Checkpoint nah an der Zone wird trotzdem verteidigt
+	var e_tempo: float = maxf(float(e.daten["tempo"]), 0.1)
+	var kandidaten: Array = []
+	for g in gegner:
+		if not _geschuetzt(g) and g.rest_weg() < (1 << 20):
+			kandidaten.append(g)
+	kandidaten.sort_custom(func(x: Gegner, y: Gegner): return x.rest_weg() < y.rest_weg())
+	var geprueft := 0
+	var gesehen := {}
+	for g: Gegner in kandidaten:
+		var weg: Array[Vector2i] = g.kommender_weg(Werte.ABFANG_WEIT)
+		if weg.is_empty() or gesehen.has(weg[0]):
+			continue   # Gegner desselben Trupps laufen denselben Weg: einmal prüfen reicht
+		gesehen[weg[0]] = true
+		geprueft += 1
+		if geprueft > 4:
+			break
+		# Ein stehender Gegner (nimmt einen Checkpoint ein, kämpft) kommt nicht entgegen: zu ihm hingehen.
+		var g_tempo: float = 0.02 if g.steht() else maxf(g.tempo(), 0.1)
+		for i in weg.size():
+			var z: Vector2i = weg[i]
+			if z.x < grenze or not karte.ist_frei(z):
+				continue
+			if z != hier and _abfaenger_auf(z, e) >= Werte.ABFANG_JE_FELD:
+				continue
+			var zu_fuss := karte.einheiten_weg(hier, z)
+			if zu_fuss.is_empty() and z != hier:
+				continue
+			# rechtzeitig da? (eine halbe Sekunde Luft)
+			if maxi(zu_fuss.size() - 1, 0) / e_tempo <= i / g_tempo + 0.5:
+				return z
+	return Karte.KEINE
+
+
+func _abfaenger_auf(z: Vector2i, ausser: Einheit) -> int:
+	var n := 0
+	for e in einheiten:
+		if e != ausser and e.marschziel() == z:
+			n += 1
+	return n
+
+
+# ------------------------------------------------------------ Reparatur durch Reservepiloten
+
+var _ausfall_zeit: Dictionary = {}  # von einem Sprenger gesprengte Fabrik -> Sekunden, bis sie von selbst wieder läuft
+var _reparaturen: Dictionary = {}   # Gebäude- oder Turmfeld -> Pilot, der es gerade übernimmt
+
+## Das nächste kaputte Ding, das dieser Pilot zu Fuß erreicht: {"z": Feld, "neben": Feld daneben} oder {}.
+func reparaturziel(pilot: Einheit) -> Dictionary:
+	var hier := karte.zelle_bei(pilot.position)
+	var kaputt: Array[Vector2i] = []
+	for z: Vector2i in karte.ausgefallen:
+		kaputt.append(z)
+	for z: Vector2i in karte.turm_schaden:
+		if karte.turm_lahm(z):
+			kaputt.append(z)
+	var bestes := {}
+	var beste := 1 << 20
+	for z in kaputt:
+		var wer: Variant = _reparaturen.get(z)
+		if is_instance_valid(wer) and wer != pilot and einheiten.has(wer):
+			continue
+		for n in Karte.NACHBARN:
+			var neben: Vector2i = z + n
+			if not karte.ist_frei(neben):
+				continue
+			var weg := karte.einheiten_weg(hier, neben)
+			if weg.is_empty() and hier != neben:
+				continue
+			if weg.size() < beste:
+				beste = weg.size()
+				bestes = {"z": z, "neben": neben}
+	if not bestes.is_empty():
+		_reparaturen[bestes["z"]] = pilot
+	return bestes
+
+
+func ist_kaputt(z: Vector2i) -> bool:
+	return karte.ausgefallen.has(z) or karte.turm_lahm(z)
+
+
+func repariere(z: Vector2i, still: bool = false) -> void:
+	_reparaturen.erase(z)
+	if OS.get_environment("TD_WURF_LOG") != "":
+		print("REPARIERT R%d %s (%s)" % [welle, z, "Turm" if karte.turm_lahm(z) else "Gebäude"])
+	if karte.turm_lahm(z):
+		karte.turm_schaden.erase(z)
+		melde("Ein Reservepilot hat einen Turm wieder in Gang gebracht.", 3.0)
+	elif karte.ausgefallen.has(z):
+		for betroffen: Vector2i in [z, karte.paar.get(z, Karte.KEINE)]:
+			if betroffen != Karte.KEINE and karte.feld.has(betroffen):
+				karte.ausgefallen.erase(betroffen)
+				karte.leben[betroffen] = karte.max_leben(karte.feld[betroffen])
+		if not still:
+			melde("Ein Reservepilot hat ein ausgefallenes Gebäude repariert.", 3.0)
+	karte.queue_redraw()
 
 
 ## Ist im Umkreis von `radius` um `punkt` gerade kein Gegner?
@@ -947,6 +1126,10 @@ func schleuderziel(von: Vector2, weite: float) -> Variant:
 			bestes = e
 	if bestes != null:
 		return bestes
+	# keine Stellung in Reichweite: dann auf den dichtesten Haufen Bodentruppen (Flächentreffer)
+	var haufen: Variant = haufen_ziel(von, weite)
+	if haufen != null:
+		return haufen
 	for z: Vector2i in karte.feld:
 		if (karte.feld[z] != Karte.FABRIK and karte.feld[z] != Karte.BATTERIE) or karte.ausgefallen.has(z):
 			continue
@@ -957,9 +1140,57 @@ func schleuderziel(von: Vector2, weite: float) -> Variant:
 	return bestes
 
 
+## Mitte des dichtesten Haufens von Bodentruppen in Reichweite (mindestens Werte.HAUFEN_MIN), sonst null.
+func haufen_ziel(von: Vector2, weite: float, ohne_rauch: bool = false) -> Variant:
+	var bestes: Variant = null
+	var meiste := Werte.HAUFEN_MIN - 1
+	var radius := Werte.HAUFEN_RADIUS * Werte.ZELLE
+	for e in einheiten:
+		if not e.bodentruppe() or von.distance_to(e.position) > weite or (ohne_rauch and effekte.im_rauch(e.position)):
+			continue
+		var n := 0
+		for f in einheiten:
+			if f.bodentruppe() and e.position.distance_to(f.position) <= radius:
+				n += 1
+		if n > meiste:
+			meiste = n
+			bestes = e.position
+	return bestes
+
+
+func _einschlag_haufen(punkt: Vector2) -> void:
+	var radius := Werte.HAUFEN_RADIUS * Werte.ZELLE
+	effekte.flaeche(punkt, radius, Color("c9a26b"))
+	if OS.get_environment("TD_WURF_LOG") != "":
+		print("HAUFEN R%d Stein bei %s" % [welle, karte.zelle_bei(punkt)])
+	for e in einheiten.duplicate():
+		if is_instance_valid(e) and e.bodentruppe() and e.position.distance_to(punkt) <= radius:
+			e.nimm_schaden(Werte.SCHLEUDER["schaden_haufen"])
+
+
+## Ein Sprenger ohne lohnenden Erdwall hat eine Fabrik erreicht: Sie fällt für die Runde aus, Bodentruppen daneben werden getroffen.
+func sprengung_fabrik(g: Gegner, z: Vector2i) -> void:
+	var mitte := karte.mitte(z)
+	for i in 8:
+		effekte.linie(mitte, mitte + Vector2.RIGHT.rotated(TAU * i / 8.0) * 60.0, Color("ffb347"))
+	gegner_entfernt(g)
+	if karte.beschiesse(z, Werte.SPRENGER_FABRIK_SCHADEN):
+		_ausfall_zeit[z] = Werte.SPRENGER_FABRIK_SEK
+	if OS.get_environment("TD_WURF_LOG") != "":
+		print("SPRENGT FABRIK R%d %s" % [welle, z])
+	var radius := Werte.SPRENGER_TRUPP_RADIUS * Werte.ZELLE
+	effekte.flaeche(mitte, radius, Color("ffb347"))
+	for e in einheiten.duplicate():
+		if is_instance_valid(e) and e.bodentruppe() and e.position.distance_to(mitte) <= radius:
+			e.nimm_schaden(Werte.SPRENGER_TRUPP_SCHADEN)
+	melde("Ein Sprenger hat eine Fabrik gesprengt – sie fällt %d Sekunden aus." % int(Werte.SPRENGER_FABRIK_SEK), 4.0)
+
+
 func wurf(von: Zonenbau, ziel: Variant) -> void:
 	# Eine Einheit kann sterben, während der Stein fliegt: deshalb nur ihre Kennung mitgeben, nicht das Objekt.
-	if ziel is Vector2i:
+	if ziel is Vector2:
+		effekte.wurf(von.position + Vector2(0, -30), ziel, Werte.SCHLEUDER["flugzeit"], _einschlag_haufen.bind(ziel))
+	elif ziel is Vector2i:
 		effekte.wurf(von.position + Vector2(0, -30), karte.mitte(ziel), Werte.SCHLEUDER["flugzeit"], _einschlag_gebaeude.bind(ziel))
 	else:
 		var e := ziel as Einheit
@@ -1014,48 +1245,75 @@ func _wurf_tick(delta: float) -> void:
 			schleudern.append(b)
 	if schleudern.is_empty():
 		# keine Wurf-Schleuder (mehr): die restlichen Wurf-Trupps laufen zu Fuß
-		if not _wurf_schlange.is_empty():
-			_schlange.append_array(_wurf_schlange)
-			_wurf_schlange = []
+		for eintrag: Dictionary in _wurf_schlange:
+			_schlange.append(eintrag["typen"])
+			_pausen.append(0.0)
+		_wurf_schlange = []
 		if not _wurf_aktiv.is_empty():
 			_schlange.append(_wurf_aktiv)
+			_pausen.append(0.0)
 			_wurf_aktiv = []
 		return
 	if _wurf_aktiv.is_empty():
 		if _wurf_schlange.is_empty():
-			if not _wurf_sofort:
-				return
-			_wurf_schlange.append(["hund", "hund", "hund", "hund"])   # Belagerung: ein Rudel als Zange obendrauf
-		if not _wurf_sofort and _kampf_sek < float(Werte.WURF["wartet"]) and not endkampf:
+			return
+		# Würfe, die auf einen Belagerungsturm warten, obwohl keiner mehr kommt: normal werfen
+		var turm_kommt := false
+		for typen: Array in _schlange:
+			if typen.has("belagerung"):
+				turm_kommt = true
+		for g in gegner:
+			if g.rolle == "belagerung":
+				turm_kommt = true
+		# der nächste Wurf, der dran ist: sein Auslöser ist erfüllt und genug Lauf-Trupps sind unterwegs
+		var dran := -1
+		for i in _wurf_schlange.size():
+			var e: Dictionary = _wurf_schlange[i]
+			if e["wenn"] != "" and not turm_kommt:
+				e["wenn"] = ""
+			if e["wenn"] == "" and (int(e["nach"]) <= _trupp_nr or _schlange.is_empty()):
+				dran = i
+				break
+		if dran < 0:
+			return
+		var eilt: bool = _wurf_schlange[dran].get("eilt", false)
+		if not eilt and _kampf_sek < float(Werte.WURF["wartet"]) and not endkampf:
 			return   # sie hält sich zurück, bis die eigenen Truppen vorgerückt sind
 		_wurf_bau = null
 		for b: Zonenbau in schleudern:
-			if b.wurfbereit() or (_wurf_sofort and _wurf_bau == null):
+			if b.wurfbereit() or (eilt and _wurf_bau == null):
 				_wurf_bau = b
 				if b.wurfbereit():
 					break
 		if _wurf_bau == null:
 			return
-		var ziel := karte.wurf_landefeld(_wurf_bau.zelle, _wurf_meiden, Werte.WURF_BELAGERUNG_ABSTAND)
+		var eintrag: Dictionary = _wurf_schlange[dran]
+		var ziel := {}
+		if eintrag.has("nahe"):
+			var feld := karte.freies_feld_nahe(eintrag["nahe"])
+			if feld != Karte.KEINE:
+				ziel = {"z": feld, "mauer": 0.0}
+		elif eintrag.has("meiden"):
+			ziel = karte.wurf_landefeld(_wurf_bau.zelle, eintrag["meiden"], Werte.WURF_BELAGERUNG_ABSTAND)
 		if ziel.is_empty():
 			ziel = karte.wurf_landefeld(_wurf_bau.zelle)
-		_wurf_sofort = false
-		_wurf_meiden = Vector2.INF
 		if ziel.is_empty():
 			return
 		_wurf_landung = ziel["z"]
 		# Geworfene stürmen den nächsten Checkpoint, den der Gegner noch nicht hält – nicht die Basis.
 		_wurf_ziel = karte.sturmziel_ab(_wurf_landung)
 		_wurf_bau.hat_geworfen()
-		_wurf_aktiv = _wurf_schlange.pop_front()
+		_wurf_schlange.remove_at(dran)
+		_wurf_aktiv = eintrag["typen"]
 		if OS.get_environment("TD_WURF_LOG") != "":
-			print("WURF R%d v%d t=%.1f  %s -> %s  Umweg %.0f  %s" % [welle, variante, _kampf_sek, _wurf_bau.zelle, _wurf_landung, ziel["mauer"], _wurf_aktiv])
+			print("WURF R%d t=%.1f  %s -> %s  %s  %s" % [welle, _kampf_sek, _wurf_bau.zelle, _wurf_landung, _wurf_aktiv, "nahe Turm" if eintrag.has("nahe") else ("Zange" if eintrag.has("meiden") else "")])
 		_wurf_trupp = []
 		_wurf_takt = 0.0
 		var dauer: float = Werte.WURF["flugzeit"] + Werte.WURF["abstand"] * _wurf_aktiv.size() + 0.5
 		effekte.warnung(karte.mitte(_wurf_landung), dauer)
 	if not is_instance_valid(_wurf_bau):
 		_schlange.append(_wurf_aktiv)   # Schleuder mitten im Wurf zerstört: der Rest läuft
+		_pausen.append(0.0)
 		_wurf_aktiv = []
 		return
 	_wurf_takt -= delta
@@ -1067,10 +1325,29 @@ func _wurf_tick(delta: float) -> void:
 	effekte.wurf(_wurf_bau.position + Vector2(0, -30), karte.mitte(_wurf_landung), Werte.WURF["flugzeit"], _hund_landet.bind(_wurf_landung, _wurf_ziel, _wurf_trupp, typ))
 
 
-## Ein Belagerungsturm hat angedockt: Die Wurf-Schleuder wirft sofort – und zwar weit weg von ihm, die Verteidiger sitzen in der Zange.
+## Ein Belagerungsturm hat angedockt: Sieht der Plan dafür einen Wurf vor, fliegt er sofort – weit weg vom Turm (Zange).
 func belagerung_dockt(g: Gegner) -> void:
-	_wurf_sofort = true
-	_wurf_meiden = g.position
+	_loese_wurf_aus("dock", {"meiden": g.position})
+
+
+## Ein Belagerungsturm hat eine Turmtruppe abgesetzt. Bei der zweiten fliegt – falls geplant – ein Wurf auf die Verteidiger am Turm.
+func turmtruppe_abgesetzt(turm: Gegner) -> void:
+	_abgesetzt[turm] = int(_abgesetzt.get(turm, 0)) + 1
+	if _abgesetzt[turm] == 2:
+		_loese_wurf_aus("drohnen", {"nahe": turm.position})
+
+
+func _loese_wurf_aus(wenn: String, zusatz: Dictionary) -> void:
+	for i in _wurf_schlange.size():
+		var e: Dictionary = _wurf_schlange[i]
+		if e["wenn"] == wenn:
+			e["wenn"] = ""
+			e["nach"] = 0
+			e["eilt"] = true
+			e.merge(zusatz)
+			_wurf_schlange.remove_at(i)
+			_wurf_schlange.push_front(e)
+			return
 
 
 func _hund_landet(zelle: Vector2i, erstes_ziel: int, rudel: Array, typ: String = "hund") -> void:
@@ -1103,7 +1380,7 @@ func schleuder_umzug(b: Zonenbau, sofort: bool) -> void:
 func sprenger_stuecke(ausser: Gegner) -> Array:
 	var stuecke: Array = []
 	for g in gegner:
-		if g != ausser and g.rolle == "sprenger" and g.sprengt() != Karte.KEINE:
+		if g != ausser and g.rolle == "sprenger" and g.sprengt() != Karte.KEINE and karte.inhalt(g.sprengt()) == Karte.WALL:
 			stuecke.append(karte.stueck_nr(g.sprengt()))
 	return stuecke
 
@@ -1166,10 +1443,14 @@ func rauchziel(von: Vector2, weite: float) -> Variant:
 		if n > meiste:
 			meiste = n
 			bestes = e.position
+	if bestes == null:
+		bestes = haufen_ziel(von, weite, true)   # keine Stellungen: dann den dichtesten Haufen am Boden einnebeln
 	return bestes
 
 
 func lege_rauch(von: Vector2, punkt: Vector2) -> void:
+	if OS.get_environment("TD_WURF_LOG") != "":
+		print("RAUCH R%d auf %s" % [welle, karte.zelle_bei(punkt)])
 	effekte.wurf(von + Vector2(0, -20), punkt, 0.8, effekte.rauch.bind(punkt, Werte.RAUCH_RADIUS * Werte.ZELLE, Werte.RAUCH_SEK))
 
 
@@ -1214,7 +1495,12 @@ func einheit_gefallen(e: Einheit) -> void:
 	e.queue_free()
 
 
-func _bei_ausfall(_zelle: Vector2i, typ: int) -> void:
+func _bei_ausfall(zelle: Vector2i, typ: int) -> void:
+	if endkampf:
+		# Letzte Runde: sie hat kein Ende – ausgefallene Gebäude laufen nach kurzer Zeit von selbst wieder an.
+		_ausfall_zeit[zelle] = Werte.SPRENGER_FABRIK_SEK
+		melde("Eine %s ist ausgefallen – sie läuft in %d Sekunden wieder an." % ["Batterie" if typ == Karte.BATTERIE else "Fabrik", int(Werte.SPRENGER_FABRIK_SEK)], 3.0)
+		return
 	melde("Eine %s ist ausgefallen – sie arbeitet erst nächste Runde wieder." % ("Batterie" if typ == Karte.BATTERIE else "Fabrik"), 4.0)
 
 
@@ -1252,7 +1538,7 @@ func kosten(typ: int) -> int:
 		Karte.BATTERIE:
 			return Werte.KOSTEN_BATTERIE
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
-	return Werte.KOSTEN_FABRIK + Werte.KOSTEN_FABRIK_ZUWACHS * _normale_fabriken()
+	return int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + Werte.KOSTEN_FABRIK_PROZENT / 100.0, _normale_fabriken()) / 5.0)) * 5
 
 
 func _normale_fabriken() -> int:
@@ -1265,9 +1551,13 @@ func _normale_fabriken() -> int:
 
 ## So viele Truppen hält diese Fabrik am Leben.
 func truppen_limit(z: Vector2i) -> int:
+	var stufe := int(fabriken[z].get("stufe", 0)) if fabriken.has(z) else 0
+	if fabriken.has(z) and fabriken[z]["typ"] == "pilot":
+		# Pilotenfabrik: immer genug für die Batterie, mit Stufe 1 ein Reservepilot dazu
+		return int(Werte.BATTERIE["plaetze"]) + (1 if stufe >= 1 else 0)
 	var n := (Werte.MAX_JE_FABRIK_ENDKAMPF if endkampf else Werte.MAX_JE_FABRIK) + sandbox_truppen
 	n = maxi(n, 1)
-	if fabriken.has(z) and int(fabriken[z].get("stufe", 0)) >= 1:
+	if stufe >= 1:
 		n += Werte.STUFE_1_TRUPPEN
 	return n
 
@@ -1480,7 +1770,7 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 		return true
 	_notiere(eintrag)
 	if stufe == 0:
-		melde("Spezialisiert auf %s: hält jetzt eine Truppe mehr und bleibt bei dieser Truppe." % d["name"], 4.0)
+		melde("Spezialisiert auf %s: hält jetzt drei Truppen und bleibt bei dieser Truppe." % d["name"], 4.0)
 	else:
 		melde("%s Stufe 2: %s." % [d["name"], Werte.STUFE_2[fabriken[z]["typ"]]["text"]], 5.0)
 	return true
@@ -1491,10 +1781,10 @@ func _werte_batterie_auf(pz: Vector2i) -> bool:
 	var stufe := int(fabriken[pz].get("stufe", 0))
 	if stufe >= Werte.BATTERIE_STUFEN.size():
 		return false
-	if budget < Werte.KOSTEN_STUFE[stufe]:
+	if budget < Werte.KOSTEN_BATTERIE_STUFE[stufe]:
 		melde("Nicht genug Budget.")
 		return false
-	budget -= Werte.KOSTEN_STUFE[stufe]
+	budget -= Werte.KOSTEN_BATTERIE_STUFE[stufe]
 	fabriken[pz]["stufe"] = stufe + 1
 	karte.fabrik_stufe[pz] = stufe + 1
 	karte.fabrik_stufe[karte.paar[pz]] = stufe + 1
@@ -1703,8 +1993,8 @@ func _noch_offen() -> int:
 	var n := _wurf_aktiv.size() + _im_flug
 	for typen: Array in _schlange:
 		n += typen.size()
-	for typen: Array in _wurf_schlange:
-		n += typen.size()
+	for eintrag: Dictionary in _wurf_schlange:
+		n += (eintrag["typen"] as Array).size()
 	return n
 
 
@@ -1737,7 +2027,7 @@ func _aktualisiere_hud(delta: float) -> void:
 	elif phase == Phase.KAMPF:
 		_lbl_vorschau.text = "Läuft: %s – noch %d" % [_wellen_text(_welle, false), _noch_offen() + gegner.size()]
 	else:
-		_lbl_vorschau.text = "Nächste: %s" % _wellen_text(naechste_welle())
+		_lbl_vorschau.text = "%s: %s" % [naechste_welle().get("name", "Nächste"), _wellen_text(naechste_welle())]
 
 	# lange Ansagen etwas kleiner, damit sie nicht in "[H] Formationen" laufen
 	_lbl_vorschau.add_theme_font_size_override("font_size", 16 if _lbl_vorschau.text.length() <= 72 else (14 if _lbl_vorschau.text.length() <= 84 else 12))

@@ -19,7 +19,7 @@
   ab der Mitte, die blassen den vom oberen und unteren Rand.
 - **Schleuder** (ab Runde 5, ab Runde 8 zwei) steht in der Zone und wirft auf Truppen in Stellungen, auf Fabriken
   und auf Batterien im pinken Kreis. Angreifbar sind sie erst in der letzten Runde.
-- **Letzte Runde (Runde 15): Gegenangriff.** Der Schild fällt, Gegner kommen ohne Ende, jede Fabrik hält 5 statt 3 Truppen. Truppen ohne Stellung marschieren zum HQ des Die Bodentruppen treten durchs Schild in die Zone, jede auf ein eigenes Feld in Schussweite zum HQ, und schießen im Vorrücken.
+- **Letzte Runde (Runde 20): Gegenangriff.** Der Schild fällt, Gegner kommen ohne Ende, jede Fabrik hält 5 statt 3 Truppen. Truppen ohne Stellung marschieren zum HQ des Die Bodentruppen treten durchs Schild in die Zone, jede auf ein eigenes Feld in Schussweite zum HQ, und schießen im Vorrücken.
   Gegners; die blaue Linie zeigt ihren Fußweg durch dein eigenes Labyrinth. Ohne Fußweg kommen sie nicht an.
   Sieg, wenn das HQ zerstört ist.
 - Erdwälle lenken den Weg um, egal wie lang der Umweg wird. Nur wenn es gar keinen Weg mehr gibt, reißen die Gegner das rot markierte Feld ein.
@@ -71,17 +71,57 @@
 3. Sonst in der letzten Runde zum HQ des Gegners.
 4. Sonst der Spitze des Gegners auf der Hauptlinie entgegen, erst danach zu Gegnern abseits davon.
 
+## Wer nichts baut, wird trotzdem getroffen
+- **Fabrikpreis:** Jede weitere Fabrik kostet 25 % mehr als die vorige (50, 65, 80, 100, 120, 155, 190, 240, 300, 375 …).
+- **Haufen am Boden:** Stehen mindestens 3 Bodentruppen dicht beieinander und ist keine Stellung in Reichweite, wirft die Stein-Schleuder auf den Haufen (Flächentreffer). Rauchwerfer nebeln ohne Stellungen ebenfalls den dichtesten Haufen ein.
+- **Sprenger ohne lohnenden Erdwall** laufen zur nächsten Fabrik und sprengen sie: Sie fällt für die Runde aus, Bodentruppen daneben werden getroffen.
+- **Abstand zur Zone:** Eigene Truppen bleiben 2 Felder vor der Zone stehen (ein Checkpoint näher an der Zone wird trotzdem verteidigt) (außer in der letzten Runde), damit die Gegner herauskommen.
+
+## Truppen sind knapp
+- **Eine Fabrik hält 2 Truppen.** Stufe 1 (50) legt sie auf eine Truppe fest und gibt die dritte. Stufe 2 kostet 150, Stufe 3 400. Batterie-Stufen: 100 / 150 / 400.
+- **Entgegenlaufen, nie hinterher:** Bodentruppen suchen ein Feld auf dem Weg eines Gegners, an dem sie vor ihm ankommen (auch durch ein Tor), höchstens zwei je Feld. Wer nicht mehr abzufangen ist, gehört den Stellungen, Türmen und Batterien weiter hinten.
+- **Runden 1 und 2:** Alle Gegner kommen über die Hauptlinie, nichts verteilt sich.
+- **Reservepilot (Batterie Stufe 1):** Der vierte Pilot läuft zu ausgefallenen Fabriken, Batterien und lahmgelegten Türmen und repariert sie in 5 Sekunden.
+- **Sprengung einer Fabrik** legt sie 25 Sekunden lahm (Beschuss durch Sphären und Schleudern weiter bis zum Rundenende).
+- **Runde 20:** Niemand geht mehr in eine Stellung, alle greifen an. Das HQ hat 3000 Leben. Ausgefallene Gebäude laufen dort nach 25 Sekunden von selbst wieder an.
+
+## Die 20 Wellen
+Jede Runde hat einen Plan mit Namen; die Vorschau zeigt ihn („Nebelwand: 3 Rauch · 6 Sphäre …“). Ein Plan legt fest, welche Trupps in welcher Reihenfolge kommen, was geworfen wird und wann. Alle Pläne stehen in `scripts/werte.gd` unter `WELLEN` (Vorlage: `wellen-entwurf-20.xlsx`).
+
+| Runde | Plan | Stufe | Idee |
+|---|---|---|---|
+| 1–2 | Erste Rudel, Rudel | Einführung | nur Hunde |
+| 3 | Späher | Einführung | eine Battlesphäre allein am Schluss |
+| 4 | Feuerschutz | Kombination | Sphären im Schutz eines Rudels |
+| 5 | Vorstoß | Einführung | Checkpoints, Stein-Schleuder |
+| 6 | Die Fahne | Einführung | ein Fahnentrupp |
+| 7 | Kleiner Fahnensturm | Kombination | zwei Fahnentrupps direkt hintereinander |
+| 8 | Sprengmeister | Einführung | zwei Sprenger allein und gut sichtbar |
+| 9 | Köder | Kombination | dickes Rudel, 20 s später die Sprenger |
+| 10 | Über die Mauer | Einführung | Wurf-Schleuder, nur Hunde |
+| 11 | Dunst | Einführung | Rauchwerfer |
+| 12 | Nebelwand | Kombination | 3 Rauchwerfer voraus, 6 Sphären dahinter |
+| 13 | Der Turm | Einführung | Belagerungsturm, keine Sprenger |
+| 14 | Abrisskommando | Kombination | nur Sprenger, Rauchwerfer, Sphären – kein Hund |
+| 15 | Fahnensturm | Prüfung | drei Fahnentrupps in Folge plus ein geworfener |
+| 16 | Zange | Kombination | Turm dockt an → Fahnenwurf weit weg; nach 2 Turmtruppen → 4 Hunde auf die Verteidiger am Turm |
+| 17 | Köder und Abriss | Prüfung | Köder, dann Sprenger zu Fuß und geworfen |
+| 18 | Doppelbelagerung | Prüfung | zwei Türme, Rauch voraus |
+| 19 | Generalprobe | Prüfung | alles gestaffelt |
+| 20 | Gegenangriff | Finale | Wettlauf: je Durchgang 4 Sprenger, Türme jeden 3. Durchgang, HQ hat 3000 Leben |
+
+Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×3,4.
+
 ## Gegnertypen (entworfene Runden, Ansage in der Bauphase davor)
 | Runde | Neu | Regel |
 |---|---|---|
 | 3 | Battlesphäre | Fernkämpfer, schießt im Laufen |
 | 5 | Checkpoints, Schleuder | siehe oben |
 | 6 | Fahnenträger | Sein Trupp stürmt in seinem Tempo. Er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Er hinterlässt für 3 Sekunden eine Spur: Gegner, die ihr folgen, stürmen in seinem Tempo mit. |
-| 8 | Sprenger, zweite Schleuder | Zwei Sprenger (ab Runde 12 drei) laufen im Schatten des ersten Fahnentrupps (ohne Fahne kommen sie zuerst), ab Runde 11 begleitet von einem Rauchwerfer, der die Stellungen an der Sprengstelle einnebelt. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung reißt auch den Erdwall direkt dahinter mit; Erdwälle mit Turm halten stand. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
-| 10 | Wurf-Schleuder | Wirft Trupps zu vier über die Wälle – nicht nur Hunde, je nach Runde auch Fahnenträger, Sprenger oder Rauchwerfer. Die Vorschau sagt nur, WAS geworfen wird („Wurf: Fahne, Sprenger“), nicht wohin; erst in der Welle markiert ein roter Kreis den Landepunkt. Ziel ist die Stelle hinter der Wallgruppe, die den Gegnern den größten Umweg abverlangt, gern nahe an einem Checkpoint. Gibt es keine echte Mauer, wirft sie weiter (blasser Kreis, 10 Felder) in Taschen zwischen Erdwällen. Bei einer sehr dicken Mauer kommt ein Rudel Hunde zusätzlich. Dockt ein Belagerungsturm an, wirft sie sofort auf die andere Seite. Ab Runde 13 gibt es eine zweite. |
-| ab 10 | Varianten | Jede Runde kommt in einer von zwei Varianten (andere Würfe, in Variante B ein früher Belagerungsturm). Die Vorschau zeigt die Würfe der gewählten Variante. |
+| 8 | Sprenger, zweite Schleuder | Sprenger kommen so, wie es der Plan der Runde vorsieht (siehe „Die 20 Wellen“). Läuft ein Rauchwerfer in Reichweite, nebelt er zuerst die Stellungen an der Sprengstelle ein. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung reißt auch den Erdwall direkt dahinter mit; Erdwälle mit Turm halten stand. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
+| 10 | Wurf-Schleuder | Wirft Trupps zu vier über die Wälle – nicht nur Hunde, je nach Runde auch Fahnenträger, Sprenger oder Rauchwerfer. Die Vorschau sagt nur, WAS geworfen wird („Wurf: Fahne, Sprenger“), nicht wohin; erst in der Welle markiert ein roter Kreis den Landepunkt. Ziel ist die Stelle hinter der Wallgruppe, die den Gegnern den größten Umweg abverlangt, gern nahe an einem Checkpoint. Gibt es keine echte Mauer, wirft sie weiter (blasser Kreis, 10 Felder) in Taschen zwischen Erdwällen. Bei einer sehr dicken Mauer kommt ein Rudel Hunde zusätzlich. Dockt ein Belagerungsturm an, wirft sie sofort auf die andere Seite. Ab Runde 14 gibt es eine zweite. |
 | 11 | Rauchwerfer | Wirft Rauch auf die dichteste Gruppe von Stellungen. Truppen im Rauch schießen einige Sekunden nicht, Türme schon. |
-| 12 | Belagerungsturm | Fährt zum Wallstück mit den meisten Stellungen und dockt an. Solange er steht (höchstens 40 Sekunden), setzt er alle 3 Sekunden eine Turmtruppe ab, bis zu sechs zugleich. Sie laufen auf zusammenhängenden Wällen, greifen Stellungen im Nahkampf an und legen Türme für den Rest der Runde lahm. Ohne Ziel springen sie ab und laufen zur Basis. |
+| 13 | Belagerungsturm | Fährt zum Wallstück mit den meisten Stellungen und dockt an. Solange er steht (höchstens 40 Sekunden), setzt er alle 3 Sekunden eine Turmtruppe ab, bis zu sechs zugleich. Sie laufen auf zusammenhängenden Wällen, greifen Stellungen im Nahkampf an und legen Türme für den Rest der Runde lahm. Ohne Ziel springen sie ab und laufen zur Basis. |
 | 15 | Letzte Runde | Gegenangriff auf das HQ. Drei Laser verteidigen die Zone (flach, nur gegen Bodentruppen, Wälle geben Deckung), Gegner kommen in dichter Folge. |
 
 ## Preise
@@ -121,7 +161,7 @@ Sie dient nur der Ideenfindung, gebaut wird weiter von Hand.
 
 Die Pläne stehen in `werkzeuge/plaene.gd` als Zeichenraster und lassen sich dort ändern oder ergänzen.
 
-`werkzeuge/formtest.gd` lässt dieselben Pläne gegen die 15 Runden laufen und schreibt je Lauf eine JSON-Zeile
+`werkzeuge/formtest.gd` lässt dieselben Pläne gegen die 20 Runden laufen und schreibt je Lauf eine JSON-Zeile
 (`frei` = ganze Formation ab Runde 2, `budget` = Teilausbau mit echtem Budget):
 
     godot --headless --path . --fixed-fps 60 -s werkzeuge/formtest.gd -- <Ausgabedatei> <frei|budget> <Läufe> [Plan ...]

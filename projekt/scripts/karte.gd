@@ -1018,6 +1018,40 @@ func wurf_landefeld(von: Vector2i, meiden: Vector2 = Vector2.INF, meiden_r: floa
 	return {}
 
 
+## Die nächste arbeitende Fabrik, die ein Gegner von `von` aus zu Fuß erreicht: {"wall": Fabrikfeld, "weg": Weg bis daneben} oder {}.
+func fabrikziel(von: Vector2i) -> Dictionary:
+	var bestes := {}
+	for z: Vector2i in feld:
+		if feld[z] != FABRIK or ausgefallen.has(z) or paar.has(z):
+			continue
+		for n in NACHBARN:
+			var neben: Vector2i = z + n
+			if not ist_frei(neben):
+				continue
+			var weg := gegner_weg("hund", von, neben)
+			if (weg.is_empty() and von != neben) or weg.size() > 40:
+				continue
+			if bestes.is_empty() or weg.size() < (bestes["weg"] as Array).size():
+				bestes = {"wall": z, "weg": weg}
+	return bestes
+
+
+## Das freie Feld (außerhalb der Zone), das einer Stelle am nächsten liegt.
+func freies_feld_nahe(punkt: Vector2) -> Vector2i:
+	var bestes := KEINE
+	var beste := INF
+	for y in Werte.ZEILEN:
+		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
+			var z := Vector2i(x, y)
+			if not ist_frei(z) or z == Werte.BASIS_ZELLE:
+				continue
+			var d := mitte(z).distance_to(punkt)
+			if d < beste:
+				beste = d
+				bestes = z
+	return bestes
+
+
 ## Wie stark ist die Mauer, die die Wurf-Schleuder auf `von` sieht? (größter Umweg in Wurfweite)
 func wurf_mauer(von: Vector2i) -> float:
 	var ziel := wurf_landefeld(von)

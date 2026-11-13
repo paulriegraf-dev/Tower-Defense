@@ -63,8 +63,9 @@ func _baue() -> void:
 	var f: Dictionary = spiel.fabriken[zelle]
 	var stufe := int(f.get("stufe", 0))
 	var bauphase: bool = spiel.phase == 0
-	var naechste := stufe < Werte.KOSTEN_STUFE.size()
-	var kann_zahlen: bool = naechste and spiel.budget >= Werte.KOSTEN_STUFE[stufe]
+	var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if f["typ"] == "pilot" else Werte.KOSTEN_STUFE
+	var naechste := stufe < preise.size()
+	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe]
 	var stand := "%s|%d|%s|%s|%s" % [f["typ"], stufe, bauphase, kann_zahlen, spiel.schilde.size()]
 	if stand == _stand:
 		_setze_ort()
@@ -109,7 +110,7 @@ func _baue() -> void:
 		_upgrade_knopf.disabled = not bauphase or not kann_zahlen
 		_upgrade_knopf.pressed.connect(spiel.werte_auf.bind(zelle))
 		_inhalt.add_child(_upgrade_knopf)
-		var wirkung := "Bleibt bei %s und hält eine Truppe mehr. Umstellen geht danach nicht mehr." % d["name"]
+		var wirkung := "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr." % d["name"]
 		if stufe == 1:
 			wirkung = Werte.STUFE_2[f["typ"]]["text"]
 		_zeile(wirkung, 12, Color("d8cfe6"))
@@ -148,7 +149,7 @@ func _baue_batterie(stufe: int, bauphase: bool, naechste: bool, kann_zahlen: boo
 		_zeile("✓ " + Werte.BATTERIE_STUFEN[i]["name"], 13, Color("7fe0ff"))
 	if naechste:
 		var s: Dictionary = Werte.BATTERIE_STUFEN[stufe]
-		_upgrade_knopf = _knopf("[U] Stufe %d: %s  –  %d" % [stufe + 1, s["name"], Werte.KOSTEN_STUFE[stufe]])
+		_upgrade_knopf = _knopf("[U] Stufe %d: %s  –  %d" % [stufe + 1, s["name"], Werte.KOSTEN_BATTERIE_STUFE[stufe]])
 		_upgrade_knopf.disabled = not bauphase or not kann_zahlen
 		_upgrade_knopf.pressed.connect(spiel.werte_auf.bind(zelle))
 		_inhalt.add_child(_upgrade_knopf)

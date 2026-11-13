@@ -34,6 +34,7 @@ var _laser_zeit := 0.0
 var _anlauf := 0.0                 # Minigun: 0..1
 
 
+var ist_pilot := false
 var ausbaustufe := 0                # Stufe der Fabrik, aus der die Truppe kommt (für das Abzeichen)
 
 ## Farbe des Abzeichens je Stufe-3-Fähigkeit
@@ -46,6 +47,7 @@ const ABZEICHEN := {
 
 func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe: int = 0, p_faehigkeit: String = "") -> void:
 	ausbaustufe = 0 if typ == "pilot" else stufe
+	ist_pilot = typ == "pilot"
 	spiel = p_spiel
 	karte = p_karte
 	daten = Werte.einheit_daten(typ, stufe, p_faehigkeit)
@@ -66,6 +68,8 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 func _suche_posten() -> void:
 	var hier := karte.zelle_bei(position)
 	var fund := karte.finde_posten(hier, self)
+	if spiel.im_endkampf() and not ist_pilot:
+		fund = {}   # letzte Runde: niemand geht mehr in eine Stellung, alle greifen an
 	_punkte.clear()
 	if fund.is_empty():
 		zustand = Zustand.BODEN
@@ -146,6 +150,11 @@ func am_boden() -> bool:
 	return zustand == Zustand.ZUM_POSTEN or zustand == Zustand.BODEN
 
 
+## Kampftruppe am Boden (kein Pilot)? Ziel für Flächentreffer auf Haufen.
+func bodentruppe() -> bool:
+	return am_boden() and not ist_pilot
+
+
 func in_stellung() -> bool:
 	return zustand == Zustand.AUF_POSTEN
 
@@ -213,6 +222,19 @@ func _process(delta: float) -> void:
 			# Von oben: mehr Reichweite und Schuss über das eigene Wallstück hinweg. Fremde Erdwälle versperren die Sicht.
 			var weite: float = (daten["reichweite"] + Werte.stellung_bonus(daten)) * Werte.ZELLE
 			_sprite.bewegt(false)
+			# Alle Gegner weg, aber ein Checkpoint ist noch verloren: Die nächste Truppe verlässt dafür ihre Stellung.
+			_posten_check -= delta
+			if _posten_check <= 0.0:
+				_posten_check = 0.5
+				if spiel.raeumen():
+					for i in karte.checkpoints.size():
+						if karte.cp_feind[i] and spiel.darf_checkpoint_holen(self, karte.checkpoints[i]):
+							if karte.posten.get(posten_zelle) == self:
+								karte.posten.erase(posten_zelle)
+							posten_zelle = Karte.KEINE
+							zustand = Zustand.BODEN
+							_waehle_marschziel()
+							return
 			var oben_ziel: Node2D = spiel.gegner_in_reichweite(position, weite, false, posten_zelle)
 			if faehigkeit == "markierung":
 				# Zielmarkierung: das stärkste Ziel der ganzen Karte, ohne Reichweiten- und Sichtgrenze
@@ -224,6 +246,12 @@ func _process(delta: float) -> void:
 			_feuere_auf(oben_ziel)
 		Zustand.BODEN:
 			if not karte.ist_begehbar(karte.zelle_bei(position)):
+				if _punkte.is_empty():
+					# steht noch in der Fabrik (oder auf einem Wall) und hat keinen Weg mehr: auf das nächste freie Feld treten,
+					# sonst bleibt sie für immer stehen
+					var raus := karte.freier_nachbar(karte.zelle_bei(position))
+					if raus != Karte.KEINE:
+						_punkte.append(karte.mitte(raus) + _versatz)
 				_gehe(delta)   # noch in der Fabrik: erst heraustreten, dann kämpfen
 				return
 			if _im_tor():
@@ -233,12 +261,12 @@ func _process(delta: float) -> void:
 			_posten_check -= delta
 			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self):   # Checkpoint zurückholen geht vor
 				_posten_check = 1.0
-				if not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
+				if (ist_pilot or not spiel.im_endkampf()) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
 					_marschziel = Karte.KEINE
 					_suche_posten()
 					return
 			if daten.get("pilot", false):
-				_gehe(delta)   # Piloten kämpfen nicht: an der Fabrik warten, bis eine Batterie einen Platz hat
+				_repariere(delta)   # Piloten kämpfen nicht: Reserve wartet an der Fabrik – oder repariert, was ausgefallen ist
 				return
 			# 1) Wer schießen kann, bleibt stehen und schießt. Das geht immer vor – es wird nicht blind weitergelaufen.
 			var weite: float = daten["reichweite"] * Werte.ZELLE
@@ -275,9 +303,15 @@ func _im_tor() -> bool:
 func _waehle_marschziel() -> void:
 	var hier := karte.zelle_bei(position)
 	_marschziel = Karte.KEINE
-	var cp := karte.naechster_feind_checkpoint(hier)
+	# Jeder verlorene Checkpoint bekommt seine eigene Truppe: alle durchgehen, nicht nur den nächsten.
 	# Nur die zugeteilte Truppe geht. Steht sie schon auf dem Checkpoint, bleibt sie dort, auch wenn Gegner näher kommen.
-	if cp != Karte.KEINE and spiel.darf_checkpoint_holen(self, cp) and (hier == cp or spiel.ist_ruhig(karte.mitte(cp), Werte.CHECKPOINT_RUHE * Werte.ZELLE)):
+	var cp := Karte.KEINE
+	for i in karte.checkpoints.size():
+		var c: Vector2i = karte.checkpoints[i]
+		if karte.cp_feind[i] and spiel.darf_checkpoint_holen(self, c) and (hier == c or spiel.ist_ruhig(karte.mitte(c), Werte.CHECKPOINT_RUHE * Werte.ZELLE)):
+			cp = c
+			break
+	if cp != Karte.KEINE:
 		_marschziel = cp
 	elif spiel.im_endkampf():
 		# durchs Schild auf das eigene Feld in der Zone
@@ -290,12 +324,67 @@ func _waehle_marschziel() -> void:
 		if hier != _marschziel:
 			_plane_zur_zelle(_marschziel)
 		return
-	var spitze: Gegner = spiel.vorderster_gegner()
-	if spitze != null and _plane_zur_zelle(karte.zelle_bei(spitze.position)):
+	# Entgegenlaufen, nie hinterher: ein Feld auf dem Weg eines Gegners, an dem diese Truppe vor ihm ankommt.
+	# Wer schon durch ist und nicht mehr abzufangen, gehört den Stellungen, Türmen und Batterien weiter hinten.
+	var grenze := Werte.ZONE_SPALTEN + Werte.ZONE_ABSTAND
+	for c: Vector2i in karte.checkpoints:
+		grenze = mini(grenze, c.x)
+	var abfang: Vector2i = spiel.abfangfeld(self)
+	if abfang != Karte.KEINE:
+		_marschziel = abfang
+		if hier != abfang:
+			_plane_zur_zelle(abfang)
 		return
-	var naechster: Gegner = spiel.naechster_gegner(position)
-	if naechster != null:
-		_plane_zur_zelle(karte.zelle_bei(naechster.position))
+	if hier.x < grenze and not spiel.im_endkampf():
+		# zu weit vorn: zurück hinter die Linie, auf das nächste freie Feld
+		var bestes := Karte.KEINE
+		for y in Werte.ZEILEN:
+			var z := Vector2i(grenze, y)
+			if karte.ist_frei(z) and (bestes == Karte.KEINE or absi(y - hier.y) < absi(bestes.y - hier.y)):
+				bestes = z
+		if bestes != Karte.KEINE:
+			_plane_zur_zelle(bestes)
+
+
+func marschziel() -> Vector2i:
+	return _marschziel if zustand == Zustand.BODEN or _wartet else Karte.KEINE
+
+
+var _rep_ziel := Karte.KEINE
+var _rep_neben := Karte.KEINE
+var _rep_zeit := 0.0
+var _rep_suche := 0.0
+
+## Reservepilot: zum nächsten ausgefallenen Gebäude oder lahmen Turm laufen und es in Werte.REPARATUR_SEK reparieren.
+func _repariere(delta: float) -> void:
+	if _rep_ziel != Karte.KEINE and not spiel.ist_kaputt(_rep_ziel):
+		_rep_ziel = Karte.KEINE
+		_rep_zeit = 0.0
+		queue_redraw()
+	if _rep_ziel == Karte.KEINE:
+		_rep_suche -= delta
+		if _rep_suche <= 0.0:
+			_rep_suche = 1.0
+			var fund: Dictionary = spiel.reparaturziel(self)
+			if not fund.is_empty():
+				_rep_ziel = fund["z"]
+				_rep_neben = fund["neben"]
+				_plane_zur_zelle(_rep_neben)
+		if _rep_ziel == Karte.KEINE:
+			_gehe(delta)
+			return
+	if not _gehe(delta) and karte.zelle_bei(position) != _rep_neben:
+		return
+	if karte.zelle_bei(position) != _rep_neben:
+		_rep_ziel = Karte.KEINE   # Weg versperrt: neu suchen
+		return
+	_sprite.bewegt(false)
+	_rep_zeit += delta
+	queue_redraw()
+	if _rep_zeit >= Werte.REPARATUR_SEK:
+		spiel.repariere(_rep_ziel)
+		_rep_ziel = Karte.KEINE
+		_rep_zeit = 0.0
 
 
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
@@ -436,6 +525,9 @@ func _draw() -> void:
 			draw_rect(Rect2(links + i * 10.0, -56, 6, 6), farbe)
 		if faehigkeit != "":
 			draw_arc(Vector2(0, 14), 15.0, 0.0, TAU, 20, Color(farbe, 0.85), 2.0)
+	if _rep_zeit > 0.0:
+		# Reparatur läuft: Fortschrittsring
+		draw_arc(Vector2(0, -30), 12.0, -PI / 2.0, -PI / 2.0 + TAU * clampf(_rep_zeit / Werte.REPARATUR_SEK, 0.0, 1.0), 20, Color("7fe0ff"), 4.0)
 	if leben < max_leben:
 		draw_rect(Rect2(-16, -46, 32, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-14, -44, 28.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("7fe0ff"))

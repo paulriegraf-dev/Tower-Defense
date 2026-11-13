@@ -14,12 +14,13 @@ const START_ZELLE := Vector2i(0, 4)    # HQ des Gegners; Mitte seiner Zone
 # Die linken Spalten gehören dem Gegner: dort kann nicht gebaut werden, Gegner kommen verteilt über die ganze Höhe heraus.
 # Bis zur letzten Runde liegt ein Schutzschild darüber: Was in der Zone steht, kann nicht beschossen werden.
 const ZONE_SPALTEN: int = 3
-const HQ_LEBEN: float = 4000.0
+const HQ_LEBEN: float = 3000.0
 const ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
-const LETZTE_RUNDE: int = 15           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
+const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
 const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
 const ENDKAMPF_PAUSE: float = 3.0     # Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
-const ENDKAMPF_WIE_WELLE: int = 9      # Stärke und Zusammensetzung der Trupps in der letzten Runde
+const ENDKAMPF_LEBEN: float = 3.4      # Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
+const LEBEN_JE_RUNDE: float = 0.23     # so viel zäher werden die Gegner je Runde (Runde 19: ×5,1)
 # Schleudern stehen in der Zone und werfen auf Truppen in Stellungen und auf Fabriken in Reichweite.
 # art: "schleuder" wirft Steine auf Stellungen und Fabriken, "wurf" wirft Hunde über die ersten Wälle,
 #      "laser" schießt flach auf Bodentruppen (Wälle geben Deckung).
@@ -27,10 +28,10 @@ const ZONENBAUTEN: Array = [
 	{"art": "schleuder", "zelle": Vector2i(1, 2), "ab_welle": 5},
 	{"art": "schleuder", "zelle": Vector2i(1, 7), "ab_welle": 8},
 	{"art": "wurf", "zelle": Vector2i(0, 7), "ab_welle": 10},
-	{"art": "wurf", "zelle": Vector2i(0, 2), "ab_welle": 13},
-	{"art": "laser", "zelle": Vector2i(2, 2), "ab_welle": 15},   # Laser gibt es nur zur Verteidigung in der letzten Runde
-	{"art": "laser", "zelle": Vector2i(2, 5), "ab_welle": 15},
-	{"art": "laser", "zelle": Vector2i(2, 7), "ab_welle": 15},
+	{"art": "wurf", "zelle": Vector2i(0, 2), "ab_welle": 14},
+	{"art": "laser", "zelle": Vector2i(2, 2), "ab_welle": 20},   # Laser gibt es nur zur Verteidigung in der letzten Runde
+	{"art": "laser", "zelle": Vector2i(2, 5), "ab_welle": 20},
+	{"art": "laser", "zelle": Vector2i(2, 7), "ab_welle": 20},
 ]
 # Stein-Schleudern wechseln ihren Platz: vor jeder Runde (sichtbar in der Bauphase) und alle paar Sekunden während der Runde.
 const SCHLEUDER_PLAETZE: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 6), Vector2i(1, 7), Vector2i(1, 8), Vector2i(1, 9)]
@@ -49,24 +50,8 @@ const WURF_MAUER_MIN: float = 8.0      # ab so viel Umweg (Schritte) hinter eine
 const WURF_MAUER_EXTRA: float = 15.0   # ab so viel Umweg wirft die Schleuder zusätzlich ein Rudel Hunde je Welle
 const WURF_CP_BONUS: float = 5.0       # Landefelder nahe einem Checkpoint, den der Gegner noch nicht hält, zählen so viel mehr
 const WURF_BELAGERUNG_ABSTAND: float = 5.0  # dockt ein Belagerungsturm an, landet der nächste Wurf mindestens so weit (Felder) von ihm weg
-const WELLEN_VARIANTEN_AB: int = 10    # ab hier kommt jede Runde in einer von zwei Varianten
+const WELLEN_VARIANTEN_AB: int = 99    # Varianten sind abgeschaltet: jede Runde hat jetzt einen festen Plan (WELLEN)
 
-# Was die Wurf-Schleuder je Runde wirft – immer Trupps zu vier. Je Runde zwei Varianten [A, B];
-# in der Bauphase steht nur, WAS geworfen wird, nicht wohin. Die Gegner werden aus der Welle genommen, nicht zusätzlich.
-const WURF_TRUPPS := {
-	10: [[["hund", "hund", "hund", "hund"], ["fahne", "hund", "hund", "hund"]],
-		[["hund", "hund", "hund", "hund"], ["hund", "hund", "hund", "hund"]]],
-	11: [[["fahne", "hund", "hund", "hund"], ["rauch", "hund", "hund", "hund"]],
-		[["sprenger", "hund", "hund", "hund"], ["hund", "hund", "hund", "hund"]]],
-	12: [[["sprenger", "hund", "hund", "hund"], ["fahne", "hund", "hund", "hund"]],
-		[["rauch", "hund", "hund", "hund"], ["fahne", "hund", "hund", "hund"]]],
-	13: [[["sprenger", "hund", "hund", "hund"], ["fahne", "hund", "hund", "hund"], ["rauch", "hund", "hund", "hund"]],
-		[["sprenger", "sprenger", "hund", "hund"], ["fahne", "hund", "hund", "hund"], ["hund", "hund", "hund", "hund"]]],
-	14: [[["sprenger", "sprenger", "hund", "hund"], ["fahne", "hund", "hund", "hund"], ["hund", "hund", "hund", "hund"]],
-		[["fahne", "hund", "hund", "hund"], ["fahne", "hund", "hund", "hund"], ["rauch", "sprenger", "hund", "hund"]]],
-	15: [[["fahne", "hund", "hund", "hund"], ["sprenger", "hund", "hund", "hund"]],
-		[["fahne", "hund", "hund", "hund"], ["sprenger", "hund", "hund", "hund"]]],
-}
 const LASER := {
 	"blatt": "res://assets/sprites/laser.webp",
 	"zelle": 64,
@@ -117,6 +102,7 @@ const SCHLEUDER := {
 	"abklingzeit": 6.0,
 	"flugzeit": 1.3,
 	"schaden_einheit": 35.0,
+	"schaden_haufen": 22.0,     # Flächentreffer auf einen Haufen Bodentruppen (jede Truppe im Umkreis)
 	"schaden_fabrik": 60.0,
 }
 const BASIS_ZELLE := Vector2i(19, 5)   # hier wollen sie hin
@@ -134,7 +120,7 @@ const CHECKPOINTS_AB_WELLE: int = 5    # vorher sind die Felder nur freigehalten
 const EINNAHME_SEK: float = 3.0        # so lange muss der Gegner einen Checkpoint halten
 const CHECKPOINT_RUHE: float = 1.5     # die zugeteilte Truppe geht einen Checkpoint zurückholen, solange in diesem Umkreis (Felder) kein Gegner ist
 const RUECKEROBERUNG_SEK: float = 4.0  # so lange muss eine Bodentruppe den Checkpoint halten
-const NACHSPIEL_MAX: float = 15.0     # so lange läuft die Runde nach dem letzten Gegner höchstens weiter, damit die zugeteilte Truppe den Checkpoint zurückholt
+const NACHSPIEL_MAX: float = 25.0     # so lange läuft die Runde nach dem letzten Gegner höchstens weiter, damit die zugeteilte Truppe den Checkpoint zurückholt
 const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen, wenn in diesem Umkreis (Felder) kein Gegner ist
 
 # --- Tempo -------------------------------------------------------------
@@ -145,7 +131,14 @@ const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 const START_BUDGET: int = 120
 const START_LEBEN: int = 15
 const KOSTEN_FABRIK: int = 50      # die erste Fabrik
-const KOSTEN_FABRIK_ZUWACHS: int = 15  # jede weitere Fabrik kostet so viel mehr als die vorige
+const KOSTEN_FABRIK_PROZENT: float = 25.0  # jede weitere Fabrik kostet so viel Prozent mehr als die vorige (auf 5 gerundet)
+const ZONE_ABSTAND: int = 2        # so viele Felder halten eigene Truppen Abstand zur Zone (außer in der letzten Runde), damit die Gegner herauskommen
+const HAUFEN_MIN: int = 3          # ab so vielen Bodentruppen dicht beieinander gilt das als Haufen: Ziel für Schleuder, Rauch und Sprenger
+const HAUFEN_RADIUS: float = 1.3   # Felder
+const SPRENGER_FABRIK_SCHADEN: float = 300.0   # Sprenger ohne lohnenden Erdwall sprengt eine Fabrik (fällt für die Runde aus) ...
+const SPRENGER_FABRIK_SEK: float = 25.0        # ... aber nur so lange (Beschuss durch Sphären und Schleudern gilt weiter bis zum Rundenende)
+const SPRENGER_TRUPP_SCHADEN: float = 45.0     # ... und trifft Bodentruppen im Umkreis
+const SPRENGER_TRUPP_RADIUS: float = 1.6
 const ERSTATTUNG: float = 0.75     # Anteil des Preises, den es beim Abreißen zurückgibt
 const KOSTEN_WALL: int = 10
 const KOSTEN_STELLUNG: int = 25    # Ausbau eines Erdwalls: Platz für eine Einheit
@@ -169,7 +162,7 @@ const BONUS_MITTE_ZUWACHS: int = 8 # ... um so viel je Runde zusätzlich
 const LEBEN_WALL: float = 120.0
 const LEBEN_FABRIK: float = 300.0
 const PRODUKTION_SEK: float = 5.0  # Sekunden je Einheit
-const MAX_JE_FABRIK: int = 3       # so viele Einheiten hält eine Fabrik am Leben
+const MAX_JE_FABRIK: int = 2       # so viele Einheiten hält eine Fabrik am Leben (Stufe 1 gibt die dritte)
 const MAX_JE_FABRIK_ENDKAMPF: int = 5  # ... und so viele in der letzten Runde
 const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plasmawerfer"]  # zur Wahl im Fabrikmenü (Piloten kommen aus der Pilotenfabrik der Batterie)
 
@@ -178,7 +171,12 @@ const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plas
 # Stufe 1: spezialisiert – bleibt bei ihrer Truppe und hält eine Truppe mehr.
 # Stufe 2: Wertepaket je Truppe (siehe STUFE_2).
 # Stufe 3: Sonderfähigkeit zur Wahl (siehe STUFE_3) – ändert, wie die Truppe kämpft.
-const KOSTEN_STUFE: Array[int] = [100, 150, 400]     # Preis für Stufe 1, 2 und 3
+const KOSTEN_STUFE: Array[int] = [50, 150, 400]      # Preis für Stufe 1, 2 und 3
+const KOSTEN_BATTERIE_STUFE: Array[int] = [100, 150, 400]   # dasselbe für die Batterie
+const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
+const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
+const ABFANG_JE_FELD: int = 2        # höchstens so viele Bodentruppen fangen auf demselben Feld ab
+const ABFANG_WEIT: int = 14          # so viele Felder voraus auf dem Gegnerweg wird ein Abfangfeld gesucht
 const STUFE_1_TRUPPEN: int = 1                  # so viele Truppen hält eine spezialisierte Fabrik zusätzlich
 # plus = wird addiert, mal = wird multipliziert
 const STUFE_2 := {
@@ -261,7 +259,7 @@ static func einheit_daten(typ: String, stufe: int, faehigkeit: String = "") -> D
 
 # Ausbaustufen der Batterie (gekauft über ihre Pilotenfabrik, Preise wie KOSTEN_STUFE).
 const BATTERIE_STUFEN := [
-	{"name": "Reservepilot", "text": "Die Pilotenfabrik hält einen vierten Piloten in Reserve. Fällt einer aus, ist die Batterie schneller wieder voll bemannt."},
+	{"name": "Reservepilot", "text": "Die Pilotenfabrik hält einen vierten Piloten in Reserve. Er rückt nach, wenn einer fehlt – und läuft sonst zu ausgefallenen Fabriken, Batterien und lahmgelegten Türmen und repariert sie (5 Sekunden)."},
 	{"name": "Schwere Ladung", "text": "Mehr Schaden und Reichweite. Die Druckwelle bläst außerdem Rauchwolken in Reichweite weg."},
 	{"name": "Energieschild", "text": "Die bemannte Batterie spannt auf einem Wegfeld in Reichweite einen Schild auf. Gegner müssen ihn erst zerschlagen, eigene Truppen gehen hindurch. Er lädt sich zwischen den Runden wieder auf."},
 ]
@@ -447,108 +445,199 @@ const GEGNER := {
 
 ## Entworfene Runden: Zusammensetzung der Welle Nummer `nr` (ab 1).
 ## Ein Trupp läuft gemeinsam im Tempo seines langsamsten Mitglieds – außer ein Fahnenträger führt ihn an.
-static func welle(nr: int, variante: int = 0, wurf_nr: int = -1) -> Dictionary:
-	var hunde := 4 + 2 * nr
-	var sphaeren := int((nr - 1) / 2.0) if nr >= 3 else 0   # Runde 3: 1, Runde 5: 2, Runde 7: 3 ...
-	var fahnen := 0 if nr < 6 else (1 if nr < 11 else 2)
-	var sprenger := 0 if nr < 8 else (2 if nr < 12 else 3)
-	var rauch := 0 if nr < 11 else 1
-	var belagerung := 0 if nr < 12 else (1 if nr < 14 else 2)
+# Die 20 Wellen als Pläne: je Runde ein Name und die Trupps in der Reihenfolge, in der sie kommen.
+#   weg "l" = läuft, "w" = wird von der Wurf-Schleuder geworfen (immer 4)
+#   pause = Sekunden mehr (oder weniger) als TRUPP_PAUSE vor diesem Trupp
+#   wenn  = "dock": Wurf, sobald ein Belagerungsturm andockt (weit weg von ihm) · "drohnen": sobald er 2 Turmtruppen abgesetzt hat (auf die Verteidiger am Turm)
+#   jeder = nur in jedem n-ten Durchgang der letzten Runde
+# Quelle: wellen-entwurf-20.xlsx (Blatt Trupps).
+const WELLEN := {
+	1: {"name": "Erste Rudel", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund"]},
+	]},
+	2: {"name": "Rudel", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+	]},
+	3: {"name": "Späher", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere"]},
+	]},
+	4: {"name": "Feuerschutz", "stufe": "Kombination", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+	]},
+	5: {"name": "Vorstoß", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "sphaere", "sphaere"]},
+	]},
+	6: {"name": "Die Fahne", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+	]},
+	7: {"name": "Kleiner Fahnensturm", "stufe": "Kombination", "trupps": [
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"], "pause": -2.0},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+	]},
+	8: {"name": "Sprengmeister", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sprenger", "sprenger"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+	]},
+	9: {"name": "Köder", "stufe": "Kombination", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sprenger", "sprenger"], "pause": 17.0},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "sphaere", "sphaere", "sphaere", "sphaere"]},
+	]},
+	10: {"name": "Über die Mauer", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sprenger", "sprenger", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+	]},
+	11: {"name": "Dunst", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["rauch", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+	]},
+	12: {"name": "Nebelwand", "stufe": "Kombination", "trupps": [
+		{"weg": "l", "typen": ["rauch", "rauch", "rauch"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
+	]},
+	13: {"name": "Der Turm", "stufe": "Einführung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+	]},
+	14: {"name": "Abrisskommando", "stufe": "Kombination", "trupps": [
+		{"weg": "l", "typen": ["rauch", "rauch"]},
+		{"weg": "l", "typen": ["sprenger", "sprenger", "sprenger"]},
+		{"weg": "w", "typen": ["rauch", "rauch", "sprenger", "sprenger"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+	]},
+	15: {"name": "Fahnensturm", "stufe": "Prüfung", "trupps": [
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"], "pause": -2.0},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"], "pause": -2.0},
+		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+	]},
+	16: {"name": "Zange", "stufe": "Kombination", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"], "wenn": "dock"},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"], "wenn": "drohnen"},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"]},
+	]},
+	17: {"name": "Köder und Abriss", "stufe": "Prüfung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger", "sprenger"], "pause": 17.0},
+		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
+	]},
+	18: {"name": "Doppelbelagerung", "stufe": "Prüfung", "trupps": [
+		{"weg": "l", "typen": ["rauch", "rauch", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"], "wenn": "drohnen"},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["sprenger", "sprenger"]},
+	]},
+	19: {"name": "Generalprobe", "stufe": "Prüfung", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"], "pause": -2.0},
+		{"weg": "w", "typen": ["rauch", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"], "wenn": "dock"},
+		{"weg": "l", "typen": ["rauch", "rauch", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
+		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
+	]},
+	20: {"name": "Gegenangriff", "stufe": "Finale", "trupps": [
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"], "pause": -2.0},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere"]},
+		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["rauch", "rauch", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
+		{"weg": "l", "typen": ["belagerung", "belagerung"], "jeder": 3},
+	]},
+}
 
-	# Wurf-Trupps (ab Runde 10): ihre Gegner kommen nicht zu Fuß, sie werden aus der Welle genommen
-	var w_nr := nr if wurf_nr < 0 else wurf_nr
-	var wurf: Array = []
-	if WURF_TRUPPS.has(w_nr) and OS.get_environment("TD_OHNE_WURF") == "":   # TD_OHNE_WURF: nur für Testläufe
-		wurf = (WURF_TRUPPS[w_nr][clampi(variante, 0, 1)] as Array).duplicate(true)
-	for trupp: Array in wurf:
-		for typ: String in trupp:
-			match typ:
-				"hund": hunde -= 1
-				"fahne": fahnen -= 1
-				"sprenger": sprenger -= 1
-				"rauch": rauch -= 1
-	hunde = maxi(hunde, 0)
-	fahnen = maxi(fahnen, 0)
-	sprenger = maxi(sprenger, 0)
-	rauch = maxi(rauch, 0)
 
-	var rest := hunde
-	var sturm: Array = []      # Fahnenträger + 4 Hunde
-	for i in fahnen:
-		var trupp: Array = ["fahne"]
-		for j in mini(4, rest):
-			trupp.append("hund")
-		rest -= trupp.size() - 1
-		sturm.append(trupp)
-	var gemischt: Array = []   # 3 Hunde als Vorhut + Battlesphäre (+ Rauchwerfer)
-	for i in sphaeren:
-		var trupp: Array = []
-		for j in mini(3, rest):
-			trupp.append("hund")
-		rest -= trupp.size()
-		trupp.append("sphaere")
-		if i < rauch:
-			trupp.append("rauch")
-		gemischt.append(trupp)
-	var rudel: Array = []      # der Rest: Rudel zu je 5 Hunden
-	while rest > 0:
-		var trupp: Array = []
-		for j in mini(5, rest):
-			trupp.append("hund")
-		rest -= trupp.size()
-		rudel.append(trupp)
-	# Sprengtrupp: die Sprenger gemeinsam; ab dem ersten Rauchwerfer geht einer mit ihnen und nebelt die Stellungen an der Sprengstelle ein
-	var sprengtrupp: Array = []
-	for i in sprenger:
-		sprengtrupp.append("sprenger")
-	if not sprengtrupp.is_empty() and rauch > 0:
-		sprengtrupp.push_front("rauch")
-		for trupp: Array in gemischt:
-			if trupp.has("rauch"):
-				trupp.erase("rauch")
-				break
-	var einzeln: Array = []    # Belagerungstürme kommen allein
-	for i in belagerung:
-		einzeln.append(["belagerung"])
-
-	# Reihenfolge: reihum Rudel, Sturmtrupp, gemischter Trupp, Einzelgänger ...
-	var trupps: Array = []
-	var listen: Array = [rudel, sturm, gemischt, einzeln]
-	var uebrig := true
-	while uebrig:
-		uebrig = false
-		for liste: Array in listen:
-			if not liste.is_empty():
-				trupps.append(liste.pop_front())
-				uebrig = true
-	# Die Sprenger laufen im Schatten des ersten Fahnentrupps (der bindet die Verteidiger am Checkpoint) – ohne Fahne kommen sie zuerst.
-	if not sprengtrupp.is_empty():
-		var nach := 0
-		for i in trupps.size():
-			if (trupps[i] as Array).has("fahne"):
-				nach = i + 1
-				break
-		trupps.insert(nach, sprengtrupp)
-	# Variante B: der erste Belagerungsturm kommt früh, während vorne noch alles läuft.
-	if variante == 1:
-		for i in trupps.size():
-			if (trupps[i] as Array).has("belagerung") and i > 1:
-				trupps.insert(1, trupps.pop_at(i))
-				break
-
-	# Zählung je Typ für die Wellenvorschau
+## Eine Welle: was kommt, in welcher Reihenfolge, was wird geworfen. `variante` und `wurf_nr` gibt es nur noch der alten Aufrufe wegen.
+static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary:
+	var plan: Dictionary = WELLEN[clampi(nr, 1, LETZTE_RUNDE)]
 	var anzahl := {}
-	for trupp: Array in trupps:
-		for typ: String in trupp:
+	var trupps: Array = []     # zu Fuß: je Trupp die Typen
+	var pausen: Array = []     # Sekunden mehr/weniger als TRUPP_PAUSE vor dem Trupp
+	var jeder: Array = []      # nur in jedem n-ten Durchgang (letzte Runde)
+	var wurf: Array = []       # geworfen: je Trupp die Typen
+	var wurf_info: Array = []  # dazu: nach wie vielen Lauf-Trupps frühestens, und der Auslöser
+	var ohne_wurf := OS.get_environment("TD_OHNE_WURF") != ""   # nur für Testläufe
+	for t: Dictionary in plan["trupps"]:
+		var typen: Array = (t["typen"] as Array).duplicate()
+		for typ: String in typen:
 			anzahl[typ] = int(anzahl.get(typ, 0)) + 1
+		if t["weg"] == "w" and not ohne_wurf:
+			wurf.append(typen)
+			wurf_info.append({"nach": trupps.size(), "wenn": t.get("wenn", "")})
+		else:
+			trupps.append(typen)
+			pausen.append(float(t.get("pause", 0.0)))
+			jeder.append(int(t.get("jeder", 1)))
 	var gruppen: Array = []
-	for typ: String in anzahl:
-		gruppen.append({"typ": typ, "anzahl": anzahl[typ]})
+	for typ: String in ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung"]:
+		if anzahl.has(typ):
+			gruppen.append({"typ": typ, "anzahl": anzahl[typ]})
 	return {
+		"name": plan["name"],
 		"gruppen": gruppen,
 		"trupps": trupps,
+		"pausen": pausen,
+		"jeder": jeder,
 		"wurf": wurf,
-		"leben_faktor": 1.0 + 0.3 * (nr - 1),
+		"wurf_info": wurf_info,
+		"leben_faktor": ENDKAMPF_LEBEN if nr >= LETZTE_RUNDE else snappedf(1.0 + LEBEN_JE_RUNDE * (nr - 1), 0.1),
 		"abstand": 0.7,            # Sekunden zwischen zwei Gegnern
 	}
 

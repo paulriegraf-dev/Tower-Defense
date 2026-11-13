@@ -64,6 +64,12 @@ func im_rauch(punkt: Vector2) -> bool:
 	return false
 
 
+## Kurzer Kreis für einen Flächentreffer.
+func flaeche(mitte: Vector2, radius: float, farbe: Color) -> void:
+	for i in 12:
+		linie(mitte + Vector2.RIGHT.rotated(TAU * i / 12.0) * radius, mitte + Vector2.RIGHT.rotated(TAU * (i + 1) / 12.0) * radius, farbe)
+
+
 ## Warnkreis am Landepunkt eines Wurfs.
 func warnung(mitte: Vector2, dauer: float) -> void:
 	_warnungen.append([mitte, dauer])

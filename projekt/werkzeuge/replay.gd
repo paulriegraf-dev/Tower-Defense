@@ -73,15 +73,22 @@ func _process(delta: float) -> bool:
 			var z := Vector2i(int(a["x"]), int(a["y"]))
 			match a["a"]:
 				"bau":
+					if a.has("px"):
+						# Batterie: die aufgezeichnete Lage der Pilotenfabrik einstellen
+						spiel._paar_richtung = maxi(0, spiel.PAAR_RICHTUNGEN.find(Vector2i(int(a["px"]), int(a["py"])) - z))
 					if not spiel.baue(z, TYPEN[a["typ"]], true):
 						gescheitert += 1
 				"abriss":
 					spiel.reisse_ab(z)
 				"einheit":
-					var n := 0
-					while spiel.fabriken.has(z) and spiel.fabriken[z]["typ"] != a["typ"] and n < 6:
-						spiel.wechsle_einheit(z)
-						n += 1
+					spiel.stelle_um(z, a["typ"])
+				"schild":
+					if spiel.setze_schild(Vector2i(int(a["bx"]), int(a["by"])), z) != "":
+						gescheitert += 1
+				"upgrade":
+					if not spiel.werte_auf(z, str(a.get("faehigkeit", ""))):
+						gescheitert += 1
+		spiel.variante = int(runde.get("variante", spiel.variante))
 		runden_index += 1
 		leben_vorher = spiel.leben
 		runde_start = sim_zeit

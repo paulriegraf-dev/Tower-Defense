@@ -1,5 +1,5 @@
 extends SceneTree
-## Lässt die Formationen aus werkzeuge/plaene.gd gegen die 15 Runden laufen und schreibt je Lauf eine JSON-Zeile.
+## Lässt die Formationen aus werkzeuge/plaene.gd gegen die 20 Runden laufen und schreibt je Lauf eine JSON-Zeile.
 ##
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/formtest.gd -- <Ausgabedatei> <frei|budget> <Läufe> [Plan ...]
 ##
