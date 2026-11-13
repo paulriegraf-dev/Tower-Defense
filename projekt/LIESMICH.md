@@ -5,7 +5,7 @@
 ## Steuerung
 - **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie, **6** Tor (2–6 ab Welle 2), **Esc** abwählen
 - **Linksklick** bauen (Erdwälle: Maustaste halten und ziehen)
-- **Linksklick auf eine Fabrik** (ohne Werkzeug): Einheit wechseln (Technogunner / Scharfschütze / Plasmawerfer / Pilot)
+- **Linksklick auf eine Fabrik** (ohne Werkzeug): Fabrikmenü öffnen – Truppe wählen (Technogunner / Scharfschütze / Plasmawerfer) und ausbauen, siehe unten. **T** dreht beim Bauen einer Batterie die Lage ihrer Pilotenfabrik.
 - **Linksklick auf eine Truppe, einen Turm, eine Stellung oder eine Batterie** (ohne Werkzeug): Reichweite anzeigen.
   Rot schraffierte Felder liegen in Reichweite, können von dort aber nicht getroffen werden (Sicht versperrt).
   Bei einer leeren Stellung: innerer Kreis Technogunner, äußerer Scharfschütze.
@@ -19,7 +19,7 @@
   ab der Mitte, die blassen den vom oberen und unteren Rand.
 - **Schleuder** (ab Runde 5, ab Runde 8 zwei) steht in der Zone und wirft auf Truppen in Stellungen, auf Fabriken
   und auf Batterien im pinken Kreis. Angreifbar sind sie erst in der letzten Runde.
-- **Letzte Runde (Runde 15): Gegenangriff.** Der Schild fällt, Gegner kommen ohne Ende, jede Fabrik hält 5 statt 3 Truppen. Truppen ohne Stellung marschieren zum HQ des
+- **Letzte Runde (Runde 15): Gegenangriff.** Der Schild fällt, Gegner kommen ohne Ende, jede Fabrik hält 5 statt 3 Truppen. Truppen ohne Stellung marschieren zum HQ des Die Bodentruppen treten durchs Schild in die Zone, jede auf ein eigenes Feld in Schussweite zum HQ, und schießen im Vorrücken.
   Gegners; die blaue Linie zeigt ihren Fußweg durch dein eigenes Labyrinth. Ohne Fußweg kommen sie nicht an.
   Sieg, wenn das HQ zerstört ist.
 - Erdwälle lenken den Weg um, egal wie lang der Umweg wird. Nur wenn es gar keinen Weg mehr gibt, reißen die Gegner das rot markierte Feld ein.
@@ -28,7 +28,7 @@
 - **Sicht von oben** (Stellungen und Türme): Über das eigene Wallstück – alle Erdwälle, die über Kanten mit dem
   eigenen zusammenhängen – wird hinweggeschossen. Jeder fremde Erdwall versperrt die Sicht. Fabriken und
   Batterien stehen am Boden und verdecken nichts.
-- **Turm** = Ausbau eines Erdwalls, der an mindestens drei weitere Erdwälle grenzt (T-Stück oder Kreuzung). Schießt selbst.
+- **Turm** = Ausbau eines Erdwalls mit mindestens drei angrenzenden Erdwällen als **Stützen**. Jeder Erdwall stützt höchstens einen Turm, und auf einer Stütze darf kein Turm stehen (Stellungen schon). Die Stützfelder sind in der Turmfarbe eingefärbt. Fällt eine Stütze, schweigt der Turm, bis der Wall wieder steht. Schießt selbst.
 - Fabriken bauen während der Welle ihre gewählte Einheit. Jede geht zur nächsten freien Stellung (Fußweg ab Fabrik).
   Wer keine Stellung findet, geht dem Gegner entgegen und schießt nur bei freier Sicht.
   Eine nähere Einheit übernimmt eine Stellung, zu der eine andere noch weit unterwegs ist.
@@ -60,15 +60,14 @@
 - **Pilot:** kämpft nicht. Piloten bemannen Batterien, immer den nächsten freien Platz nach Fußweg, und warten
   sonst an ihrer Fabrik. Kampftruppen gehen nicht in Batterien, Piloten nicht in Stellungen.
 - **Tor** (Taste 6, 40 Budget): Ausbau eines Erdwalls. Für den Gegner bleibt es ein Erdwall (Weg, Sicht, Sprenger),
-  eigene Truppen gehen hindurch. So kommen Truppen aus einem eingemauerten Kern heraus.
-- **Railgun-Batterie** (Taste 5): Gebäude am Boden, versperrt den Weg wie eine Fabrik. Die Kästchen zeigen die
-  Besatzung. Sie feuert nur mit drei Piloten, dann weit, über Wälle hinweg und flächig. Eine Fabrik hält drei
-  Truppen, eine Pilotenfabrik neben der Batterie ist also genau eine Besatzung. Wer darin sitzt, kann nicht getroffen werden;
-  die Schleuder kann aber das Gebäude treffen.
+  eigene Truppen gehen hindurch. So kommen Truppen aus einem eingemauerten Kern heraus. Im Tor bleiben sie nicht stehen: Sie laufen erst ganz hindurch und entscheiden dann neu.
+- **Railgun-Batterie** (Taste 5, 290): wird zusammen mit ihrer Pilotenfabrik gebaut (zwei Felder), versperrt den Weg wie eine Fabrik.
+  Die Kästchen zeigen die Besatzung. Sie feuert nur mit drei Piloten, dann weit, über Wälle hinweg und flächig.
+  Wer darin sitzt, kann nicht getroffen werden; Schleuder und Battlesphären können aber das Gebäude für die Runde ausschalten.
 
 ## Verhalten der Bodentruppen (ohne Stellung)
 1. Wer einen Gegner in Reichweite und Sicht hat, bleibt stehen und schießt.
-2. Sonst: zu einem verlorenen Checkpoint, wenn dort gerade kein Gegner in der Nähe ist.
+2. Sonst: zu einem verlorenen Checkpoint, wenn dort gerade kein Gegner in der Nähe ist. Dafür wird pro Checkpoint eine Truppe eingeteilt; das geht vor dem Besetzen einer Stellung (auch wer gerade zu einer Stellung läuft, dreht um).
 3. Sonst in der letzten Runde zum HQ des Gegners.
 4. Sonst der Spitze des Gegners auf der Hauptlinie entgegen, erst danach zu Gegnern abseits davon.
 
@@ -77,15 +76,16 @@
 |---|---|---|
 | 3 | Battlesphäre | Fernkämpfer, schießt im Laufen |
 | 5 | Checkpoints, Schleuder | siehe oben |
-| 6 | Fahnenträger | Sein Trupp stürmt in seinem Tempo. Er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. |
-| 8 | Sprenger, zweite Schleuder | Zwei Sprenger (ab Runde 12 drei) kommen als Erste und sprengen nacheinander die Erdwälle mit der größten Abkürzung. In der Bauphase sind die drei lohnendsten orange markiert. Erdwälle mit Turm sind sicher. Die Stein-Schleudern wechseln ab jetzt vor jeder Runde und alle 20 Sekunden ihren Platz. |
-| 10 | Wurf-Schleuder | Wirft ein Rudel von vier Hunden über die ersten Wälle (oranger Kreis). Ab Runde 13 gibt es eine zweite. |
+| 6 | Fahnenträger | Sein Trupp stürmt in seinem Tempo. Er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Er hinterlässt für 3 Sekunden eine Spur: Gegner, die ihr folgen, stürmen in seinem Tempo mit. |
+| 8 | Sprenger, zweite Schleuder | Zwei Sprenger (ab Runde 12 drei) laufen im Schatten des ersten Fahnentrupps (ohne Fahne kommen sie zuerst), ab Runde 11 begleitet von einem Rauchwerfer, der die Stellungen an der Sprengstelle einnebelt. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung reißt auch den Erdwall direkt dahinter mit; Erdwälle mit Turm halten stand. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
+| 10 | Wurf-Schleuder | Wirft Trupps zu vier über die Wälle – nicht nur Hunde, je nach Runde auch Fahnenträger, Sprenger oder Rauchwerfer. Die Vorschau sagt nur, WAS geworfen wird („Wurf: Fahne, Sprenger“), nicht wohin; erst in der Welle markiert ein roter Kreis den Landepunkt. Ziel ist die Stelle hinter der Wallgruppe, die den Gegnern den größten Umweg abverlangt, gern nahe an einem Checkpoint. Gibt es keine echte Mauer, wirft sie weiter (blasser Kreis, 10 Felder) in Taschen zwischen Erdwällen. Bei einer sehr dicken Mauer kommt ein Rudel Hunde zusätzlich. Dockt ein Belagerungsturm an, wirft sie sofort auf die andere Seite. Ab Runde 13 gibt es eine zweite. |
+| ab 10 | Varianten | Jede Runde kommt in einer von zwei Varianten (andere Würfe, in Variante B ein früher Belagerungsturm). Die Vorschau zeigt die Würfe der gewählten Variante. |
 | 11 | Rauchwerfer | Wirft Rauch auf die dichteste Gruppe von Stellungen. Truppen im Rauch schießen einige Sekunden nicht, Türme schon. |
-| 12 | Belagerungsturm | Fährt zum Wallstück mit den meisten Stellungen und dockt an. Seine Turmtruppen laufen auf zusammenhängenden Wällen und greifen Stellungen im Nahkampf an. |
+| 12 | Belagerungsturm | Fährt zum Wallstück mit den meisten Stellungen und dockt an. Solange er steht (höchstens 40 Sekunden), setzt er alle 3 Sekunden eine Turmtruppe ab, bis zu sechs zugleich. Sie laufen auf zusammenhängenden Wällen, greifen Stellungen im Nahkampf an und legen Türme für den Rest der Runde lahm. Ohne Ziel springen sie ab und laufen zur Basis. |
 | 15 | Letzte Runde | Gegenangriff auf das HQ. Drei Laser verteidigen die Zone (flach, nur gegen Bodentruppen, Wälle geben Deckung), Gegner kommen in dichter Folge. |
 
 ## Preise
-Erdwall 10, Stellung 25, Turm 75, Batterie 150. Die erste Fabrik kostet 50, jede weitere 15 mehr als die vorige.
+Erdwall 10, Stellung 25, Turm 75, Tor 40, Batterie mit Pilotenfabrik 290. Die erste Fabrik kostet 50, jede weitere 15 mehr als die vorige (Pilotenfabriken zählen nicht mit). Spezialisieren 100, Stufe 2 150, Stufe 3 400.
 Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennummer) und Prämien je besiegtem Gegner.
 **Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 50. Die fünf Felder
 unten neben den Bauknöpfen zeigen, wie viele Schritte du gerade erreicht hast.
@@ -125,3 +125,35 @@ Die Pläne stehen in `werkzeuge/plaene.gd` als Zeichenraster und lassen sich dor
 (`frei` = ganze Formation ab Runde 2, `budget` = Teilausbau mit echtem Budget):
 
     godot --headless --path . --fixed-fps 60 -s werkzeuge/formtest.gd -- <Ausgabedatei> <frei|budget> <Läufe> [Plan ...]
+
+## Fabrikmenü und Upgrades
+
+Ein Klick auf eine Fabrik (ohne Bauwerkzeug) öffnet eine Tafel daneben. **Q / W / E** wählen die Truppe, **U** kauft die nächste Stufe, **Esc** schließt.
+
+- **Stufe 0:** Grundfabrik, hält 3 Truppen, die Truppe lässt sich jederzeit umstellen (in der Welle gilt das für die nächste Truppe).
+- **Stufe 1, Spezialisieren (100):** bleibt bei ihrer Truppe, hält dafür eine Truppe mehr. Umstellen geht danach nicht mehr.
+- **Stufe 2 (150):** Wertepaket je Truppe – Scharfschütze: +1 Reichweite, +30 % Schaden, feuert 20 % schneller. Technogunner: +50 % Leben, +30 % Schaden, +0,5 Reichweite. Plasmawerfer: +0,4 Fläche, +30 % Schaden, läuft 25 % schneller.
+- **Stufe 3 (400):** eine Fähigkeit zur Wahl, die ändert, wie die Truppe kämpft.
+  - Scharfschütze: **Durchschuss** (gerade Linie durch alle Gegner), **Laserstrahl** (Dauerstrahl, wächst am selben Ziel bis auf das Dreifache), **Zielmarkierung** (nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte, wenig eigener Schaden, das Ziel nimmt 5 Sekunden lang 40 % mehr Schaden).
+  - Technogunner: **Bollwerk** (Nahkämpfer mit 3,5-fachem Leben, nimmt keine Stellung), **Feuerteam** (feuert schneller, je mehr Feuerteam-Schützen dasselbe Ziel beschießen), **Minigun** (nur in der Stellung: läuft an und feuert bis zu dreimal so schnell; Treffer und Rauch unterbrechen sie).
+  - Plasmawerfer: **Abpraller** (springt bis zu zweimal zum nächsten Gegner weiter), **Brandfeld** (der Einschlag brennt 3 Sekunden nach), **Plasmagel** (nur aus der Stellung: kaum Schaden, bremst Getroffene 3 Sekunden auf weniger als halbes Tempo).
+
+Ausbauen geht nur zwischen den Wellen. Beim Abriss gibt es 75 % zurück, die Upgrades eingerechnet. Punkte oben links auf der Fabrik zeigen die Stufe.
+
+**Batterie:** Sie wird zusammen mit ihrer Pilotenfabrik gebaut (zwei Felder, **T** dreht die Lage). Die Pilotenfabrik bildet nur Piloten aus und lässt sich nicht umstellen. Wird eine Hälfte abgerissen oder eingerissen, fällt auch die andere.
+
+**Batterie-Ausbau:** Klick auf die Batterie oder ihre Pilotenfabrik öffnet das Menü. Drei feste Stufen (100 / 150 / 400, Taste **U**):
+1. **Reservepilot** – die Pilotenfabrik hält einen vierten Piloten in Reserve.
+2. **Schwere Ladung** – 30 % mehr Schaden, 1,5 Felder mehr Reichweite; bläst alle 2,5 s eine Rauchwolke in Reichweite weg.
+3. **Energieschild** – nach dem Kauf ein freies Feld in Reichweite anklicken (später mit **Q** im Menü versetzbar). Der Schild hält 450 Schaden aus, Gegner bleiben davor stehen und schlagen darauf ein, der Weg wird dadurch nicht umgeleitet, eigene Truppen gehen hindurch. Er steht nur, solange die Batterie voll bemannt und nicht ausgefallen ist, und lädt sich zwischen den Runden wieder auf.
+
+**Startmenü (übergangsweise):** Beim Start wählst du **[1] Normales Spiel** oder **[2] Sandbox** (unendlich Budget, alle Bauwerke schon in Runde 1). Nach **R** (Neustart) erscheint das Menü wieder. In der Sandbox steht in der Bauphase oben rechts die **Sandbox-Leiste** (Klick auf den Kopf klappt sie ein): Runde direkt wählen (1–15, Gebautes bleibt stehen), Anzahl je Gegnertyp für die nächste Welle, Truppen je Fabrik, „Welle wie im Spiel“ setzt die Gegnerzahlen zurück. Umschalt + Klick ändert in 5er-Schritten.
+
+**Beschuss:** Stein-Schleudern und Battlesphären zerstören Fabriken und Batterien nicht mehr. Sind die Lebenspunkte auf null, fällt das Gebäude für den Rest der Runde aus (rotes Kreuz) und arbeitet ab der nächsten Runde wieder. Battlesphären zielen der Reihe nach auf Truppen in Stellungen, dann auf Fabriken und Batterien in Sicht, dann auf Bodentruppen.
+
+**Abzeichen an den Truppen:** Über dem Kopf steht ein Punkt je Ausbaustufe der Fabrik. Ab Stufe 3 tragen Punkte und ein Ring am Boden die Farbe der Fähigkeit: Durchschuss gelb, Laserstrahl rot, Zielmarkierung orange; Bollwerk blau, Feuerteam weiß, Minigun hellorange; Abpraller violett, Brandfeld kräftig orange, Plasmagel grün.
+
+## Einkommen
+
+Nach jeder Runde gibt es 100 + 5 je Runde, ab Runde 6 zusätzlich 8 je Runde (Runde 8: 164, Runde 12: 216). Dazu 20 für jeden
+Checkpoint, der am Rundenende dir gehört, und Zinsen (10 je 100 übriges Budget, höchstens 50).

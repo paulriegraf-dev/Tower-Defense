@@ -8,14 +8,14 @@ const PLAENE: Dictionary = preload("res://werkzeuge/plaene.gd").PLAENE
 ## Plan -> [Name, wofür gut, wofür anfällig]
 const TEXTE := {
 	"1-schlauch": ["Langer Schlauch", "Längster Weg, wächst Wand für Wand.", "Sprenger, Checkpoints tief im Gang, keine Türme."],
-	"2-kamm": ["Kamm", "Langer Weg, weite Sicht, Türme an den Zahnwurzeln.", "Teuer, halb gebaut wenig wert."],
+	"2-kamm": ["Kamm", "Langer Weg, weite Sicht, jeder Zahn stützt einen Turm.", "Teuer, halb gebaut wenig wert."],
 	"3-zitadelle": ["Zitadelle", "Ein Wallstück: alle sehen alles. Fabriken im Kern, Tor als Ausgang.", "Kurzer Weg, dünne Arme für Sprenger."],
 	"4-inseln": ["Inseln", "Viel Feuerkraft, kurze Fußwege.", "Keine Wegführung, erst mit Türmen stark."],
-	"5-doppelriegel": ["Doppelriegel", "Sprengsicher, viele Turmplätze, billig.", "Kürzester Weg, nah an der Schleuder."],
+	"5-doppelriegel": ["Doppelriegel", "Sprengsicher und billig, die dicke Mauer stützt Türme.", "Kürzester Weg, nah an der Schleuder."],
 	"6-gestaffelt": ["Gestaffelte Linien", "Billig und schnell gebaut.", "Die Linien verdecken sich die Sicht."],
 	"7-kamm-mit-kern": ["Kamm mit Kern", "Langer Weg und geschützte Fabriken mit Tor.", "Dünne Zähne für Sprenger."],
 	"8-riegel-und-schlauch": ["Riegel und Schlauch", "Türme vorn, langer Weg dahinter.", "Sprenger, Checkpoints tief im Gang."],
-	"9-dicker-schlauch": ["Dicker Schlauch", "Sprengsicher, sehr viele Turmplätze.", "Teuer, erst fertig stark."],
+	"9-dicker-schlauch": ["Dicker Schlauch", "Sprengsicher, Stützen für mehrere Türme.", "Teuer, erst fertig stark."],
 }
 
 const GRUND := Color(0.07, 0.06, 0.1, 0.94)

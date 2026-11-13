@@ -26,12 +26,30 @@ var _marschziel := Karte.KEINE     # Feld, zu dem diese Bodentruppe marschiert: 
 var _versatz := Vector2.ZERO       # damit Truppen nicht exakt aufeinander stehen
 var _sprite: Figur
 var _treffer := 0.0
+var faehigkeit := ""               # Stufe-3-Fähigkeit aus der Fabrik
+var letztes_ziel: Node2D = null    # Feuerteam: worauf zuletzt geschossen wurde ...
+var letzter_schuss := -100.0       # ... und wann (Spielzeit in Sekunden)
+var _laser_ziel: Node2D = null
+var _laser_zeit := 0.0
+var _anlauf := 0.0                 # Minigun: 0..1
 
 
-func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i) -> void:
+var ausbaustufe := 0                # Stufe der Fabrik, aus der die Truppe kommt (für das Abzeichen)
+
+## Farbe des Abzeichens je Stufe-3-Fähigkeit
+const ABZEICHEN := {
+	"durchschuss": Color("ffd166"), "laser": Color("ff4d5e"), "markierung": Color("ff9f1c"),
+	"bollwerk": Color("6fa8ff"), "feuerteam": Color("f4f4f4"), "minigun": Color("ffb347"),
+	"abpraller": Color("c77dff"), "brandfeld": Color("ff6a00"), "plasmagel": Color("5dfc8a"),
+}
+
+
+func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe: int = 0, p_faehigkeit: String = "") -> void:
+	ausbaustufe = 0 if typ == "pilot" else stufe
 	spiel = p_spiel
 	karte = p_karte
-	daten = Werte.EINHEITEN[typ]
+	daten = Werte.einheit_daten(typ, stufe, p_faehigkeit)
+	faehigkeit = daten["faehigkeit"]
 	max_leben = daten["leben"]
 	leben = max_leben
 	fabrik_zelle = p_fabrik
@@ -148,6 +166,18 @@ func _process(delta: float) -> void:
 
 	match zustand:
 		Zustand.ZUM_POSTEN:
+			if spiel.ist_einnehmer(self):
+				# Ein verlorener Checkpoint geht vor: die Stellung freigeben und ihn zurückholen
+				if karte.posten.get(posten_zelle) == self:
+					karte.posten.erase(posten_zelle)
+				posten_zelle = Karte.KEINE
+				_wartet = false
+				_punkte.clear()
+				zustand = Zustand.BODEN
+				return
+			if _im_tor():
+				_gehe(delta)   # im Tor wird nicht angehalten: erst ganz hindurch
+				return
 			# Die Stellung ist ein Nebenauftrag: erst schießen, was in Reichweite und Sicht ist ...
 			if karte.ist_begehbar(karte.zelle_bei(position)):
 				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, daten["reichweite"] * Werte.ZELLE, true)
@@ -184,6 +214,11 @@ func _process(delta: float) -> void:
 			var weite: float = (daten["reichweite"] + Werte.stellung_bonus(daten)) * Werte.ZELLE
 			_sprite.bewegt(false)
 			var oben_ziel: Node2D = spiel.gegner_in_reichweite(position, weite, false, posten_zelle)
+			if faehigkeit == "markierung":
+				# Zielmarkierung: das stärkste Ziel der ganzen Karte, ohne Reichweiten- und Sichtgrenze
+				var staerkster: Gegner = spiel.staerkster_gegner()
+				if staerkster != null:
+					oben_ziel = staerkster
 			if oben_ziel == null:
 				oben_ziel = spiel.zonenbau_in_reichweite(position, weite, false, posten_zelle)
 			_feuere_auf(oben_ziel)
@@ -191,9 +226,12 @@ func _process(delta: float) -> void:
 			if not karte.ist_begehbar(karte.zelle_bei(position)):
 				_gehe(delta)   # noch in der Fabrik: erst heraustreten, dann kämpfen
 				return
+			if _im_tor():
+				_gehe(delta)   # im Tor wird nicht angehalten und nicht umgeplant: erst ganz hindurch, dann neu entscheiden
+				return
 			# Nachrücken: Ist eine Stellung frei geworden (oder näher als für den, der dorthin unterwegs ist)?
 			_posten_check -= delta
-			if _posten_check <= 0.0:
+			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self):   # Checkpoint zurückholen geht vor
 				_posten_check = 1.0
 				if not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
 					_marschziel = Karte.KEINE
@@ -207,7 +245,12 @@ func _process(delta: float) -> void:
 			var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true)
 			if ziel == null:
 				ziel = spiel.zonenbau_in_reichweite(position, weite, true)
-			if ziel != null:
+			var drueckt: bool = spiel.im_endkampf() and karte.zelle_bei(position) != _marschziel and _marschziel != Karte.KEINE
+			if ziel != null and drueckt and (ziel is Zonenbau or position.distance_to(ziel.position) > Werte.ENDKAMPF_ABSTAND * Werte.ZELLE):
+				# Letzte Runde: im Gehen schießen und weiter auf das eigene Feld in der Zone vorrücken – stehen bleibt nur,
+				# wem ein Gegner zu nah kommt. Sonst stapeln sich alle am ersten Feld mit Schussweite.
+				_feuere_auf(ziel)
+			elif ziel != null:
 				_sprite.bewegt(false)
 				_feuere_auf(ziel)
 				return
@@ -217,6 +260,12 @@ func _process(delta: float) -> void:
 				_plan_in = 0.3
 				_waehle_marschziel()
 			_gehe(delta)
+
+
+## Steckt die Truppe gerade in einem Tor und hat noch Weg vor sich? Dann läuft sie erst hindurch
+## (auch durch mehrere Tore hintereinander), statt mittendrin stehen zu bleiben oder umzudrehen.
+func _im_tor() -> bool:
+	return not _punkte.is_empty() and karte.ist_tor(karte.zelle_bei(position))
 
 
 ## Wohin geht eine Bodentruppe, wenn sie gerade nichts beschießen kann?
@@ -230,10 +279,16 @@ func _waehle_marschziel() -> void:
 	# Nur die zugeteilte Truppe geht. Steht sie schon auf dem Checkpoint, bleibt sie dort, auch wenn Gegner näher kommen.
 	if cp != Karte.KEINE and spiel.darf_checkpoint_holen(self, cp) and (hier == cp or spiel.ist_ruhig(karte.mitte(cp), Werte.CHECKPOINT_RUHE * Werte.ZELLE)):
 		_marschziel = cp
-	elif spiel.im_endkampf() and (hier == Werte.ANGRIFFS_ZELLE or not karte.einheiten_weg(hier, Werte.ANGRIFFS_ZELLE).is_empty()):
-		_marschziel = Werte.ANGRIFFS_ZELLE
+	elif spiel.im_endkampf():
+		# durchs Schild auf das eigene Feld in der Zone
+		var feld: Vector2i = spiel.angriffsfeld(self)
+		if hier == feld or not karte.einheiten_weg(hier, feld).is_empty():
+			_marschziel = feld
+		else:
+			spiel.gib_angriffsfeld_frei(self)
 	if _marschziel != Karte.KEINE:
-		_plane_zur_zelle(_marschziel)
+		if hier != _marschziel:
+			_plane_zur_zelle(_marschziel)
 		return
 	var spitze: Gegner = spiel.vorderster_gegner()
 	if spitze != null and _plane_zur_zelle(karte.zelle_bei(spitze.position)):
@@ -246,19 +301,70 @@ func _waehle_marschziel() -> void:
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
 func _feuere_auf(ziel: Node2D) -> void:
 	if ziel == null or spiel.im_rauch(position):
+		# Minigun: Rauch stoppt den Anlauf sofort, ohne Ziel läuft sie langsam aus
+		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * get_process_delta_time())
+		_laser_ziel = null
 		return   # im Rauch sieht die Einheit nichts
 	_sprite.flip_h = ziel.position.x < position.x
+	var farbe := Color(daten["schussfarbe"])
+	var muendung := position + Vector2(18 * (-1 if _sprite.flip_h else 1), -10)
+	var oben := zustand == Zustand.AUF_POSTEN
+
+	# Laserstrahl: kein Einzelschuss, sondern Dauerschaden, der am selben Ziel anwächst
+	if faehigkeit == "laser" and ziel is Gegner:
+		var dt := get_process_delta_time()
+		if ziel != _laser_ziel:
+			_laser_ziel = ziel
+			_laser_zeit = 0.0
+		_laser_zeit += dt
+		var faktor := minf(Werte.LASER_HOECHST, 1.0 + Werte.LASER_ANSTIEG * _laser_zeit)
+		spiel.strahl(muendung, ziel.position + Vector2(0, 2), Color(1.0, 0.35, 0.3), 2.0 + faktor)
+		_sprite.angriff(0.3)
+		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) / float(daten["abklingzeit"]) * faktor * dt)
+		return
+
 	if _abkling > 0.0:
 		return
-	_abkling = daten["abklingzeit"]
-	_sprite.angriff(daten["abklingzeit"])
+	var pause: float = daten["abklingzeit"]
+	if faehigkeit == "feuerteam":
+		# je mehr Feuerteam-Schützen gerade dasselbe Ziel beschießen, desto kürzer die Pause
+		pause *= maxf(Werte.FEUERTEAM_HOECHST, 1.0 - Werte.FEUERTEAM_JE_MITSCHUETZE * spiel.mitschuetzen(self, ziel))
+	elif faehigkeit == "minigun" and oben:
+		pause *= lerpf(1.0, Werte.MINIGUN_SCHNELLSTE, _anlauf)
+		_anlauf = minf(1.0, _anlauf + Werte.MINIGUN_JE_SCHUSS)
+	elif faehigkeit == "markierung" and oben:
+		pause *= Werte.MARKIERUNG_ABKLING
+	_abkling = pause
+	letztes_ziel = ziel
+	letzter_schuss = spiel.spielzeit()
+	_sprite.angriff(pause)
+
+	if faehigkeit == "markierung" and oben and ziel is Gegner:
+		spiel.strahl(muendung, ziel.position, Color(1.0, 0.25, 0.3), 2.0)
+		(ziel as Gegner).markiert = Werte.MARKIERUNG_SEK
+		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) * Werte.MARKIERUNG_EIGENER_SCHADEN)
+		return
+	if faehigkeit == "durchschuss" and ziel is Gegner:
+		# gerade Linie durch alle Gegner bis ans Ende der Reichweite
+		var richtung := (ziel.position - position).normalized()
+		var ende := position + richtung * reichweite_jetzt() * Werte.ZELLE
+		spiel.strahl(muendung, ende, farbe, 3.0)
+		spiel.linienschaden(self, position, ende, float(daten["schaden"]), posten_zelle if oben else Karte.KEINE)
+		return
 	if daten.has("flaeche") and ziel is Gegner:
 		# Flächenschaden: trifft alle Gegner rund um das Ziel
-		spiel.schuss(position + Vector2(0, -10), ziel.position, Color(daten["schussfarbe"]))
-		spiel.flaechenschaden(ziel.position, daten["flaeche"] * Werte.ZELLE, daten["schaden"], Color(daten["schussfarbe"]))
+		var radius: float = float(daten["flaeche"]) * Werte.ZELLE
+		spiel.schuss(position + Vector2(0, -10), ziel.position, farbe)
+		if faehigkeit == "plasmagel" and oben:
+			spiel.gelschuss(ziel.position, radius, float(daten["schaden"]) * Werte.PLASMAGEL_SCHADEN)
+			return
+		spiel.flaechenschaden(ziel.position, radius, daten["schaden"], farbe)
+		if faehigkeit == "abpraller":
+			spiel.abpraller(ziel as Gegner, radius, float(daten["schaden"]), farbe)
+		elif faehigkeit == "brandfeld":
+			spiel.lege_brand(ziel.position, radius, float(daten["schaden"]) * Werte.BRANDFELD_SCHADEN)
 		return
-	var muendung := position + Vector2(18 * (-1 if _sprite.flip_h else 1), -10)
-	spiel.schuss(muendung, ziel.position + Vector2(0, 4), Color(daten["schussfarbe"]))
+	spiel.schuss(muendung, ziel.position + Vector2(0, 4), farbe)
 	ziel.call("nimm_schaden", daten["schaden"])
 
 
@@ -303,6 +409,7 @@ func posten_verloren() -> void:
 
 
 func nimm_schaden(menge: float) -> void:
+	_anlauf = 0.0   # Minigun: ein Treffer unterbricht den Anlauf
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()
@@ -320,6 +427,15 @@ func _draw() -> void:
 		var r := reichweite_jetzt() * Werte.ZELLE
 		draw_circle(Vector2.ZERO, r, Color(0.5, 0.88, 1.0, 0.08))
 		draw_arc(Vector2.ZERO, r, 0.0, TAU, 96, Color(0.5, 0.88, 1.0, 0.8), 2.0)
+	if ausbaustufe > 0 and zustand != Zustand.IN_BATTERIE:
+		# Abzeichen über dem Kopf: ein Punkt je Stufe; ab Stufe 3 in der Farbe der Fähigkeit, dazu ein Ring am Boden
+		var farbe: Color = ABZEICHEN.get(faehigkeit, Color("ffe9a8"))
+		var links := -5.0 * ausbaustufe + 1.0
+		for i in ausbaustufe:
+			draw_rect(Rect2(links + i * 10.0 - 1.0, -57, 8, 8), Color(0.08, 0.06, 0.12, 0.9))
+			draw_rect(Rect2(links + i * 10.0, -56, 6, 6), farbe)
+		if faehigkeit != "":
+			draw_arc(Vector2(0, 14), 15.0, 0.0, TAU, 20, Color(farbe, 0.85), 2.0)
 	if leben < max_leben:
 		draw_rect(Rect2(-16, -46, 32, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-14, -44, 28.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("7fe0ff"))

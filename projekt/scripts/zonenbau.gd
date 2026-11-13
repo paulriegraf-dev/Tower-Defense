@@ -141,6 +141,7 @@ func _draw() -> void:
 				draw_arc(Vector2.ZERO, Werte.SCHLEUDER["reichweite"] * Werte.ZELLE, 0.0, TAU, 96, Color(pink, 0.45), 2.0)
 			"wurf":
 				draw_arc(Vector2.ZERO, Werte.WURF["reichweite"] * Werte.ZELLE, 0.0, TAU, 96, Color(1.0, 0.6, 0.1, 0.45), 2.0)
+				draw_arc(Vector2.ZERO, Werte.WURF["weit"] * Werte.ZELLE, 0.0, TAU, 128, Color(1.0, 0.6, 0.1, 0.18), 1.0)   # Taschenwürfe
 			"laser":
 				draw_arc(Vector2.ZERO, Werte.LASER["reichweite"] * Werte.ZELLE, 0.0, TAU, 96, Color(1.0, 0.25, 0.3, 0.45), 2.0)
 	if leben < max_leben:

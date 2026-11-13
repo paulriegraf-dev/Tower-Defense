@@ -40,6 +40,11 @@ var _angedockt := -1.0              # Belagerungsturm: Sekunden seit dem Andocke
 var _abgesetzt := 0
 var _auf_wall := false              # Turmtruppe: läuft noch oben auf den Wällen
 var _wall_zelle := Karte.KEINE
+var _leerlauf := 0.0                # Turmtruppe: Sekunden ohne Ziel auf dem Wall
+var _brut: Array = []               # Belagerungsturm: seine abgesetzten Turmtruppen
+var geworfen := false               # von der Wurf-Schleuder hinter die vordere Front geworfen
+var markiert := 0.0                 # Sekunden: von einem Scharfschützen markiert, nimmt mehr Schaden
+var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
 
 
 func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, start_zelle: Vector2i, erstes_ziel: int) -> void:
@@ -68,7 +73,15 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 ## Ein Trupp bleibt zusammen: alle laufen so schnell wie das langsamste lebende Mitglied.
 ## Führt ein Fahnenträger den Trupp an, stürmen alle in seinem Tempo.
 func tempo() -> float:
+	var t := _tempo_ungebremst()
+	return t * Werte.PLASMAGEL_TEMPO if gebremst > 0.0 else t
+
+
+func _tempo_ungebremst() -> float:
 	var t: float = daten["tempo"]
+	# Auf der Spur eines Fahnenträgers stürmen alle in seinem Tempo mit (der Belagerungsturm nicht).
+	if rolle != "belagerung" and rolle != "fahne" and spiel.auf_fahnenspur(position):
+		return maxf(t, float(Werte.GEGNER["fahne"]["tempo"]))
 	for g: Gegner in trupp:
 		if g.rolle == "fahne":
 			return g.daten["tempo"]
@@ -98,8 +111,24 @@ func _process(delta: float) -> void:
 	_treffer -= delta
 	if rolle == "sprenger":
 		queue_redraw()   # Warnzeichen blinkt
-	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else Color.WHITE
+	if markiert > 0.0 or gebremst > 0.0:
+		markiert -= delta
+		gebremst -= delta
+		queue_redraw()
+	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else Color.WHITE)
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
+
+	# Energieschild einer Batterie im Weg: stehen bleiben und draufschlagen, bis er bricht.
+	if not _auf_wall:
+		var schild: Vector2i = spiel.schild_bei(position)
+		if schild != Karte.KEINE:
+			_sprite.bewegt(false)
+			if _abkling <= 0.0:
+				_abkling = daten["abklingzeit"] if daten["schaden"] > 0.0 else Werte.SCHILD_SCHLAG_SEK
+				if daten["schaden"] > 0.0:
+					_sprite.angriff(_abkling)
+				spiel.schade_schild(schild, maxf(float(daten["schaden"]), Werte.SCHILD_MIN_SCHADEN))
+			return
 
 	# 0) Sonderregeln. Geben sie true zurück, ist dieser Schritt damit erledigt.
 	match rolle:
@@ -116,12 +145,22 @@ func _process(delta: float) -> void:
 	# 1) Ziel in Reichweite? Nahkämpfer bleiben stehen und kämpfen.
 	if daten["fernkampf"]:
 		# Fernkämpfer schießen im Laufen und halten dafür nicht an.
-		var ziel: Einheit = spiel.fernziel(position, reichweite)
-		if ziel != null and _abkling <= 0.0:
+		# Ziele der Reihe nach: Truppen in Stellungen, dann Fabriken und Batterien, dann Bodentruppen
+		var ziel: Einheit = spiel.fernziel(position, reichweite, 1)
+		var bau := Karte.KEINE
+		if ziel == null:
+			bau = karte.gebaeude_in_reichweite(position, reichweite)
+			if bau == Karte.KEINE:
+				ziel = spiel.fernziel(position, reichweite, 2)
+		if _abkling <= 0.0 and (ziel != null or bau != Karte.KEINE):
 			_abkling = daten["abklingzeit"]
 			_sprite.angriff(daten["abklingzeit"])
-			spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
-			ziel.nimm_schaden(daten["schaden"])
+			if ziel != null:
+				spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
+				ziel.nimm_schaden(daten["schaden"])
+			else:
+				spiel.schuss(position + Vector2(0, -6), karte.mitte(bau), Color("ff7ad9"))
+				karte.beschiesse(bau, daten["schaden"])
 	elif daten["schaden"] > 0.0:
 		var opfer: Einheit = spiel.naechste_bodeneinheit(position, reichweite)
 		if opfer != null:
@@ -195,7 +234,8 @@ func _zum_wall(delta: float) -> bool:
 	if ziel_weg or (_sonder_plan_in <= 0.0 and (rolle != "sprenger" or _sonderziel == Karte.KEINE)):
 		_sonder_plan_in = 2.0
 		var hier := karte.zelle_bei(position)
-		var fund: Dictionary = karte.sprengziel(hier, spiel.sprenger_stuecke(self)) if rolle == "sprenger" else karte.andockziel(hier)
+		# Ein geworfener Sprenger steht schon hinter der Front: für ihn gilt kein Mindestanmarsch.
+		var fund: Dictionary = karte.sprengziel(hier, spiel.sprenger_stuecke(self), 0 if geworfen else Werte.SPRENGER_MIN_WEG) if rolle == "sprenger" else karte.andockziel(hier)
 		if fund.is_empty():
 			_sonderziel = Karte.KEINE
 		else:
@@ -218,6 +258,7 @@ func _zum_wall(delta: float) -> bool:
 		spiel.sprengung(self, _sonderziel)
 	else:
 		_angedockt = 0.0
+		spiel.belagerung_dockt(self)
 	return true
 
 
@@ -230,16 +271,19 @@ func _setze_truppen_ab(delta: float) -> void:
 		_sonder_plan_in = 0.0
 		return
 	_angedockt += delta
-	var faellig := int((_angedockt - Werte.ANDOCK_SEK) / Werte.ENTERER_ABSTAND) + 1
-	if _angedockt < Werte.ANDOCK_SEK or _abgesetzt >= faellig:
-		return
-	_abgesetzt += 1
-	_sprite.angriff(1.0)
-	spiel.setze_enterer_ab(_sonderziel, leben_faktor, _ziel)
-	if _abgesetzt >= Werte.ENTERER_JE_TURM:
-		# leer: der Turm zerfällt
+	if _angedockt >= Werte.BELAGERUNG_SEK:
+		# ausgebrannt: der Turm zerfällt
 		_tot = true
 		spiel.gegner_entfernt(self)
+		return
+	# Solange der Turm steht, kommen Turmtruppen nach – aber nie mehr als ENTERER_GLEICHZEITIG auf einmal.
+	_brut = _brut.filter(func(g): return is_instance_valid(g) and not g._tot)
+	var faellig := int((_angedockt - Werte.ANDOCK_SEK) / Werte.ENTERER_ABSTAND) + 1
+	if _angedockt < Werte.ANDOCK_SEK or _abgesetzt >= faellig or _brut.size() >= Werte.ENTERER_GLEICHZEITIG:
+		return
+	_abgesetzt = faellig
+	_sprite.angriff(1.0)
+	_brut.append(spiel.setze_enterer_ab(_sonderziel, leben_faktor, _ziel))
 
 
 # ------------------------------------------------------------- Turmtruppe
@@ -248,21 +292,39 @@ func _auf_dem_wall(delta: float, reichweite: float) -> void:
 	if karte.inhalt(_wall_zelle) != Karte.WALL:
 		_springe_ab(_wall_zelle)   # der Wall unter ihr wurde eingerissen
 		return
-	var weg: Array[Vector2i] = [_wall_zelle]   # steht die Stellung genau hier, ist das schon das Ziel
-	if not karte.posten.has(_wall_zelle):
+	# Ziel: die nächste Stellung, in der jemand steht, oder der nächste laufende Turm auf diesem Wallstück
+	var weg: Array[Vector2i] = [_wall_zelle]   # liegt das Ziel genau hier, ist der Weg schon zu Ende
+	if not karte.enterziel(_wall_zelle):
 		weg = karte.wall_weg_zur_stellung(_wall_zelle)
 	if weg.is_empty():
-		_springe_ab(karte.absprung(_wall_zelle))
-		return
-	var opfer: Einheit = karte.posten.get(weg[weg.size() - 1])
-	if opfer != null and position.distance_to(opfer.position) <= reichweite:
+		# nichts mehr zu holen: kurz warten, dann abspringen und wie die anderen zur Basis laufen
+		_leerlauf += delta
 		_sprite.bewegt(false)
-		_sprite.flip_h = opfer.position.x < position.x
+		if _leerlauf >= Werte.ENTERER_LEERLAUF_SEK:
+			var feld := karte.absprung(_wall_zelle)
+			if feld == Karte.KEINE:
+				_tot = true
+				spiel.gegner_entfernt(self)   # eingeschlossen: gibt auf
+			else:
+				_springe_ab(feld)
+		return
+	_leerlauf = 0.0
+	var ziel_zelle := weg[weg.size() - 1]
+	var ziel_punkt := karte.mitte(ziel_zelle) + Vector2(0, -12)
+	if position.distance_to(ziel_punkt) <= reichweite:
+		_sprite.bewegt(false)
+		_sprite.flip_h = ziel_punkt.x < position.x
 		if _abkling <= 0.0:
 			_abkling = daten["abklingzeit"]
 			_sprite.angriff(daten["abklingzeit"])
-			spiel.schuss(position, opfer.position, Color("ff7ad9"))
-			opfer.nimm_schaden(daten["schaden"])
+			spiel.schuss(position, ziel_punkt, Color("ff7ad9"))
+			var opfer: Variant = karte.posten.get(ziel_zelle)
+			if is_instance_valid(opfer) and (opfer as Einheit).in_stellung():
+				(opfer as Einheit).nimm_schaden(daten["schaden"])
+			else:
+				karte.schade_turm(ziel_zelle, daten["schaden"])
+				if karte.turm_lahm(ziel_zelle):
+					spiel.melde("Turmtruppen haben einen Turm lahmgelegt – er schweigt bis zum Ende der Runde.", 4.0)
 		return
 	if weg.size() < 2:
 		return
@@ -296,6 +358,8 @@ func _wirf_rauch(reichweite: float) -> void:
 func nimm_schaden(menge: float) -> void:
 	if _tot:
 		return
+	if markiert > 0.0:
+		menge *= Werte.MARKIERUNG_FAKTOR
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()
@@ -310,6 +374,14 @@ func sprengt() -> Vector2i:
 
 
 func _draw() -> void:
+	if markiert > 0.0:
+		# Zielmarkierung: Fadenkreuz
+		var rot := Color(1.0, 0.25, 0.3, 0.9)
+		draw_arc(Vector2(0, -8), 20.0, 0.0, TAU, 24, rot, 2.0)
+		draw_line(Vector2(-26, -8), Vector2(-12, -8), rot, 2.0)
+		draw_line(Vector2(12, -8), Vector2(26, -8), rot, 2.0)
+		draw_line(Vector2(0, -34), Vector2(0, -20), rot, 2.0)
+		draw_line(Vector2(0, 4), Vector2(0, 18), rot, 2.0)
 	if rolle == "sprenger":
 		# Warnzeichen über dem Kopf, blinkend
 		var an := fmod(Time.get_ticks_msec() / 1000.0, 0.6) < 0.4

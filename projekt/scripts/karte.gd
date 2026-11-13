@@ -3,6 +3,7 @@ extends Node2D
 ## Das Raster: was wo steht, wie es aussieht und wer welchen Weg nimmt.
 
 signal zerstoert(zelle: Vector2i, typ: int)
+signal ausgefallen_ist(zelle: Vector2i, typ: int)
 
 ## FREI/WALL/FABRIK stehen im Raster; STELLUNG und TURM sind Ausbauten eines Erdwalls.
 enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE, TOR }
@@ -13,9 +14,16 @@ const KEINE := Vector2i(-1, -1)
 var feld: Dictionary = {}          # Zelle -> WALL / FABRIK
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
 var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
+var stuetzen: Dictionary = {}      # Turm-Zelle -> die Erdwälle, die ihn stützen (Array[Vector2i])
+var stuetze_von: Dictionary = {}   # Erdwall -> Zelle des Turms, den er stützt (jeder Wall stützt höchstens einen)
+var turm_schaden: Dictionary = {}  # Turm-Zelle -> Schaden durch Turmtruppen in dieser Runde
 var posten: Dictionary = {}        # Stellungs-Zelle -> Einheit, die darauf steht
 var besatzung: Dictionary = {}     # Batterie-Zelle -> Einheiten, die dorthin gehören (unterwegs oder schon drin)
 var fabrik_typ: Dictionary = {}    # Fabrik-Zelle -> Einheitentyp, den sie baut
+var fabrik_stufe: Dictionary = {}  # Fabrik-Zelle -> Ausbaustufe (0 = Grundfabrik)
+var paar: Dictionary = {}          # Batterie <-> ihre Pilotenfabrik (beide Richtungen)
+var ausgefallen: Dictionary = {}   # zerschossene Fabriken und Batterien: stehen noch, arbeiten aber erst nächste Runde wieder
+var vorschau_partner := KEINE      # Bauvorschau der Batterie: das Feld ihrer Pilotenfabrik
 var fortschritt: Dictionary = {}   # Fabrik-Zelle -> 0..1 (Produktionsbalken)
 
 var checkpoints: Array[Vector2i] = []
@@ -28,9 +36,10 @@ var cp_tempo: Array[float] = []    # je Checkpoint: hält ihn gerade ein Gegner?
 var pfad: Array[Vector2i] = []     # Weg der nächsten Welle: Start -> Checkpoints -> Basis (ab Mitte der Zone)
 var neben_pfade: Array = []        # dasselbe vom oberen und unteren Rand der Zone
 var schild := true                 # Schutzschild über der Zone des Gegners (fällt in der letzten Runde)
-var zeige_schwachstelle := false   # Bauphase: den Erdwall markieren, den ein Sprenger anpeilen würde
+var zeige_schwachstelle := false   # (nicht mehr benutzt: Sprengziele werden in der Bauphase nicht mehr verraten)
 var _ersparnis: Dictionary = {}    # Wall-Zelle -> so viel kürzer wird der Gegnerweg ohne diesen Wall
 var _ersparnis_gueltig := false
+var _ersparnis_seite: Dictionary = {}   # [Wall, Feld davor] -> Abkürzung, wenn von dort gesprengt wird
 var _sprengvorschau: Array = []
 var _sprengvorschau_gueltig := false
 var _sprengvorschau_von := KEINE
@@ -166,6 +175,8 @@ func besatzung_drin(z: Vector2i) -> int:
 func setze(z: Vector2i, typ: int) -> void:
 	feld[z] = typ
 	leben[z] = max_leben(typ)
+	if typ == WALL:
+		pruefe_stuetzen()   # ein neuer Wall kann einem Turm die fehlende Stütze geben
 	_gewichte_fuer(z)
 	aktualisiere_pfad()
 
@@ -178,6 +189,13 @@ func entferne(z: Vector2i) -> void:
 	fabrik_typ.erase(z)
 	posten.erase(z)
 	fortschritt.erase(z)
+	fabrik_stufe.erase(z)
+	ausgefallen.erase(z)
+	if paar.has(z):
+		paar.erase(paar[z])
+		paar.erase(z)
+	stuetze_von.erase(z)
+	pruefe_stuetzen()
 	_gewichte_fuer(z)
 	aktualisiere_pfad()
 
@@ -190,14 +208,58 @@ func schade(z: Vector2i, menge: float) -> bool:
 	if leben[z] > 0.0:
 		return false
 	var typ: int = feld[z]
+	var partner: Vector2i = paar.get(z, KEINE)   # Batterie und Pilotenfabrik fallen gemeinsam
 	entferne(z)
 	zerstoert.emit(z, typ)
+	if partner != KEINE and feld.has(partner):
+		var typ2: int = feld[partner]
+		entferne(partner)
+		zerstoert.emit(partner, typ2)
 	return true
 
 
+## Beschuss durch Schleudern und Fernkämpfer: Fabriken und Batterien werden nicht zerstört, sondern fallen
+## für den Rest der Runde aus (samt Partner bei Batterie und Pilotenfabrik). Gibt true zurück, wenn sie gerade ausfällt.
+func beschiesse(z: Vector2i, menge: float) -> bool:
+	if not feld.has(z) or (feld[z] != FABRIK and feld[z] != BATTERIE) or ausgefallen.has(z):
+		return false
+	leben[z] = maxf(0.0, leben[z] - menge)
+	if leben[z] > 0.0:
+		return false
+	for betroffen: Vector2i in [z, paar.get(z, KEINE)]:
+		if betroffen != KEINE and feld.has(betroffen):
+			ausgefallen[betroffen] = true
+			leben[betroffen] = 0.0
+			fortschritt.erase(betroffen)
+			ausgefallen_ist.emit(betroffen, feld[betroffen])
+	return true
+
+
+## Das nächste arbeitende Gebäude (Fabrik oder Batterie) in Schussweite, auf das freie Sicht besteht.
+func gebaeude_in_reichweite(von: Vector2, weite: float) -> Vector2i:
+	var bestes := KEINE
+	var beste := weite * weite
+	for z: Vector2i in feld:
+		if (feld[z] != FABRIK and feld[z] != BATTERIE) or ausgefallen.has(z):
+			continue
+		var m := mitte(z)
+		var d := von.distance_squared_to(m)
+		if d > beste:
+			continue
+		# Sicht bis kurz vor das Gebäude (das Gebäude selbst steht ja im Raster)
+		var davor := m + (von - m).normalized() * (Werte.ZELLE * 0.62)
+		if zelle_bei(davor) == z or sicht_frei(von, davor):
+			beste = d
+			bestes = z
+	return bestes
+
+
 func repariere_alles() -> void:
+	ausgefallen.clear()
 	for z: Vector2i in feld:
 		leben[z] = max_leben(feld[z])
+	turm_schaden.clear()   # lahmgelegte Türme laufen wieder
+	pruefe_stuetzen()
 
 
 # --------------------------------------------------------- Checkpoints
@@ -256,13 +318,84 @@ func ausbau_hindernis(z: Vector2i, typ: int) -> String:
 		return "Ausbauen geht nur auf einem Erdwall."
 	if ausbau.has(z):
 		return "Dieser Erdwall ist schon ausgebaut."
-	if typ == TURM and wall_nachbarn(z) < Werte.TURM_NACHBARN:
-		return "Ein Turm braucht %d angrenzende Erdwälle (T-Stück oder Kreuzung)." % Werte.TURM_NACHBARN
+	if typ == TURM:
+		if stuetze_von.has(z):
+			return "Dieser Erdwall stützt schon einen anderen Turm."
+		if wall_nachbarn(z) < Werte.TURM_NACHBARN:
+			return "Ein Turm braucht %d angrenzende Erdwälle als Stützen (T-Stück oder Kreuzung)." % Werte.TURM_NACHBARN
+		if freie_stuetzen(z).size() < Werte.TURM_NACHBARN:
+			return "Zu wenig freie Stützen: Nachbarwälle mit Turm oder schon vergebene Stützen zählen nicht."
 	return ""
+
+
+## Nachbarwälle von `z`, die einen Turm auf `z` stützen könnten: kein Turm darauf und noch keinem anderen Turm zugeteilt.
+## Sortiert: zuerst die, die sonst am wenigsten taugen (wenige eigene Nachbarwälle) – so bleibt Platz für weitere Türme.
+func freie_stuetzen(z: Vector2i) -> Array[Vector2i]:
+	var frei: Array[Vector2i] = []
+	for r in NACHBARN:
+		var n := z + r
+		if inhalt(n) != WALL or ausbau.get(n, FREI) == TURM:
+			continue
+		if stuetze_von.has(n) and stuetze_von[n] != z:
+			continue
+		frei.append(n)
+	frei.sort_custom(func(a: Vector2i, b: Vector2i): return wall_nachbarn(a) < wall_nachbarn(b))
+	return frei
+
+
+## Teilt einem Turm seine Stützen zu (oder neu zu, wenn eine verloren ging). Gibt zurück, ob er genug hat.
+func _stuetze_turm(z: Vector2i) -> bool:
+	for alt: Vector2i in stuetzen.get(z, []):
+		if stuetze_von.get(alt) == z:
+			stuetze_von.erase(alt)
+	var neu: Array[Vector2i] = freie_stuetzen(z).slice(0, Werte.TURM_NACHBARN)
+	stuetzen[z] = neu
+	for n in neu:
+		stuetze_von[n] = z
+	return neu.size() >= Werte.TURM_NACHBARN
+
+
+## Nach jeder Änderung an Erdwällen: Türme, denen eine Stütze fehlt, suchen sich neue.
+func pruefe_stuetzen() -> void:
+	for z: Vector2i in stuetzen.keys():
+		if ausbau.get(z, FREI) != TURM:
+			for alt: Vector2i in stuetzen[z]:
+				if stuetze_von.get(alt) == z:
+					stuetze_von.erase(alt)
+			stuetzen.erase(z)
+			turm_schaden.erase(z)
+	for z: Vector2i in ausbau:
+		if ausbau[z] != TURM:
+			continue
+		var ganz := stuetzen.has(z) and (stuetzen[z] as Array).size() >= Werte.TURM_NACHBARN
+		if ganz:
+			for n: Vector2i in stuetzen[z]:
+				if inhalt(n) != WALL or stuetze_von.get(n) != z:
+					ganz = false
+		if not ganz:
+			_stuetze_turm(z)
+
+
+## Schießt dieser Turm? Nicht, wenn ihm eine Stütze fehlt oder Turmtruppen ihn in dieser Runde lahmgelegt haben.
+func turm_aktiv(z: Vector2i) -> bool:
+	if ausbau.get(z, FREI) != TURM or turm_lahm(z):
+		return false
+	return (stuetzen.get(z, []) as Array).size() >= Werte.TURM_NACHBARN
+
+
+func turm_lahm(z: Vector2i) -> bool:
+	return float(turm_schaden.get(z, 0.0)) >= float(Werte.TURM["leben"])
+
+
+## Turmtruppen beschädigen einen Turm; ist er lahmgelegt, schweigt er bis zum Ende der Runde.
+func schade_turm(z: Vector2i, menge: float) -> void:
+	turm_schaden[z] = float(turm_schaden.get(z, 0.0)) + menge
 
 
 func baue_aus(z: Vector2i, typ: int) -> void:
 	ausbau[z] = typ
+	if typ == TURM:
+		_stuetze_turm(z)
 	if typ == TOR:
 		_gewichte_fuer(z)
 		aktualisiere_pfad()
@@ -428,6 +561,8 @@ func freier_nachbar(z: Vector2i) -> Vector2i:
 func finde_posten(von: Vector2i, sucher: Einheit) -> Dictionary:
 	var bester := {}
 	var beste_laenge := 1 << 30
+	if sucher.daten.get("faehigkeit", "") == "bollwerk":
+		return {}   # Bollwerk kämpft am Boden und lässt die Stellungen den anderen
 	# Kampftruppen gehen nur in Stellungen, Piloten nur in Batterien.
 	var pilot: bool = sucher.daten.get("pilot", false)
 	for w: Vector2i in ausbau:
@@ -519,17 +654,38 @@ func ersparnisse() -> Dictionary:
 	_ersparnis_gueltig = true
 	_sprengvorschau_gueltig = false
 	_ersparnis = {}
+	_ersparnis_seite = {}
 	var a := _astar_gegner["hund"] as AStarGrid2D
 	var basis := _weg_kosten("hund", _route("hund"))
 	for w: Vector2i in feld:
 		if feld[w] != WALL or ausbau.get(w, FREI) == TURM:
 			continue
-		a.set_point_weight_scale(w, 1.0)
-		var gewinn := basis - _weg_kosten("hund", _route("hund"))
-		a.set_point_weight_scale(w, _gewicht("hund", WALL))
-		if gewinn > 0.5:
-			_ersparnis[w] = gewinn
+		for n in NACHBARN:
+			var zugang := w + n
+			if not ist_frei(zugang):
+				continue
+			# Die Sprengung reicht zwei Felder tief: der Wall und der direkt dahinter (vom Sprenger aus gesehen)
+			var hinter := sprengt_mit(w, zugang)
+			a.set_point_weight_scale(w, 1.0)
+			if hinter != KEINE:
+				a.set_point_weight_scale(hinter, 1.0)
+			var gewinn := basis - _weg_kosten("hund", _route("hund"))
+			a.set_point_weight_scale(w, _gewicht("hund", WALL))
+			if hinter != KEINE:
+				a.set_point_weight_scale(hinter, _gewicht("hund", WALL))
+			if gewinn > 0.5:
+				_ersparnis_seite[[w, zugang]] = gewinn
+				_ersparnis[w] = maxf(gewinn, float(_ersparnis.get(w, 0.0)))
 	return _ersparnis
+
+
+## Der zweite Erdwall, den eine Sprengung von `zugang` aus an `w` mitreißt (KEINE, wenn dahinter keiner steht).
+## Ein Turm hält stand und schützt damit auch, was hinter ihm liegt.
+func sprengt_mit(w: Vector2i, zugang: Vector2i) -> Vector2i:
+	var hinter := w + (w - zugang)
+	if (w - zugang).length_squared() != 1 or inhalt(hinter) != WALL or ausbau.get(hinter, FREI) == TURM:
+		return KEINE
+	return hinter
 
 
 ## Die Erdwälle mit der größten Ersparnis, die lohnendste zuerst (höchstens `anzahl`).
@@ -601,34 +757,64 @@ func bestes_ziel_ab(z: Vector2i, ab: int) -> int:
 	return bestes
 
 
+## Geworfene Gegner stürmen Checkpoints: der nächste Checkpoint ab `z`, der noch nicht dem Gegner gehört
+## (auch wenn er auf der Route schon hinter ihnen liegt). Gibt es keinen, geht es zur Basis.
+func sturmziel_ab(z: Vector2i) -> int:
+	var bestes := checkpoints.size()
+	var beste_laenge := 1 << 30
+	if not cp_aktiv:
+		return bestes
+	for i in checkpoints.size():
+		if cp_feind[i]:
+			continue
+		var laenge := 1 if z == checkpoints[i] else gegner_weg("hund", z, checkpoints[i]).size()
+		if laenge > 0 and laenge < beste_laenge:
+			beste_laenge = laenge
+			bestes = i
+	return bestes
+
+
 ## Ziel eines Sprengers ab `von`: der erreichbare Erdwall mit der größten Ersparnis.
 ## Ergebnis: {"wall": Zelle, "weg": Felder bis zum Nachbarfeld des Walls} oder {}.
-func sprengziel(von: Vector2i, belegt: Array = []) -> Dictionary:
-	var alle := ersparnisse()
+func sprengziel(von: Vector2i, belegt: Array = [], min_weg: int = Werte.SPRENGER_MIN_WEG) -> Dictionary:
+	ersparnisse()
 	var bester := {}
 	var beste_wertung := -INF
 	var fern := {}          # Notlösung: der am weitesten entfernte Wall, falls alle zu nah am Start liegen
 	# Zweiter Durchgang ohne die Sperre, falls nur noch Wallstücke übrig sind, die schon ein anderer Sprenger anpeilt
 	for durchgang in 2:
-		for w: Vector2i in alle:
+		for paar: Array in _ersparnis_seite:
+			var w: Vector2i = paar[0]
+			var zugang: Vector2i = paar[1]
 			if durchgang == 0 and belegt.has(stueck_nr(w)):
 				continue
-			var weg := _weg_an_wall(von, w)
+			var weg: Array[Vector2i] = [von]
+			if zugang != von:
+				weg = _weg_ohne_tor(von, zugang)
 			if weg.is_empty():
 				continue
 			if fern.is_empty() or weg.size() > (fern["weg"] as Array).size():
 				fern = {"wall": w, "weg": weg}
 			# Die vorderste Front lässt er stehen: erst Wälle ab einem Mindestanmarsch kommen in Frage
-			if weg.size() < Werte.SPRENGER_MIN_WEG:
+			if weg.size() < min_weg:
 				continue
 			# Abkürzung zählt, ein langer Anmarsch kostet
-			var wertung: float = alle[w] - Werte.SPRENGER_WEG_GEWICHT * weg.size()
+			var wertung: float = float(_ersparnis_seite[paar]) - Werte.SPRENGER_WEG_GEWICHT * weg.size()
 			if wertung > beste_wertung:
 				beste_wertung = wertung
 				bester = {"wall": w, "weg": weg}
 		if not bester.is_empty():
 			break
 	return bester if not bester.is_empty() else fern
+
+
+## Fußweg für Gegner zu einem freien Feld: wie der Weg eigener Truppen, aber nicht durch deren Tore.
+func _weg_ohne_tor(von: Vector2i, nach: Vector2i) -> Array[Vector2i]:
+	var weg := einheiten_weg(von, nach)
+	for z in weg:
+		if ist_tor(z):
+			return []
+	return weg
 
 
 ## Bauphase: die Erdwälle, die die nächsten Sprenger vom Start aus anpeilen würden (jeder ein anderes Wallstück).
@@ -713,7 +899,7 @@ func wall_weg_zur_stellung(von: Vector2i) -> Array[Vector2i]:
 	while i < offen.size():
 		var z := offen[i]
 		i += 1
-		if z != von and posten.has(z):
+		if z != von and enterziel(z):
 			var weg: Array[Vector2i] = [z]
 			while weg[0] != von:
 				weg.push_front(vorgaenger[weg[0]])
@@ -724,6 +910,14 @@ func wall_weg_zur_stellung(von: Vector2i) -> Array[Vector2i]:
 				vorgaenger[nz] = z
 				offen.append(nz)
 	return []
+
+
+## Lohnt dieses Wallfeld für eine Turmtruppe? Eine Stellung, in der wirklich jemand steht, oder ein laufender Turm.
+func enterziel(z: Vector2i) -> bool:
+	if turm_aktiv(z):
+		return true
+	var e: Variant = posten.get(z)
+	return is_instance_valid(e) and (e as Einheit).in_stellung()
 
 
 ## Nächstes freies Feld neben dem Wallstück, auf dem `von` liegt (zum Abspringen).
@@ -753,6 +947,69 @@ func landefeld(von: Vector2i, weite: float) -> Vector2i:
 				beste_kosten = kosten
 				bestes = z
 	return bestes
+
+
+## Wohin wirft die Wurf-Schleuder auf `von`? Hinter die Wallgruppe, die den Gegnern den größten Umweg abverlangt.
+## Gibt es keine echte Mauer, wirft sie weiter – in Taschen zwischen Erdwällen.
+## Ergebnis: {"z": Landefeld, "mauer": Umweg in Schritten} oder {} (dann wirft sie gar nicht).
+func wurf_landefeld(von: Vector2i, meiden: Vector2 = Vector2.INF, meiden_r: float = 0.0) -> Dictionary:
+	var start := start_zelle()
+	var bestes := KEINE
+	var beste := -INF
+	var groesste_mauer := 0.0
+	var tasche_bestes := KEINE
+	var tasche_beste := -INF
+	var ab := erstes_ziel()
+	var rest_start := minf(_rest_kosten(start, ab), 200.0)
+	for y in Werte.ZEILEN:
+		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
+			var z := Vector2i(x, y)
+			var luft := Vector2(z - von).length()
+			if not ist_frei(z) or z == Werte.BASIS_ZELLE or luft > Werte.WURF["weit"]:
+				continue
+			if meiden != Vector2.INF and mitte(z).distance_to(meiden) < meiden_r * Werte.ZELLE:
+				continue
+			var cp_nah := 0.0
+			for i in checkpoints.size():
+				if cp_aktiv and not cp_feind[i] and Vector2(z - checkpoints[i]).length() <= 2.5:
+					cp_nah = Werte.WURF_CP_BONUS
+			# Tasche: wie viele Erdwälle und Bauwerke liegen rundherum?
+			var tasche := 0
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					var n := z + Vector2i(dx, dy)
+					if n != z and in_karte(n) and inhalt(n) != FREI:
+						tasche += 1
+			# Umweg: so viel länger ist der Fußweg vom Start hierher als die Luftlinie (Erdwälle im Weg zählen voll)
+			var kosten := minf(_weg_kosten("hund", gegner_weg("hund", start, z)), 60.0)
+			var umweg := kosten - Vector2(z - start).length()
+			groesste_mauer = maxf(groesste_mauer, umweg)
+			# weiter als die normale Wurfweite nur, wenn es sich lohnt
+			var ueber := maxf(0.0, luft - float(Werte.WURF["reichweite"]))
+			var wert := umweg + cp_nah + 0.5 * tasche - 1.5 * ueber
+			if wert > beste:
+				beste = wert
+				bestes = z
+			if tasche >= 3 and x > Werte.ZONE_SPALTEN:
+				# Taschenwurf: lohnt sich nur, wenn er den Gegnern Weg erspart
+				var erspart := rest_start - minf(_rest_kosten(z, bestes_ziel_ab(z, ab)), 200.0)
+				var t_wert := 2.0 * tasche + 0.5 * erspart + cp_nah - 0.3 * luft
+				if t_wert > tasche_beste:
+					tasche_beste = t_wert
+					tasche_bestes = z
+	if groesste_mauer >= Werte.WURF_MAUER_MIN and bestes != KEINE:
+		return {"z": bestes, "mauer": groesste_mauer}
+	if tasche_bestes != KEINE:
+		return {"z": tasche_bestes, "mauer": groesste_mauer}
+	if bestes != KEINE:
+		return {"z": bestes, "mauer": groesste_mauer}
+	return {}
+
+
+## Wie stark ist die Mauer, die die Wurf-Schleuder auf `von` sieht? (größter Umweg in Wurfweite)
+func wurf_mauer(von: Vector2i) -> float:
+	var ziel := wurf_landefeld(von)
+	return float(ziel.get("mauer", 0.0))
 
 
 # ------------------------------------------------------------ Vorschau
@@ -828,12 +1085,22 @@ func _draw() -> void:
 	for z: Vector2i in feld:
 		if feld[z] == WALL:
 			_zeichne_wall(z, 1.0)
+			if stuetze_von.has(z):
+				_zeichne_stuetze(z, TECH_HELL, 0.5)
 			if ausbau.has(z):
 				_zeichne_ausbau(z, ausbau[z], 1.0)
+				if ausbau[z] == TURM and not turm_aktiv(z):
+					_zeichne_turm_aus(z)
 		elif feld[z] == BATTERIE:
 			_zeichne_batterie(z, 1.0)
 		else:
 			_zeichne_fabrik(z, 1.0)
+		if ausgefallen.has(z):
+			# ausgefallen bis zum Ende der Runde: abgedunkelt, rotes Kreuz
+			_r(z, 2, 2, 60, 60, Color(0, 0, 0, 0.55))
+			var oa := Vector2(z) * zg
+			draw_line(oa + Vector2(14, 14), oa + Vector2(50, 50), WARNUNG, 5.0)
+			draw_line(oa + Vector2(50, 14), oa + Vector2(14, 50), WARNUNG, 5.0)
 		_zeichne_leben(z)
 
 	_markiere_durchbrueche(pfad if not zeige_neu else vorschau_pfad, KEINE if not zeige_neu else vorschau_zelle)
@@ -845,19 +1112,6 @@ func _draw() -> void:
 			draw_rect(Rect2(oz + Vector2(2, 2), Vector2(zg - 4, zg - 4)), Color(1.0, 0.45, 0.1, 0.95), false, 5.0)
 			draw_rect(Rect2(oz + Vector2(28, 12), Vector2(8, 24)), Color(1.0, 0.5, 0.12))
 			draw_rect(Rect2(oz + Vector2(28, 42), Vector2(8, 8)), Color(1.0, 0.5, 0.12))
-
-	# Schwachstelle: der Erdwall, den ein Sprenger anpeilen würde
-	if zeige_schwachstelle and zeige_pfad_kraeftig:
-		var rang := 0
-		for schwach: Vector2i in sprengvorschau(3):
-			# die lohnendste Stelle kräftig und pulsierend, die nächsten beiden blasser
-			var puls := 0.5 + 0.5 * sin(_zeit * 5.0)
-			var deckung := (0.5 + 0.5 * puls) if rang == 0 else 0.45
-			var o := Vector2(schwach) * zg
-			draw_rect(Rect2(o + Vector2(2, 2), Vector2(zg - 4, zg - 4)), Color(1.0, 0.6, 0.1, deckung), false, 4.0)
-			draw_rect(Rect2(o + Vector2(28, 14), Vector2(8, 22)), Color(1.0, 0.6, 0.12, 1.0 if rang == 0 else 0.6))
-			draw_rect(Rect2(o + Vector2(28, 40), Vector2(8, 8)), Color(1.0, 0.6, 0.12, 1.0 if rang == 0 else 0.6))
-			rang += 1
 
 	# Felder in Reichweite, die die Auswahl nicht treffen kann: rot schraffiert
 	for z in _sicht_blind:
@@ -896,6 +1150,10 @@ func _draw() -> void:
 		elif vorschau_typ == TOR:
 			_zeichne_ausbau(vorschau_zelle, TOR, 0.7)
 		elif vorschau_typ == STELLUNG or vorschau_typ == TURM:
+			if vorschau_typ == TURM:
+				# die Stützen, die dieser Turm belegen würde
+				for n in freie_stuetzen(vorschau_zelle).slice(0, Werte.TURM_NACHBARN):
+					_zeichne_stuetze(n, TECH_LICHT, 0.5)
 			_zeichne_ausbau(vorschau_zelle, vorschau_typ, 0.7)
 			var radius: float = Werte.TURM["reichweite"] if vorschau_typ == TURM else 3.0 + Werte.POSTEN_REICHWEITE_BONUS
 			draw_arc((Vector2(vorschau_zelle) + Vector2(0.5, 0.5)) * zg, radius * zg, 0.0, TAU, 64, Color(TECH_LICHT, 0.6), 2.0)
@@ -904,12 +1162,35 @@ func _draw() -> void:
 				_zeichne_wall(vorschau_zelle, 0.6)
 			elif vorschau_typ == BATTERIE:
 				_zeichne_batterie(vorschau_zelle, 0.6)
+				if vorschau_partner != KEINE:
+					_zeichne_fabrik(vorschau_partner, 0.6)
 				draw_arc((Vector2(vorschau_zelle) + Vector2(0.5, 0.5)) * zg, Werte.BATTERIE["reichweite"] * zg, 0.0, TAU, 96, Color(TECH_LICHT, 0.6), 2.0)
 			else:
 				_zeichne_fabrik(vorschau_zelle, 0.6)
 			var bricht := weg_bricht_durch(vorschau_pfad, vorschau_zelle)
 			_zeichne_weg(vorschau_pfad, WARNUNG if bricht else WEG_NEU, true)
 			_markiere_durchbrueche(vorschau_pfad, vorschau_zelle)
+
+
+## Ein Erdwall, der einen Turm stützt: die Krone in der Farbe des Turms, mit einer Klammer zum Turm hin –
+## so liest sich Turm plus Stützen als ein Bauwerk.
+func _zeichne_stuetze(z: Vector2i, farbe: Color, staerke: float) -> void:
+	var zg := float(Werte.ZELLE)
+	var o := Vector2(z) * zg
+	draw_rect(Rect2(o + Vector2(6, 6), Vector2(zg - 12, zg - 12)), Color(farbe, staerke))
+	draw_rect(Rect2(o + Vector2(5, 5), Vector2(zg - 10, zg - 10)), Color(farbe, minf(1.0, staerke + 0.4)), false, 3.0)
+	if stuetze_von.has(z):
+		var r: Vector2i = stuetze_von[z] - z   # Richtung zum Turm
+		var mitte := o + Vector2(zg, zg) * 0.5
+		draw_rect(Rect2(mitte + Vector2(r) * zg * 0.5 - Vector2(7, 7), Vector2(14, 14)), Color(farbe, 0.95))
+
+
+## Turm außer Betrieb (lahmgelegt oder ohne Stützen): abgedunkelt mit rotem Kreuz
+func _zeichne_turm_aus(z: Vector2i) -> void:
+	_r(z, 12, 2, 40, 42, Color(0, 0, 0, 0.55))
+	var o := Vector2(z) * Werte.ZELLE
+	draw_line(o + Vector2(18, 8), o + Vector2(46, 38), WARNUNG, 4.0)
+	draw_line(o + Vector2(46, 8), o + Vector2(18, 38), WARNUNG, 4.0)
 
 
 ## Stellung = Steinplattform mit Brüstung, Turm = Geschütz des Technoclans.
@@ -989,6 +1270,18 @@ func _zeichne_fabrik(z: Vector2i, alpha: float) -> void:
 			_blaetter[typ] = load(Werte.EINHEITEN[typ]["blatt"])
 		var kante: int = Werte.EINHEITEN[typ]["zelle"]
 		draw_texture_rect_region(_blaetter[typ], Rect2(Vector2(z) * Werte.ZELLE + Vector2(8, 10), Vector2(48, 48)), Rect2(0, 0, kante, kante))
+	# Ausbaustufe: ein Punkt je Stufe oben links; eine spezialisierte Fabrik trägt einen hellen Rahmen
+	var stufe: int = fabrik_stufe.get(z, 0)
+	if stufe > 0:
+		draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(3, 11), Vector2(58, 50)), Color(TECH_LICHT, 0.9 * alpha), false, 2.0)
+		for i in stufe:
+			_r(z, 6 + i * 9, 3, 7, 7, TECH_DUNKEL * a)
+			_r(z, 7 + i * 9, 4, 5, 5, Color("ffe9a8") * a)
+	if paar.has(z):
+		# Pilotenfabrik: Klammer zur Batterie hin
+		var r: Vector2i = paar[z] - z
+		var mitte := (Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE
+		draw_rect(Rect2(mitte + Vector2(r) * Werte.ZELLE * 0.5 - Vector2(8, 8), Vector2(16, 16)), TECH_LICHT * a)
 	if fortschritt.has(z):
 		_r(z, 6, 58, 52, 4, TECH_DUNKEL)
 		_r(z, 6, 58, 52.0 * clampf(fortschritt[z], 0.0, 1.0), 4, TECH_LICHT)
