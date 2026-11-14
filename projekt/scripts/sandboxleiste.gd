@@ -9,6 +9,8 @@ var _inhalt: VBoxContainer
 var _kopf: Button
 var _zahlen: Dictionary = {}    # Kennung -> Label
 var _offen := true
+var _basis_knoepfe: Dictionary = {}   # Art -> Button
+var _route: CheckButton
 
 
 func _ready() -> void:
@@ -36,6 +38,29 @@ func _ready() -> void:
 	for typ: String in TYPEN:
 		_zeile(typ, Werte.GEGNER[typ]["name"], func(d: int): spiel.sandbox_aendere_gegner(typ, d))
 	_zeile("truppen", "Truppen je Fabrik", func(d: int): spiel.sandbox_truppen = clampi(spiel.sandbox_truppen + d, -2, 9))
+	# Basis versetzen (fester Platz, zufällig oder per Klick) und Checkpoint-Route ab Runde 1
+	var basis_text := Label.new()
+	basis_text.text = "Basis"
+	basis_text.add_theme_font_size_override("font_size", 13)
+	_inhalt.add_child(basis_text)
+	var basis_reihe := HBoxContainer.new()
+	for wahl: Array in [["fest", "fest"], ["rechts", "rechts"], ["ueberall", "überall"], ["klick", "setzen"]]:
+		var k := Button.new()
+		k.text = wahl[1]
+		k.focus_mode = Control.FOCUS_NONE
+		k.add_theme_font_size_override("font_size", 12)
+		k.tooltip_text = {"fest": "alter Platz rechts in der Mitte", "rechts": "zufällig im rechten Drittel", "ueberall": "zufällig, mindestens 8 Felder vom HQ des Gegners", "klick": "per Klick auf ein freies Feld"}[wahl[0]]
+		k.pressed.connect(func(): spiel.sandbox_basis(wahl[0]))
+		basis_reihe.add_child(k)
+		_basis_knoepfe[wahl[0]] = k
+	_inhalt.add_child(basis_reihe)
+	_route = CheckButton.new()
+	_route.text = "Checkpoint-Route ab Runde 1"
+	_route.focus_mode = Control.FOCUS_NONE
+	_route.add_theme_font_size_override("font_size", 12)
+	_route.button_pressed = true
+	_route.toggled.connect(func(an: bool): spiel.sandbox_cp_route(an))
+	_inhalt.add_child(_route)
 	var b := Button.new()
 	b.text = "Welle wie im Spiel"
 	b.focus_mode = Control.FOCUS_NONE
@@ -83,4 +108,6 @@ func _process(_delta: float) -> void:
 		l.text = str(int(anzahl.get(typ, 0)))
 		l.modulate = Color("ffe9a8") if spiel.sandbox_gegner.has(typ) else Color.WHITE
 	(_zahlen["truppen"] as Label).text = str(spiel.truppen_limit(Karte.KEINE))
+	for art: String in _basis_knoepfe:
+		(_basis_knoepfe[art] as Button).modulate = Color("ffe9a8") if spiel.basis_art == art else Color.WHITE
 	position = Vector2(1272.0 - size.x, Werte.KARTE_OBEN + 6.0)

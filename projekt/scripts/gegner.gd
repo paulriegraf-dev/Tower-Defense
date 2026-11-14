@@ -5,7 +5,7 @@ extends Node2D
 ## Truppen in Stellungen und sichtbare Bodentruppen.
 ##
 ## Sonderregeln je nach daten["rolle"]:
-##   "fahne"      – führt den Trupp in seinem Tempo, kämpft nicht, nimmt Checkpoints schneller ein
+##   "fahne"      – geht dem Trupp voran und macht ihn 30 % schneller, kämpft nicht, nimmt Checkpoints schneller ein
 ##   "sprenger"   – läuft zum Erdwall mit der größten Abkürzung und sprengt ihn
 ##   "rauch"      – wirft Rauch auf Stellungen
 ##   "belagerung" – fährt zum Wallstück mit den meisten Stellungen, dockt an, setzt Turmtruppen ab
@@ -33,6 +33,7 @@ var _treffer := 0.0
 var _tot := false
 
 # Sonderregeln
+var _zuendung := -1.0               # Sprenger: Sekunden, die er schon an seinem Ziel zündet (-1 = noch nicht angekommen)
 var _sonderziel := Karte.KEINE      # Sprenger / Belagerungsturm: der angepeilte Erdwall
 var _sonderweg: Array[Vector2i] = []
 var _sonder_index := 0
@@ -79,14 +80,21 @@ func tempo() -> float:
 
 
 func _tempo_ungebremst() -> float:
-	var t: float = daten["tempo"]
-	# Auf der Spur eines Fahnenträgers stürmen alle in seinem Tempo mit (der Belagerungsturm nicht).
-	if rolle != "belagerung" and rolle != "fahne" and spiel.auf_fahnenspur(position):
-		return maxf(t, float(Werte.GEGNER["fahne"]["tempo"]))
+	# Tempo des Trupps = langsamstes Mitglied, den Fahnenträger nicht mitgezählt (er wartet auf seinen Trupp).
+	var t: float = INF if rolle == "fahne" else float(daten["tempo"])
+	var fahne_dabei := false
 	for g: Gegner in trupp:
 		if g.rolle == "fahne":
-			return g.daten["tempo"]
-		t = minf(t, g.daten["tempo"])
+			fahne_dabei = true
+		else:
+			t = minf(t, g.daten["tempo"])
+	if t == INF:
+		return daten["tempo"]   # Fahnenträger ohne Trupp: eigenes Tempo
+	if rolle == "fahne":
+		return minf(float(daten["tempo"]), t)   # der Bonus gilt nur für die anderen: er selbst läuft ohne
+	# Ein Fahnenträger im Trupp oder seine Spur am Boden treibt an (den Belagerungsturm nicht).
+	if fahne_dabei or (rolle != "belagerung" and spiel.auf_fahnenspur(position)):
+		return t * Werte.FAHNE_BONUS
 	return t
 
 
@@ -211,7 +219,8 @@ func _process(delta: float) -> void:
 	if _index >= _weg.size():
 		if _ziel < karte.checkpoints.size():
 			# Auf dem Checkpoint: stehen bleiben und halten, bis er eingenommen ist – dann weiter zum nächsten Ziel.
-			if karte.cp_feind[_ziel]:
+			# Vor der Runde, ab der Checkpoints zählen, läuft er nur hindurch (Sandbox: Checkpoint-Route ab Runde 1).
+			if karte.cp_feind[_ziel] or not karte.cp_aktiv:
 				_ziel += 1
 				plane_neu()
 			else:
@@ -269,6 +278,7 @@ func _zum_wall(delta: float) -> bool:
 	# Ein Sprenger bleibt bei seinem Ziel, solange der Wall steht; der Belagerungsturm plant laufend neu.
 	if ziel_weg or (_sonder_plan_in <= 0.0 and (rolle != "sprenger" or _sonderziel == Karte.KEINE)):
 		_sonder_plan_in = 2.0
+		_zuendung = -1.0   # neues Ziel: die Zündung beginnt von vorn
 		var hier := karte.zelle_bei(position)
 		# Ein geworfener Sprenger steht schon hinter der Front: für ihn gilt kein Mindestanmarsch.
 		var fund: Dictionary = karte.sprengziel(hier, spiel.sprenger_stuecke(self), 0 if geworfen else Werte.SPRENGER_MIN_WEG) if rolle == "sprenger" else karte.andockziel(hier)
@@ -294,6 +304,11 @@ func _zum_wall(delta: float) -> bool:
 	_sprite.bewegt(false)
 	_sprite.flip_h = karte.mitte(_sonderziel).x < position.x
 	if rolle == "sprenger":
+		# Zündzeit: Er steht still am Ziel und ist leicht zu treffen. Fällt er vorher, gibt es keine Sprengung.
+		_zuendung = maxf(_zuendung, 0.0) + delta
+		if _zuendung < Werte.SPRENGER_ZUENDZEIT:
+			queue_redraw()
+			return true
 		_tot = true
 		if _ziel_ist_fabrik:
 			spiel.sprengung_fabrik(self, _sonderziel)
@@ -435,6 +450,11 @@ func _draw() -> void:
 		draw_colored_polygon(PackedVector2Array([Vector2(0, -78), Vector2(-13, -56), Vector2(13, -56)]), farbe)
 		draw_rect(Rect2(-2, -72, 4, 9), Color("2a1608"))
 		draw_rect(Rect2(-2, -61, 4, 3), Color("2a1608"))
+		if _zuendung >= 0.0:
+			# Zündung läuft: Ring um das Warnzeichen füllt sich, bis es knallt
+			var anteil := clampf(_zuendung / Werte.SPRENGER_ZUENDZEIT, 0.0, 1.0)
+			draw_arc(Vector2(0, -64), 19.0, 0.0, TAU, 32, Color(0, 0, 0, 0.55), 5.0)
+			draw_arc(Vector2(0, -64), 19.0, -PI / 2.0, -PI / 2.0 + TAU * anteil, 32, Color("ff5a1f"), 4.0)
 	if rolle == "fahne":
 		draw_rect(Rect2(-2, -84, 4, 40), Color("3a2a1c"))
 		draw_rect(Rect2(2, -84, 22, 14), Color("ff5ad0"))

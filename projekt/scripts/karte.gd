@@ -27,6 +27,8 @@ var vorschau_partner := KEINE      # Bauvorschau der Batterie: das Feld ihrer Pi
 var fortschritt: Dictionary = {}   # Fabrik-Zelle -> 0..1 (Produktionsbalken)
 
 var checkpoints: Array[Vector2i] = []
+var basis := Werte.BASIS_ZELLE      # eigene Basis: dorthin wollen die Gegner (Sandbox: frei wählbar)
+var cp_route := false              # Sandbox: Der Gegnerweg führt schon vor CHECKPOINTS_AB_WELLE durch die Checkpoints (ohne Einnahme)
 var cp_aktiv := false              # Checkpoints sind erst ab Werte.CHECKPOINTS_AB_WELLE im Spiel
 var cp_feind: Array[bool] = []     # je Checkpoint: vom Gegner eingenommen?
 var cp_fortschritt: Array[float] = []   # je Checkpoint: Sekunden der laufenden Rückeroberung
@@ -141,7 +143,7 @@ func ist_frei(z: Vector2i) -> bool:
 
 
 func ist_bebaubar(z: Vector2i) -> bool:
-	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and z != Werte.BASIS_ZELLE and not checkpoints.has(z)
+	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and z != basis and not checkpoints.has(z)
 
 
 ## Mittelpunkt einer Zelle in Weltkoordinaten.
@@ -266,7 +268,7 @@ func repariere_alles() -> void:
 
 ## Ziel Nummer `i` auf dem Gegnerweg: erst die Checkpoints, danach die Basis.
 func ziel_zelle(i: int) -> Vector2i:
-	return checkpoints[i] if i < checkpoints.size() else Werte.BASIS_ZELLE
+	return checkpoints[i] if i < checkpoints.size() else basis
 
 
 ## Der am weitesten vorn liegende eingenommene Checkpoint (-1 = keiner, Start ist die Grube).
@@ -279,7 +281,7 @@ func start_index() -> int:
 
 ## Erstes Routenziel der nächsten Welle (Nummer des Checkpoints; ohne Checkpoints direkt die Basis).
 func erstes_ziel() -> int:
-	return start_index() + 1 if cp_aktiv else checkpoints.size()
+	return start_index() + 1 if cp_aktiv or cp_route else checkpoints.size()
 
 
 func start_zelle() -> Vector2i:
@@ -468,7 +470,9 @@ func _gewichte_fuer(z: Vector2i) -> void:
 
 
 ## Weg eines Gegners: der billigste – Wälle sind teuer, aber nicht verboten.
-func gegner_weg(gegner_typ: String, von: Vector2i, nach: Vector2i = Werte.BASIS_ZELLE) -> Array[Vector2i]:
+func gegner_weg(gegner_typ: String, von: Vector2i, nach: Vector2i = KEINE) -> Array[Vector2i]:
+	if nach == KEINE:
+		nach = basis
 	if not in_karte(von):
 		return []
 	return (_astar_gegner[gegner_typ] as AStarGrid2D).get_id_path(von, nach)
@@ -534,18 +538,39 @@ func weg_bricht_durch(weg: Array[Vector2i], zusatz: Vector2i = KEINE) -> bool:
 func einheiten_weg(von: Vector2i, nach: Vector2i) -> Array[Vector2i]:
 	if not in_karte(von) or not ist_frei(nach):
 		return []
-	if ist_frei(von):
+	if ist_begehbar(von):
 		return _astar_einheiten.get_id_path(von, nach)
-	# Start liegt in einem Gebäude (frisch aus der Fabrik): über einen freien Nachbarn.
+	# Start liegt in einem Gebäude (frisch aus der Fabrik): über einen freien Nachbarn – oder durch ein Tor direkt an der Fabrik.
 	var bester: Array[Vector2i] = []
 	for n in NACHBARN:
 		var s := von + n
-		if not ist_frei(s):
+		if not ist_begehbar(s):
 			continue
 		var weg := _astar_einheiten.get_id_path(s, nach)
 		if not weg.is_empty() and (bester.is_empty() or weg.size() < bester.size()):
 			bester = weg
 	return bester
+
+
+## Erste Schritte aus einem Gebäude heraus: ein freies Nachbarfeld – oder, wenn es keins gibt,
+## durch ein Tor direkt am Gebäude auf das freie Feld dahinter. Leer = kein Ausgang.
+func ausgang(z: Vector2i) -> Array[Vector2i]:
+	var frei := freier_nachbar(z)
+	if frei != KEINE:
+		return [frei]
+	for n in NACHBARN:
+		var tor := z + n
+		if not ist_tor(tor):
+			continue
+		for m: Vector2i in [n, Vector2i(n.y, n.x), Vector2i(-n.y, -n.x)]:
+			if ist_frei(tor + m):
+				return [tor, tor + m]
+	return []
+
+
+## Hat dieses Gebäude einen Ausgang für seine Truppen (freies Nachbarfeld oder Tor)?
+func hat_ausgang(z: Vector2i) -> bool:
+	return not ausgang(z).is_empty()
 
 
 func freier_nachbar(z: Vector2i) -> Vector2i:
@@ -664,28 +689,38 @@ func ersparnisse() -> Dictionary:
 			var zugang := w + n
 			if not ist_frei(zugang):
 				continue
-			# Die Sprengung reicht zwei Felder tief: der Wall und der direkt dahinter (vom Sprenger aus gesehen)
-			var hinter := sprengt_mit(w, zugang)
+			# Die Sprengung geht in die Tiefe: der Wall und die Erdwälle direkt dahinter (vom Sprenger aus gesehen), siehe sprengt_reihe
+			var reihe := sprengt_reihe(w, zugang)
 			a.set_point_weight_scale(w, 1.0)
-			if hinter != KEINE:
-				a.set_point_weight_scale(hinter, 1.0)
+			for h: Vector2i in reihe:
+				a.set_point_weight_scale(h, 1.0)
 			var gewinn := basis - _weg_kosten("hund", _route("hund"))
 			a.set_point_weight_scale(w, _gewicht("hund", WALL))
-			if hinter != KEINE:
-				a.set_point_weight_scale(hinter, _gewicht("hund", WALL))
+			for h: Vector2i in reihe:
+				a.set_point_weight_scale(h, _gewicht("hund", WALL))
 			if gewinn > 0.5:
 				_ersparnis_seite[[w, zugang]] = gewinn
 				_ersparnis[w] = maxf(gewinn, float(_ersparnis.get(w, 0.0)))
 	return _ersparnis
 
 
-## Der zweite Erdwall, den eine Sprengung von `zugang` aus an `w` mitreißt (KEINE, wenn dahinter keiner steht).
-## Ein Turm hält stand und schützt damit auch, was hinter ihm liegt.
-func sprengt_mit(w: Vector2i, zugang: Vector2i) -> Vector2i:
-	var hinter := w + (w - zugang)
-	if (w - zugang).length_squared() != 1 or inhalt(hinter) != WALL or ausbau.get(hinter, FREI) == TURM:
-		return KEINE
-	return hinter
+## Die Erdwälle, die eine Sprengung von `zugang` aus an `w` mitreißt: alle, die in gerader Linie direkt dahinter stehen,
+## bis die Sprengung insgesamt SPRENGER_TIEFE Erdwälle tief ist. Ein Turm hält stand und schützt, was hinter ihm liegt.
+## Mitgerissen werden nur blanke Erdwälle (keine Stellung, kein Tor, kein Turm), die zu einer Mauerlage quer zur
+## Sprengrichtung gehören (quer daneben steht ein weiterer Erdwall). So trifft es nur stumpfe Riegel; eine Linie, die in
+## Sprengrichtung verläuft, oder eine Reihe Stellungen verliert nur das getroffene Feld.
+func sprengt_reihe(w: Vector2i, zugang: Vector2i) -> Array[Vector2i]:
+	var reihe: Array[Vector2i] = []
+	var richtung := w - zugang
+	if richtung.length_squared() != 1:
+		return reihe
+	var quer := Vector2i(richtung.y, richtung.x)
+	var hinter := w + richtung
+	while reihe.size() < Werte.SPRENGER_TIEFE - 1 and inhalt(hinter) == WALL and ausbau.get(hinter, FREI) == FREI \
+			and (inhalt(hinter + quer) == WALL or inhalt(hinter - quer) == WALL):
+		reihe.append(hinter)
+		hinter += richtung
+	return reihe
 
 
 ## Die Erdwälle mit der größten Ersparnis, die lohnendste zuerst (höchstens `anzahl`).
@@ -965,19 +1000,25 @@ func landefeld(von: Vector2i, weite: float) -> Vector2i:
 ## Gibt es keine echte Mauer, wirft sie weiter – in Taschen zwischen Erdwällen.
 ## Ergebnis: {"z": Landefeld, "mauer": Umweg in Schritten} oder {} (dann wirft sie gar nicht).
 func wurf_landefeld(von: Vector2i, meiden: Vector2 = Vector2.INF, meiden_r: float = 0.0) -> Dictionary:
-	var start := start_zelle()
+	# Gemessen wird immer von der Zone aus, in der die Schleuder steht – nicht von einem eingenommenen Checkpoint.
+	# (Sonst gilt nach einer Einnahme das Feld VOR der Mauer als "weit weg" und der Wurf landet davor.)
+	var start := Werte.START_ZELLE
 	var bestes := KEINE
 	var beste := -INF
 	var groesste_mauer := 0.0
 	var tasche_bestes := KEINE
 	var tasche_beste := -INF
 	var ab := erstes_ziel()
-	var rest_start := minf(_rest_kosten(start, ab), 200.0)
+	var rest_start := minf(_rest_kosten(start_zelle(), ab), 200.0)
 	for y in Werte.ZEILEN:
 		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
 			var z := Vector2i(x, y)
 			var luft := Vector2(z - von).length()
-			if not ist_frei(z) or z == Werte.BASIS_ZELLE or luft > Werte.WURF["weit"]:
+			if not ist_frei(z) or z == basis or luft > Werte.WURF["tasche_weit"]:
+				continue
+			# Rundum eingeschlossen (von hier kommt niemand zu Fuß zur Basis, ohne etwas einzureißen)? Kein Landeziel:
+			# Geworfen wird hinter eine Mauer, nicht in einen geschlossenen Kern.
+			if _weg_kosten("hund", gegner_weg("hund", z, basis)) >= 1000.0:
 				continue
 			if meiden != Vector2.INF and mitte(z).distance_to(meiden) < meiden_r * Werte.ZELLE:
 				continue
@@ -995,16 +1036,19 @@ func wurf_landefeld(von: Vector2i, meiden: Vector2 = Vector2.INF, meiden_r: floa
 			# Umweg: so viel länger ist der Fußweg vom Start hierher als die Luftlinie (Erdwälle im Weg zählen voll)
 			var kosten := minf(_weg_kosten("hund", gegner_weg("hund", start, z)), 60.0)
 			var umweg := kosten - Vector2(z - start).length()
-			groesste_mauer = maxf(groesste_mauer, umweg)
-			# weiter als die normale Wurfweite nur, wenn es sich lohnt
-			var ueber := maxf(0.0, luft - float(Werte.WURF["reichweite"]))
-			var wert := umweg + cp_nah + 0.5 * tasche - 1.5 * ueber
-			if wert > beste:
+			# Der normale Wurf hinter die Mauer reicht nur bis zur Wurfweite; weiter fliegen nur Taschenwürfe (siehe unten)
+			var in_wurfweite := luft <= float(Werte.WURF["reichweite"])
+			if in_wurfweite:
+				groesste_mauer = maxf(groesste_mauer, umweg)
+			var wert := umweg + cp_nah + 0.5 * tasche
+			if in_wurfweite and wert > beste:
 				beste = wert
 				bestes = z
 			if tasche >= 3 and x > Werte.ZONE_SPALTEN:
-				# Taschenwurf: lohnt sich nur, wenn er den Gegnern Weg erspart
+				# Taschenwurf: nur, wenn er den Gegnern Weg erspart – eine Nische VOR der Mauer ist keine Tasche
 				var erspart := rest_start - minf(_rest_kosten(z, bestes_ziel_ab(z, ab)), 200.0)
+				if erspart < Werte.WURF_TASCHE_MIN_ERSPART:
+					continue
 				var t_wert := 2.0 * tasche + 0.5 * erspart + cp_nah - 0.3 * luft
 				if t_wert > tasche_beste:
 					tasche_beste = t_wert
@@ -1043,7 +1087,7 @@ func freies_feld_nahe(punkt: Vector2) -> Vector2i:
 	for y in Werte.ZEILEN:
 		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
 			var z := Vector2i(x, y)
-			if not ist_frei(z) or z == Werte.BASIS_ZELLE:
+			if not ist_frei(z) or z == basis:
 				continue
 			var d := mitte(z).distance_to(punkt)
 			if d < beste:
@@ -1323,6 +1367,12 @@ func _zeichne_fabrik(z: Vector2i, alpha: float) -> void:
 		for i in stufe:
 			_r(z, 6 + i * 9, 3, 7, 7, TECH_DUNKEL * a)
 			_r(z, 7 + i * 9, 4, 5, 5, Color("ffe9a8") * a)
+	if not hat_ausgang(z):
+		# Kein Ausgang (weder freies Feld noch Tor): Truppen besetzen nur direkt anliegende Stellungen
+		_r(z, 5, 43, 14, 14, TECH_DUNKEL * a)
+		var ecke := Vector2(z) * Werte.ZELLE + Vector2(8, 46)
+		draw_line(ecke, ecke + Vector2(8, 8), WARNUNG * a, 2.0)
+		draw_line(ecke + Vector2(8, 0), ecke + Vector2(0, 8), WARNUNG * a, 2.0)
 	if paar.has(z):
 		# Pilotenfabrik: Klammer zur Batterie hin
 		var r: Vector2i = paar[z] - z
@@ -1376,7 +1426,7 @@ func _zeichne_checkpoint(i: int) -> void:
 
 
 func _zeichne_basis() -> void:
-	var z := Werte.BASIS_ZELLE
+	var z := basis
 	_r(z, 2, 6, 60, 56, TECH_DUNKEL)
 	_r(z, 6, 10, 52, 48, TECH)
 	_r(z, 14, 18, 36, 32, TECH_HELL)

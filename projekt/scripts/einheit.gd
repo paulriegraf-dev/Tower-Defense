@@ -31,6 +31,7 @@ var letztes_ziel: Node2D = null    # Feuerteam: worauf zuletzt geschossen wurde 
 var letzter_schuss := -100.0       # ... und wann (Spielzeit in Sekunden)
 var _laser_ziel: Node2D = null
 var _laser_zeit := 0.0
+var _ohne_ziel := 0.0              # Aufräumen: so lange (Sekunden) hat die Truppe in der Stellung kein Ziel mehr
 var _anlauf := 0.0                 # Minigun: 0..1
 
 
@@ -76,8 +77,7 @@ func _suche_posten() -> void:
 		posten_zelle = Karte.KEINE
 		if not karte.ist_frei(hier):
 			# erst aus der Fabrik heraustreten
-			var raus := karte.freier_nachbar(hier)
-			if raus != Karte.KEINE:
+			for raus: Vector2i in karte.ausgang(hier):
 				_punkte.append(karte.mitte(raus) + _versatz)
 		return
 	zustand = Zustand.ZUM_POSTEN
@@ -184,6 +184,15 @@ func _process(delta: float) -> void:
 				_punkte.clear()
 				zustand = Zustand.BODEN
 				return
+			if not ist_pilot and spiel.aufraeumen():
+				# Rundenende, nichts kommt mehr nach: nicht mehr in die Stellung, sondern den Übrigen hinterher
+				if karte.posten.get(posten_zelle) == self:
+					karte.posten.erase(posten_zelle)
+				posten_zelle = Karte.KEINE
+				_wartet = false
+				_punkte.clear()
+				zustand = Zustand.BODEN
+				return
 			if _im_tor():
 				_gehe(delta)   # im Tor wird nicht angehalten: erst ganz hindurch
 				return
@@ -243,14 +252,26 @@ func _process(delta: float) -> void:
 					oben_ziel = staerkster
 			if oben_ziel == null:
 				oben_ziel = spiel.zonenbau_in_reichweite(position, weite, false, posten_zelle)
+			# Aufräumen: Nichts kommt mehr nach und von hier oben ist kein Ziel zu treffen – absteigen und hinterher.
+			if oben_ziel == null and spiel.aufraeumen():
+				_ohne_ziel += delta
+				if _ohne_ziel >= 1.5:
+					_ohne_ziel = 0.0
+					if karte.posten.get(posten_zelle) == self:
+						karte.posten.erase(posten_zelle)
+					posten_zelle = Karte.KEINE
+					zustand = Zustand.BODEN
+					_waehle_marschziel()
+					return
+			else:
+				_ohne_ziel = 0.0
 			_feuere_auf(oben_ziel)
 		Zustand.BODEN:
 			if not karte.ist_begehbar(karte.zelle_bei(position)):
 				if _punkte.is_empty():
 					# steht noch in der Fabrik (oder auf einem Wall) und hat keinen Weg mehr: auf das nächste freie Feld treten,
 					# sonst bleibt sie für immer stehen
-					var raus := karte.freier_nachbar(karte.zelle_bei(position))
-					if raus != Karte.KEINE:
+					for raus: Vector2i in karte.ausgang(karte.zelle_bei(position)):
 						_punkte.append(karte.mitte(raus) + _versatz)
 				_gehe(delta)   # noch in der Fabrik: erst heraustreten, dann kämpfen
 				return
@@ -259,7 +280,7 @@ func _process(delta: float) -> void:
 				return
 			# Nachrücken: Ist eine Stellung frei geworden (oder näher als für den, der dorthin unterwegs ist)?
 			_posten_check -= delta
-			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self):   # Checkpoint zurückholen geht vor
+			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self) and (ist_pilot or not spiel.aufraeumen()):   # Checkpoint zurückholen und Aufräumen gehen vor
 				_posten_check = 1.0
 				if (ist_pilot or not spiel.im_endkampf()) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
 					_marschziel = Karte.KEINE
@@ -335,6 +356,14 @@ func _waehle_marschziel() -> void:
 		if hier != abfang:
 			_plane_zur_zelle(abfang)
 		return
+	if spiel.aufraeumen():
+		# Rundenende: Wer nicht mehr abzufangen ist, wird jetzt doch verfolgt – es kommt ja nichts mehr nach.
+		var jagd: Vector2i = spiel.jagdziel(self)
+		if jagd != Karte.KEINE:
+			_marschziel = jagd
+			if hier != jagd:
+				_plane_zur_zelle(jagd)
+			return
 	if hier.x < grenze and not spiel.im_endkampf():
 		# zu weit vorn: zurück hinter die Linie, auf das nächste freie Feld
 		var bestes := Karte.KEINE
@@ -389,7 +418,9 @@ func _repariere(delta: float) -> void:
 
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
 func _feuere_auf(ziel: Node2D) -> void:
-	if ziel == null or spiel.im_rauch(position):
+	# Im Rauch sieht die Einheit nichts – außer mit Klarsicht (Scharfschütze ab Stufe 2) oder auf ein markiertes Ziel.
+	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
+	if ziel == null or blind:
 		# Minigun: Rauch stoppt den Anlauf sofort, ohne Ziel läuft sie langsam aus
 		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * get_process_delta_time())
 		_laser_ziel = null

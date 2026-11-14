@@ -44,10 +44,14 @@ const WURF := {
 	"flugzeit": 1.5,
 	"rudel": 4,                 # so viele Gegner wirft sie kurz hintereinander an dieselbe Stelle
 	"abstand": 0.25,            # Sekunden zwischen zwei Würfen eines Rudels
-	"weit": 10.0,               # ohne echte Mauer wirft sie so weit (Felder) – in Taschen zwischen Erdwällen
+	"weit": 10.0,               # so weit (Felder) darf ein Angreifer im Phantom-Modus sein Wurfziel wählen
+	"tasche_weit": 8.0,         # ohne echte Mauer wirft sie von selbst höchstens so weit – in Taschen zwischen Erdwällen
 }
+const WURF_FARBE := Color(0.6, 0.85, 1.25)   # Wurf-Schleuder: kühl eingefärbt, damit sie sich von der Stein-Schleuder abhebt
 const WURF_MAUER_MIN: float = 8.0      # ab so viel Umweg (Schritte) hinter einer Wallgruppe gilt sie als Mauer, die überworfen wird
 const WURF_MAUER_EXTRA: float = 15.0   # ab so viel Umweg wirft die Schleuder zusätzlich ein Rudel Hunde je Welle
+const NEBEL_SICHT: float = 2.5          # Phantom-Modus: so weit (Felder) sieht eine Einheit des Angreifers durch den Kriegsnebel
+const WURF_TASCHE_MIN_ERSPART: float = 3.0   # ein Taschenwurf muss den Gegnern mindestens so viele Schritte Weg ersparen (sonst landet er vor der Mauer)
 const WURF_CP_BONUS: float = 5.0       # Landefelder nahe einem Checkpoint, den der Gegner noch nicht hält, zählen so viel mehr
 const WURF_BELAGERUNG_ABSTAND: float = 5.0  # dockt ein Belagerungsturm an, landet der nächste Wurf mindestens so weit (Felder) von ihm weg
 const WELLEN_VARIANTEN_AB: int = 99    # Varianten sind abgeschaltet: jede Runde hat jetzt einen festen Plan (WELLEN)
@@ -76,17 +80,20 @@ const ENDKAMPF_ABSTAND: float = 1.5      # letzte Runde: erst wenn ein Gegner n�
 const WURF_SPRENGER_AB_WELLE: int = 12 # ab hier wird ein Sprenger der Welle von der Wurf-Schleuder geworfen
 const FAHNE_EINNAHME_FAKTOR: float = 2.0   # Fahnenträger nehmen Checkpoints so viel schneller ein
 const FAHNE_SPUR_SEK: float = 3.0          # so lange bleibt die Spur eines Fahnenträgers liegen
-const FAHNE_SPUR_RADIUS: float = 1.3       # Gegner in diesem Umkreis (Felder) um die Spur stürmen in seinem Tempo mit
+const FAHNE_SPUR_RADIUS: float = 1.3       # Gegner in diesem Umkreis (Felder) um die Spur bekommen den Fahnen-Bonus
+const FAHNE_BONUS: float = 1.3             # Fahnenträger im Trupp oder Fahnenspur: so viel schneller als das eigene Tempo
 const SPRENGER_AB_WELLE: int = 8       # ab hier kommen Sprenger (und die Schleudern wechseln den Platz)
 const SPRENGER_WEG_GEWICHT: float = 0.3   # so stark zählt der Anmarsch: Abkürzung minus Gewicht x Weglänge. 0 = immer der Wall mit der größten Abkürzung
+const SPRENGER_TIEFE: int = 4              # so viele Erdwälle hintereinander reißt eine Sprengung höchstens mit (in gerader Linie; ein Turm stoppt sie)
+const SPRENGER_ZUENDZEIT: float = 2.5     # so lange (Sekunden) steht der Sprenger zündend an seinem Ziel; fällt er vorher, gibt es keine Sprengung
 const SPRENGER_MIN_WEG: int = 6           # Erdwälle, die der Sprenger in weniger Schritten erreicht, lässt er aus: die vorderste Front bleibt stehen, und die Verteidigung hat Zeit zum Schießen
 
 # Ansage in der Bauphase vor der Runde, in der etwas zum ersten Mal auftritt.
 const NEUHEITEN := {
 	3: "Neu: Battlesphäre. Fernkämpfer, schießt im Laufen auf Truppen in Stellungen und sichtbare Bodentruppen.",
 	5: "Neu: Checkpoints (Fahnen) und eine Schleuder in der Zone. Der Gegnerweg führt durch beide Fahnen. Die Schleuder wirft auf Stellungen und Fabriken im pinken Kreis.",
-	6: "Neu: Fahnenträger. Sein Trupp stürmt in seinem Tempo, er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Fällt er, wird der Trupp langsam.",
-	8: "Neu: Sprenger. Sie kommen als Erste und sprengen nacheinander die Erdwälle, deren Wegfall eine große Abkürzung bringt. Die Sprengung reißt auch den Erdwall direkt dahinter mit; nur Türme halten stand. Welche Wälle es trifft, siehst du erst in der Welle (Ziel blinkt). Dazu eine zweite Schleuder; beide wechseln ab jetzt ihren Platz.",
+	6: "Neu: Fahnenträger. Er macht die anderen in seinem Trupp 30 % schneller (selbst läuft er ohne Bonus), kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Fällt er, wird der Trupp wieder langsam.",
+	8: "Neu: Sprenger. Sie kommen als Erste und sprengen nacheinander die Erdwälle, deren Wegfall eine große Abkürzung bringt. Dicke Riegel aus blanken Erdwällen fallen bis zu 4 Felder tief, sonst nur das getroffene Feld; Türme halten stand. Welche Wälle es trifft, siehst du erst in der Welle (Ziel blinkt). Dazu eine zweite Schleuder; beide wechseln ab jetzt ihren Platz.",
 	10: "Neu in der Zone: Wurf-Schleuder. Sie wirft ein ganzes Rudel Hunde über die ersten Wälle (oranger Kreis). Ab Runde 13 steht dort eine zweite.",
 	11: "Neu: Rauchwerfer. Sein Rauch nimmt Truppen für einige Sekunden die Sicht – am liebsten dort, wo viele Stellungen beieinander liegen. Türme schießen weiter.",
 	12: "Neu: Belagerungsturm. Er fährt zum Wallstück mit den meisten Stellungen und dockt an. Seine Truppen laufen auf den Wällen und greifen Stellungen im Nahkampf an.",
@@ -120,7 +127,7 @@ const CHECKPOINTS_AB_WELLE: int = 5    # vorher sind die Felder nur freigehalten
 const EINNAHME_SEK: float = 3.0        # so lange muss der Gegner einen Checkpoint halten
 const CHECKPOINT_RUHE: float = 1.5     # die zugeteilte Truppe geht einen Checkpoint zurückholen, solange in diesem Umkreis (Felder) kein Gegner ist
 const RUECKEROBERUNG_SEK: float = 4.0  # so lange muss eine Bodentruppe den Checkpoint halten
-const NACHSPIEL_MAX: float = 25.0     # so lange läuft die Runde nach dem letzten Gegner höchstens weiter, damit die zugeteilte Truppe den Checkpoint zurückholt
+const NACHSPIEL_MAX: float = 10.0     # so lange läuft die Runde nach dem letzten Gegner höchstens weiter, damit die zugeteilte Truppe den Checkpoint zurückholt
 const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen, wenn in diesem Umkreis (Felder) kein Gegner ist
 
 # --- Tempo -------------------------------------------------------------
@@ -180,8 +187,8 @@ const ABFANG_WEIT: int = 14          # so viele Felder voraus auf dem Gegnerweg 
 const STUFE_1_TRUPPEN: int = 1                  # so viele Truppen hält eine spezialisierte Fabrik zusätzlich
 # plus = wird addiert, mal = wird multipliziert
 const STUFE_2 := {
-	"scharfschuetze": {"text": "+1 Reichweite, +30 % Schaden, feuert 20 % schneller",
-		"plus": {"reichweite": 1.0}, "mal": {"schaden": 1.3, "abklingzeit": 0.8}},
+	"scharfschuetze": {"text": "Klarsicht (schießt auch im Rauch), +30 % Schaden, feuert 20 % schneller",
+		"plus": {}, "mal": {"schaden": 1.3, "abklingzeit": 0.8}, "setze": {"klarsicht": true}},
 	"technogunner": {"text": "+50 % Leben, +30 % Schaden, +0,5 Reichweite",
 		"plus": {"reichweite": 0.5}, "mal": {"leben": 1.5, "schaden": 1.3}},
 	"plasmawerfer": {"text": "+0,4 Fläche, +30 % Schaden, läuft 25 % schneller",
@@ -196,7 +203,7 @@ const STUFE_3 := {
 			"stark": "Rudel in geraden Gängen", "schwach": "Einzelziele, verwinkelte Wege"},
 		"laser": {"name": "Laserstrahl", "text": "Dauerstrahl auf ein Ziel; der Schaden wächst, solange er dranbleibt.",
 			"stark": "zähe Einzelziele", "schwach": "viele kleine Gegner"},
-		"markierung": {"name": "Zielmarkierung", "text": "Nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte und markiert es – alle anderen richten daran mehr Schaden an.",
+		"markierung": {"name": "Zielmarkierung", "text": "Nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte und markiert es – alle anderen richten daran mehr Schaden an und treffen es auch aus dem Rauch heraus.",
 			"stark": "Belagerungsturm, Fahnenträger, Sprenger – überall", "schwach": "Rudel; eigener Schaden gering"},
 	},
 	"technogunner": {
@@ -250,6 +257,8 @@ static func einheit_daten(typ: String, stufe: int, faehigkeit: String = "") -> D
 			d[k] = float(d[k]) + float(paket["plus"][k])
 		for k: String in paket["mal"]:
 			d[k] = float(d[k]) * float(paket["mal"][k])
+		for k: String in paket.get("setze", {}):
+			d[k] = paket["setze"][k]
 	if d["faehigkeit"] == "bollwerk":
 		d["leben"] = float(d["leben"]) * BOLLWERK_LEBEN
 		d["schaden"] = float(d["schaden"]) * BOLLWERK_SCHADEN
@@ -280,8 +289,8 @@ const BATTERIE := {
 	"leben": 300.0,
 	"reichweite": 8.0,          # weit, über Wälle hinweg
 	"flaeche": 1.5,             # Radius des Einschlags in Feldern
-	"schaden": 45.0,
-	"abklingzeit": 4.0,
+	"schaden": 65.0,            # vorher 45 (14.11.: Batterie für ihren Preis gestärkt)
+	"abklingzeit": 3.5,         # vorher 4
 }
 
 # --- Weg zur Stellung ------------------------------------------------------
@@ -444,7 +453,7 @@ const GEGNER := {
 
 
 ## Entworfene Runden: Zusammensetzung der Welle Nummer `nr` (ab 1).
-## Ein Trupp läuft gemeinsam im Tempo seines langsamsten Mitglieds – außer ein Fahnenträger führt ihn an.
+## Ein Trupp läuft gemeinsam im Tempo seines langsamsten Mitglieds; ein Fahnenträger macht ihn um FAHNE_BONUS schneller.
 # Die 20 Wellen als Pläne: je Runde ein Name und die Trupps in der Reihenfolge, in der sie kommen.
 #   weg "l" = läuft, "w" = wird von der Wurf-Schleuder geworfen (immer 4)
 #   pause = Sekunden mehr (oder weniger) als TRUPP_PAUSE vor diesem Trupp
@@ -606,7 +615,11 @@ const WELLEN := {
 
 ## Eine Welle: was kommt, in welcher Reihenfolge, was wird geworfen. `variante` und `wurf_nr` gibt es nur noch der alten Aufrufe wegen.
 static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary:
-	var plan: Dictionary = WELLEN[clampi(nr, 1, LETZTE_RUNDE)]
+	return welle_aus_plan(WELLEN[clampi(nr, 1, LETZTE_RUNDE)], nr)
+
+
+## Dasselbe für einen beliebigen Plan im Format von WELLEN (Phantom-Modus: der Plan eines Spielers).
+static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 	var anzahl := {}
 	var trupps: Array = []     # zu Fuß: je Trupp die Typen
 	var pausen: Array = []     # Sekunden mehr/weniger als TRUPP_PAUSE vor dem Trupp
@@ -616,11 +629,20 @@ static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary
 	var ohne_wurf := OS.get_environment("TD_OHNE_WURF") != ""   # nur für Testläufe
 	for t: Dictionary in plan["trupps"]:
 		var typen: Array = (t["typen"] as Array).duplicate()
+		if typen.is_empty():
+			continue
 		for typ: String in typen:
 			anzahl[typ] = int(anzahl.get(typ, 0)) + 1
 		if t["weg"] == "w" and not ohne_wurf:
 			wurf.append(typen)
-			wurf_info.append({"nach": trupps.size(), "wenn": t.get("wenn", "")})
+			var info := {"nach": trupps.size(), "wenn": t.get("wenn", "")}
+			if t.has("zeit") and str(t.get("wenn", "")) == "":
+				# Phantom-Modus: der Angreifer hat den Wurf auf eine feste Sekunde gelegt
+				info["nach"] = 0
+				info["zeit"] = float(t["zeit"])
+			if t.has("ziel"):
+				info["ziel"] = t["ziel"]   # Phantom-Modus: der Angreifer hat das Landefeld selbst gewählt
+			wurf_info.append(info)
 		else:
 			trupps.append(typen)
 			pausen.append(float(t.get("pause", 0.0)))
@@ -637,6 +659,7 @@ static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary
 		"jeder": jeder,
 		"wurf": wurf,
 		"wurf_info": wurf_info,
+		"wurf_frei": bool(plan.get("wurf_frei", false)),   # Phantom-Modus: die Wurf-Schleuder wartet am Rundenanfang nicht
 		"leben_faktor": ENDKAMPF_LEBEN if nr >= LETZTE_RUNDE else snappedf(1.0 + LEBEN_JE_RUNDE * (nr - 1), 0.1),
 		"abstand": 0.7,            # Sekunden zwischen zwei Gegnern
 	}

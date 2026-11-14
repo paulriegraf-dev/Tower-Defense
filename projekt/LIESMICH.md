@@ -9,7 +9,7 @@
 - **Linksklick auf eine Truppe, einen Turm, eine Stellung oder eine Batterie** (ohne Werkzeug): Reichweite anzeigen.
   Rot schraffierte Felder liegen in Reichweite, können von dort aber nicht getroffen werden (Sicht versperrt).
   Bei einer leeren Stellung: innerer Kreis Technogunner, äußerer Scharfschütze.
-- **Rechtsklick** abreißen (zwischen den Wellen, 75 % des Preises zurück)
+- **Rechtsklick** abreißen (zwischen den Wellen; in derselben Bauphase Gebautes voll zurück, sonst 75 % – siehe „Abreißen und Erstattung“)
 - **Leertaste** Welle starten, **F** Tempo ×2, **R** Neustart nach Niederlage
 
 ## Regeln im Prototyp
@@ -117,15 +117,17 @@ Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×
 |---|---|---|
 | 3 | Battlesphäre | Fernkämpfer, schießt im Laufen |
 | 5 | Checkpoints, Schleuder | siehe oben |
-| 6 | Fahnenträger | Sein Trupp stürmt in seinem Tempo. Er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Er hinterlässt für 3 Sekunden eine Spur: Gegner, die ihr folgen, stürmen in seinem Tempo mit. |
-| 8 | Sprenger, zweite Schleuder | Sprenger kommen so, wie es der Plan der Runde vorsieht (siehe „Die 20 Wellen“). Läuft ein Rauchwerfer in Reichweite, nebelt er zuerst die Stellungen an der Sprengstelle ein. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung reißt auch den Erdwall direkt dahinter mit; Erdwälle mit Turm halten stand. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
-| 10 | Wurf-Schleuder | Wirft Trupps zu vier über die Wälle – nicht nur Hunde, je nach Runde auch Fahnenträger, Sprenger oder Rauchwerfer. Die Vorschau sagt nur, WAS geworfen wird („Wurf: Fahne, Sprenger“), nicht wohin; erst in der Welle markiert ein roter Kreis den Landepunkt. Ziel ist die Stelle hinter der Wallgruppe, die den Gegnern den größten Umweg abverlangt, gern nahe an einem Checkpoint. Gibt es keine echte Mauer, wirft sie weiter (blasser Kreis, 10 Felder) in Taschen zwischen Erdwällen. Bei einer sehr dicken Mauer kommt ein Rudel Hunde zusätzlich. Dockt ein Belagerungsturm an, wirft sie sofort auf die andere Seite. Ab Runde 14 gibt es eine zweite. |
-| 11 | Rauchwerfer | Wirft Rauch auf die dichteste Gruppe von Stellungen. Truppen im Rauch schießen einige Sekunden nicht, Türme schon. |
+| 6 | Fahnenträger | Die anderen in seinem Trupp werden 30 % schneller; er selbst läuft ohne Bonus und fällt dadurch zurück. Er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Er hinterlässt für 3 Sekunden eine Spur: Gegner, die ihr folgen, werden ebenfalls 30 % schneller. |
+| 8 | Sprenger, zweite Schleuder | Sprenger kommen so, wie es der Plan der Runde vorsieht (siehe „Die 20 Wellen“). Läuft ein Rauchwerfer in Reichweite, nebelt er zuerst die Stellungen an der Sprengstelle ein. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung geht in die Tiefe, aber nur durch dicke Riegel: Mitgerissen werden bis zu 3 weitere blanke Erdwälle in gerader Linie dahinter, und nur, wenn jeder davon quer zur Sprengrichtung einen Erdwall-Nachbarn hat (also zu einer Mauerlage gehört). Stellungen, Tore und Türme stoppen die Sprengung; eine Linie, die in Sprengrichtung verläuft, verliert nur das getroffene Feld. Am Ziel zündet er 2,5 Sekunden lang und steht dabei still (ein Ring über dem Warnzeichen füllt sich); fällt er vorher, gibt es keine Sprengung. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
+| 10 | Wurf-Schleuder | Wirft Trupps zu vier über die Wälle – nicht nur Hunde, je nach Runde auch Fahnenträger, Sprenger oder Rauchwerfer. Die Vorschau sagt nur, WAS geworfen wird („Wurf: Fahne, Sprenger“), nicht wohin; erst in der Welle markiert ein roter Kreis den Landepunkt. Ziel ist die Stelle hinter der Wallgruppe, die den Gegnern den größten Umweg abverlangt, gern nahe an einem Checkpoint. Gibt es keine echte Mauer, wirft sie weiter (blasser Kreis, 8 Felder) in Taschen zwischen Erdwällen. In einen rundum geschlossenen Kern wirft sie nicht; der normale Wurf reicht 6 Felder. Bei einer sehr dicken Mauer kommt ein Rudel Hunde zusätzlich. Dockt ein Belagerungsturm an, wirft sie sofort auf die andere Seite. Ab Runde 14 gibt es eine zweite. |
+| 11 | Rauchwerfer | Wirft Rauch auf die dichteste Gruppe von Stellungen. Truppen im Rauch schießen einige Sekunden nicht, Türme schon; in den Rauch hinein kann geschossen werden. Scharfschützen ab Stufe 2 (Klarsicht) schießen auch im Rauch, ein markiertes Ziel treffen alle. |
 | 13 | Belagerungsturm | Fährt zum Wallstück mit den meisten Stellungen und dockt an. Solange er steht (höchstens 40 Sekunden), setzt er alle 3 Sekunden eine Turmtruppe ab, bis zu sechs zugleich. Sie laufen auf zusammenhängenden Wällen, greifen Stellungen im Nahkampf an und legen Türme für den Rest der Runde lahm. Ohne Ziel springen sie ab und laufen zur Basis. |
 | 15 | Letzte Runde | Gegenangriff auf das HQ. Drei Laser verteidigen die Zone (flach, nur gegen Bodentruppen, Wälle geben Deckung), Gegner kommen in dichter Folge. |
 
 ## Preise
-Erdwall 10, Stellung 25, Turm 75, Tor 40, Batterie mit Pilotenfabrik 290. Die erste Fabrik kostet 50, jede weitere 15 mehr als die vorige (Pilotenfabriken zählen nicht mit). Spezialisieren 100, Stufe 2 150, Stufe 3 400.
+Erdwall 10, Stellung 25, Turm 75, Tor 40, Batterie mit Pilotenfabrik 290. Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 50, Stufe 2 150, Stufe 3 400.
+
+**Übersicht [I]:** Karten für alle Gegner, eigenen Truppen und Bauten mit Werten, Verhalten und Gegenmitteln (Reiter unten, Karte anklicken). Die Texte stehen in `scripts/lexikon.gd`, die Zahlen kommen aus `werte.gd`.
 Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennummer) und Prämien je besiegtem Gegner.
 **Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 50. Die fünf Felder
 unten neben den Bauknöpfen zeigen, wie viele Schritte du gerade erreicht hast.
@@ -168,24 +170,24 @@ Die Pläne stehen in `werkzeuge/plaene.gd` als Zeichenraster und lassen sich dor
 
 ## Fabrikmenü und Upgrades
 
-Ein Klick auf eine Fabrik (ohne Bauwerkzeug) öffnet eine Tafel daneben. **Q / W / E** wählen die Truppe, **U** kauft die nächste Stufe, **Esc** schließt.
+Ein Klick auf eine Fabrik (ohne Bauwerkzeug) öffnet eine Tafel daneben. Truppe und Ausbaustufe werden dort angeklickt (keine Tasten mehr). **Esc** schließt.
 
 - **Stufe 0:** Grundfabrik, hält 3 Truppen, die Truppe lässt sich jederzeit umstellen (in der Welle gilt das für die nächste Truppe).
 - **Stufe 1, Spezialisieren (100):** bleibt bei ihrer Truppe, hält dafür eine Truppe mehr. Umstellen geht danach nicht mehr.
-- **Stufe 2 (150):** Wertepaket je Truppe – Scharfschütze: +1 Reichweite, +30 % Schaden, feuert 20 % schneller. Technogunner: +50 % Leben, +30 % Schaden, +0,5 Reichweite. Plasmawerfer: +0,4 Fläche, +30 % Schaden, läuft 25 % schneller.
+- **Stufe 2 (150):** Wertepaket je Truppe – Scharfschütze: Klarsicht (schießt auch im Rauch), +30 % Schaden, feuert 20 % schneller. Technogunner: +50 % Leben, +30 % Schaden, +0,5 Reichweite. Plasmawerfer: +0,4 Fläche, +30 % Schaden, läuft 25 % schneller.
 - **Stufe 3 (400):** eine Fähigkeit zur Wahl, die ändert, wie die Truppe kämpft.
-  - Scharfschütze: **Durchschuss** (gerade Linie durch alle Gegner), **Laserstrahl** (Dauerstrahl, wächst am selben Ziel bis auf das Dreifache), **Zielmarkierung** (nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte, wenig eigener Schaden, das Ziel nimmt 5 Sekunden lang 40 % mehr Schaden).
+  - Scharfschütze: **Durchschuss** (gerade Linie durch alle Gegner), **Laserstrahl** (Dauerstrahl, wächst am selben Ziel bis auf das Dreifache), **Zielmarkierung** (nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte, wenig eigener Schaden, das Ziel nimmt 5 Sekunden lang 40 % mehr Schaden und kann auch aus dem Rauch heraus getroffen werden).
   - Technogunner: **Bollwerk** (Nahkämpfer mit 3,5-fachem Leben, nimmt keine Stellung), **Feuerteam** (feuert schneller, je mehr Feuerteam-Schützen dasselbe Ziel beschießen), **Minigun** (nur in der Stellung: läuft an und feuert bis zu dreimal so schnell; Treffer und Rauch unterbrechen sie).
   - Plasmawerfer: **Abpraller** (springt bis zu zweimal zum nächsten Gegner weiter), **Brandfeld** (der Einschlag brennt 3 Sekunden nach), **Plasmagel** (nur aus der Stellung: kaum Schaden, bremst Getroffene 3 Sekunden auf weniger als halbes Tempo).
 
-Ausbauen geht nur zwischen den Wellen. Beim Abriss gibt es 75 % zurück, die Upgrades eingerechnet. Punkte oben links auf der Fabrik zeigen die Stufe.
+Ausbauen geht nur zwischen den Wellen. Beim Abriss gibt es 75 % zurück, die Upgrades eingerechnet (was in derselben Bauphase gekauft wurde: voll). Punkte oben links auf der Fabrik zeigen die Stufe.
 
 **Batterie:** Sie wird zusammen mit ihrer Pilotenfabrik gebaut (zwei Felder, **T** dreht die Lage). Die Pilotenfabrik bildet nur Piloten aus und lässt sich nicht umstellen. Wird eine Hälfte abgerissen oder eingerissen, fällt auch die andere.
 
 **Batterie-Ausbau:** Klick auf die Batterie oder ihre Pilotenfabrik öffnet das Menü. Drei feste Stufen (100 / 150 / 400, Taste **U**):
 1. **Reservepilot** – die Pilotenfabrik hält einen vierten Piloten in Reserve.
 2. **Schwere Ladung** – 30 % mehr Schaden, 1,5 Felder mehr Reichweite; bläst alle 2,5 s eine Rauchwolke in Reichweite weg.
-3. **Energieschild** – nach dem Kauf ein freies Feld in Reichweite anklicken (später mit **Q** im Menü versetzbar). Der Schild hält 450 Schaden aus, Gegner bleiben davor stehen und schlagen darauf ein, der Weg wird dadurch nicht umgeleitet, eigene Truppen gehen hindurch. Er steht nur, solange die Batterie voll bemannt und nicht ausgefallen ist, und lädt sich zwischen den Runden wieder auf.
+3. **Energieschild** – nach dem Kauf ein freies Feld in Reichweite anklicken (später über den Knopf im Menü versetzbar). Der Schild hält 450 Schaden aus, Gegner bleiben davor stehen und schlagen darauf ein, der Weg wird dadurch nicht umgeleitet, eigene Truppen gehen hindurch. Er steht nur, solange die Batterie voll bemannt und nicht ausgefallen ist, und lädt sich zwischen den Runden wieder auf.
 
 **Startmenü (übergangsweise):** Beim Start wählst du **[1] Normales Spiel** oder **[2] Sandbox** (unendlich Budget, alle Bauwerke schon in Runde 1). Nach **R** (Neustart) erscheint das Menü wieder. In der Sandbox steht in der Bauphase oben rechts die **Sandbox-Leiste** (Klick auf den Kopf klappt sie ein): Runde direkt wählen (1–15, Gebautes bleibt stehen), Anzahl je Gegnertyp für die nächste Welle, Truppen je Fabrik, „Welle wie im Spiel“ setzt die Gegnerzahlen zurück. Umschalt + Klick ändert in 5er-Schritten.
 
@@ -197,3 +199,26 @@ Ausbauen geht nur zwischen den Wellen. Beim Abriss gibt es 75 % zurück, die Upg
 
 Nach jeder Runde gibt es 100 + 5 je Runde, ab Runde 6 zusätzlich 8 je Runde (Runde 8: 164, Runde 12: 216). Dazu 20 für jeden
 Checkpoint, der am Rundenende dir gehört, und Zinsen (10 je 100 übriges Budget, höchstens 50).
+
+## Abreißen und Erstattung
+
+Rechtsklick reißt ab. Was in derselben Bauphase gebaut oder aufgewertet wurde, kommt voll zurück; für alles aus früheren Runden gibt es 75 %. Fabrik, Batterie und Turm brauchen einen zweiten Rechtsklick (der erste zeigt, was es zurückgäbe). Erdwälle, Stellungen und Tore fallen sofort; das Wegwischen mit gedrückter rechter Taste lässt Türme stehen.
+
+## Phantom-Modus (Zusatz, ersetzt das normale Spiel nicht)
+
+Im Startmenü unter **Phantom-Modus** (alles per Mausklick):
+
+- **Angreifer** – Seitenwechsel. Der aufgezeichnete Bau eines Spielers verteidigt (jede Runde frisch, ohne Dauerschaden, 15 Leben), du planst die Welle auf dem **Laufband**. Budget je Runde = Preis der entworfenen Welle dieser Runde. Bauen kannst du dort nicht.
+- **Verteidiger** – normales Spiel, aber die 20 Wellen stammen von einem gespeicherten Angriff. Die Ansage oben zeigt den Plan der Runde. Runden ohne Plan laufen mit der entworfenen Welle.
+
+Laufband: unten die Trupps zu Fuß (Breite = Dauer, Lücke = Pause), darüber die Würfe. Einheit unten anklicken = in den gewählten Trupp; Kärtchen anklicken = wählen; Kärtchen ziehen oder −/+ 1 s = Pause; „→ Wurf“ macht aus dem Trupp einen Wurf (höchstens 4 Einheiten, +30 Punkte, kein Belagerungsturm; vor Runde 10 wird die Wurf-Schleuder dafür hingestellt). „Ziel“ am Wurf-Trupp: Klick auf ein freies Feld im orangen Kreis legt das Landefeld fest. [L] blendet das Band aus, Leertaste startet den Angriff. „Vorlage“ lädt die entworfene Welle der Runde.
+
+Fällt die Verteidigung vor Runde 20, übernimmt ein Ersatz-Phantom (bis zu zwei weitere aus `phantome/`) ab der nächsten Runde mit eigener Karte und vollen Leben. Wertung am Ende: 100 je genommenes Leben × (1 + Anteil des ungenutzten Budgets der Runde), 1000 je geknackter Verteidigung + 50 je Runde vor 20, 10 je Sekunde, die das eigene HQ in Runde 20 hält (Werte in `scripts/phantom.gd`).
+
+Schlussbild (nur per Mausklick): Neustart ohne Menü, Startmenü, nach einem Sieg im normalen Spiel „In die Offensive“ (mit Bestätigung, danach Auswahl des Baus), dazu „Phantom-Protokoll hochladen“. Auch das Fabrikmenü wird nur noch geklickt; die Tasten 1–6 zum Platzieren bleiben.
+
+Dateien liegen im Ordner `Phantom Dateien/`: `Verteidiger/` (entsteht automatisch bei jedem Sieg im normalen Spiel), `Angreifer/` (entsteht am Ende jedes Angriffs), `preise.json` (Preise – dort änderbar). Was in diesen Ordnern liegt, wird beim Web-Export mit ausgeliefert: Das ist der Pool für alle Spieler.
+
+Von Testspielern: Im Schlussbild gibt es „Phantom-Protokoll hochladen“ – im Browser lädt das die Datei des Laufs herunter, der Tester schickt sie dir. Du legst sie in `Phantom Dateien/Verteidiger/` bzw. `Angreifer/` (am Dateinamen zu erkennen: `verteidigung-…` / `angriff-…`). Mit dem nächsten Hochladen des Spiels haben sie alle.
+
+Werkzeuge: `werkzeuge/angrifftest.gd` (greift ein Phantom ohne Bild mit den entworfenen Wellen an), `werkzeuge/phantom_aus_partie.gd` (macht aus einer alten Partie ein Phantom).

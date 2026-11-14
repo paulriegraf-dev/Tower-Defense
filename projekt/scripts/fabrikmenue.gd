@@ -92,10 +92,9 @@ func _baue() -> void:
 		var reihe := HBoxContainer.new()
 		reihe.add_theme_constant_override("separation", 6)
 		_inhalt.add_child(reihe)
-		var tasten := ["Q", "W", "E"]
 		for i in Werte.FABRIK_EINHEITEN.size():
 			var typ: String = Werte.FABRIK_EINHEITEN[i]
-			var b := _knopf("[%s] %s" % [tasten[i], Werte.EINHEITEN[typ]["name"]])
+			var b := _knopf(str(Werte.EINHEITEN[typ]["name"]))
 			b.disabled = typ == f["typ"]
 			b.pressed.connect(spiel.stelle_um.bind(zelle, typ))
 			reihe.add_child(b)
@@ -106,7 +105,7 @@ func _baue() -> void:
 	# nächste Stufe
 	if stufe < 2:
 		var titel := "Spezialisieren" if stufe == 0 else "Stufe 2"
-		_upgrade_knopf = _knopf("[U] %s  –  %d" % [titel, Werte.KOSTEN_STUFE[stufe]])
+		_upgrade_knopf = _knopf("%s  –  %d" % [titel, Werte.KOSTEN_STUFE[stufe]])
 		_upgrade_knopf.disabled = not bauphase or not kann_zahlen
 		_upgrade_knopf.pressed.connect(spiel.werte_auf.bind(zelle))
 		_inhalt.add_child(_upgrade_knopf)
@@ -118,11 +117,10 @@ func _baue() -> void:
 		# Stufe 3: eine Fähigkeit wählen
 		_zeile("Stufe 3 – eine Fähigkeit wählen (%d):" % Werte.KOSTEN_STUFE[2], 13, Color("ffe9a8"))
 		var wahl: Dictionary = Werte.STUFE_3[f["typ"]]
-		var tasten := ["Q", "W", "E"]
 		var i := 0
 		for kennung: String in wahl:
 			var w: Dictionary = wahl[kennung]
-			var b := _knopf("[%s] %s" % [tasten[i], w["name"]])
+			var b := _knopf(str(w["name"]))
 			b.disabled = not bauphase or not kann_zahlen
 			b.pressed.connect(spiel.werte_auf.bind(zelle, kennung))
 			_inhalt.add_child(b)
@@ -149,7 +147,7 @@ func _baue_batterie(stufe: int, bauphase: bool, naechste: bool, kann_zahlen: boo
 		_zeile("✓ " + Werte.BATTERIE_STUFEN[i]["name"], 13, Color("7fe0ff"))
 	if naechste:
 		var s: Dictionary = Werte.BATTERIE_STUFEN[stufe]
-		_upgrade_knopf = _knopf("[U] Stufe %d: %s  –  %d" % [stufe + 1, s["name"], Werte.KOSTEN_BATTERIE_STUFE[stufe]])
+		_upgrade_knopf = _knopf("Stufe %d: %s  –  %d" % [stufe + 1, s["name"], Werte.KOSTEN_BATTERIE_STUFE[stufe]])
 		_upgrade_knopf.disabled = not bauphase or not kann_zahlen
 		_upgrade_knopf.pressed.connect(spiel.werte_auf.bind(zelle))
 		_inhalt.add_child(_upgrade_knopf)
@@ -157,7 +155,7 @@ func _baue_batterie(stufe: int, bauphase: bool, naechste: bool, kann_zahlen: boo
 		if not bauphase:
 			_zeile("Ausbauen geht nur zwischen den Wellen.", 12, Color("a79fb3"))
 	else:
-		var b := _knopf("[Q] Schildfeld %s" % ("versetzen" if spiel.schilde.has(spiel.karte.paar[zelle]) else "wählen"))
+		var b := _knopf("Schildfeld %s" % ("versetzen" if spiel.schilde.has(spiel.karte.paar[zelle]) else "wählen"))
 		b.disabled = not bauphase
 		b.pressed.connect(spiel.waehle_schildfeld.bind(zelle))
 		_inhalt.add_child(b)

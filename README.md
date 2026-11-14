@@ -2,6 +2,9 @@
 
 **▶ Im Browser spielen:** https://paulriegraf-dev.github.io/Tower-Defense/
 
+**▶ Entwicklungsversion (neuester Stand, kann wackeln):** https://paulriegraf-dev.github.io/Tower-Defense/entwicklung/
+Mit 20 Runden, Upgrades, Batterie, Übersicht [I], Sandbox und Phantom-Modus. Der Quellcode dazu liegt im Zweig `entwicklung`.
+
 Tower Defense mit Erdwällen, die den Gegnerweg lenken, Fabriken, die Truppen bauen, umkämpften Checkpoints
 und einem Gegenangriff auf das gegnerische HQ in der letzten Runde. Hobby-Prototyp, gebaut mit Godot 4.7.
 
