@@ -193,7 +193,7 @@ static func aus_partie(partie: Dictionary, quelle: String = "") -> Dictionary:
 	var letzte: Dictionary = runden[runden.size() - 1]
 	return {
 		"format": 1, "art": "verteidigung", "quelle": quelle, "begonnen": str(partie.get("begonnen", "")), "spieler": "Paul",
-		"karte": {"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN, "checkpoints": partie.get("checkpoints", [])},
+		"karte": {"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN, "checkpoints": partie.get("checkpoints", []), "basis": partie.get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])},
 		"ergebnis": {"ausgang": letzte["original"]["ausgang"], "runde": letzte["runde"], "leben": letzte["original"]["leben"]},
 		"runden": runden,
 	}

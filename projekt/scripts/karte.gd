@@ -32,7 +32,7 @@ var fortschritt: Dictionary = {}   # Fabrik-Zelle -> 0..1 (Produktionsbalken)
 
 var checkpoints: Array[Vector2i] = []
 var basis := Werte.BASIS_ZELLE      # eigene Basis: dorthin wollen die Gegner (Sandbox: frei wählbar)
-var cp_route := false              # Sandbox: Der Gegnerweg führt schon vor CHECKPOINTS_AB_WELLE durch die Checkpoints (ohne Einnahme)
+var cp_route := Werte.CP_ROUTE_AB_START   # Der Gegnerweg führt schon vor CHECKPOINTS_AB_WELLE durch die Checkpoints (ohne Einnahme)
 var cp_aktiv := false              # Checkpoints sind erst ab Werte.CHECKPOINTS_AB_WELLE im Spiel
 var cp_feind: Array[bool] = []     # je Checkpoint: vom Gegner eingenommen?
 var cp_fortschritt: Array[float] = []   # je Checkpoint: Sekunden der laufenden Rückeroberung

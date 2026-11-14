@@ -91,7 +91,7 @@ const SPRENGER_MIN_WEG: int = 6           # Erdwälle, die der Sprenger in wenig
 # Ansage in der Bauphase vor der Runde, in der etwas zum ersten Mal auftritt.
 const NEUHEITEN := {
 	3: "Neu: Battlesphäre. Fernkämpfer, schießt im Laufen auf Truppen in Stellungen und sichtbare Bodentruppen.",
-	5: "Neu: Checkpoints (Fahnen) und eine Schleuder in der Zone. Der Gegnerweg führt durch beide Fahnen. Die Schleuder wirft auf Stellungen und Fabriken im pinken Kreis.",
+	5: "Neu: Ab jetzt nehmen die Gegner die Checkpoints (Fahnen) ein, und in der Zone steht eine Schleuder. Die Schleuder wirft auf Stellungen und Fabriken im pinken Kreis.",
 	6: "Neu: Fahnenträger. Er macht die anderen in seinem Trupp 30 % schneller (selbst läuft er ohne Bonus), kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Fällt er, wird der Trupp wieder langsam.",
 	8: "Neu: Sprenger. Sie kommen als Erste und sprengen nacheinander die Erdwälle, deren Wegfall eine große Abkürzung bringt. Dicke Riegel aus blanken Erdwällen fallen bis zu 4 Felder tief, sonst nur das getroffene Feld; Türme halten stand. Welche Wälle es trifft, siehst du erst in der Welle (Ziel blinkt). Dazu eine zweite Schleuder; beide wechseln ab jetzt ihren Platz.",
 	10: "Neu in der Zone: Wurf-Schleuder. Sie wirft ein ganzes Rudel Hunde über die ersten Wälle (oranger Kreis). Ab Runde 13 steht dort eine zweite.",
@@ -112,7 +112,10 @@ const SCHLEUDER := {
 	"schaden_haufen": 22.0,     # Flächentreffer auf einen Haufen Bodentruppen (jede Truppe im Umkreis)
 	"schaden_fabrik": 60.0,
 }
-const BASIS_ZELLE := Vector2i(19, 5)   # hier wollen sie hin
+const BASIS_ZELLE := Vector2i(19, 5)   # hier wollen sie hin (fester Platz: Tests, alte Partien, Sandbox „fest“)
+const BASIS_ZUFALL: bool = true        # normales Spiel: Die Basis steht jede Partie woanders (mindestens 8 Felder vom HQ, 3 von den Checkpoints)
+const CP_ROUTE_AB_START: bool = true   # der Gegnerweg führt schon ab Runde 1 durch die Checkpoints (eingenommen werden sie erst ab CHECKPOINTS_AB_WELLE)
+const STARTPAKET_WAELLE: int = 8       # so viele Erdwälle gibt es gratis, sobald sie freigeschaltet werden (Runde 2)
 
 # --- Checkpoints ---------------------------------------------------------
 # Der Gegnerweg führt der Reihe nach durch alle Checkpoints. Gegner bleiben auf einem Checkpoint stehen, bis sie ihn

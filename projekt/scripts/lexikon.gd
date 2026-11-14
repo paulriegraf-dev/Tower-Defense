@@ -484,7 +484,7 @@ func _baue_daten() -> void:
 		{"name": "Checkpoints", "unter": "zwei Fahnen auf dem Gegnerweg", "marke": "ab Runde %d" % W.CHECKPOINTS_AB_WELLE, "skizze": "checkpoint",
 			"werte": [["Einnahme", _z(W.EINNAHME_SEK) + " s"], ["Zurück", _z(W.RUECKEROBERUNG_SEK) + " s"], ["Bonus", str(W.BONUS_JE_CHECKPOINT)]],
 			"abschnitte": [["Regeln", TITEL, [
-				"Sie liegen in jeder Partie etwas anders. Der Gegnerweg führt der Reihe nach durch beide.",
+				"Sie liegen in jeder Partie etwas anders – deine Basis auch. Der Gegnerweg führt schon ab Runde 1 der Reihe nach durch beide; einnehmen können die Gegner sie erst ab Runde %d." % W.CHECKPOINTS_AB_WELLE,
 				"Gegner bleiben darauf stehen, bis sie ihn eingenommen haben. Danach gehört er dem Gegner, und die nächste Welle startet dort.",
 				"Zurückholen: Je verlorenem Checkpoint geht eine Bodentruppe hin und hält ihn – nur solange die Welle läuft und kurz danach.",
 				"Jeder Checkpoint, der am Rundenende dir gehört, bringt Budget."]]]},
@@ -607,5 +607,5 @@ func _baue_daten() -> void:
 				"Je Checkpoint, der am Rundenende dir gehört: %d." % W.BONUS_JE_CHECKPOINT,
 				"Zinsen: für je %d Budget, das am Rundenende übrig ist, %d dazu – höchstens %d." % [W.ZINS_SCHRITT, W.ZINS_JE_SCHRITT, W.ZINS_STUFEN * W.ZINS_JE_SCHRITT],
 				"Dazu eine kleine Prämie je besiegtem Gegner.",
-				"Runde 1: nur Fabriken. Erdwälle gibt es ab Runde %d." % W.WAELLE_AB_WELLE]]]})
+				"Runde 1: nur Fabriken. Erdwälle gibt es ab Runde %d – die ersten %d davon gratis." % [W.WAELLE_AB_WELLE, W.STARTPAKET_WAELLE]]]]})
 	_daten = [gegner, truppen, bauten]

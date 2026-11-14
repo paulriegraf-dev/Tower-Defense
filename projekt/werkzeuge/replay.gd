@@ -60,8 +60,8 @@ func _process(delta: float) -> bool:
 		# erst jetzt ist das Spiel fertig aufgebaut
 		eingerichtet = true
 		spiel.setze_checkpoints(partie["checkpoints"])
-		if partie.has("basis"):
-			spiel.setze_basis(Vector2i(int(partie["basis"][0]), int(partie["basis"][1])))
+		var b: Array = partie.get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])   # alte Partien: Basis am festen Platz
+		spiel.setze_basis(Vector2i(int(b[0]), int(b[1])))
 	if spiel.phase == 0:      # Bauphase: Ergebnis der letzten Runde festhalten, Züge der nächsten ausführen
 		if runden_index > 0 and zeile.size() < runden_index:
 			_halte_fest("geschafft")

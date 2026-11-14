@@ -136,7 +136,7 @@ func _ready() -> void:
 	var start := naechster_start
 	naechster_start = ""
 	if start == "normal":
-		pass   # Neustart vom Schlussbild: gleich ins normale Spiel, ohne Menü
+		_normales_spiel()   # Neustart vom Schlussbild: gleich ins normale Spiel, ohne Menü
 	elif start.begins_with("angriff:"):
 		starte_phantom_angriff(start.trim_prefix("angriff:"))
 	elif DisplayServer.get_name() != "headless" and OS.get_environment("TD_OHNE_MENUE") == "":
@@ -159,8 +159,16 @@ func _menue_gewaehlt(mit_sandbox: bool) -> void:
 		_protokoll["sandbox"] = true
 		sandbox_cp_route(true)
 		melde("Sandbox: unendlich Budget, alle Bauwerke freigeschaltet.", 5.0)
+	else:
+		_normales_spiel()
 	_menue.queue_free()
 	_menue = null
+
+
+## Normales Spiel (auch gegen ein Angriffs-Phantom): Die Basis steht jede Partie woanders.
+func _normales_spiel() -> void:
+	if Werte.BASIS_ZUFALL:
+		stelle_basis("ueberall")
 
 
 # ------------------------------------------------------------ Phantom-Modus
@@ -182,6 +190,7 @@ func starte_phantom_verteidigung(pfad: String) -> bool:
 		melde("Dieses Phantom lässt sich nicht laden.", 5.0)
 		return false
 	phantom_modus = "verteidigung"
+	_normales_spiel()
 	_protokoll["gegen_angriff"] = pfad.get_file()
 	melde("Du verteidigst gegen den Angriff von %s. Seine Welle steht jede Runde oben in der Ansage." % str(_angriff_phantom.get("spieler", "einem Phantom")), 8.0)
 	return true
@@ -340,6 +349,8 @@ func _phantom_gefallen() -> void:
 	_phantom = neu
 	leben = Werte.START_LEBEN
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
+	var b: Array = _phantom["karte"].get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])
+	setze_basis(Vector2i(int(b[0]), int(b[1])))
 	for i in karte.cp_feind.size():
 		karte.cp_feind[i] = false
 	_naechste_bauphase()
@@ -561,6 +572,11 @@ var _setze_basis := false
 func sandbox_basis(art: String) -> void:
 	if not sandbox or phase != Phase.BAU:
 		return
+	stelle_basis(art)
+
+
+## Basis versetzen: "fest", "rechts", "ueberall" (zufällig) oder "klick" (nächster Linksklick).
+func stelle_basis(art: String) -> void:
 	_setze_basis = art == "klick"
 	if art == "klick":
 		melde("Basis setzen: Klick auf ein freies Feld. Rechtsklick bricht ab.", 6.0)
@@ -1029,6 +1045,55 @@ func ziel_ueber_spiegel(von: Vector2, weite: float) -> Dictionary:
 	return bestes
 
 
+var _weg_grund: ColorRect
+var _lbl_weg: Label
+var _weg_in := 0.0
+
+## Weganzeige: Weglänge, Umweg durch eigene Bauten (gegenüber freiem Feld) und Wegfelder in Reichweite von Stellungen, Türmen, Batterien.
+func _aktualisiere_weganzeige(delta: float) -> void:
+	var zeigen := phase == Phase.BAU and phantom_modus != "angriff" and welle >= Werte.WAELLE_AB_WELLE - 1 and not endkampf
+	_weg_grund.visible = zeigen
+	if not zeigen:
+		return
+	_weg_in -= delta / maxf(Engine.time_scale, 0.01)
+	if _weg_in > 0.0:
+		return
+	_weg_in = 0.4
+	var weg := karte.pfad
+	if weg.size() < 2:
+		return
+	var frei := 0
+	var von := karte.start_zelle()
+	for i in range(karte.erstes_ziel(), karte.checkpoints.size() + 1):
+		var nach := karte.ziel_zelle(i)
+		frei += absi(nach.x - von.x) + absi(nach.y - von.y)
+		von = nach
+	var umweg := maxi(0, weg.size() - 1 - frei)
+	# Wegfelder in Reichweite (grob: Luftlinie, ohne Sichtregel)
+	var quellen: Array = []   # [Mitte, Reichweite in Pixeln]
+	for z: Vector2i in karte.ausbau:
+		match karte.ausbau[z]:
+			Karte.STELLUNG:
+				quellen.append([karte.mitte(z), 4.0 * Werte.ZELLE])
+			Karte.TURM:
+				var art: String = karte.turm_art.get(z, "geschuetz")
+				if art != "funk":
+					quellen.append([karte.mitte(z), float(Werte.TURMARTEN[art]["reichweite"]) * Werte.ZELLE])
+	for z: Vector2i in karte.feld:
+		if karte.feld[z] == Karte.BATTERIE:
+			quellen.append([karte.mitte(z), float(Werte.BATTERIE["reichweite"]) * Werte.ZELLE])
+	var beschossen := 0
+	for f in weg:
+		var m := karte.mitte(f)
+		for q: Array in quellen:
+			if m.distance_to(q[0]) <= q[1]:
+				beschossen += 1
+				break
+	_lbl_weg.text = "Gegnerweg %d Felder · +%d durch deine Bauten · %d unter Beschuss" % [weg.size() - 1, umweg, beschossen]
+	_weg_grund.size.x = _lbl_weg.get_minimum_size().x + 20.0
+	_weg_grund.position.x = get_viewport_rect().size.x - _weg_grund.size.x
+
+
 ## Funkturm: Truppen in Stellungen in seinem Umkreis feuern schneller. Faktor auf ihre Pause (1.0 = kein Funkturm in der Nähe).
 func funk_faktor(stellung: Vector2i) -> float:
 	if stellung == Karte.KEINE:
@@ -1447,6 +1512,9 @@ func _welle_geschafft() -> void:
 func _naechste_bauphase() -> void:
 	welle += 1
 	waehle_variante()
+	if welle == Werte.WAELLE_AB_WELLE and not sandbox and phantom_modus != "angriff":
+		freie_waelle = Werte.STARTPAKET_WAELLE
+		melde("Erdwälle sind frei: Die ersten %d bekommst du geschenkt. Lenke damit den Gegnerweg um – unten rechts siehst du, wie lang er wird." % freie_waelle, 9.0)
 	if welle == Werte.CHECKPOINTS_AB_WELLE:
 		karte.cp_aktiv = true
 		karte.aktualisiere_pfad()
@@ -2218,10 +2286,14 @@ func _bei_zerstoert(zelle: Vector2i, typ: int) -> void:
 
 # ------------------------------------------------------------------- Bauen
 
+## Startpaket: so viele Erdwälle sind noch gratis; welche Felder gratis gebaut wurden (geben beim Abriss nichts zurück).
+var freie_waelle := 0
+var _gratis: Dictionary = {}
+
 func kosten(typ: int) -> int:
 	match typ:
 		Karte.WALL:
-			return Werte.KOSTEN_WALL
+			return 0 if freie_waelle > 0 else Werte.KOSTEN_WALL
 		Karte.STELLUNG:
 			return Werte.KOSTEN_STELLUNG
 		Karte.TURM:
@@ -2315,8 +2387,12 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		if not still:
 			melde(grund)
 		return false
-	_merke_bezahlt(z, "panzer" if typ == Karte.PANZER else ("ausbau" if _ist_ausbau(typ) else "bau"), kosten(typ))
-	budget -= kosten(typ)
+	var preis := kosten(typ)
+	if typ == Karte.WALL and freie_waelle > 0:
+		freie_waelle -= 1
+		_gratis[z] = true
+	_merke_bezahlt(z, "panzer" if typ == Karte.PANZER else ("ausbau" if _ist_ausbau(typ) else "bau"), preis)
+	budget -= preis
 	var eintrag := {"a": "bau", "typ": BAU_NAMEN[typ], "x": z.x, "y": z.y}
 	if phase == Phase.KAMPF:
 		eintrag["t"] = snappedf(_kampf_sek, 0.1)   # während der Welle gebaut
@@ -2381,6 +2457,8 @@ func erstattung(z: Vector2i) -> int:
 	if not frisch_bau.has("bau"):
 		if paar:
 			alt += Werte.KOSTEN_BATTERIE
+		elif war == Karte.WALL and _gratis.has(z):
+			pass   # aus dem Startpaket: gratis gebaut, gibt nichts zurück
 		elif war == Karte.FABRIK:
 			# der Preis, den die zuletzt gebaute Fabrik gekostet hat
 			alt += int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + Werte.KOSTEN_FABRIK_PROZENT / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
@@ -2414,6 +2492,7 @@ func reisse_ab(z: Vector2i) -> bool:
 		karte.entferne(partner)
 	fabriken.erase(z)
 	_bezahlt.erase(z)
+	_gratis.erase(z)
 	karte.entferne(z)
 	budget += zurueck
 	return true
@@ -2880,6 +2959,8 @@ func _aktualisiere_hud(delta: float) -> void:
 	for feld in _zins_felder:
 		(feld.get_parent() as Control).visible = not angreifer
 	(_knoepfe[Karte.FABRIK] as Button).text = "[1] Fabrik %d" % kosten(Karte.FABRIK)
+	(_knoepfe[Karte.WALL] as Button).text = "[2] Erdwall gratis ×%d" % freie_waelle if freie_waelle > 0 else "[2] Erdwall %d" % Werte.KOSTEN_WALL
+	_aktualisiere_weganzeige(delta)
 
 	# Hinweiszeile: kurze Meldung hat Vorrang, sonst ein Tipp passend zur Lage.
 	# Meldungen laufen in Echtzeit ab, nicht schneller bei Tempo ×2.
@@ -3000,6 +3081,15 @@ func _baue_hud() -> void:
 	_hinweis_grund.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ebene.add_child(_hinweis_grund)
 	_lbl_hinweis = _label(_hinweis_grund, Vector2(12, 3), 15, Color("ece6f5"))
+
+	# Weganzeige (Bauphase): wie lang der Gegnerweg ist, wie viel davon deine Bauten bringen und wie viel unter Beschuss liegt
+	_weg_grund = ColorRect.new()
+	_weg_grund.color = Color(0.07, 0.06, 0.09, 0.8)
+	_weg_grund.position = Vector2(breite - 300, unten_y - 28)
+	_weg_grund.size = Vector2(300, 28)
+	_weg_grund.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ebene.add_child(_weg_grund)
+	_lbl_weg = _label(_weg_grund, Vector2(10, 4), 14, Color("ffd34d"))
 
 	_neu_grund = ColorRect.new()
 	_neu_grund.color = Color(0.07, 0.06, 0.09, 0.85)
