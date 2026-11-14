@@ -230,7 +230,7 @@ func _process(delta: float) -> void:
 			pass   # die Batterie feuert (siehe main.gd)
 		Zustand.AUF_POSTEN:
 			# Von oben: mehr Reichweite und Schuss über das eigene Wallstück hinweg. Fremde Erdwälle versperren die Sicht.
-			var weite: float = (daten["reichweite"] + Werte.stellung_bonus(daten)) * Werte.ZELLE
+			var weite: float = (daten["reichweite"] + karte.posten_bonus(posten_zelle, daten)) * Werte.ZELLE
 			_sprite.bewegt(false)
 			# Alle Gegner weg, aber ein Checkpoint ist noch verloren: Die nächste Truppe verlässt dafür ihre Stellung.
 			_posten_check -= delta
@@ -426,6 +426,7 @@ func _repariere(delta: float) -> void:
 
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
 func _feuere_auf(ziel: Node2D) -> void:
+	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]   # Schadensliste: alles von hier zählt für die Fabrik
 	# Im Rauch sieht die Einheit nichts – außer mit Klarsicht (Scharfschütze ab Stufe 2) oder auf ein markiertes Ziel.
 	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
 	if ziel == null or blind:
@@ -548,6 +549,7 @@ func posten_verloren() -> void:
 
 func nimm_schaden(menge: float) -> void:
 	_anlauf = 0.0   # Minigun: ein Treffer unterbricht den Anlauf
+	menge *= spiel.schild_faktor(position)   # Schildturm in der Nähe
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()
@@ -557,7 +559,7 @@ func nimm_schaden(menge: float) -> void:
 
 ## Reichweite in Feldern, so wie sie gerade gilt (in der Stellung mit Bonus).
 func reichweite_jetzt() -> float:
-	return daten["reichweite"] + (Werte.stellung_bonus(daten) if zustand == Zustand.AUF_POSTEN else 0.0)
+	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else 0.0)
 
 
 func _draw() -> void:

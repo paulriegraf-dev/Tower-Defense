@@ -10,6 +10,7 @@ var _inhalt: VBoxContainer
 var _stand := ""      # woraus die Tafel zuletzt gebaut wurde – neu bauen nur, wenn sich etwas ändert
 var _truppen_knoepfe: Array[Button] = []
 var _upgrade_knopf: Button
+var _lbl_stats: Label   # Schaden und Kills dieser Fabrik (wie die Pop-Zahl in Bloons)
 
 
 func _ready() -> void:
@@ -57,6 +58,21 @@ func _process(_delta: float) -> void:
 		schliesse()
 		return
 	_baue()
+	_zeige_stats()
+
+
+func _quelle() -> String:
+	if spiel.karte.paar.has(zelle):
+		var b: Vector2i = spiel.karte.paar[zelle]
+		return "batterie:%d,%d" % [b.x, b.y]
+	return "fabrik:%d,%d" % [zelle.x, zelle.y]
+
+
+func _zeige_stats() -> void:
+	if not is_instance_valid(_lbl_stats):
+		return
+	var g: Dictionary = spiel.gesamt_stats.get(_quelle(), {})
+	_lbl_stats.text = "Gesamt: %d Schaden · %d Kills" % [roundi(float(g.get("schaden", 0.0))), int(g.get("kills", 0))]
 
 
 func _baue() -> void:
@@ -80,12 +96,18 @@ func _baue() -> void:
 
 	if f["typ"] == "pilot":
 		_baue_batterie(stufe, bauphase, naechste, kann_zahlen)
+		_zeile("", 13, Color("ffd34d"))
+		_lbl_stats = _inhalt.get_child(_inhalt.get_child_count() - 1)
+		_zeige_stats()
 		reset_size()
 		_setze_ort()
 		return
 
 	_zeile("%s-Fabrik · Stufe %d" % [d["name"], stufe], 17, Color("ffe9a8"))
 	_zeile("hält %d Truppen" % spiel.truppen_limit(zelle), 13, Color("a79fb3"))
+	_zeile("", 13, Color("ffd34d"))
+	_lbl_stats = _inhalt.get_child(_inhalt.get_child_count() - 1)
+	_zeige_stats()
 
 	if stufe == 0:
 		# Truppe wählen

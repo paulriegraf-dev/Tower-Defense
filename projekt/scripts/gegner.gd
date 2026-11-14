@@ -47,6 +47,7 @@ var _brut: Array = []               # Belagerungsturm: seine abgesetzten Turmtru
 var geworfen := false               # von der Wurf-Schleuder hinter die vordere Front geworfen
 var markiert := 0.0                 # Sekunden: von einem Scharfschützen markiert, nimmt mehr Schaden
 var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
+var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schwächer als Plasmagel)
 
 
 func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, start_zelle: Vector2i, erstes_ziel: int) -> void:
@@ -76,7 +77,11 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 ## Führt ein Fahnenträger den Trupp an, stürmen alle in seinem Tempo.
 func tempo() -> float:
 	var t := _tempo_ungebremst()
-	return t * Werte.PLASMAGEL_TEMPO if gebremst > 0.0 else t
+	if gebremst > 0.0:
+		return t * Werte.PLASMAGEL_TEMPO
+	if gefroren > 0.0:
+		return t * float(Werte.TURMARTEN["frost"]["bremse_tempo"])
+	return t
 
 
 func _tempo_ungebremst() -> float:
@@ -153,11 +158,12 @@ func _process(delta: float) -> void:
 		_stand_pos = position
 	if rolle == "sprenger":
 		queue_redraw()   # Warnzeichen blinkt
-	if markiert > 0.0 or gebremst > 0.0:
+	if markiert > 0.0 or gebremst > 0.0 or gefroren > 0.0:
 		markiert -= delta
 		gebremst -= delta
+		gefroren -= delta
 		queue_redraw()
-	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else Color.WHITE)
+	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 else Color.WHITE))
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
 
 	# Energieschild einer Batterie im Weg: stehen bleiben und draufschlagen, bis er bricht.
@@ -421,9 +427,11 @@ func nimm_schaden(menge: float) -> void:
 		return
 	if markiert > 0.0:
 		menge *= Werte.MARKIERUNG_FAKTOR
+	var wirksam := minf(menge, maxf(leben, 0.0))
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()
+	spiel.zaehle_schaden(wirksam, leben <= 0.0)   # für die Schadensliste [Tab]
 	if leben <= 0.0:
 		_tot = true
 		spiel.gegner_besiegt(self)

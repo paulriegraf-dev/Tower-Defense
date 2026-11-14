@@ -117,6 +117,7 @@ func hat_geworfen() -> void:
 func nimm_schaden(menge: float) -> void:
 	if not spiel.im_endkampf() or leben <= 0.0:
 		return
+	spiel.zaehle_schaden(minf(menge, leben), leben - menge <= 0.0)   # Schadensliste [Tab]: Treffer am HQ und an Zonenbauten
 	leben -= menge
 	_treffer = 0.08
 	if leben <= 0.0:

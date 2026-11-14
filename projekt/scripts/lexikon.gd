@@ -76,8 +76,11 @@ func _gui_input(event: InputEvent) -> void:
 				return
 
 
+## Kartenraster: Bei mehr als drei Reihen werden die Karten niedriger, damit alles über die Reiter passt.
 func _karten_recht(i: int) -> Rect2:
-	return Rect2(RASTER + Vector2(i % SPALTEN, int(i / float(SPALTEN))) * SCHRITT, KARTE)
+	var reihen := maxi(3, ceili((_daten[_reiter] as Array).size() / float(SPALTEN)))
+	var schritt_y := minf(SCHRITT.y, 524.0 / reihen)
+	return Rect2(RASTER + Vector2((i % SPALTEN) * SCHRITT.x, int(i / float(SPALTEN)) * schritt_y), Vector2(KARTE.x, schritt_y - 10.0))
 
 
 func _reiter_recht(i: int) -> Rect2:
@@ -111,7 +114,8 @@ func _zeichne_karte(r: Rect2, e: Dictionary, gewaehlt: bool) -> void:
 	_kasten(r, KARTE_HELL if drueber or gewaehlt else KARTE_BLAU, RAND, 10, 3)
 	_kasten(Rect2(r.position + Vector2(3, 3), Vector2(r.size.x - 6, 30)), KARTE_KOPF, KARTE_KOPF, 7, 0)
 	_schreibe_mittig(r.position + Vector2(0, 24), r.size.x, e["name"], 15, Color.WHITE, 5)
-	_zeichne_bild(e, Vector2(r.get_center().x, r.position.y + 136), 2.0 if e.get("gross", false) else 1.5, 2.0, false)
+	var m := r.size.y / KARTE.y   # niedrigere Karten: Bild etwas kleiner
+	_zeichne_bild(e, Vector2(r.get_center().x, r.position.y + r.size.y - 32.0 * m), (2.0 if e.get("gross", false) else 1.5) * m, 2.0 * m, false)
 	_schreibe_mittig(r.position + Vector2(0, r.size.y - 9), r.size.x, e["marke"], 13, GUT, 4)
 
 
@@ -259,6 +263,13 @@ func _skizze(art: String, o: Vector2, s: float) -> void:
 			draw_arc(o + Vector2(28, 26) * s, 13.0 * s, PI / 2.0, PI * 1.5, 16, Color("8c96a8"), maxf(2.0, 7.0 * s))
 			_q(o, s, 24, 10, 14, 7, Color("e0453a"))
 			_q(o, s, 24, 35, 14, 7, Color("3a7be0"))
+		"generator":
+			# Ring aus Erdwällen mit Generator und Kuppel
+			for p: Vector2i in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(0, 1), Vector2i(3, 1), Vector2i(0, 2), Vector2i(3, 2), Vector2i(0, 3), Vector2i(1, 3), Vector2i(2, 3), Vector2i(3, 3)]:
+				_q(o, s, p.x * 16 + 1, p.y * 16 + 1, 14, 14, Color("a87b4a"))
+			_q(o, s, 18, 20, 28, 22, tech_dunkel)
+			draw_circle(o + Vector2(32, 31) * s, 9.0 * s, Color(0.42, 0.72, 1.0))
+			draw_arc(o + Vector2(32, 32) * s, 40.0 * s, 0.0, TAU, 32, Color(0.55, 0.82, 1.0, 0.8), maxf(1.5, 2.0 * s))
 		"panzer":
 			var stahl := Color("8c96a8")
 			_q(o, s, 0, 0, 64, 6, stahl)
@@ -286,24 +297,28 @@ func _skizze(art: String, o: Vector2, s: float) -> void:
 
 
 ## Formturm als 3×3-Skizze: in der Mitte der Turm in seiner Farbe, drumherum die Erdwälle, die seine Form ergeben.
+## je Form: [Stützen (in Turmfarbe), weitere Erdwälle, die die Form braucht (nur Erde)]
 const FORMEN := {
-	"geschuetz": [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)],
-	"frost": [Vector2i(1, 0), Vector2i(0, 1)],
-	"funk": [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)],
-	"lanze": [Vector2i(-1, 0), Vector2i(1, 0)],
+	"geschuetz": [[Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)], []],
+	"frost": [[Vector2i(1, 0), Vector2i(0, 1)], [Vector2i(2, 0), Vector2i(0, 2)]],
+	"heil": [[Vector2i(-1, -1), Vector2i(1, 1)], []],
+	"lanze": [[Vector2i(0, -1), Vector2i(0, 1)], [Vector2i(-1, -1), Vector2i(-1, 1)]],
+	"funk": [[Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)], []],
 }
 
 func _skizze_form(art: String, o: Vector2, s: float) -> void:
-	var k := 64.0 / 3.0
+	var k := 64.0 / 5.0
 	var farbe := Color(Werte.TURMARTEN[art]["farbe"])
 	_q(o, s, 0, 0, 64, 64, Color(0.31, 0.49, 0.27, 0.5))
-	for n: Vector2i in FORMEN[art]:
-		var x := (n.x + 1) * k
-		var y := (n.y + 1) * k
+	for n: Vector2i in FORMEN[art][1]:
+		_q(o, s, (n.x + 2) * k + 1, (n.y + 2) * k + 1, k - 2, k - 2, Color("a87b4a"))
+	for n: Vector2i in FORMEN[art][0]:
+		var x := (n.x + 2) * k
+		var y := (n.y + 2) * k
 		_q(o, s, x + 1, y + 1, k - 2, k - 2, Color("a87b4a"))
-		_q(o, s, x + 4, y + 4, k - 8, k - 8, farbe.darkened(0.45))
-	_q(o, s, k + 1, k + 1, k - 2, k - 2, Color("2a2038"))
-	_q(o, s, k + 4, k + 4, k - 8, k - 8, farbe)
+		_q(o, s, x + 3, y + 3, k - 6, k - 6, farbe.darkened(0.45))
+	_q(o, s, 2 * k + 1, 2 * k + 1, k - 2, k - 2, Color("2a2038"))
+	_q(o, s, 2 * k + 3, 2 * k + 3, k - 6, k - 6, farbe)
 
 
 func _q(o: Vector2, s: float, x: float, y: float, w: float, h: float, farbe: Color) -> void:
@@ -398,10 +413,10 @@ func _turmkarte(art: String, extra: Array) -> Dictionary:
 		w.append(["Angriff alle", _z(d["abklingzeit"]) + " s"])
 	var regeln: Array = [d["text"]]
 	regeln.append_array(extra)
-	return {"name": d["name"], "unter": "Turm auf " + {"Ecke": "einer Ecke", "Kreuzung": "einer Kreuzung", "T-Stück": "einem T-Stück", "gerades Stück": "einem geraden Stück"}.get(d["form"], d["form"]),
+	return {"name": d["name"], "unter": "Turm auf " + {"Ecke": "einer Ecke", "Kreuzung": "einer Kreuzung", "T-Stück": "einem T-Stück", "gerades Stück": "einem geraden Stück", "Bogen": "einem Bogen", "Linie mit Enden": "einer Linie mit Enden"}.get(d["form"], d["form"]),
 		"marke": "%d  [4]" % W.KOSTEN_TURM, "skizze": "form:" + art, "werte": w,
 		"abschnitte": [["Was er macht", TITEL, regeln], ["Für alle Türme", TEXT_BLASS, [
-			"Welcher Turm entsteht, entscheidet die Form der freien Nachbarwälle: Ecke = Frost, gerade = Lanze, T-Stück = Geschütz, Kreuzung = Funk.",
+			"Welcher Turm entsteht, entscheidet die Form der Erdwälle drumherum: T-Stück = Geschütz, Kreuzung = Funk, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilung. Ein schlichtes gerades Stück oder eine kurze Ecke trägt keinen Turm. Die Vorschau nennt den Turm.",
 			"Stützregel: Diese Erdwälle dürfen keinen anderen Turm stützen. Stellungen darauf sind erlaubt.",
 			"Schießt ohne Truppe und auch im Rauch. Sicht wie aus einer Stellung. Sein Erdwall hält Sprengern stand.",
 			"Turmtruppen können ihn lahmlegen – dann schweigt er bis zum Rundenende."]]]}
@@ -556,26 +571,25 @@ func _baue_daten() -> void:
 				"Eine Truppe steht oben und schießt über die Erdwälle ihres Wallstücks. Fremde Wallstücke versperren die Sicht.",
 				"Mehr Reichweite von oben: Technogunner +%s, Scharfschütze +%s, Plasmawerfer +%s." % [_z(W.stellung_bonus(W.EINHEITEN["technogunner"])), _z(W.stellung_bonus(W.EINHEITEN["scharfschuetze"])), _z(W.stellung_bonus(W.EINHEITEN["plasmawerfer"]))],
 				"Kein Schuss durch die Lücke zwischen Erdwällen, die sich nur an den Ecken berühren.",
+				"Wachposten: Auf einem einzelnen Erdwall ohne Nachbarwälle reicht jede Truppe noch +%s Felder weiter." % _z(W.WACHPOSTEN_BONUS),
 				"Nahkämpfer am Boden kommen nicht heran. Gefährlich sind Sphären, Schleudern, Rauch und Turmtruppen.",
 				"Darf auch in der Welle gebaut werden, solange kein Gegner in der Nähe ist."]]]},
 		_turmkarte("geschuetz", ["Das ist der bisherige Turm."]),
-		_turmkarte("frost", ["Bremst ganze Trupps – gut gegen Fahnensturm und schnelle Rudel."]),
+		_turmkarte("frost", ["Braucht eine lange Ecke: Der Turm steht im Knick, beide Arme sind mindestens 2 Erdwälle lang.",
+			"Bremst ganze Trupps – gut gegen Fahnensturm und schnelle Rudel."]),
 		_turmkarte("funk", ["Zählt alle Stellungen im Umkreis, nicht nur eine – je mehr Stellungen drumherum, desto mehr lohnt er."]),
-		_turmkarte("lanze", ["Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
-		{"name": "Spiegel", "unter": "Ausbau eines Erdwalls", "marke": "%d  [8]" % W.KOSTEN_SPIEGEL, "skizze": "spiegel",
-			"werte": [["Preis", str(W.KOSTEN_SPIEGEL)], ["für", "Bodentruppen"]],
+		_turmkarte("lanze", ["Braucht eine Klammer: drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer ab (⊐). Der Turm steht in der Mitte.",
+			"Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
+		{"name": "Schildgenerator", "unter": "Großbau in einem Hof", "marke": "%d  [4]" % W.KOSTEN_GENERATOR, "skizze": "generator",
+			"werte": [["Preis", str(W.KOSTEN_GENERATOR)], ["Felder", "1"], ["Hof", "%d–%d Felder" % [W.HOF_MIN, W.HOF_MAX]], ["Schutz", "%d %%" % roundi(W.KUPPEL_SCHUTZ * 100)]],
 			"abschnitte": [["Was er macht", TITEL, [
-				"Bodentruppen, die den Spiegel sehen, schießen über ihn um die Ecke auf Gegner, die sie selbst nicht sehen.",
-				"Truppe → Spiegel und Spiegel → Gegner brauchen freie Sicht; beide Strecken zusammen müssen in ihrer Reichweite liegen.",
-				"Truppen in Stellungen nutzen ihn nicht.",
-				"Am besten an Ecken und Gangbiegungen, hinter denen die Gegner verschwinden."]]]},
-		{"name": "Magnet", "unter": "Ausbau eines Erdwalls", "marke": "%d  [9]" % W.KOSTEN_MAGNET, "skizze": "magnet",
-			"werte": [["Preis", str(W.KOSTEN_MAGNET)], ["Linie", "%d Felder" % int(W.MAGNET["laenge"])], ["Zug", _z(W.MAGNET["zug"]) + " Felder"], ["Zug alle", _z(W.MAGNET["abklingzeit"]) + " s"]],
-			"abschnitte": [["Was er macht", TITEL, [
-				"Zieht die Gegner in seiner Linie zu sich heran – nur in der Linie, in die er zeigt. Die Richtung stellst du beim Bauen mit [T] ein.",
-				"Die Linie endet am ersten Erdwall oder Gebäude; durch Wälle zieht er nicht. Gezogene Gegner suchen sich danach einen neuen Weg.",
-				"Der Belagerungsturm ist zu schwer für ihn.",
-				"So holst du Trupps aus dem Gang vor deine Stellungen oder ziehst sie auf langen Wegen zurück."]]]},
+				"Ein Hof sind freie Felder, die rundum von Erdwällen eingeschlossen sind (ein Tor zählt mit). Mit [4] auf ein freies Hof-Feld gesetzt entsteht der Generator.",
+				"Seine Kuppel deckt den ganzen Ring und ein Feld darüber hinaus. Truppen darunter – in Stellungen und am Boden – nehmen %d %% weniger Schaden." % roundi(W.KUPPEL_SCHUTZ * 100),
+				"Steine der Schleuder prallen an der Kuppel ab; Schleudern und Rauchwerfer suchen sich Ziele außerhalb.",
+				"Bricht der Ring auf (Sprenger), erlischt die Kuppel, bis er wieder geschlossen ist. Pro Hof ein Generator."]],
+				["Dagegen spricht", SCHLECHT, ["Teuer, und der Hof bindet Platz und Erdwälle, die sonst den Weg verlängern."]]]},
+		_turmkarte("heil", ["Braucht eine Treppe: drei Erdwälle schräg hintereinander, die sich nur an den Ecken berühren. Der Turm steht in der Mitte.",
+			"Truppen sind knapp: Wer überlebt, muss nicht nachgebaut werden."]),
 		{"name": "Panzerung", "unter": "Ausbau eines Erdwalls", "marke": "%d  [7]" % W.KOSTEN_PANZER, "skizze": "panzer",
 			"werte": [["Preis", str(W.KOSTEN_PANZER)]],
 			"abschnitte": [["Was sie macht", TITEL, [

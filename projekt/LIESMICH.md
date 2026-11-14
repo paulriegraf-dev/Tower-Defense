@@ -3,14 +3,14 @@
 Öffnen: Godot starten → **Importieren** → diesen Ordner (`project.godot`) wählen → **F5** spielt.
 
 ## Steuerung
-- **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie, **6** Tor, **7** Panzerung, **8** Spiegel, **9** Magnet (2–9 ab Welle 2), **T** dreht Batterie und Magnet, **Esc** abwählen
+- **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie, **6** Tor, **7** Panzerung (2–7 ab Welle 2), **T** dreht die Batterie, **Esc** abwählen
 - **Linksklick** bauen (Erdwälle: Maustaste halten und ziehen)
 - **Linksklick auf eine Fabrik** (ohne Werkzeug): Fabrikmenü öffnen – Truppe wählen (Technogunner / Scharfschütze / Plasmawerfer) und ausbauen, siehe unten. **T** dreht beim Bauen einer Batterie die Lage ihrer Pilotenfabrik.
 - **Linksklick auf eine Truppe, einen Turm, eine Stellung oder eine Batterie** (ohne Werkzeug): Reichweite anzeigen.
   Rot schraffierte Felder liegen in Reichweite, können von dort aber nicht getroffen werden (Sicht versperrt).
   Bei einer leeren Stellung: innerer Kreis Technogunner, äußerer Scharfschütze.
 - **Rechtsklick** abreißen (zwischen den Wellen; in derselben Bauphase Gebautes voll zurück, sonst 75 % – siehe „Abreißen und Erstattung“)
-- **Leertaste** Welle starten, **F** Tempo ×2, **R** Neustart nach Niederlage
+- **Leertaste** Welle starten, **F** Tempo ×1 / ×2 / ×3 (schaltet weiter), **Tab** (gedrückt halten) Schadensliste der Runde je Fabrik, Turmart und Batterie, **R** Neustart nach Niederlage
 
 ## Regeln im Prototyp
 - **Zone des Gegners** (linke drei Spalten, abgedunkelt): Dort kann nicht gebaut werden, und bis zur letzten Runde
@@ -28,9 +28,8 @@
 - **Sicht von oben** (Stellungen und Türme): Über das eigene Wallstück – alle Erdwälle, die über Kanten mit dem
   eigenen zusammenhängen – wird hinweggeschossen. Jeder fremde Erdwall versperrt die Sicht. Fabriken und
   Batterien stehen am Boden und verdecken nichts.
-- **Formtürme** = Ausbau eines Erdwalls. Welcher Turm entsteht, bestimmt die Form der freien Nachbarwälle (**Stützen**): **Kreuzung** (4) = Funkturm – schießt nicht, Truppen in Stellungen im Umkreis von 2,5 Feldern feuern 25 % schneller; **T-Stück** (3) = Geschützturm – der bisherige Turm; **Ecke** (2 über Eck) = Frostturm – Frostpuls alle 1,5 s, verlangsamt alle Gegner in Reichweite 2 s stark; **gerades Stück** (2 gegenüber) = Lanzenturm – alle 4 s ein Strahl in gerader Linie (6 Felder), der alles in der Linie trifft. Jeder Erdwall stützt höchstens einen Turm, und auf einer Stütze darf kein anderer Turm stehen. Alle Türme kosten 75; [I] zeigt die Formen.
-- **Spiegel [8]** (50) = Ausbau eines Erdwalls: Bodentruppen, die ihn sehen, schießen über ihn um die Ecke auf Gegner, die sie selbst nicht sehen (Truppe → Spiegel → Gegner, beide Strecken zusammen in ihrer Reichweite). Truppen in Stellungen nutzen ihn nicht.
-- **Magnet [9]** (60) = Ausbau eines Erdwalls mit Richtung ([T] dreht): zieht alle 6 Sekunden die Gegner in seiner Linie (bis 4 Felder, endet am ersten Hindernis) bis zu 1,5 Felder zu sich heran, höchstens bis vor den Magneten. Der Belagerungsturm ist zu schwer.
+- **Wachposten** = Stellung auf einem einzelnen Erdwall ohne Nachbarwälle (Streubau): +1 Reichweite für jede Truppe darauf, zusätzlich zum Bonus der Stellung.
+- **Formtürme** = Ausbau eines Erdwalls. Welcher Turm entsteht, bestimmt die Form der Erdwälle drumherum: **Kreuzung** (4 Nachbarwälle) = Funkturm – schießt nicht, Truppen in Stellungen im Umkreis von 2,5 Feldern feuern 25 % schneller; **T-Stück** (3) = Geschützturm – der bisherige Turm; **lange Ecke** (Turm im Knick, beide Arme mindestens 2 Erdwälle lang) = Frostturm – Frostpuls alle 1,5 s ohne Schaden, verlangsamt alle Gegner in Reichweite 1,2 s auf 80 % Tempo; **Klammer** (drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer ab: ⊐) = Lanzenturm – alle 4 s ein Strahl in gerader Linie (6 Felder), der alles in der Linie trifft; **Treppe** (drei Erdwälle schräg hintereinander, die sich nur an den Ecken berühren; Turm in der Mitte) = Heilturm – schießt nicht, heilt alle 2 s eigene Truppen im Umkreis um 8 Leben. Ein schlichtes gerades Stück oder eine kurze Ecke trägt keinen Turm. Jeder Erdwall stützt höchstens einen Turm, und auf einer Stütze darf kein anderer Turm stehen. Alle Türme kosten 75; [I] zeigt die Formen. Spiegel und Magnet sind vorerst herausgenommen.
 - **Panzerung [7]** (30) = Ausbau eines Erdwalls, auch zusätzlich zu Stellung, Turm oder Tor: Die erste Sprengung nimmt nur die Panzerung, erst der zweite Sprenger bringt den Erdwall zu Fall. Eine Sprengung in die Tiefe endet an einem gepanzerten Erdwall.
   Die Stützfelder sind in der Farbe ihres Turms eingefärbt. Fällt eine Stütze, schweigt der Turm, bis der Wall wieder steht.
 - Fabriken bauen während der Welle ihre gewählte Einheit. Jede geht zur nächsten freien Stellung (Fußweg ab Fabrik).
@@ -122,7 +121,7 @@ Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×
 | 3 | Battlesphäre | Fernkämpfer, schießt im Laufen |
 | 5 | Checkpoints, Schleuder | siehe oben |
 | 6 | Fahnenträger | Die anderen in seinem Trupp werden 30 % schneller; er selbst läuft ohne Bonus und fällt dadurch zurück. Er kämpft nicht und nimmt Checkpoints doppelt so schnell ein. Er hinterlässt für 3 Sekunden eine Spur: Gegner, die ihr folgen, werden ebenfalls 30 % schneller. |
-| 8 | Sprenger, zweite Schleuder | Sprenger kommen so, wie es der Plan der Runde vorsieht (siehe „Die 20 Wellen“). Läuft ein Rauchwerfer in Reichweite, nebelt er zuerst die Stellungen an der Sprengstelle ein. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung geht in die Tiefe, aber nur durch dicke Riegel: Mitgerissen werden bis zu 3 weitere blanke Erdwälle in gerader Linie dahinter, und nur, wenn jeder davon quer zur Sprengrichtung einen Erdwall-Nachbarn hat (also zu einer Mauerlage gehört). Stellungen, Tore und Türme stoppen die Sprengung; eine Linie, die in Sprengrichtung verläuft, verliert nur das getroffene Feld. Am Ziel zündet er 2,5 Sekunden lang und steht dabei still (ein Ring über dem Warnzeichen füllt sich); fällt er vorher, gibt es keine Sprengung. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
+| 8 | Sprenger, zweite Schleuder | Sprenger kommen so, wie es der Plan der Runde vorsieht (siehe „Die 20 Wellen“). Läuft ein Rauchwerfer in Reichweite, nebelt er zuerst die Stellungen an der Sprengstelle ein. Sie sprengen Erdwälle mit großer Abkürzung, frühestens nach sechs Schritten Anmarsch. Die Sprengung geht in die Tiefe, aber nur durch dicke Riegel: Mitgerissen werden bis zu 3 weitere blanke Erdwälle in gerader Linie dahinter, und nur, wenn jeder davon quer zur Sprengrichtung einen Erdwall-Nachbarn hat (also zu einer Mauerlage gehört). Stellungen, Tore und Türme stoppen die Sprengung; eine Linie, die in Sprengrichtung verläuft, verliert nur das getroffene Feld. Am Ziel zündet er 1,7 Sekunden lang und steht dabei still (ein Ring über dem Warnzeichen füllt sich); fällt er vorher, gibt es keine Sprengung. Die Ziele werden nicht mehr vorab markiert: erst in der Welle blinkt das Ziel, und der Sprenger trägt ein Warnzeichen. |
 | 10 | Wurf-Schleuder | Wirft Trupps zu vier über die Wälle – nicht nur Hunde, je nach Runde auch Fahnenträger, Sprenger oder Rauchwerfer. Die Vorschau sagt nur, WAS geworfen wird („Wurf: Fahne, Sprenger“), nicht wohin; erst in der Welle markiert ein roter Kreis den Landepunkt. Ziel ist die Stelle hinter der Wallgruppe, die den Gegnern den größten Umweg abverlangt, gern nahe an einem Checkpoint. Gibt es keine echte Mauer, wirft sie weiter (blasser Kreis, 8 Felder) in Taschen zwischen Erdwällen. In einen rundum geschlossenen Kern wirft sie nicht; der normale Wurf reicht 6 Felder. Bei einer sehr dicken Mauer kommt ein Rudel Hunde zusätzlich. Dockt ein Belagerungsturm an, wirft sie sofort auf die andere Seite. Ab Runde 14 gibt es eine zweite. |
 | 11 | Rauchwerfer | Wirft Rauch auf die dichteste Gruppe von Stellungen. Truppen im Rauch schießen einige Sekunden nicht, Türme schon; in den Rauch hinein kann geschossen werden. Scharfschützen ab Stufe 2 (Klarsicht) schießen auch im Rauch, ein markiertes Ziel treffen alle. |
 | 13 | Belagerungsturm | Fährt zum Wallstück mit den meisten Stellungen und dockt an. Solange er steht (höchstens 40 Sekunden), setzt er alle 3 Sekunden eine Turmtruppe ab, bis zu sechs zugleich. Sie laufen auf zusammenhängenden Wällen, greifen Stellungen im Nahkampf an und legen Türme für den Rest der Runde lahm. Ohne Ziel springen sie ab und laufen zur Basis. |
@@ -133,7 +132,7 @@ Erdwall 10, Stellung 25, Turm 75 (jede Form), Tor 40, Panzerung 30, Batterie mit
 
 **Übersicht [I]:** Karten für alle Gegner, eigenen Truppen und Bauten mit Werten, Verhalten und Gegenmitteln (Reiter unten, Karte anklicken). Die Texte stehen in `scripts/lexikon.gd`, die Zahlen kommen aus `werte.gd`.
 Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennummer) und Prämien je besiegtem Gegner.
-**Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 30. Die drei Felder
+**Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 50. Die fünf Felder
 unten neben den Bauknöpfen zeigen, wie viele Schritte du gerade erreicht hast.
 
 ## Bauprotokoll und Nachspielen
@@ -202,7 +201,7 @@ Ausbauen geht nur zwischen den Wellen. Beim Abriss gibt es 75 % zurück, die Upg
 ## Einkommen
 
 Nach jeder Runde gibt es 100 + 5 je Runde (Runde 8: 140, Runde 12: 160). Dazu 20 für jeden
-Checkpoint, der am Rundenende dir gehört, und Zinsen (10 je 100 übriges Budget, höchstens 30).
+Checkpoint, der am Rundenende dir gehört, und Zinsen (10 je 100 übriges Budget, höchstens 50).
 
 ## Abreißen und Erstattung
 
@@ -232,3 +231,5 @@ Werkzeuge: `werkzeuge/angrifftest.gd` (greift ein Phantom ohne Bild mit den entw
 - **Checkpoint-Route ab Runde 1:** Der Gegnerweg führt von Anfang an durch beide Checkpoints; eingenommen werden sie erst ab Runde 5.
 - **Startpaket:** Sobald Erdwälle freigeschaltet sind (Runde 2), sind die ersten 8 gratis. Abreißen gibt für sie nichts zurück.
 - **Weganzeige:** Unten rechts steht in der Bauphase, wie lang der Gegnerweg ist, wie viele Felder deine Bauten ihn verlängern und wie viele Wegfelder in Reichweite deiner Stellungen, Türme und Batterien liegen (grob, ohne Sichtregel).
+- **Schadensliste [Tab]:** Solange Tab gedrückt ist, zeigt eine Liste, wer in dieser Runde wie viel Schaden gemacht hat – je Fabrik (alle ihre Truppen, mit Stufe und Fähigkeit), je Turmart und je Batterie, mit Kills und Balken im Verhältnis. Ein Klick auf eine Fabrik zeigt ihren Gesamtschaden und ihre Kills über die ganze Partie.
+- **Schildgenerator (Großbau, 150):** Ein Hof sind 2–12 freie Felder, rundum von Erdwällen eingeschlossen (ein Tor zählt mit). Mit [4] auf ein freies Hof-Feld gesetzt entsteht ein Generator (1 Feld). Seine Kuppel deckt den ganzen Ring plus ein Feld: Truppen darunter nehmen 40 % weniger Schaden, Steine der Schleuder prallen ab, Schleudern und Rauchwerfer zielen auf Truppen außerhalb. Bricht der Ring auf, erlischt die Kuppel. Pro Hof ein Generator. Ersetzt den Schildturm.

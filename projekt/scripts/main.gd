@@ -90,7 +90,7 @@ var _fabrikmenue: Fabrikmenue        # Tafel an der angeklickten Fabrik: Truppe 
 var _nachspiel := 0.0               # Sekunden, die nach dem letzten Gegner noch für die Rückeroberung liefen
 var _kampf_sek := 0.0               # Spielzeit seit Rundenbeginn
 var _im_flug := 0                   # geworfene Hunde, die noch in der Luft sind
-var _tempo_faktor := 1.0            # 1 oder 2 (Taste F), wird mit Werte.SPIELTEMPO multipliziert
+var _tempo_faktor := 1.0            # 1, 2 oder 3 (Taste F schaltet weiter), wird mit Werte.SPIELTEMPO multipliziert
 var _spawn_in := 0.0
 var _turm_abkling: Dictionary = {}  # Turm-Zelle -> Sekunden bis zum nächsten Schuss
 var _meldung := ""
@@ -268,6 +268,13 @@ func _lade_phantom_stand() -> void:
 			karte.fabrik_stufe[z] = stufe
 		if f.has("faehigkeit"):
 			fabriken[z]["faehigkeit"] = str(f["faehigkeit"])
+	for g: Array in stand.get("generatoren", []):
+		var gz := Vector2i(int(g[0]), int(g[1]))
+		var gp := Vector2i(int(g[2]), int(g[3]))
+		karte.generator_paar[gz] = gp
+		karte.generator_paar[gp] = gz
+		karte.setze(gz, Karte.GENERATOR)
+		karte.setze(gp, Karte.GENERATOR)
 	for b: Dictionary in stand["batterien"]:
 		var z := Vector2i(int(b["x"]), int(b["y"]))
 		var pz := Vector2i(int(b["px"]), int(b["py"]))
@@ -505,7 +512,7 @@ func _angriff_bestaetigt() -> void:
 # -------------------------------------------------------------- Bauprotokoll
 # -------------------------------------------------------------- Bauprotokoll
 
-const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor", Karte.PANZER: "panzer", Karte.SPIEGEL: "spiegel", Karte.MAGNET: "magnet"}
+const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor", Karte.PANZER: "panzer", Karte.SPIEGEL: "spiegel", Karte.MAGNET: "magnet", Karte.GENERATOR: "generator"}
 
 
 func _beginne_protokoll() -> void:
@@ -684,6 +691,7 @@ func _spawn_zelle() -> Vector2i:
 # ------------------------------------------------------------------ Ablauf
 
 func _process(delta: float) -> void:
+	schadensquelle = ""   # wer gerade Schaden macht, setzt sich selbst (Truppe, Turm, Batterie, Brandfeld)
 	_aktualisiere_vorschau()
 	_aktualisiere_sichtanzeige()
 	_aktualisiere_hud(delta)
@@ -959,8 +967,12 @@ func _tuerme_feuern(delta: float) -> void:
 			continue   # kein Turm, lahmgelegt oder ohne Stützen
 		var art_name: String = karte.turm_art.get(z, "geschuetz")
 		if art_name == "funk":
-			continue   # der Funkturm schießt nicht selbst (siehe funk_faktor)
+			continue   # schießt nicht selbst (siehe funk_faktor)
+		if art_name == "heil":
+			_heilturm(z, delta)
+			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
+		schadensquelle = "turm:" + art_name
 		var weite: float = float(art["reichweite"]) * Werte.ZELLE
 		var farbe := Color(art["farbe"])
 		var rest: float = _turm_abkling.get(z, 0.0) - delta
@@ -975,8 +987,9 @@ func _tuerme_feuern(delta: float) -> void:
 						effekte.flaeche(von, weite, farbe)
 						for g in gegner.duplicate():
 							if is_instance_valid(g) and not _geschuetzt(g) and von.distance_to(g.position) <= weite and karte.sicht_von_wall(z, von, g.position):
-								g.gebremst = maxf(g.gebremst, float(art["bremse_sek"]))
-								g.nimm_schaden(float(art["schaden"]))
+								g.gefroren = maxf(g.gefroren, float(art["bremse_sek"]))
+								if float(art["schaden"]) > 0.0:
+									g.nimm_schaden(float(art["schaden"]))
 					"lanze":
 						# Strahl in gerader Linie bis zum Ende der Reichweite: trifft alles in der Linie
 						var ende := von + (ziel.position - von).normalized() * weite
@@ -1077,7 +1090,7 @@ func _aktualisiere_weganzeige(delta: float) -> void:
 				quellen.append([karte.mitte(z), 4.0 * Werte.ZELLE])
 			Karte.TURM:
 				var art: String = karte.turm_art.get(z, "geschuetz")
-				if art != "funk":
+				if not art in ["funk", "heil"]:
 					quellen.append([karte.mitte(z), float(Werte.TURMARTEN[art]["reichweite"]) * Werte.ZELLE])
 	for z: Vector2i in karte.feld:
 		if karte.feld[z] == Karte.BATTERIE:
@@ -1092,6 +1105,30 @@ func _aktualisiere_weganzeige(delta: float) -> void:
 	_lbl_weg.text = "Gegnerweg %d Felder · +%d durch deine Bauten · %d unter Beschuss" % [weg.size() - 1, umweg, beschossen]
 	_weg_grund.size.x = _lbl_weg.get_minimum_size().x + 20.0
 	_weg_grund.position.x = get_viewport_rect().size.x - _weg_grund.size.x
+
+
+## Heilturm: alle paar Sekunden eigene Truppen im Umkreis heilen.
+func _heilturm(z: Vector2i, delta: float) -> void:
+	var art: Dictionary = Werte.TURMARTEN["heil"]
+	var rest: float = _turm_abkling.get(z, 0.0) - delta
+	if rest <= 0.0:
+		rest = float(art["abklingzeit"])
+		var m := karte.mitte(z)
+		var weite := float(art["reichweite"]) * Werte.ZELLE
+		var geheilt := false
+		for e in einheiten:
+			if is_instance_valid(e) and not e.in_batterie() and e.leben < e.max_leben and m.distance_to(e.position) <= weite:
+				e.leben = minf(e.max_leben, e.leben + float(art["heilung"]))
+				e.queue_redraw()
+				geheilt = true
+		if geheilt:
+			effekte.flaeche(m, weite, Color(art["farbe"]))
+	_turm_abkling[z] = rest
+
+
+## Schildkuppel: Faktor auf den Schaden, den eine eigene Truppe an `punkt` nimmt (1.0 = keine Kuppel).
+func schild_faktor(punkt: Vector2) -> float:
+	return 1.0 - Werte.KUPPEL_SCHUTZ if karte.in_kuppel(punkt) else 1.0
 
 
 ## Funkturm: Truppen in Stellungen in seinem Umkreis feuern schneller. Faktor auf ihre Pause (1.0 = kein Funkturm in der Nähe).
@@ -1139,6 +1176,7 @@ func _batterien_feuern(delta: float) -> void:
 			if bestes != null:
 				rest = Werte.BATTERIE["abklingzeit"]
 				schuss(von, bestes.position, Color("7fe0ff"))
+				schadensquelle = "batterie:%d,%d" % [z.x, z.y]
 				flaechenschaden(bestes.position, radius, float(Werte.BATTERIE["schaden"]) * (Werte.BATTERIE_ST2_SCHADEN if stufe >= 2 else 1.0), Color("7fe0ff"))
 		_turm_abkling[z] = maxf(rest, 0.0) if rest <= 0.0 else rest
 
@@ -1218,7 +1256,7 @@ func abpraller(erstes: Gegner, radius: float, schaden: float, farbe: Color) -> v
 var _braende: Array = []   # [Mitte, Radius, Restzeit, Schaden je Sekunde]
 
 func lege_brand(mitte: Vector2, radius: float, schaden_je_sek: float) -> void:
-	_braende.append([mitte, radius, Werte.BRANDFELD_SEK, schaden_je_sek])
+	_braende.append([mitte, radius, Werte.BRANDFELD_SEK, schaden_je_sek, schadensquelle])
 	effekte.brand(mitte, radius, Werte.BRANDFELD_SEK)
 
 
@@ -1226,6 +1264,7 @@ func _braende_wirken(delta: float) -> void:
 	_spielzeit += delta
 	for b: Array in _braende:
 		b[2] -= delta
+		schadensquelle = str(b[4]) if b.size() > 4 else ""
 		for g in gegner.duplicate():
 			if not _geschuetzt(g) and (b[0] as Vector2).distance_to(g.position) <= float(b[1]):
 				g.nimm_schaden(float(b[3]) * delta)
@@ -1268,6 +1307,8 @@ func starte_welle() -> void:
 	_bezahlt.clear()   # ab jetzt gilt für alles Gebaute die normale Erstattung
 	_abriss_merk = Karte.KEINE
 	phase = Phase.KAMPF
+	runde_stats.clear()   # Schadensliste [Tab]: zählt je Runde neu
+	runde_stats_welle = welle
 	werkzeug = Karte.FREI
 	_runde_start_ms = Time.get_ticks_msec()
 	_leben_vor_runde = leben
@@ -1855,7 +1896,7 @@ func schleuderziel(von: Vector2, weite: float) -> Variant:
 	var bestes: Variant = null
 	var beste := weite * weite
 	for e in einheiten:
-		if not e.in_stellung():
+		if not e.in_stellung() or karte.in_kuppel(e.position):
 			continue
 		var d := von.distance_squared_to(e.position)
 		if d <= beste:
@@ -1868,7 +1909,7 @@ func schleuderziel(von: Vector2, weite: float) -> Variant:
 	if haufen != null:
 		return haufen
 	for z: Vector2i in karte.feld:
-		if (karte.feld[z] != Karte.FABRIK and karte.feld[z] != Karte.BATTERIE) or karte.ausgefallen.has(z):
+		if (karte.feld[z] != Karte.FABRIK and karte.feld[z] != Karte.BATTERIE) or karte.ausgefallen.has(z) or karte.in_kuppel(karte.mitte(z)):
 			continue
 		var d := von.distance_squared_to(karte.mitte(z))
 		if d <= beste:
@@ -1883,7 +1924,7 @@ func haufen_ziel(von: Vector2, weite: float, ohne_rauch: bool = false) -> Varian
 	var meiste := Werte.HAUFEN_MIN - 1
 	var radius := Werte.HAUFEN_RADIUS * Werte.ZELLE
 	for e in einheiten:
-		if not e.bodentruppe() or von.distance_to(e.position) > weite or (ohne_rauch and effekte.im_rauch(e.position)):
+		if not e.bodentruppe() or von.distance_to(e.position) > weite or (ohne_rauch and effekte.im_rauch(e.position)) or karte.in_kuppel(e.position):
 			continue
 		var n := 0
 		for f in einheiten:
@@ -1895,7 +1936,17 @@ func haufen_ziel(von: Vector2, weite: float, ohne_rauch: bool = false) -> Varian
 	return bestes
 
 
+## Ein Stein, der unter einer Schildkuppel einschlagen würde, prallt ab.
+func _prallt_ab(punkt: Vector2) -> bool:
+	if not karte.in_kuppel(punkt):
+		return false
+	effekte.flaeche(punkt, 18.0, Color(0.6, 0.85, 1.0))
+	return true
+
+
 func _einschlag_haufen(punkt: Vector2) -> void:
+	if _prallt_ab(punkt):
+		return
 	var radius := Werte.HAUFEN_RADIUS * Werte.ZELLE
 	effekte.flaeche(punkt, radius, Color("c9a26b"))
 	if OS.get_environment("TD_WURF_LOG") != "":
@@ -1935,6 +1986,8 @@ func wurf(von: Zonenbau, ziel: Variant) -> void:
 
 
 func _einschlag_gebaeude(zelle: Vector2i) -> void:
+	if _prallt_ab(karte.mitte(zelle)):
+		return
 	if karte.inhalt(zelle) == Karte.FABRIK or karte.inhalt(zelle) == Karte.BATTERIE:
 		karte.beschiesse(zelle, Werte.SCHLEUDER["schaden_fabrik"])   # fällt für die Runde aus, wird nicht zerstört
 
@@ -1943,12 +1996,62 @@ func _einschlag_einheit(kennung: int) -> void:
 	if not is_instance_id_valid(kennung):
 		return
 	var e := instance_from_id(kennung) as Einheit
+	if e != null and _prallt_ab(e.position):
+		return
 	if e != null and einheiten.has(e) and e.in_stellung():
 		e.nimm_schaden(Werte.SCHLEUDER["schaden_einheit"])
 
 
 func schuss(von: Vector2, nach: Vector2, farbe: Color) -> void:
 	effekte.linie(von, nach, farbe)
+
+
+# ------------------------------------------------------------ Schadensliste [Tab]
+# Jeder Treffer an einem Gegner wird der Quelle gutgeschrieben, die gerade feuert: eine Fabrik (alle ihre Truppen),
+# eine Turmart oder eine Batterie. Gezählt wird nur Schaden, der wirklich Leben nimmt (kein Überschuss beim letzten Treffer).
+var schadensquelle := ""
+var runde_stats: Dictionary = {}    # Quelle -> {"schaden", "kills", "name", "blatt", "zelle", "farbe"}
+var gesamt_stats: Dictionary = {}   # dasselbe über die ganze Partie
+var runde_stats_welle := 0          # zu welcher Runde runde_stats gehört
+
+func zaehle_schaden(menge: float, getoetet: bool) -> void:
+	if schadensquelle == "" or menge <= 0.0:
+		return
+	for tabelle: Dictionary in [runde_stats, gesamt_stats]:
+		if not tabelle.has(schadensquelle):
+			tabelle[schadensquelle] = {"schaden": 0.0, "kills": 0}
+		var e: Dictionary = tabelle[schadensquelle]
+		e["schaden"] = float(e["schaden"]) + menge
+		if getoetet:
+			e["kills"] = int(e["kills"]) + 1
+		e.merge(_quelle_info(schadensquelle), true)
+
+
+## Name und Bild einer Schadensquelle (für die Liste). Eine Fabrik zeigt ihre Truppe, Stufe und Fähigkeit.
+func _quelle_info(quelle: String) -> Dictionary:
+	var teile := quelle.split(":")
+	match teile[0]:
+		"fabrik":
+			var xy := teile[1].split(",")
+			var z := Vector2i(int(xy[0]), int(xy[1]))
+			if not fabriken.has(z):
+				return {}
+			var f: Dictionary = fabriken[z]
+			var d: Dictionary = Werte.EINHEITEN[f["typ"]]
+			var name: String = d["name"]
+			var stufe := int(f.get("stufe", 0))
+			if stufe > 0:
+				name += " · Stufe %d" % stufe
+			var fae := str(f.get("faehigkeit", ""))
+			if fae != "" and Werte.STUFE_3.has(f["typ"]) and (Werte.STUFE_3[f["typ"]] as Dictionary).has(fae):
+				name += " · " + str(Werte.STUFE_3[f["typ"]][fae]["name"])
+			return {"name": name, "blatt": d["blatt"], "zelle": d["zelle"]}
+		"turm":
+			var art: Dictionary = Werte.TURMARTEN.get(teile[1], Werte.TURMARTEN["geschuetz"])
+			return {"name": art["name"] + " (alle)", "farbe": art["farbe"]}
+		"batterie":
+			return {"name": "Batterie", "blatt": Werte.BATTERIE["blatt"], "zelle": Werte.BATTERIE["zelle"]}
+	return {"name": quelle}
 
 
 func gegner_besiegt(g: Gegner) -> void:
@@ -2181,7 +2284,7 @@ func rauchziel(von: Vector2, weite: float) -> Variant:
 		var stelle := karte.mitte(g.sprengt())
 		var naechste := INF
 		for e in einheiten:
-			if not e.in_stellung() or von.distance_to(e.position) > weite or effekte.im_rauch(e.position):
+			if not e.in_stellung() or von.distance_to(e.position) > weite or effekte.im_rauch(e.position) or karte.in_kuppel(e.position):
 				continue
 			var d := e.position.distance_to(stelle)
 			if d <= 4.0 * Werte.ZELLE and d < naechste:
@@ -2190,7 +2293,7 @@ func rauchziel(von: Vector2, weite: float) -> Variant:
 		if bestes != null:
 			return bestes
 	for e in einheiten:
-		if not e.in_stellung() or von.distance_to(e.position) > weite or effekte.im_rauch(e.position):
+		if not e.in_stellung() or von.distance_to(e.position) > weite or effekte.im_rauch(e.position) or karte.in_kuppel(e.position):
 			continue
 		var n := 0
 		for f in einheiten:
@@ -2306,6 +2409,8 @@ func kosten(typ: int) -> int:
 			return Werte.KOSTEN_SPIEGEL
 		Karte.MAGNET:
 			return Werte.KOSTEN_MAGNET
+		Karte.GENERATOR:
+			return Werte.KOSTEN_GENERATOR
 		Karte.BATTERIE:
 			return Werte.KOSTEN_BATTERIE
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
@@ -2345,8 +2450,14 @@ func _ist_ausbau(typ: int) -> bool:
 	return typ == Karte.STELLUNG or typ == Karte.TURM or typ == Karte.TOR or typ == Karte.SPIEGEL or typ == Karte.MAGNET
 
 
+## Mit dem Turm-Werkzeug [4] auf ein freies Feld: dort entsteht ein Schildgenerator (nur in einem Hof).
+func bautyp(z: Vector2i, typ: int) -> int:
+	return Karte.GENERATOR if typ == Karte.TURM and karte.inhalt(z) == Karte.FREI else typ
+
+
 ## Leerer Text = Bauen erlaubt, sonst der Grund, warum nicht.
 func bau_hindernis(z: Vector2i, typ: int) -> String:
+	typ = bautyp(z, typ)
 	if phantom_modus == "angriff":
 		return "Im Angriff baut der Verteidiger. Du planst die Welle im Taktikplaner [L]."
 	if phase == Phase.KAMPF and endkampf and typ != Karte.STELLUNG:
@@ -2363,7 +2474,16 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 		return "Gebaut wird zwischen den Wellen."
 	if typ != Karte.FABRIK and welle < Werte.WAELLE_AB_WELLE and not sandbox:
 		return "Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE
-	if typ == Karte.PANZER:
+	if typ == Karte.GENERATOR:
+		var hof := karte.hof_von(z)
+		if hof.is_empty():
+			return "Turm auf freiem Feld = Schildgenerator: nur in einem Hof (2–%d freie Felder, rundum von Erdwällen eingeschlossen)." % Werte.HOF_MAX
+		if not karte.ist_frei(z):
+			return "Der Generator braucht ein freies Feld im Hof."
+		for c: Vector2i in hof:
+			if karte.inhalt(c) == Karte.GENERATOR:
+				return "In diesem Hof steht schon ein Schildgenerator."
+	elif typ == Karte.PANZER:
 		if karte.inhalt(z) != Karte.WALL:
 			return "Panzerung geht nur auf einem Erdwall."
 		if karte.panzer.has(z):
@@ -2382,6 +2502,7 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 
 
 func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
+	typ = bautyp(z, typ)
 	var grund := bau_hindernis(z, typ)
 	if grund != "":
 		if not still:
@@ -2400,6 +2521,12 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if typ == Karte.PANZER:
 		karte.panzer[z] = true
 		karte.queue_redraw()
+		return true
+	if typ == Karte.GENERATOR:
+		karte.generator_paar[z] = z   # ein Feld: Partner ist er selbst
+		karte.setze(z, Karte.GENERATOR)
+		if not still:
+			melde("Schildgenerator: Die Kuppel deckt den ganzen Ring. Truppen darunter nehmen 40 % weniger Schaden, Steine und Rauch prallen ab.", 6.0)
 		return true
 	if typ == Karte.MAGNET:
 		var r := PAAR_RICHTUNGEN[_paar_richtung]
@@ -2490,6 +2617,11 @@ func reisse_ab(z: Vector2i) -> bool:
 		fabriken.erase(partner)
 		_bezahlt.erase(partner)
 		karte.entferne(partner)
+	if karte.generator_paar.has(z):
+		var teil: Vector2i = karte.generator_paar[z]
+		if teil != z:
+			_bezahlt.erase(teil)
+			karte.entferne(teil)
 	fabriken.erase(z)
 	_bezahlt.erase(z)
 	_gratis.erase(z)
@@ -2504,11 +2636,11 @@ func _rechtsklick_abriss(z: Vector2i) -> bool:
 	if phantom_modus == "angriff" or phase != Phase.BAU or karte.inhalt(z) == Karte.FREI:
 		return false
 	var war: int = karte.inhalt(z)
-	var teuer: bool = war == Karte.FABRIK or war == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM
+	var teuer: bool = war == Karte.FABRIK or war == Karte.BATTERIE or war == Karte.GENERATOR or karte.ausbau.get(z, Karte.FREI) == Karte.TURM
 	if teuer and (_abriss_merk != z or Time.get_ticks_msec() - _abriss_ms > ABRISS_FRIST_MS):
 		_abriss_merk = z
 		_abriss_ms = Time.get_ticks_msec()
-		var name := "Turm" if war == Karte.WALL else ("Batterie" if karte.paar.has(z) else "Fabrik")
+		var name := "Turm" if war == Karte.WALL else ("Schildgenerator" if war == Karte.GENERATOR else ("Batterie" if karte.paar.has(z) else "Fabrik"))
 		melde("%s abreißen? Nochmal rechts klicken (+%d Budget zurück)." % [name, erstattung(z)], ABRISS_FRIST_MS / 1000.0)
 		return true
 	return reisse_ab(z)
@@ -2556,7 +2688,7 @@ func _aktualisiere_sichtanzeige() -> void:
 		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -14), z, float(Werte.TURMARTEN[karte.turm_art.get(z, "geschuetz")]["reichweite"]))
 	elif art == Karte.STELLUNG:
 		var scharf: Dictionary = Werte.EINHEITEN["scharfschuetze"]
-		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -12), z, scharf["reichweite"] + Werte.stellung_bonus(scharf))
+		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -12), z, scharf["reichweite"] + karte.posten_bonus(z, scharf))
 	else:
 		karte.zeige_sicht(false)
 
@@ -2753,7 +2885,7 @@ func waehle(typ: int) -> void:
 
 
 func _tempo_umschalten() -> void:
-	_tempo_faktor = 1.0 if _tempo_faktor > 1.5 else 2.0
+	_tempo_faktor = _tempo_faktor + 1.0 if _tempo_faktor < 2.5 else 1.0   # ×1 → ×2 → ×3 → ×1
 	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 
 
@@ -2778,10 +2910,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				waehle(Karte.TOR)
 			KEY_7:
 				waehle(Karte.PANZER)
-			KEY_8:
-				waehle(Karte.SPIEGEL)
-			KEY_9:
-				waehle(Karte.MAGNET)
 			KEY_SPACE:
 				starte_welle()
 			KEY_L:
@@ -2878,7 +3006,7 @@ func _aktualisiere_vorschau() -> void:
 	karte.vorschau_partner = partner_feld(z) if werkzeug == Karte.BATTERIE else Karte.KEINE
 	karte.vorschau_richtung = PAAR_RICHTUNGEN[_paar_richtung]
 	if phase != Phase.ENDE and werkzeug != Karte.FREI:
-		karte.setze_vorschau(z, werkzeug, bau_hindernis(z, werkzeug) == "")
+		karte.setze_vorschau(z, bautyp(z, werkzeug), bau_hindernis(z, werkzeug) == "")
 	else:
 		karte.setze_vorschau(Karte.KEINE, Karte.FREI, false)
 
@@ -2985,9 +3113,9 @@ func _aktualisiere_hud(delta: float) -> void:
 	elif werkzeug == Karte.STELLUNG:
 		text = "Stellung: Ausbau eines Erdwalls. Eine Einheit steht oben, schießt weiter und über Wälle hinweg."
 	elif werkzeug == Karte.TURM:
-		text = "Turm: Die Form bestimmt den Typ – Ecke = Frost, gerade = Lanze, T-Stück = Geschütz, Kreuzung = Funk. [I] zeigt alle."
+		text = "Turm: Die Form der Nachbarwälle bestimmt den Typ (die Vorschau nennt ihn). [I] → Bauten zeigt alle Formen."
 	elif werkzeug == Karte.SPIEGEL:
-		text = "Spiegel: Bodentruppen, die ihn sehen, schießen über ihn um die Ecke (beide Strecken zusammen in ihrer Reichweite)."
+		text = "Spiegel: nur an Wallenden. Bodentruppen schießen über ihn um die Ecke (helle Felder)."
 	elif werkzeug == Karte.MAGNET:
 		text = "Magnet: zieht alle %d s die Gegner in seiner Linie (%d Felder) heran. [T] dreht die Richtung." % [int(Werte.MAGNET["abklingzeit"]), int(Werte.MAGNET["laenge"])]
 	elif werkzeug == Karte.PANZER:
@@ -3040,8 +3168,6 @@ func _baue_hud() -> void:
 		[Karte.BATTERIE, "[5] Batterie %d" % Werte.KOSTEN_BATTERIE, ""],
 		[Karte.TOR, "[6] Tor %d" % Werte.KOSTEN_TOR, ""],
 		[Karte.PANZER, "[7] Panzer %d" % Werte.KOSTEN_PANZER, ""],
-		[Karte.SPIEGEL, "[8] Spiegel %d" % Werte.KOSTEN_SPIEGEL, ""],
-		[Karte.MAGNET, "[9] Magnet %d" % Werte.KOSTEN_MAGNET, ""],
 	]:
 		var typ: int = eintrag[0]
 		var muster: String = eintrag[2] if eintrag[2] != "" else eintrag[1]
@@ -3052,7 +3178,8 @@ func _baue_hud() -> void:
 		_knoepfe[typ] = b
 		x += w + 4.0
 	_btn_tempo = _knopf(unten, breite - 74, 66, _tempo_umschalten, false)
-	_btn_start = _knopf(unten, breite - 230, 150, starte_welle, false)
+	_btn_start = _knopf(unten, breite - 216, 138, starte_welle, false)
+	_btn_start.add_theme_font_size_override("font_size", 13)
 	_btn_start.text = "[Leertaste] Start"
 
 	# Zinsanzeige wie in Teamfight Tactics: ein Feld je Zinsschritt, gefüllt = schon erreicht
@@ -3061,17 +3188,17 @@ func _baue_hud() -> void:
 	for i in Werte.ZINS_STUFEN:
 		var rahmen := ColorRect.new()
 		rahmen.color = Color("3a3344")
-		rahmen.position = Vector2(x + 36 + i * 20, 12)
-		rahmen.size = Vector2(16, 16)
+		rahmen.position = Vector2(x + 34 + i * 15, 13)
+		rahmen.size = Vector2(13, 13)
 		rahmen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		unten.add_child(rahmen)
 		var feld := ColorRect.new()
 		feld.position = Vector2(2, 2)
-		feld.size = Vector2(12, 12)
+		feld.size = Vector2(9, 9)
 		feld.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		rahmen.add_child(feld)
 		_zins_felder.append(feld)
-	_lbl_zins = _label(unten, Vector2(x + 36 + Werte.ZINS_STUFEN * 20 + 2, 11), 13, Color("ffd34d"))
+	_lbl_zins = _label(unten, Vector2(x + 36 + Werte.ZINS_STUFEN * 15 + 3, 11), 13, Color("ffd34d"))
 
 	# Hinweiszeile liegt halb durchsichtig am unteren Rand der Karte
 	_hinweis_grund = ColorRect.new()
@@ -3105,6 +3232,9 @@ func _baue_hud() -> void:
 	_btn_menue = _knopf(oben, breite - 110, 104, _abbruch_klick, false)
 	_btn_menue.text = "Hauptmenü"
 	_btn_menue.add_theme_font_size_override("font_size", 14)
+	var liste: Control = preload("res://scripts/schadensliste.gd").new()
+	liste.spiel = self
+	ebene.add_child(liste)
 	_fabrikmenue = Fabrikmenue.new()
 	_fabrikmenue.spiel = self
 	ebene.add_child(_fabrikmenue)

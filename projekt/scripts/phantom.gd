@@ -217,6 +217,11 @@ static func _wende_an(zellen: Dictionary, schilde: Dictionary, a: Dictionary) ->
 				zellen[z] = {"typ": "wall"}
 			elif typ == "fabrik":
 				zellen[z] = {"typ": "fabrik", "einheit": Werte.FABRIK_EINHEITEN[0], "stufe": 0}
+			elif typ == "generator":
+				var gp := Vector2i(int(a["px"]), int(a["py"])) if a.has("px") else z
+				zellen[z] = {"typ": "generator", "partner": gp}
+				if gp != z:
+					zellen[gp] = {"typ": "generator_teil", "partner": z}
 			elif typ == "batterie":
 				var pz := Vector2i(int(a["px"]), int(a["py"]))
 				zellen[z] = {"typ": "batterie", "partner": pz}
@@ -245,6 +250,7 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 	var waelle: Array = []
 	var fabriken: Array = []
 	var batterien: Array = []
+	var generatoren: Array = []
 	var felder: Array = zellen.keys()
 	felder.sort_custom(func(a: Vector2i, b: Vector2i): return a.x < b.x or (a.x == b.x and a.y < b.y))
 	for z: Vector2i in felder:
@@ -259,13 +265,16 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 				if c.has("partner"):
 					f["batterie"] = [c["partner"].x, c["partner"].y]
 				fabriken.append(f)
+			"generator":
+				var gp: Vector2i = c["partner"]
+				generatoren.append([z.x, z.y, gp.x, gp.y])
 			"batterie":
 				var pz: Vector2i = c["partner"]
 				var b := {"x": z.x, "y": z.y, "px": pz.x, "py": pz.y, "stufe": int(zellen[pz]["stufe"]) if zellen.has(pz) else 0}
 				if schilde.has(z):
 					b["schild"] = [schilde[z].x, schilde[z].y]
 				batterien.append(b)
-	return {"waelle": waelle, "fabriken": fabriken, "batterien": batterien}
+	return {"waelle": waelle, "fabriken": fabriken, "batterien": batterien, "generatoren": generatoren}
 
 
 ## Kurzfassung eines Plans für die Vorschau des Verteidigers: Trupps in Reihenfolge.

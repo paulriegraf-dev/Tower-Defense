@@ -85,7 +85,7 @@ const FAHNE_BONUS: float = 1.3             # Fahnenträger im Trupp oder Fahnens
 const SPRENGER_AB_WELLE: int = 8       # ab hier kommen Sprenger (und die Schleudern wechseln den Platz)
 const SPRENGER_WEG_GEWICHT: float = 0.3   # so stark zählt der Anmarsch: Abkürzung minus Gewicht x Weglänge. 0 = immer der Wall mit der größten Abkürzung
 const SPRENGER_TIEFE: int = 4              # so viele Erdwälle hintereinander reißt eine Sprengung höchstens mit (in gerader Linie; ein Turm stoppt sie)
-const SPRENGER_ZUENDZEIT: float = 2.5     # so lange (Sekunden) steht der Sprenger zündend an seinem Ziel; fällt er vorher, gibt es keine Sprengung
+const SPRENGER_ZUENDZEIT: float = 1.7     # so lange (Sekunden) steht der Sprenger zündend an seinem Ziel; fällt er vorher, gibt es keine Sprengung
 const SPRENGER_MIN_WEG: int = 6           # Erdwälle, die der Sprenger in weniger Schritten erreicht, lässt er aus: die vorderste Front bleibt stehen, und die Verteidigung hat Zeit zum Schießen
 
 # Ansage in der Bauphase vor der Runde, in der etwas zum ersten Mal auftritt.
@@ -163,7 +163,7 @@ const BONUS_JE_CHECKPOINT: int = 20    # zusätzlich je Checkpoint, der am Runde
 # Zinsen wie in Teamfight Tactics: Für je ZINS_SCHRITT Budget, das am Rundenende noch da ist, gibt es ZINS_JE_SCHRITT dazu.
 const ZINS_SCHRITT: int = 100
 const ZINS_JE_SCHRITT: int = 10
-const ZINS_STUFEN: int = 3         # höchstens so viele Schritte zählen (also höchstens 30 Zinsen; vorher 5, bis 14.11.)
+const ZINS_STUFEN: int = 5         # höchstens so viele Schritte zählen (also höchstens 50 Zinsen)
 const BONUS_ZUWACHS: int = 5       # ... plus so viel je Wellennummer
 const BONUS_MITTE_AB: int = 6      # ab dieser Runde wächst der Bonus schneller (Geld für Fabriken UND Upgrades)
 const BONUS_MITTE_ZUWACHS: int = 0 # ... um so viel je Runde zusätzlich (0 = aus; war 8, am 14.11. gestrichen: zu viel Geld zum Sparen)
@@ -300,21 +300,28 @@ const BATTERIE := {
 const GEFAHR_RADIUS: float = 2.0   # Felder: Truppen auf dem Weg zu Stellung/Batterie meiden Felder so nah an Gegnern
 
 # --- Stellungen und Türme ------------------------------------------------
+const WACHPOSTEN_BONUS: float = 1.0  # Stellung auf einem einzelnen Erdwall ohne Nachbarwälle (Streubau): zusätzliche Reichweite
 const POSTEN_REICHWEITE_BONUS: float = 1.0 # Extra-Reichweite von oben, falls eine Einheit keinen eigenen Wert hat ("stellung_bonus")
 const TURM_NACHBARN: int = 3               # so viele angrenzende Erdwälle braucht ein Turm (T-Stück oder Kreuzung)
 # Formtürme: Die Form der freien Nachbarwälle bestimmt, welcher Turm entsteht (Stützregel wie bisher).
-#   Kreuzung (4) = Funkturm · T-Stück (3) = Geschützturm · Ecke (2 über Eck) = Frostturm · gerades Stück (2 gegenüber) = Lanzenturm
+#   Kreuzung (4) = Funkturm · T-Stück (3) = Geschützturm
+#   lange Ecke (Ecke, beide Arme 2 Erdwälle lang) = Frostturm
+#   Klammer (gerades Stück, an beiden Enden biegt die Mauer ab: ⊐) = Lanzenturm
+#   Treppe (keine Nachbarwälle, nur schräg an zwei gegenüberliegenden Ecken) = Heilturm
 const TURMARTEN := {
 	"geschuetz": {"name": "Geschützturm", "form": "T-Stück", "nachbarn": 3, "farbe": "7fe0ff",
 		"reichweite": 3.5, "schaden": 16.0, "abklingzeit": 0.9,
 		"text": "Schießt schnell auf ein Ziel. Der Allrounder."},
-	"frost": {"name": "Frostturm", "form": "Ecke", "nachbarn": 2, "farbe": "bfefff",
-		"reichweite": 3.0, "schaden": 4.0, "abklingzeit": 1.5, "bremse_sek": 2.0,
-		"text": "Frostpuls auf alle Gegner in Reichweite und Sicht: wenig Schaden, aber 2 Sekunden stark verlangsamt."},
+	"frost": {"name": "Frostturm", "form": "Lange Ecke", "nachbarn": 2, "farbe": "bfefff",
+		"reichweite": 3.0, "schaden": 0.0, "abklingzeit": 1.5, "bremse_sek": 1.2, "bremse_tempo": 0.8,
+		"text": "Frostpuls auf alle Gegner in Reichweite und Sicht: kein Schaden, aber 1,2 Sekunden auf 80 % Tempo verlangsamt."},
 	"funk": {"name": "Funkturm", "form": "Kreuzung", "nachbarn": 4, "farbe": "ffd34d",
 		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 0.0, "feuer_faktor": 0.75,
 		"text": "Schießt nicht selbst. Truppen in Stellungen im Umkreis feuern 25 % schneller."},
-	"lanze": {"name": "Lanzenturm", "form": "gerades Stück", "nachbarn": 2, "farbe": "ff8a3d",
+	"heil": {"name": "Heilturm", "form": "Treppe", "nachbarn": 2, "farbe": "7dff9a",
+		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 2.0, "heilung": 8.0,
+		"text": "Schießt nicht. Heilt alle 2 Sekunden eigene Truppen im Umkreis um 8 Leben."},
+	"lanze": {"name": "Lanzenturm", "form": "Klammer", "nachbarn": 2, "farbe": "ff8a3d",
 		"reichweite": 6.0, "schaden": 45.0, "abklingzeit": 4.0, "breite": 0.35,
 		"text": "Langsamer, schwerer Strahl in gerader Linie: trifft alles, was in der Linie steht – ideal für lange Gänge."},
 }
@@ -325,6 +332,13 @@ const MAGNET := {
 	"abklingzeit": 6.0,          # Sekunden zwischen zwei Zügen
 	"zug": 1.5,                  # so weit (Felder) zieht er die Gegner heran – höchstens bis vor den Magneten
 }
+# Schildgenerator: steht in einem Hof (freie Felder, rundum von Erdwällen eingeschlossen) auf einem Feld.
+# Seine Kuppel deckt den ganzen Ring samt Rand: Truppen darunter nehmen weniger Schaden, Steine der Schleuder und Rauch prallen ab.
+const KOSTEN_GENERATOR: int = 150
+const HOF_MIN: int = 2             # so viele Felder muss ein Hof mindestens haben (der Generator braucht zwei)
+const HOF_MAX: int = 12            # größere eingeschlossene Flächen zählen nicht als Hof
+const KUPPEL_SCHUTZ: float = 0.4   # Truppen unter der Kuppel nehmen so viel weniger Schaden
+const KUPPEL_RAND: float = 1.0     # Felder: so weit reicht die Kuppel über den äußersten Wall des Rings hinaus
 const KOSTEN_PANZER: int = 30      # Panzerung eines Erdwalls: Die erste Sprengung nimmt nur die Panzerung
 const TURM := {
 	"leben": 90.0,               # so viel Schaden durch Turmtruppen, dann ist er für den Rest der Runde lahmgelegt
