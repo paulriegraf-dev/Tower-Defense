@@ -2,7 +2,7 @@ extends PanelContainer
 ## Sandbox-Leiste (nur im Sandbox-Modus, nur in der Bauphase): Runde wählen, Gegner der nächsten Welle und
 ## Truppen je Fabrik einstellen. Übergangswerkzeug zum Ausprobieren.
 
-const TYPEN := ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung"]
+const TYPEN := ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung", "schild", "sani", "schwarm"]
 
 var spiel: Node
 var _inhalt: VBoxContainer

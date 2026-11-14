@@ -6,7 +6,7 @@ signal zerstoert(zelle: Vector2i, typ: int)
 signal ausgefallen_ist(zelle: Vector2i, typ: int)
 
 ## FREI/WALL/FABRIK stehen im Raster; STELLUNG und TURM sind Ausbauten eines Erdwalls.
-enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE, TOR, PANZER, SPIEGEL, MAGNET, GENERATOR }   # PANZER ist nur Bauwerkzeug; SPIEGEL und MAGNET sind Ausbauten
+enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE, TOR, PANZER, SPIEGEL, MAGNET, GENERATOR, KOMMANDANT }   # PANZER ist nur Bauwerkzeug; SPIEGEL und MAGNET sind Ausbauten
 
 const NACHBARN: Array[Vector2i] = [Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN, Vector2i.RIGHT]
 const KEINE := Vector2i(-1, -1)
@@ -25,7 +25,7 @@ var vorschau_richtung := Vector2i.RIGHT   # Bauvorschau des Magneten
 var panzer: Dictionary = {}        # gepanzerte Erdwälle -> true (die erste Sprengung nimmt nur die Panzerung)
 var stuetzen: Dictionary = {}      # Turm-Zelle -> die Erdwälle, die ihn stützen (Array[Vector2i])
 var stuetze_von: Dictionary = {}   # Erdwall -> Zelle des Turms, den er stützt (jeder Wall stützt höchstens einen)
-var turm_schaden: Dictionary = {}  # Turm-Zelle -> Schaden durch Turmtruppen in dieser Runde
+var turm_schaden: Dictionary = {}  # Turm-Zelle -> Schaden durch Myr-Drohnen in dieser Runde
 var posten: Dictionary = {}        # Stellungs-Zelle -> Einheit, die darauf steht
 var besatzung: Dictionary = {}     # Batterie-Zelle -> Einheiten, die dorthin gehören (unterwegs oder schon drin)
 var fabrik_typ: Dictionary = {}    # Fabrik-Zelle -> Einheitentyp, den sie baut
@@ -500,7 +500,7 @@ func pruefe_stuetzen() -> void:
 			_stuetze_turm(z)
 
 
-## Schießt dieser Turm? Nicht, wenn ihm eine Stütze fehlt oder Turmtruppen ihn in dieser Runde lahmgelegt haben.
+## Schießt dieser Turm? Nicht, wenn ihm eine Stütze fehlt oder Myr-Drohnen ihn in dieser Runde lahmgelegt haben.
 func turm_aktiv(z: Vector2i) -> bool:
 	if ausbau.get(z, FREI) != TURM or turm_lahm(z):
 		return false
@@ -511,7 +511,7 @@ func turm_lahm(z: Vector2i) -> bool:
 	return float(turm_schaden.get(z, 0.0)) >= float(Werte.TURM["leben"])
 
 
-## Turmtruppen beschädigen einen Turm; ist er lahmgelegt, schweigt er bis zum Ende der Runde.
+## Myr-Drohnen beschädigen einen Turm; ist er lahmgelegt, schweigt er bis zum Ende der Runde.
 func schade_turm(z: Vector2i, menge: float) -> void:
 	turm_schaden[z] = float(turm_schaden.get(z, 0.0)) + menge
 
@@ -716,9 +716,15 @@ func finde_posten(von: Vector2i, sucher: Einheit) -> Dictionary:
 		return {}   # Bollwerk kämpft am Boden und lässt die Stellungen den anderen
 	# Kampftruppen gehen nur in Stellungen, Piloten nur in Batterien.
 	var pilot: bool = sucher.daten.get("pilot", false)
+	var erlaubt: Array = sucher.spiel.zugewiesen(sucher.fabrik_zelle) if not pilot else []   # per Pfeil zugewiesene Stellungen
 	for w: Vector2i in ausbau:
 		if pilot or ausbau[w] != STELLUNG:
 			continue
+		if not erlaubt.is_empty() and not erlaubt.has(w):
+			continue
+		var res: Vector2i = sucher.spiel.reserviert_fuer(w)
+		if res != KEINE and res != sucher.fabrik_zelle:
+			continue   # per Pfeil einer anderen Fabrik vorbehalten
 		var weg := _weg_auf_wall(von, w)
 		if weg.is_empty() or weg.size() >= beste_laenge:
 			continue
@@ -1031,46 +1037,36 @@ func wallstueck(w: Vector2i) -> Array[Vector2i]:
 	return stueck
 
 
-## Andockstelle eines Belagerungsturms ab `von`: das erreichbare Wallstück mit den meisten Stellungen.
-## Ergebnis: {"wall": Zelle, "weg": Felder bis zum Nachbarfeld} oder {} (keine Stellung erreichbar).
+## Andockstelle eines Belagerungsturms ab `von` (14.11. neu): immer außerhalb des Gegner-Schildes (der Zone).
+## 1. Wahl: die am schnellsten erreichbare Wallstelle, von der eine Stellung oder ein Turm höchstens ANDOCK_NAH Wallschritte entfernt ist.
+## 2. Wahl: die nächste Wallstelle, von der überhaupt ein Ziel über Wälle erreichbar ist. 3. Wahl: der nächste Erdwall.
+## Ergebnis: {"wall": Zelle, "weg": Felder bis zum Nachbarfeld} oder {} (kein Erdwall erreichbar).
 func andockziel(von: Vector2i) -> Dictionary:
-	var gesehen: Dictionary = {}
-	var stuecke: Array = []      # [Anzahl Stellungen, Zellen]
-	for w: Vector2i in ausbau:
-		if ausbau[w] != STELLUNG or gesehen.has(w):
+	var beste: Array = [{}, {}, {}]
+	for w: Vector2i in feld:
+		if inhalt(w) != WALL or w.x < Werte.ZONE_SPALTEN:
 			continue
-		var stueck := wallstueck(w)
-		var stellungen := 0
-		for z in stueck:
-			gesehen[z] = true
-			if ausbau.get(z, FREI) == STELLUNG:
-				stellungen += 1
-		stuecke.append([stellungen, stueck])
-	stuecke.sort_custom(func(x, y): return x[0] > y[0])
-	for eintrag: Array in stuecke:
-		# Innerhalb des Stücks: dort andocken, wo die meisten Stellungen in der Nähe sind (mitten ins Gefecht),
-		# bei Gleichstand am nächsten erreichbaren Feld.
-		var bestes := {}
-		var beste_nester := -1
-		for w: Vector2i in eintrag[1]:
-			var nester := 0
-			for z: Vector2i in eintrag[1]:
-				if ausbau.get(z, FREI) == STELLUNG and Vector2(z - w).length() <= 2.3:
-					nester += 1
-			if nester < beste_nester:
-				continue
-			var weg := _weg_an_wall(von, w)
-			if weg.is_empty():
-				continue
-			if nester > beste_nester or weg.size() < (bestes["weg"] as Array).size():
-				bestes = {"wall": w, "weg": weg}
-				beste_nester = nester
-		if not bestes.is_empty():
-			return bestes
+		var stufe := 2
+		if enterziel(w):
+			stufe = 0
+		else:
+			var zu_ziel := wall_weg_zur_stellung(w)
+			if not zu_ziel.is_empty():
+				stufe = 0 if zu_ziel.size() - 1 <= Werte.ANDOCK_NAH else 1
+		if not (beste[stufe] as Dictionary).is_empty() and (beste[stufe]["weg"] as Array).size() <= absi(w.x - von.x) + absi(w.y - von.y):
+			continue   # kann nicht kürzer werden
+		var weg := _weg_an_wall(von, w)
+		if weg.is_empty():
+			continue
+		if (beste[stufe] as Dictionary).is_empty() or weg.size() < (beste[stufe]["weg"] as Array).size():
+			beste[stufe] = {"wall": w, "weg": weg}
+	for b: Dictionary in beste:
+		if not b.is_empty():
+			return b
 	return {}
 
 
-## Weg einer Turmtruppe über zusammenhängende Wälle zur nächsten besetzten Stellung (leer = keine erreichbar).
+## Weg einer Myr-Drohne über zusammenhängende Wälle zur nächsten besetzten Stellung (leer = keine erreichbar).
 func wall_weg_zur_stellung(von: Vector2i) -> Array[Vector2i]:
 	var vorgaenger: Dictionary = {von: von}
 	var offen: Array[Vector2i] = [von]
@@ -1091,7 +1087,7 @@ func wall_weg_zur_stellung(von: Vector2i) -> Array[Vector2i]:
 	return []
 
 
-## Lohnt dieses Wallfeld für eine Turmtruppe? Eine Stellung, in der wirklich jemand steht, oder ein laufender Turm.
+## Lohnt dieses Wallfeld für eine Myr-Drohne? Eine Stellung, in der wirklich jemand steht, oder ein laufender Turm.
 func enterziel(z: Vector2i) -> bool:
 	if turm_aktiv(z):
 		return true
@@ -1330,6 +1326,7 @@ func _draw() -> void:
 		_zeichne_leben(z)
 
 	_zeichne_kuppeln()
+	_zeichne_zuweisung()
 	_markiere_durchbrueche(pfad if not zeige_neu else vorschau_pfad, KEINE if not zeige_neu else vorschau_zelle)
 
 	# Kampf: das Ziel eines Sprengers blinkt
@@ -1404,6 +1401,11 @@ func _draw() -> void:
 			_zeichne_magnetlinie(vorschau_zelle, vorschau_richtung, 0.8)
 		elif vorschau_typ == GENERATOR:
 			pass   # oben gezeichnet
+		elif vorschau_typ == KOMMANDANT:
+			var mk := (Vector2(vorschau_zelle) + Vector2(0.5, 0.5)) * zg
+			draw_arc(mk + Vector2(0, 14), 17.0, 0.0, TAU, 24, Color("ffd34d"), 3.0)
+			draw_arc(mk, float(Werte.KOMMANDANT["reichweite"]) * zg, 0.0, TAU, 64, Color(TECH_LICHT, 0.6), 2.0)
+			draw_string(ThemeDB.fallback_font, Vector2(vorschau_zelle) * zg + Vector2(-20, -6), "Brakk", HORIZONTAL_ALIGNMENT_CENTER, zg + 40, 14, Color("ffd34d"))
 		elif vorschau_typ == STELLUNG or vorschau_typ == TURM:
 			if vorschau_typ == TURM:
 				# die Stützen, die dieser Turm belegen würde
@@ -1641,6 +1643,46 @@ func _zeichne_generator(z: Vector2i, alpha: float) -> void:
 	var m := (Vector2(z) + Vector2(0.5, 0.45)) * Werte.ZELLE
 	draw_circle(m, 13.0, Color(0.42, 0.72, 1.0, 0.8 * alpha))
 	draw_circle(m, 6.0, Color(0.85, 0.95, 1.0, alpha))
+
+
+## Pfeile der angeklickten Fabrik zu ihren zugewiesenen Stellungen (und der Pfeil, der gerade gezogen wird).
+var zuweis_fabrik := KEINE
+var zuweis_ziele: Array = []
+var zuweis_zug := Vector2.INF   # Mausposition, solange ein Pfeil gezogen wird
+var zuweis_einrast := KEINE     # Stellung, über der die Maus beim Ziehen gerade steht: der Pfeil rastet dort ein
+
+func _zeichne_zuweisung() -> void:
+	if zuweis_fabrik == KEINE:
+		return
+	var zg := float(Werte.ZELLE)
+	var von := (Vector2(zuweis_fabrik) + Vector2(0.5, 0.5)) * zg
+	for w in zuweis_ziele:
+		_einrastrahmen(w, Color("ffd34d"))
+		_pfeil(von, (Vector2(w) + Vector2(0.5, 0.5)) * zg, Color("ffd34d"))
+	if zuweis_einrast != KEINE:
+		_einrastrahmen(zuweis_einrast, Color(1, 1, 1, 0.9))
+		_pfeil(von, (Vector2(zuweis_einrast) + Vector2(0.5, 0.5)) * zg, Color(1, 0.95, 0.7, 0.9))
+	elif zuweis_zug != Vector2.INF:
+		_pfeil(von, zuweis_zug - position, Color(1, 0.83, 0.3, 0.5))
+
+
+## Fest zugewiesene Stellung: Rahmen mit Ecken ("eingerastet").
+func _einrastrahmen(w: Vector2i, farbe: Color) -> void:
+	var o := Vector2(w) * float(Werte.ZELLE)
+	draw_rect(Rect2(o + Vector2(3, 3), Vector2(58, 58)), farbe, false, 2.0)
+	for e: Vector2 in [Vector2(3, 3), Vector2(51, 3), Vector2(3, 51), Vector2(51, 51)]:
+		draw_rect(Rect2(o + e, Vector2(10, 10)), farbe)
+
+
+func _pfeil(von: Vector2, nach: Vector2, farbe: Color) -> void:
+	var r := (nach - von)
+	if r.length() < 8.0:
+		return
+	var n := r.normalized()
+	var spitze := nach - n * 14.0
+	draw_line(von + n * 18.0, spitze, farbe, 3.0)
+	var q := Vector2(-n.y, n.x)
+	draw_colored_polygon(PackedVector2Array([nach - n * 4.0, spitze - n * 6.0 + q * 7.0, spitze - n * 6.0 - q * 7.0]), farbe)
 
 
 func _zeichne_kuppeln() -> void:

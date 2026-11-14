@@ -373,7 +373,7 @@ func _bild(d: Dictionary, reihe: int = 1, faktor: float = 1.0) -> Dictionary:
 
 func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 	var d: Dictionary = Werte.GEGNER[id]
-	var w: Array = [["Leben", _z(d["leben"])], ["Tempo", _z(d["tempo"])]]
+	var w: Array = [["Leben", _z(float(d["leben"]) + Werte.GEGNER_GRUND_LEBEN)], ["Tempo", _z(d["tempo"])]]
 	if d["reichweite"] > 0.0:
 		w.append(["Reichweite", _z(d["reichweite"])])
 	if d["schaden"] > 0.0:
@@ -422,7 +422,7 @@ func _turmkarte(art: String, extra: Array) -> Dictionary:
 			"Welcher Turm entsteht, entscheidet die Form der Erdwälle drumherum: T-Stück = Geschütz, Kreuzung = Funk, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilung. Ein schlichtes gerades Stück oder eine kurze Ecke trägt keinen Turm. Die Vorschau nennt den Turm.",
 			"Stützregel: Diese Erdwälle dürfen keinen anderen Turm stützen. Stellungen darauf sind erlaubt.",
 			"Schießt ohne Truppe und auch im Rauch. Sicht wie aus einer Stellung. Sein Erdwall hält Sprengern stand.",
-			"Turmtruppen können ihn lahmlegen – dann schweigt er bis zum Rundenende."]]]}
+			"Myr-Drohnen können ihn lahmlegen – dann schweigt er bis zum Rundenende."]]]}
 
 
 func _baue_daten() -> void:
@@ -438,6 +438,8 @@ func _baue_daten() -> void:
 		_gegner("sphaere", "ab Runde 3", [
 			"Fernkämpfer, schießt im Laufen.",
 			"Ziele der Reihe nach: Truppen in Stellungen, dann Fabriken und Batterien, dann Bodentruppen.",
+			"An Truppen macht sie %s Schaden, an Gebäuden %s." % [_z(W.GEGNER["sphaere"]["schaden_einheit"]), _z(W.GEGNER["sphaere"]["schaden"])],
+			"Solange sie schießt, läuft sie nur langsam weiter (%d %% Tempo)." % roundi(W.FERNKAMPF_GEFECHT_TEMPO * 100),
 			"Zerschossene Fabriken und Batterien fallen bis zum Rundenende aus."], [
 			"Scharfschützen: mehr Reichweite als die Sphäre.",
 			"Fabriken nicht direkt an den Weg stellen.",
@@ -464,13 +466,29 @@ func _baue_daten() -> void:
 			"Scharfschützen ab Stufe 2 (Klarsicht) schießen auch im Rauch; ein markiertes Ziel treffen alle.",
 			"Batterie mit Schwerer Ladung bläst den Rauch weg."]),
 		_gegner("belagerung", "ab Runde 13", [
-			"Fährt zum Wallstück mit den meisten Stellungen und dockt an.",
-			"Dann springt alle %s Sekunden eine Turmtruppe auf den Wall – bis zu %d zugleich, höchstens %s Sekunden lang." % [_z(W.ENTERER_ABSTAND), W.ENTERER_GLEICHZEITIG, _z(W.BELAGERUNG_SEK)],
+			"Dockt am ersten erreichbaren Erdwall nach der Zone an, an dem Stellungen oder Türme in der Nähe sind (höchstens %d Wallschritte)." % W.ANDOCK_NAH,
+			"Dann springt alle %s Sekunden eine Myr-Drohne auf den Wall – bis zu %d zugleich, höchstens %s Sekunden lang." % [_z(W.ENTERER_ABSTAND), W.ENTERER_GLEICHZEITIG, _z(W.BELAGERUNG_SEK)],
 			"Dockt er an, wirft die Wurf-Schleuder sofort auf die andere Seite."], [
 			"Unterwegs zerstören: langsam, aber sehr zäh.",
 			"Laserstrahl und Zielmarkierung gegen zähe Einzelziele."]),
-		_gegner("enterer", "ab Runde 13", [
-			"Kommt aus dem Belagerungsturm und läuft oben auf zusammenhängenden Erdwällen.",
+		_gegner("schild", "ab Runde 9", [
+			"Trägt einen großen Schild nach vorn: Alles von vorn macht nur %d %% Schaden – auch Batterie, Plasma und Lanze." % roundi(W.SCHILD_FRONT_FAKTOR * 100),
+			"Fläche und Strahlen von vorn fängt er auch für die ab, die direkt hinter ihm gehen.",
+			"Er zieht das Feuer auf sich: Truppen, Türme und Batterien nehmen ihn zuerst ins Visier, egal welche Zielwahl.",
+			"Er geht %s Sekunden vor dem Rest seines Trupps los. Von der Seite und von hinten trifft alles voll." % _z(W.SCHILD_VORLAUF_SEK)], [
+			"Stellungen und Türme seitlich am Gang oder hinter einer Kurve.",
+			"Lanze in einer Klammer am Ende eines Gangs trifft ihn, sobald er abbiegt."]),
+		_gegner("sani", "ab Runde 14", [
+			"Kämpft nicht. Alle %s Sekunden heilt er die Gegner im Umkreis von %s Feldern um %s Leben." % [_z(W.GEGNER["sani"]["abklingzeit"]), _z(W.GEGNER["sani"]["reichweite"]), _z(W.GEGNER["sani"]["heilung"])],
+			"Gebündelte Trupps werden mit ihm deutlich zäher."], [
+			"Zielwahl „Stärkste“ hilft nicht – er hat wenig Leben. Lieber gezielt: Scharfschützen mit Zielmarkierung, Schwere Munition.",
+			"Flächenschaden auf den ganzen Trupp."]),
+		_gegner("schwarm", "ab Runde 12", [
+			"Langsam und zäh. Fällt er, zerfällt er in %d Myr-Drohnen, die am Boden weiterkämpfen." % int(W.GEGNER["schwarm"]["zerfall"])], [
+			"Flächenschaden, Doppelschuss, Frost – alles, was viele kleine Ziele trifft.",
+			"Nicht erst kurz vor dem Ziel fallen lassen: die Drohnen sind schnell."]),
+		_gegner("enterer", "ab Runde 12", [
+			"Kommt aus dem Belagerungsturm und läuft oben auf zusammenhängenden Erdwällen – oder aus einem gefallenen Schwarmgeist, dann kämpft sie am Boden.",
 			"Greift Truppen in Stellungen im Nahkampf an und legt Türme bis zum Rundenende lahm.",
 			"Findet sie kein Ziel, springt sie ab und läuft zur Basis."], [
 			"Getrennte Wallstücke: Sie kommt nur über verbundene Erdwälle.",
@@ -530,6 +548,15 @@ func _baue_daten() -> void:
 			"Stark gegen Rudel, langsam gegen einzelne zähe Gegner."],
 			["Kein Reichweitenbonus – von oben nur der Schuss über die eigenen Erdwälle."]),
 	]
+	var kd: Dictionary = W.KOMMANDANT
+	truppen.append({"name": "Kommandant Brakk", "unter": "Held, einmal pro Partie", "marke": "%d  [8]" % W.KOSTEN_KOMMANDANT, "bild": _bild(kd), "gross": true,
+		"werte": [["Leben", _z(kd["leben"])], ["Tempo", _z(kd["tempo"])], ["Reichweite", _z(kd["reichweite"])], ["Schaden", "2 × " + _z(kd["schaden"])], ["Angriff alle", _z(kd["abklingzeit"]) + " s"]],
+		"abschnitte": [["Steuerung", TITEL, [
+			"[8] und Klick auf ein freies Feld stellt ihn auf (zwischen den Wellen). Mit [W][A][S][D] läufst du mit ihm; er schießt von selbst auf den vordersten Gegner.",
+			"[Q] Sammeln: Bodentruppen im Umkreis von %s Feldern folgen ihm (Abklingzeit %s s). Nochmal [Q] = Losschlagen auf das Feld unter der Maus: %s s lang laufen sie schneller und feuern rascher (danach %s s Pause)." % [_z(kd["sammel_radius"]), _z(kd["sammel_abklingzeit"]), _z(kd["sturm_sek"]), _z(kd["sturm_abklingzeit"])],
+			"[E] Klettern: auf einen angrenzenden Erdwall und wieder herunter (%s s). Oben +%s Reichweite und Sicht über sein Wallstück, er läuft nur auf Erdwällen." % [_z(kd["kletter_abklingzeit"]), _z(kd["wall_bonus"])],
+			"[R] Klonmaschine auf das freie Feld unter der Maus, einmal pro Runde. Wer hindurchgeht, wird einmal geklont – mit seinem aktuellen Leben. Das gilt auch für Gegner! Klone geben keine Prämie und werden nicht nochmal geklont.",
+			"Auf einem verlorenen Checkpoint holt er ihn %s-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder da." % _z(kd["cp_faktor"])]]]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
 	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "bild": _bild(pilot), "gross": true,
 		"werte": [["Leben", _z(pilot["leben"])], ["Tempo", _z(pilot["tempo"])]],
@@ -575,7 +602,7 @@ func _baue_daten() -> void:
 				"Mehr Reichweite von oben: Technogunner +%s, Scharfschütze +%s, Plasmawerfer +%s." % [_z(W.stellung_bonus(W.EINHEITEN["technogunner"])), _z(W.stellung_bonus(W.EINHEITEN["scharfschuetze"])), _z(W.stellung_bonus(W.EINHEITEN["plasmawerfer"]))],
 				"Kein Schuss durch die Lücke zwischen Erdwällen, die sich nur an den Ecken berühren.",
 				"Wachposten: Auf einem einzelnen Erdwall ohne Nachbarwälle reicht jede Truppe noch +%s Felder weiter." % _z(W.WACHPOSTEN_BONUS),
-				"Nahkämpfer am Boden kommen nicht heran. Gefährlich sind Sphären, Schleudern, Rauch und Turmtruppen.",
+				"Nahkämpfer am Boden kommen nicht heran. Gefährlich sind Sphären, Schleudern, Rauch und Myr-Drohnen.",
 				"Darf auch in der Welle gebaut werden, solange kein Gegner in der Nähe ist."]]]},
 		_turmkarte("geschuetz", ["Das ist der bisherige Turm."]),
 		_turmkarte("frost", ["Braucht eine lange Ecke: Der Turm steht im Knick, beide Arme sind mindestens 2 Erdwälle lang.",

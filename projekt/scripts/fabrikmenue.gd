@@ -28,7 +28,7 @@ func _ready() -> void:
 
 
 func oeffne(z: Vector2i) -> void:
-	if not spiel.fabriken.has(z) and not _ist_turm(z):
+	if not spiel.fabriken.has(z) and not _ist_turm(z) and not _ist_generator(z):
 		return
 	zelle = z
 	_stand = ""
@@ -38,6 +38,31 @@ func oeffne(z: Vector2i) -> void:
 
 func _ist_turm(z: Vector2i) -> bool:
 	return spiel.karte.ausbau.get(z, Karte.FREI) == Karte.TURM
+
+
+func _ist_generator(z: Vector2i) -> bool:
+	return spiel.karte.inhalt(z) == Karte.GENERATOR
+
+
+## Werte eines Turms, einer Batterie oder eines Generators über die ganze Partie (wie bei Bloons).
+func _objekt_text(z: Vector2i) -> String:
+	var s: Dictionary = spiel.objekt_stats.get(z, {})
+	var teile: Array = []
+	if float(s.get("schaden", 0.0)) > 0.0 or float(s.get("kills", 0.0)) > 0.0:
+		teile.append("%d Schaden · %d Kills" % [roundi(float(s.get("schaden", 0.0))), int(s.get("kills", 0.0))])
+	if s.has("gebremst"):
+		teile.append("%d Gegner gebremst" % int(s["gebremst"]))
+	if s.has("heilung"):
+		teile.append("%d geheilt" % roundi(float(s["heilung"])))
+	if s.has("gerettet"):
+		teile.append("%d gerettet" % int(s["gerettet"]))
+	if s.has("instand"):
+		teile.append("%d Türme instandgesetzt" % int(s["instand"]))
+	if s.has("abgefangen"):
+		teile.append("%d Schaden abgefangen" % roundi(float(s["abgefangen"])))
+	if s.has("abgewehrt"):
+		teile.append("%d Steine abgewehrt" % int(s["abgewehrt"]))
+	return "Gesamt: " + (" · ".join(teile) if not teile.is_empty() else "noch nichts")
 
 
 func schliesse() -> void:
@@ -58,7 +83,7 @@ func taste(code: int) -> void:
 func _process(_delta: float) -> void:
 	if not visible:
 		return
-	if not spiel.fabriken.has(zelle) and not _ist_turm(zelle):
+	if not spiel.fabriken.has(zelle) and not _ist_turm(zelle) and not _ist_generator(zelle):
 		schliesse()
 		return
 	_baue()
@@ -73,15 +98,41 @@ func _quelle() -> String:
 
 
 func _zeige_stats() -> void:
-	if not is_instance_valid(_lbl_stats) or _ist_turm(zelle):
+	if not is_instance_valid(_lbl_stats):
+		return
+	if _ist_turm(zelle) or _ist_generator(zelle):
+		_lbl_stats.text = _objekt_text(zelle)
 		return
 	var g: Dictionary = spiel.gesamt_stats.get(_quelle(), {})
-	_lbl_stats.text = "Gesamt: %d Schaden · %d Kills" % [roundi(float(g.get("schaden", 0.0))), int(g.get("kills", 0))]
+	var text := "Gesamt: %d Schaden · %d Kills" % [roundi(float(g.get("schaden", 0.0))), int(g.get("kills", 0))]
+	if spiel.karte.paar.has(zelle):
+		var ab := float(spiel.objekt_stats.get(spiel.karte.paar[zelle], {}).get("abgefangen", 0.0))
+		if ab > 0.0:
+			text += " · Schild fing %d ab" % roundi(ab)
+	_lbl_stats.text = text
 
 
 func _baue() -> void:
 	if _ist_turm(zelle):
 		_baue_turm()
+		return
+	if _ist_generator(zelle):
+		if _stand != "generator":
+			_stand = "generator"
+			for kind in _inhalt.get_children():
+				_inhalt.remove_child(kind)
+				kind.queue_free()
+			_truppen_knoepfe = []
+			_upgrade_knopf = null
+			_zeile("Schildgenerator", 17, Color("ffe9a8"))
+			_zeile("Kuppel über dem Hof: Truppen darunter nehmen %d %% weniger Schaden, Steine prallen ab." % roundi(Werte.KUPPEL_SCHUTZ * 100), 12, Color("a79fb3"))
+			if spiel.karte.kuppeln.filter(func(k): return k[2] == zelle).is_empty():
+				_zeile("Kuppel aus: Der Ring ist offen.", 12, Color("ff8a7a"))
+			_zeile("", 13, Color("ffd34d"))
+			_lbl_stats = _inhalt.get_child(_inhalt.get_child_count() - 1)
+			_zeige_stats()
+			reset_size()
+		_setze_ort()
 		return
 	var f: Dictionary = spiel.fabriken[zelle]
 	var stufe := int(f.get("stufe", 0))
@@ -89,7 +140,7 @@ func _baue() -> void:
 	var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if f["typ"] == "pilot" else Werte.KOSTEN_STUFE
 	var naechste := stufe < preise.size()
 	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe]
-	var stand := "%s|%d|%s|%s|%s" % [f["typ"], stufe, bauphase, kann_zahlen, spiel.schilde.size()]
+	var stand := "%s|%d|%s|%s|%s|%s|%d" % [f["typ"], stufe, bauphase, kann_zahlen, spiel.schilde.size(), f.get("ziel", "erste"), spiel.zugewiesen(zelle).size()]
 	if stand == _stand:
 		_setze_ort()
 		return
@@ -115,6 +166,24 @@ func _baue() -> void:
 	_zeile("", 13, Color("ffd34d"))
 	_lbl_stats = _inhalt.get_child(_inhalt.get_child_count() - 1)
 	_zeige_stats()
+	# Zielwahl: wen die Truppen dieser Fabrik zuerst beschießen
+	var zreihe := HBoxContainer.new()
+	zreihe.add_theme_constant_override("separation", 4)
+	_inhalt.add_child(zreihe)
+	var zl := Label.new()
+	zl.text = "Ziel:"
+	zl.add_theme_font_size_override("font_size", 13)
+	zl.add_theme_color_override("font_color", Color("a79fb3"))
+	zreihe.add_child(zl)
+	for m: Array in [["erste", "Erste"], ["letzte", "Letzte"], ["staerkste", "Stärkste"]]:
+		var zb := _knopf(m[1])
+		zb.add_theme_font_size_override("font_size", 12)
+		zb.toggle_mode = true
+		zb.button_pressed = str(f.get("ziel", "erste")) == m[0]
+		zb.pressed.connect(spiel.setze_zielmodus.bind(zelle, m[0]))
+		zreihe.add_child(zb)
+	var n_zu: int = spiel.zugewiesen(zelle).size()
+	_zeile("Stellungen: %s" % ("frei – Maus von der Fabrik auf eine Stellung ziehen, um sie fest zuzuweisen" if n_zu == 0 else "%d zugewiesen (Pfeile; nochmal ziehen löst)" % n_zu), 11, Color("a79fb3"))
 
 	if stufe == 0:
 		# Truppe wählen
@@ -190,6 +259,9 @@ func _baue_turm() -> void:
 	var d: Dictionary = Werte.TURMARTEN[art]
 	_zeile("%s · Stufe %d" % [d["name"], stufe], 17, Color("ffe9a8"))
 	_zeile(d["text"], 12, Color("a79fb3"))
+	_zeile("", 13, Color("ffd34d"))
+	_lbl_stats = _inhalt.get_child(_inhalt.get_child_count() - 1)
+	_zeige_stats()
 	if not k.turm_aktiv(zelle):
 		_zeile("Schweigt gerade: Stütze fehlt oder lahmgelegt.", 12, Color("ff8a7a"))
 	if stufe >= 2:

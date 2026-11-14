@@ -38,6 +38,11 @@ var _anlauf := 0.0                 # Minigun: 0..1
 
 var ist_pilot := false
 var ausbaustufe := 0                # Stufe der Fabrik, aus der die Truppe kommt (für das Abzeichen)
+var folge: Node2D = null            # Kommandant hat gesammelt: ihm folgen
+var sturm_bis := 0.0                # Losschlagen: so lange schneller und rascher feuern
+var sturm_ziel := Karte.KEINE       # ... und dorthin stürmen
+var klon := false                   # aus der Klonmaschine (wird nicht noch einmal geklont)
+var _gefolgt := false
 
 ## Farbe des Abzeichens je Stufe-3-Fähigkeit
 const ABZEICHEN := {
@@ -170,9 +175,22 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
-	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else Color.WHITE
+	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else Color.WHITE)
 	if ausgewaehlt:
 		queue_redraw()
+	if sturm_bis > 0.0:
+		sturm_bis -= delta
+	if is_instance_valid(folge) or (sturm_bis > 0.0 and sturm_ziel != Karte.KEINE):
+		_folgen(delta)
+		return
+	if _gefolgt:
+		# Sammeln/Losschlagen vorbei: wieder selbst entscheiden
+		_gefolgt = false
+		folge = null
+		sturm_ziel = Karte.KEINE
+		zustand = Zustand.BODEN
+		_punkte.clear()
+		_suche_posten()
 
 	match zustand:
 		Zustand.ZUM_POSTEN:
@@ -199,7 +217,7 @@ func _process(delta: float) -> void:
 				return
 			# Die Stellung ist ein Nebenauftrag: erst schießen, was in Reichweite und Sicht ist ...
 			if karte.ist_begehbar(karte.zelle_bei(position)):
-				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, daten["reichweite"] * Werte.ZELLE, true)
+				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, daten["reichweite"] * Werte.ZELLE, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
 				if gegner_nah != null:
 					_sprite.bewegt(false)
 					_feuere_auf(gegner_nah)
@@ -245,7 +263,7 @@ func _process(delta: float) -> void:
 							zustand = Zustand.BODEN
 							_waehle_marschziel()
 							return
-			var oben_ziel: Node2D = spiel.gegner_in_reichweite(position, weite, false, posten_zelle)
+			var oben_ziel: Node2D = spiel.gegner_in_reichweite(position, weite, false, posten_zelle, spiel.zielmodus(fabrik_zelle))
 			if faehigkeit == "markierung":
 				# Zielmarkierung: das stärkste Ziel der ganzen Karte, ohne Reichweiten- und Sichtgrenze
 				var staerkster: Gegner = spiel.staerkster_gegner()
@@ -292,7 +310,7 @@ func _process(delta: float) -> void:
 				return
 			# 1) Wer schießen kann, bleibt stehen und schießt. Das geht immer vor – es wird nicht blind weitergelaufen.
 			var weite: float = daten["reichweite"] * Werte.ZELLE
-			var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true)
+			var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
 			if ziel == null:
 				ziel = spiel.zonenbau_in_reichweite(position, weite, true)
 			_spiegel_punkt = Vector2.INF
@@ -427,6 +445,7 @@ func _repariere(delta: float) -> void:
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
 func _feuere_auf(ziel: Node2D) -> void:
 	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]   # Schadensliste: alles von hier zählt für die Fabrik
+	spiel.schuss_herkunft = position
 	# Im Rauch sieht die Einheit nichts – außer mit Klarsicht (Scharfschütze ab Stufe 2) oder auf ein markiertes Ziel.
 	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (in_stellung() and spiel.peilung(posten_zelle)) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
 	if ziel == null or blind:
@@ -472,6 +491,8 @@ func _feuere_auf(ziel: Node2D) -> void:
 		pause *= Werte.MARKIERUNG_ABKLING
 	if oben:
 		pause *= spiel.funk_faktor(posten_zelle)   # Funkturm in der Nähe: schneller feuern
+	if sturm_bis > 0.0:
+		pause *= float(Werte.KOMMANDANT["sturm_feuer"])   # Losschlagen: rascher feuern
 	_abkling = pause
 	letztes_ziel = ziel
 	letzter_schuss = spiel.spielzeit()
@@ -507,12 +528,54 @@ func _feuere_auf(ziel: Node2D) -> void:
 	ziel.call("nimm_schaden", daten["schaden"])
 
 
+## Vom Kommandanten gesammelt: Stellung freigeben und ihm folgen.
+func folge_kommandant(k: Node2D) -> void:
+	if posten_zelle != Karte.KEINE and karte.posten.get(posten_zelle) == self:
+		karte.posten.erase(posten_zelle)
+	posten_zelle = Karte.KEINE
+	zustand = Zustand.BODEN
+	_punkte.clear()
+	_plan_in = 0.0
+	folge = k
+	sturm_bis = 0.0
+	_gefolgt = true
+
+
+## Folgen bzw. Stürmen: was in Reichweite ist, wird beschossen; sonst zum Kommandanten bzw. zum Sturmziel.
+func _folgen(delta: float) -> void:
+	_gefolgt = true
+	var weite: float = daten["reichweite"] * Werte.ZELLE
+	var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
+	if ziel != null:
+		_sprite.bewegt(false)
+		_feuere_auf(ziel)
+		return
+	var ziel_zelle := sturm_ziel if not is_instance_valid(folge) else karte.zelle_bei(folge.position)
+	if is_instance_valid(folge) and position.distance_to(folge.position) < Werte.ZELLE * 1.3:
+		_sprite.bewegt(false)
+		return
+	if not is_instance_valid(folge) and karte.zelle_bei(position) == sturm_ziel:
+		sturm_ziel = Karte.KEINE   # angekommen und nichts zu tun: Sturm ist vorbei
+		return
+	_plan_in -= delta
+	if _plan_in <= 0.0 or _punkte.is_empty():
+		_plan_in = 0.5
+		if not karte.ist_begehbar(ziel_zelle):
+			# Kommandant auf dem Wall: zum freien Feld daneben
+			for n in Karte.NACHBARN:
+				if karte.ist_begehbar(ziel_zelle + n):
+					ziel_zelle = ziel_zelle + n
+					break
+		_plane_zur_zelle(ziel_zelle)
+	_gehe(delta)
+
+
 ## Läuft die Wegpunkte ab. true, sobald keiner mehr übrig ist.
 func _gehe(delta: float) -> bool:
 	_sprite.bewegt(not _punkte.is_empty())
 	if _punkte.is_empty():
 		return true
-	var schritt: float = daten["tempo"] * Werte.ZELLE * delta
+	var schritt: float = daten["tempo"] * Werte.ZELLE * delta * (float(Werte.KOMMANDANT["sturm_tempo"]) if sturm_bis > 0.0 else 1.0)
 	var ziel := _punkte[0]
 	if absf(ziel.x - position.x) > 1.0:
 		_sprite.flip_h = ziel.x < position.x
@@ -549,7 +612,10 @@ func posten_verloren() -> void:
 
 func nimm_schaden(menge: float) -> void:
 	_anlauf = 0.0   # Minigun: ein Treffer unterbricht den Anlauf
-	menge *= spiel.schild_faktor(position)   # Schildturm in der Nähe
+	var f: float = spiel.schild_faktor(position)   # Schildgenerator-Kuppel
+	if f < 1.0:
+		spiel.kuppel_abgefangen(position, menge * (1.0 - f))
+	menge *= f
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()

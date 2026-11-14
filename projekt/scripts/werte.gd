@@ -21,6 +21,7 @@ const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in de
 const ENDKAMPF_PAUSE: float = 3.0     # Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
 const ENDKAMPF_LEBEN: float = 3.4      # Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
 const LEBEN_JE_RUNDE: float = 0.23     # so viel zäher werden die Gegner je Runde (Runde 19: ×5,1)
+const GEGNER_GRUND_LEBEN: float = 20.0  # jeder Gegner bekommt so viel Leben dazu, vor dem Rundenfaktor (14.11.: gegen zu starken Flächenschaden; hilft vor allem den kleinen)
 # Schleudern stehen in der Zone und werfen auf Truppen in Stellungen und auf Fabriken in Reichweite.
 # art: "schleuder" wirft Steine auf Stellungen und Fabriken, "wurf" wirft Hunde über die ersten Wälle,
 #      "laser" schießt flach auf Bodentruppen (Wälle geben Deckung).
@@ -72,10 +73,11 @@ const LASER := {
 const RAUCH_RADIUS: float = 2.0        # Felder
 const RAUCH_SEK: float = 5.0           # so lange können Truppen im Rauch nicht schießen (Türme schon)
 const ANDOCK_SEK: float = 3.0          # so lange braucht ein Belagerungsturm am Wall, bevor Truppen herausspringen
-const ENTERER_ABSTAND: float = 3.0     # Sekunden zwischen zwei Turmtruppen – sie kommen nach, solange der Turm steht
-const ENTERER_GLEICHZEITIG: int = 6    # mehr Turmtruppen eines Turms sind nie zugleich unterwegs
+const ANDOCK_NAH: int = 3            # Belagerungsturm dockt am liebsten dort an, wo eine Stellung/ein Turm höchstens so viele Wallschritte entfernt ist (außerhalb der Zone, am schnellsten erreichbar)
+const ENTERER_ABSTAND: float = 3.0     # Sekunden zwischen zwei Myr-Drohnen – sie kommen nach, solange der Turm steht
+const ENTERER_GLEICHZEITIG: int = 6    # mehr Myr-Drohnen eines Turms sind nie zugleich unterwegs
 const BELAGERUNG_SEK: float = 40.0     # so lange hält ein angedockter Belagerungsturm höchstens durch, dann zerfällt er
-const ENTERER_LEERLAUF_SEK: float = 3.0 # findet eine Turmtruppe so lange kein Ziel auf dem Wall, springt sie ab
+const ENTERER_LEERLAUF_SEK: float = 3.0 # findet eine Myr-Drohne so lange kein Ziel auf dem Wall, springt sie ab
 const ENDKAMPF_ABSTAND: float = 1.5      # letzte Runde: erst wenn ein Gegner näher ist (Felder), bleiben vorrückende Truppen stehen
 const WURF_SPRENGER_AB_WELLE: int = 12 # ab hier wird ein Sprenger der Welle von der Wurf-Schleuder geworfen
 const FAHNE_EINNAHME_FAKTOR: float = 2.0   # Fahnenträger nehmen Checkpoints so viel schneller ein
@@ -96,7 +98,10 @@ const NEUHEITEN := {
 	8: "Neu: Sprenger. Sie kommen als Erste und sprengen nacheinander die Erdwälle, deren Wegfall eine große Abkürzung bringt. Dicke Riegel aus blanken Erdwällen fallen bis zu 4 Felder tief, sonst nur das getroffene Feld; Türme halten stand. Welche Wälle es trifft, siehst du erst in der Welle (Ziel blinkt). Dazu eine zweite Schleuder; beide wechseln ab jetzt ihren Platz.",
 	10: "Neu in der Zone: Wurf-Schleuder. Sie wirft ein ganzes Rudel Hunde über die ersten Wälle (oranger Kreis). Ab Runde 13 steht dort eine zweite.",
 	11: "Neu: Rauchwerfer. Sein Rauch nimmt Truppen für einige Sekunden die Sicht – am liebsten dort, wo viele Stellungen beieinander liegen. Türme schießen weiter.",
-	12: "Neu: Belagerungsturm. Er fährt zum Wallstück mit den meisten Stellungen und dockt an. Seine Truppen laufen auf den Wällen und greifen Stellungen im Nahkampf an.",
+	9: "Neu: Schildträger. Sein Schild hält alles von vorn ab (nur 25 % Schaden) – Fläche und Strahlen auch für die, die direkt hinter ihm gehen. Truppen und Türme nehmen ihn zuerst ins Visier. Von der Seite und von hinten trifft alles voll.",
+	14: "Neu: Sanitäter. Er kämpft nicht, heilt aber alle 1,5 Sekunden die Gegner um sich herum. Zuerst ausschalten!",
+	12: "Neu: Schwarmgeist. Zäh und langsam – fällt er, zerfällt er in drei Myr-Drohnen.",
+	13: "Neu: Belagerungsturm. Er dockt am ersten erreichbaren Erdwall nach der Zone an, an dem Stellungen oder Türme in der Nähe sind. Seine Truppen laufen auf den Wällen und greifen Stellungen im Nahkampf an.",
 }
 const SCHLEUDER := {
 	"blatt": "res://assets/sprites/schleuder.webp",
@@ -112,6 +117,7 @@ const SCHLEUDER := {
 	"schaden_haufen": 22.0,     # Flächentreffer auf einen Haufen Bodentruppen (jede Truppe im Umkreis)
 	"schaden_fabrik": 60.0,
 }
+const AUSGAENGE := {"": Vector2i(0, 4), "oben": Vector2i(1, 1), "unten": Vector2i(1, 8)}   # Phantom-Modus: hier kommt ein Trupp geschlossen aus der Zone
 const BASIS_ZELLE := Vector2i(19, 5)   # hier wollen sie hin (fester Platz: Tests, alte Partien, Sandbox „fest“)
 const BASIS_ZUFALL: bool = true        # normales Spiel: Die Basis steht jede Partie woanders (mindestens 8 Felder vom HQ, 3 von den Checkpoints)
 const CP_ROUTE_AB_START: bool = true   # der Gegnerweg führt schon ab Runde 1 durch die Checkpoints (eingenommen werden sie erst ab CHECKPOINTS_AB_WELLE)
@@ -362,7 +368,7 @@ const TURM_STUFE_3 := {
 	"heil": {
 		"lazarett": {"name": "Feldlazarett", "lazarett": true, "text": "Fällt eine Truppe im Umkreis, steht sie mit halbem Leben wieder auf – einmal pro Runde.",
 			"stark": "spart teure Truppen", "schwach": "nur einmal pro Runde"},
-		"instand": {"name": "Instandsetzung", "instand_sek": 8.0, "text": "Türme im Umkreis, die Turmtruppen lahmgelegt haben, laufen nach 8 Sekunden wieder.",
+		"instand": {"name": "Instandsetzung", "instand_sek": 8.0, "text": "Türme im Umkreis, die Myr-Drohnen lahmgelegt haben, laufen nach 8 Sekunden wieder.",
 			"stark": "Antwort auf den Belagerungsturm", "schwach": "kein Bonus für Truppen"},
 	},
 }
@@ -382,7 +388,7 @@ const KUPPEL_SCHUTZ: float = 0.4   # Truppen unter der Kuppel nehmen so viel wen
 const KUPPEL_RAND: float = 1.0     # Felder: so weit reicht die Kuppel über den äußersten Wall des Rings hinaus
 const KOSTEN_PANZER: int = 30      # Panzerung eines Erdwalls: Die erste Sprengung nimmt nur die Panzerung
 const TURM := {
-	"leben": 90.0,               # so viel Schaden durch Turmtruppen, dann ist er für den Rest der Runde lahmgelegt
+	"leben": 90.0,               # so viel Schaden durch Myr-Drohnen, dann ist er für den Rest der Runde lahmgelegt
 	"reichweite": 3.5,
 	"schaden": 16.0,
 	"abklingzeit": 0.9,
@@ -494,7 +500,8 @@ const GEGNER := {
 		"leben": 110.0,
 		"tempo": 1.0,
 		"reichweite": 3.5,
-		"schaden": 16.0,            # trifft Truppen wie Gebäude; Ziele: erst Stellungen, dann Fabriken und Batterien, dann Bodentruppen
+		"schaden": 16.0,            # an Gebäuden; Ziele: erst Stellungen, dann Fabriken und Batterien, dann Bodentruppen
+		"schaden_einheit": 22.0,    # an Truppen
 		"abklingzeit": 1.2,
 		"wall_kosten": 1000.0,
 		"fabrik_kosten": 2000.0,
@@ -504,7 +511,7 @@ const GEGNER := {
 	"fahne": {
 		"name": "Fahnenträger", "kurz": "Fahne", "art": "führt den Trupp", "rolle": "fahne", "fernkampf": false,
 		"blatt": "res://assets/sprites/fahnentraeger.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 1.8, "massstab": 1.1,
-		"leben": 135.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
+		"leben": 190.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 8,
 	},
 	"sprenger": {
@@ -515,7 +522,7 @@ const GEGNER := {
 	},
 	"rauch": {
 		"name": "Rauchwerfer", "kurz": "Rauch", "art": "nimmt die Sicht", "rolle": "rauch", "fernkampf": false,
-		"blatt": "res://assets/sprites/rauchwerfer.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.6, "massstab": 1.1,
+		"blatt": "res://assets/sprites/rauchwerfer_neu.png", "zelle": 48, "bilder": [9, 13, 17], "angriff_dauer": 2.0, "massstab": 1.4,
 		"leben": 80.0, "tempo": 1.0, "reichweite": 5.0, "schaden": 0.0, "abklingzeit": 9.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 8,
 	},
@@ -526,12 +533,50 @@ const GEGNER := {
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 15,
 	},
 	"enterer": {
-		"name": "Turmtruppe", "kurz": "Turmtruppe", "art": "Nahkampf auf Wällen", "rolle": "enterer", "fernkampf": false,
+		"name": "Myr-Drohne", "kurz": "Drohne", "art": "Nahkampf, auf Wällen und am Boden", "rolle": "enterer", "fernkampf": false,
 		"blatt": "res://assets/sprites/enterer.webp", "zelle": 48, "bilder": [9, 9, 9], "angriff_dauer": 0.9, "massstab": 1.2,
 		"leben": 60.0, "tempo": 1.6, "reichweite": 1.1, "schaden": 10.0, "abklingzeit": 0.8,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 2,
 	},
+	"schild": {
+		"name": "Schildträger", "kurz": "Schild", "art": "Frontschild", "rolle": "schild", "fernkampf": false,
+		"blatt": "res://assets/sprites/schildtraeger.png", "zelle": 48, "bilder": [9, 13, 17], "angriff_dauer": 1.6, "massstab": 1.4,
+		"leben": 150.0, "tempo": 0.9, "reichweite": 1.1, "schaden": 12.0, "abklingzeit": 1.0,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 10,
+	},
+	"sani": {
+		"name": "Sanitäter", "kurz": "Sani", "art": "heilt Gegner", "rolle": "sani", "fernkampf": false,
+		"blatt": "res://assets/sprites/sanitaeter.png", "zelle": 48, "bilder": [9, 13, 17], "angriff_dauer": 1.2, "massstab": 1.3,
+		"leben": 70.0, "tempo": 1.1, "reichweite": 2.5, "schaden": 0.0, "abklingzeit": 1.5, "heilung": 8.0,
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 10,
+	},
+	"schwarm": {
+		"name": "Schwarmgeist", "kurz": "Schwarm", "art": "zerfällt in Drohnen", "rolle": "schwarm", "fernkampf": false,
+		"blatt": "res://assets/sprites/schwarmgeist.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.0, "massstab": 1.1,
+		"leben": 300.0, "tempo": 0.8, "reichweite": 1.1, "schaden": 14.0, "abklingzeit": 1.2, "zerfall": 3,   # vorher 200 (14.11.)
+		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 12,
+	},
 }
+# Kommandant Brakk (einmal pro Partie, Taste [8]): WASD, [Q] Sammeln/Losschlagen, [E] Klettern, [R] Klonmaschine
+const KOSTEN_KOMMANDANT: int = 500
+const KOMMANDANT := {
+	"name": "Kommandant Brakk", "blatt": "res://assets/sprites/brakk_klein.png", "zelle": 32, "bilder": [9, 13, 17],
+	"angriff_dauer": 1.2, "massstab": 2.0, "schussfarbe": "8ff0ff", "faehigkeit": "",   # halb so fein wie das Original, doppelt gezeigt: Pixelgröße wie die Technoclan-Truppen
+	"leben": 500.0, "tempo": 2.2, "reichweite": 3.5, "schaden": 18.0, "abklingzeit": 1.2,
+	"schuss_bilder": [10, 14],    # in diesen Bildern der Angriffsanimation blitzt der Laser: dann fällt je ein Schuss
+	"muendung": Vector2(28, -20), # Laseraustritt relativ zu den Füßen (Blick nach rechts)
+	"wall_bonus": 1.5,            # oben auf dem Erdwall: mehr Reichweite
+	"sammel_radius": 4.0, "sammel_abklingzeit": 4.0,
+	"sturm_sek": 8.0, "sturm_abklingzeit": 12.0, "sturm_tempo": 1.3, "sturm_feuer": 0.6,
+	"kletter_abklingzeit": 3.0,
+	"cp_faktor": 4.0,             # holt verlorene Checkpoints so viel schneller zurück
+}
+const FERNKAMPF_GEFECHT_TEMPO := 0.35   # Battlesphäre: solange sie schießt, läuft sie nur mit diesem Anteil ihres Tempos
+const SCHILD_VORLAUF_SEK := 1.5         # gestaffelt: Schildträger gehen so viele Sekunden vor dem Rest ihres Trupps los
+const SCHILD_FRONT_FAKTOR := 0.25   # Schildträger: Schüsse von vorn (innerhalb SCHILD_FRONT_WINKEL zur Laufrichtung) machen nur so viel Schaden
+const SCHILD_FRONT_WINKEL := 60.0
+const SCHILD_DECKUNG_BREITE := 0.6   # Schildabfangen: Fläche/Strahl von vorn trifft auch die, die direkt hinter ihm stehen, nur mit SCHILD_FRONT_FAKTOR – so viele Felder seitlich der Schusslinie ...
+const SCHILD_DECKUNG_TIEFE := 2.0    # ... und bis zu so vielen Feldern hinter ihm
 
 
 ## Entworfene Runden: Zusammensetzung der Welle Nummer `nr` (ab 1).
@@ -539,7 +584,7 @@ const GEGNER := {
 # Die 20 Wellen als Pläne: je Runde ein Name und die Trupps in der Reihenfolge, in der sie kommen.
 #   weg "l" = läuft, "w" = wird von der Wurf-Schleuder geworfen (immer 4)
 #   pause = Sekunden mehr (oder weniger) als TRUPP_PAUSE vor diesem Trupp
-#   wenn  = "dock": Wurf, sobald ein Belagerungsturm andockt (weit weg von ihm) · "drohnen": sobald er 2 Turmtruppen abgesetzt hat (auf die Verteidiger am Turm)
+#   wenn  = "dock": Wurf, sobald ein Belagerungsturm andockt (weit weg von ihm) · "drohnen": sobald er 2 Myr-Drohnen abgesetzt hat (auf die Verteidiger am Turm)
 #   jeder = nur in jedem n-ten Durchgang der letzten Runde
 # Quelle: wellen-entwurf-20.xlsx (Blatt Trupps).
 const WELLEN := {
@@ -588,8 +633,8 @@ const WELLEN := {
 	]},
 	9: {"name": "Köder", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger"], "pause": 17.0},
+		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["hund", "hund", "hund", "sphaere", "sphaere", "sphaere", "sphaere"]},
 	]},
@@ -600,6 +645,7 @@ const WELLEN := {
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
 	]},
 	11: {"name": "Dunst", "stufe": "Einführung", "trupps": [
@@ -609,36 +655,41 @@ const WELLEN := {
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund", "hund"]},
 	]},
 	12: {"name": "Nebelwand", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["rauch", "rauch", "rauch"]},
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schwarm", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "schild", "schild", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
 	]},
 	13: {"name": "Der Turm", "stufe": "Einführung", "trupps": [
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schwarm", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund", "hund"]},
 	]},
 	14: {"name": "Abrisskommando", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["rauch", "rauch"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger", "sprenger"]},
 		{"weg": "w", "typen": ["rauch", "rauch", "sprenger", "sprenger"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sani", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["schild", "sani", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schwarm", "hund", "hund"]},
 	]},
 	15: {"name": "Fahnensturm", "stufe": "Prüfung", "trupps": [
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"], "pause": -2.0},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"], "pause": -2.0},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "schild", "sani", "schwarm"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund", "hund"]},
 	]},
 	16: {"name": "Zange", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
@@ -648,6 +699,7 @@ const WELLEN := {
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"]},
+		{"weg": "l", "typen": ["schwarm", "schwarm"]},
 	]},
 	17: {"name": "Köder und Abriss", "stufe": "Prüfung", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
@@ -657,6 +709,7 @@ const WELLEN := {
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "schild", "schild", "sani"]},
 	]},
 	18: {"name": "Doppelbelagerung", "stufe": "Prüfung", "trupps": [
 		{"weg": "l", "typen": ["rauch", "rauch", "hund", "hund", "hund", "hund"]},
@@ -667,6 +720,7 @@ const WELLEN := {
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger"]},
+		{"weg": "l", "typen": ["schwarm", "schwarm", "sani"]},
 	]},
 	19: {"name": "Generalprobe", "stufe": "Prüfung", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
@@ -679,7 +733,7 @@ const WELLEN := {
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
 		{"weg": "l", "typen": ["belagerung"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "schild", "sani", "schwarm", "schwarm"]},
 	]},
 	20: {"name": "Gegenangriff", "stufe": "Finale", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
@@ -690,6 +744,7 @@ const WELLEN := {
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["rauch", "rauch", "sphaere", "sphaere", "sphaere"]},
 		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "sani", "schwarm"]},
 		{"weg": "l", "typen": ["belagerung", "belagerung"], "jeder": 3},
 	]},
 }
@@ -705,6 +760,7 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 	var anzahl := {}
 	var trupps: Array = []     # zu Fuß: je Trupp die Typen
 	var pausen: Array = []     # Sekunden mehr/weniger als TRUPP_PAUSE vor dem Trupp
+	var ausgaenge: Array = []  # Phantom-Modus: wo der Trupp aus der Zone kommt
 	var jeder: Array = []      # nur in jedem n-ten Durchgang (letzte Runde)
 	var wurf: Array = []       # geworfen: je Trupp die Typen
 	var wurf_info: Array = []  # dazu: nach wie vielen Lauf-Trupps frühestens, und der Auslöser
@@ -728,9 +784,10 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 		else:
 			trupps.append(typen)
 			pausen.append(float(t.get("pause", 0.0)))
+			ausgaenge.append(str(t.get("ausgang", "")))
 			jeder.append(int(t.get("jeder", 1)))
 	var gruppen: Array = []
-	for typ: String in ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung"]:
+	for typ: String in ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung", "schild", "sani", "schwarm"]:
 		if anzahl.has(typ):
 			gruppen.append({"typ": typ, "anzahl": anzahl[typ]})
 	return {
@@ -738,6 +795,7 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 		"gruppen": gruppen,
 		"trupps": trupps,
 		"pausen": pausen,
+		"ausgaenge": ausgaenge,   # Phantom-Modus: Ausgang je Trupp ("" = Hauptlinie, "oben", "unten")
 		"jeder": jeder,
 		"wurf": wurf,
 		"wurf_info": wurf_info,

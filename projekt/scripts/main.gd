@@ -63,10 +63,11 @@ var _lbl_zins: Label
 var _lbl_zins_titel: Label
 var _wurf_schlange: Array = []      # Würfe dieser Welle: {"typen", "nach", "wenn"}
 var _pausen: Array = []             # zu _schlange: Sekunden mehr/weniger Pause vor dem Trupp
+var _ausgaenge: Array = []          # zu _schlange: Ausgang je Trupp (nur Phantom-Modus)
 var _trupp_nr := 0                  # so viele Lauf-Trupps dieses Durchgangs sind schon unterwegs
 var _durchgang := 0                 # letzte Runde: der wievielte Durchgang der Welle
 var _wurf_nahe := Vector2.INF       # der nächste Wurf landet hier in der Nähe (Zange am Belagerungsturm)
-var _abgesetzt: Dictionary = {}     # Belagerungsturm -> so viele Turmtruppen hat er schon abgesetzt
+var _abgesetzt: Dictionary = {}     # Belagerungsturm -> so viele Myr-Drohnen hat er schon abgesetzt
 var _wurf_aktiv: Array = []         # der Trupp, der gerade fliegt (Rest)
 var _wurf_takt := 0.0
 var _wurf_bau: Zonenbau
@@ -276,6 +277,13 @@ func _lade_phantom_stand() -> void:
 			karte.fabrik_stufe[z] = stufe
 		if f.has("faehigkeit"):
 			fabriken[z]["faehigkeit"] = str(f["faehigkeit"])
+		if f.has("ziel"):
+			fabriken[z]["ziel"] = str(f["ziel"])
+		if f.has("stellungen"):
+			var liste: Array = []
+			for s in f["stellungen"]:
+				liste.append(Vector2i(int(s[0]), int(s[1])))
+			fabriken[z]["stellungen"] = liste
 	for g: Array in stand.get("generatoren", []):
 		var gz := Vector2i(int(g[0]), int(g[1]))
 		var gp := Vector2i(int(g[2]), int(g[3]))
@@ -358,6 +366,7 @@ func _phantom_gefallen() -> void:
 	gegner.clear()
 	_schlange = []
 	_pausen = []
+	_ausgaenge = []
 	_wurf_schlange = []
 	_wurf_aktiv = []
 	_im_flug = 0
@@ -520,7 +529,7 @@ func _angriff_bestaetigt() -> void:
 # -------------------------------------------------------------- Bauprotokoll
 # -------------------------------------------------------------- Bauprotokoll
 
-const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor", Karte.PANZER: "panzer", Karte.SPIEGEL: "spiegel", Karte.MAGNET: "magnet", Karte.GENERATOR: "generator"}
+const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor", Karte.PANZER: "panzer", Karte.SPIEGEL: "spiegel", Karte.MAGNET: "magnet", Karte.GENERATOR: "generator", Karte.KOMMANDANT: "kommandant"}
 
 
 func _beginne_protokoll() -> void:
@@ -691,6 +700,9 @@ func _neuer_zonenbau(art: String, zelle: Vector2i) -> Zonenbau:
 func _spawn_zelle() -> Vector2i:
 	if _start_zelle != Werte.START_ZELLE:
 		return _start_zelle
+	if phantom_modus != "":
+		# Phantom-Modus: jeder Trupp kommt geschlossen an seinem Ausgang heraus, damit die geplante Reihenfolge hält
+		return Werte.AUSGAENGE.get(str(_ausgaenge[0]) if not _ausgaenge.is_empty() else "", Werte.START_ZELLE)
 	if welle <= Werte.HAUPTLINIE_BIS:
 		return Werte.START_ZELLE   # die ersten Runden: alle über die Hauptlinie, nichts verteilt sich
 	return Vector2i(randi() % Werte.ZONE_SPALTEN, randi() % Werte.ZEILEN)
@@ -698,7 +710,27 @@ func _spawn_zelle() -> Vector2i:
 
 # ------------------------------------------------------------------ Ablauf
 
+var _zieh_von := Karte.KEINE   # Fabrik, von der gerade ein Zuweisungspfeil gezogen wird
+var kommandant: Kommandant = null   # Brakk, einmal pro Partie
+var klonmaschine: Klonmaschine = null
+var schuss_herkunft := Vector2.INF   # woher der gerade ausgeteilte Schaden kommt (Schildträger); INF = Fläche/unbekannt
+var _trupp_zelle := Vector2i.ZERO   # Startfeld des Trupps, der gerade entsteht
+
+
+func _aktualisiere_zuweisung() -> void:
+	var f := Karte.KEINE
+	if _fabrikmenue != null and _fabrikmenue.visible and fabriken.has(_fabrikmenue.zelle):
+		f = _fabrikmenue.zelle
+	var ziele: Array = zugewiesen(f) if f != Karte.KEINE else []
+	if f != karte.zuweis_fabrik or ziele != karte.zuweis_ziele:
+		karte.zuweis_fabrik = f
+		karte.zuweis_ziele = ziele
+		karte.queue_redraw()
+
+
 func _process(delta: float) -> void:
+	schuss_herkunft = Vector2.INF
+	_aktualisiere_zuweisung()
 	schadensquelle = ""   # wer gerade Schaden macht, setzt sich selbst (Truppe, Turm, Batterie, Brandfeld)
 	_aktualisiere_vorschau()
 	_aktualisiere_sichtanzeige()
@@ -716,13 +748,29 @@ func _process(delta: float) -> void:
 		if _spawn_in <= 0.0:
 			var typen: Array = _schlange[0]
 			var typ: String = typen.pop_front()
-			var g := _neuer_gegner(typ, _spawn_zelle(), _erstes_ziel)
+			if _trupp.is_empty():
+				_trupp_zelle = _spawn_zelle()   # gebündelt: der ganze Trupp startet am selben Fleck
+			var g := _neuer_gegner(typ, _trupp_zelle, _erstes_ziel)
 			g.trupp = _trupp
 			_trupp.append(g)
+			# In der Zone wartet der Trupp, bis er vollständig ist, und läuft dann gemeinsam los
+			g.wartet = not typen.is_empty() and _trupp_zelle.x < Werte.ZONE_SPALTEN
 			if typen.is_empty():
+				# Trupp vollständig: Schildträger gehen vor, der Rest folgt ein paar Sekunden später
+				var mit_schild := false
+				for m in _trupp:
+					if is_instance_valid(m) and m.rolle == "schild":
+						mit_schild = true
+				for m in _trupp:
+					if is_instance_valid(m):
+						if mit_schild and m.rolle != "schild" and _trupp_zelle.x < Werte.ZONE_SPALTEN:
+							m.warte_noch = Werte.SCHILD_VORLAUF_SEK
+						m.wartet = false
 				# Trupp vollständig: nach einer Pause kommt der nächste (der Plan kann sie verlängern oder kürzen)
 				_schlange.pop_front()
 				_pausen.pop_front()
+				if not _ausgaenge.is_empty():
+					_ausgaenge.pop_front()
 				_trupp = []
 				_trupp_nr += 1
 				_spawn_in += Werte.ENDKAMPF_TRUPP_PAUSE if endkampf else Werte.TRUPP_PAUSE
@@ -814,7 +862,7 @@ func raeumen() -> bool:
 	return phase == Phase.KAMPF and not endkampf and gegner.is_empty() and _schlange.is_empty() and _wurf_schlange.is_empty() and _wurf_aktiv.is_empty() and _im_flug == 0
 
 
-## Aufräumen am Rundenende: Es kommt nichts mehr nach (kein Trupp, kein Wurf, kein Belagerungsturm, der Turmtruppen absetzt),
+## Aufräumen am Rundenende: Es kommt nichts mehr nach (kein Trupp, kein Wurf, kein Belagerungsturm, der Myr-Drohnen absetzt),
 ## aber es leben noch Gegner. Dann dürfen Truppen ohne Ziel ihre Stellung verlassen und den Übrigen hinterhergehen.
 func aufraeumen() -> bool:
 	if phase != Phase.KAMPF or endkampf or gegner.is_empty() or not _schlange.is_empty() or not _wurf_schlange.is_empty() or not _wurf_aktiv.is_empty() or _im_flug > 0:
@@ -938,14 +986,16 @@ func _checkpoints_halten(delta: float) -> void:
 			karte.cp_tempo[i] = 0.0
 			continue
 		var besetzt := false
+		var cp_faktor := 1.0
 		for e in einheiten:
 			if e.zustand == Einheit.Zustand.BODEN and karte.zelle_bei(e.position) == karte.checkpoints[i]:
 				besetzt = true
-				break
+				if e is Kommandant:
+					cp_faktor = float(Werte.KOMMANDANT["cp_faktor"])   # Brakk holt ihn viel schneller zurück
 		if not besetzt:
 			karte.cp_fortschritt[i] = maxf(0.0, karte.cp_fortschritt[i] - delta)
 			continue
-		karte.cp_fortschritt[i] += delta
+		karte.cp_fortschritt[i] += delta * cp_faktor
 		if karte.cp_fortschritt[i] >= Werte.RUECKEROBERUNG_SEK:
 			karte.cp_feind[i] = false
 			karte.cp_fortschritt[i] = 0.0
@@ -966,6 +1016,9 @@ func checkpoint_erreicht(i: int) -> void:
 	karte.cp_fortschritt[i] = 0.0
 	karte.cp_einnahme[i] = 0.0
 	karte.aktualisiere_pfad()
+	for g in gegner:
+		if is_instance_valid(g) and not g._auf_wall and g._ziel == i:
+			g.plane_neu()   # dieser Checkpoint ist erledigt: direkt weiter zum nächsten
 	melde("Checkpoint %d verloren! Die nächste Welle startet dort." % (i + 1), 4.0)
 
 
@@ -981,9 +1034,11 @@ func _tuerme_feuern(delta: float) -> void:
 			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
 		schadensquelle = "turm:" + art_name
+		schadensobjekt = z
 		var weite: float = float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
 		var farbe := Color(art["farbe"])
 		var von := karte.mitte(z) + Vector2(0, -14)
+		schuss_herkunft = von
 		var schaden := float(karte.turm_wert(z, "schaden"))
 		# Lanze mit Doppelstrahl: der zweite Strahl folgt kurz nach dem ersten auf derselben Linie
 		if _turm_nachschuss.has(z):
@@ -1022,6 +1077,8 @@ func _tuerme_feuern(delta: float) -> void:
 						for g in gegner.duplicate():
 							if is_instance_valid(g) and not _geschuetzt(g) and von.distance_to(g.position) <= weite and karte.sicht_von_wall(z, von, g.position):
 								var sek := float(karte.turm_wert(z, "bremse_sek"))
+								if g.gefroren <= 0.0:
+									objekt_zaehle(z, "gebremst", 1.0)
 								g.gefroren = maxf(g.gefroren, sek)
 								if sproede > 0.0:
 									g.sproede = maxf(g.sproede, sek)
@@ -1052,11 +1109,16 @@ func _tuerme_feuern(delta: float) -> void:
 
 func _lanzenstrahl(von: Vector2, ende: Vector2, farbe: Color, breite: float, schaden: float) -> void:
 	strahl(von, ende, farbe, 6.0)
-	for g in gegner.duplicate():
+	var betroffen: Array = []
+	for g in gegner:
 		if is_instance_valid(g) and not _geschuetzt(g):
 			var p := Geometry2D.get_closest_point_to_segment(g.position, von, ende)
 			if p.distance_to(g.position) <= breite:
-				g.nimm_schaden(schaden)
+				betroffen.append(g)
+	var deckung := schild_deckung(von, betroffen)   # Schildabfangen: hinter einem Schildträger kommt der Strahl geschwächt an
+	for g: Gegner in betroffen:
+		if is_instance_valid(g):
+			g.nimm_schaden(schaden * float(deckung.get(g, 1.0)))
 
 
 ## Magnete: alle paar Sekunden die Gegner in ihrer Zuglinie heranziehen (höchstens bis vor den Magneten, nicht durch Wälle).
@@ -1169,6 +1231,7 @@ func _heilturm(z: Vector2i, delta: float) -> void:
 			if karte.turm_lahm(t) and Vector2(t - z).length() <= float(karte.turm_wert(z, "reichweite")):
 				_instand_zeit[t] = float(_instand_zeit.get(t, 0.0)) + delta
 				if float(_instand_zeit[t]) >= instand:
+					objekt_zaehle(z, "instand", 1.0)
 					karte.turm_schaden.erase(t)
 					_instand_zeit.erase(t)
 					effekte.flaeche(karte.mitte(t), Werte.ZELLE * 0.8, Color(art["farbe"]))
@@ -1182,7 +1245,9 @@ func _heilturm(z: Vector2i, delta: float) -> void:
 		var geheilt := false
 		for e in einheiten:
 			if is_instance_valid(e) and not e.in_batterie() and e.leben < e.max_leben and m.distance_to(e.position) <= weite:
+				var vorher_leben: float = e.leben
 				e.leben = minf(e.max_leben, e.leben + heilung)
+				objekt_zaehle(z, "heilung", e.leben - vorher_leben)
 				e.queue_redraw()
 				geheilt = true
 		if geheilt:
@@ -1222,6 +1287,7 @@ func lazarett_rettet(e: Einheit) -> bool:
 		if karte.turm_art[z] == "heil" and karte.turm_aktiv(z) and not _lazarett_genutzt.has(z) and karte.turm_wert(z, "lazarett", false) \
 				and karte.mitte(z).distance_to(e.position) <= float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE:
 			_lazarett_genutzt[z] = true
+			objekt_zaehle(z, "gerettet", 1.0)
 			e.leben = e.max_leben * 0.5
 			effekte.flaeche(e.position, Werte.ZELLE * 0.6, Color(Werte.TURMARTEN["heil"]["farbe"]))
 			melde("Feldlazarett: %s steht wieder auf." % e.daten["name"], 3.0)
@@ -1231,6 +1297,7 @@ func lazarett_rettet(e: Einheit) -> bool:
 
 ## Voll bemannte Batterien feuern auf die dichteste Gegnergruppe in Reichweite – über Wälle hinweg.
 func _batterien_feuern(delta: float) -> void:
+	schuss_herkunft = Vector2.INF
 	var radius: float = Werte.BATTERIE["flaeche"] * Werte.ZELLE
 	for z: Vector2i in karte.feld:
 		if karte.feld[z] != Karte.BATTERIE or karte.ausgefallen.has(z):
@@ -1257,6 +1324,8 @@ func _batterien_feuern(delta: float) -> void:
 				for h in gegner:
 					if g.position.distance_to(h.position) <= radius:
 						n += 1
+				if g.rolle == "schild":
+					n += 1000   # Provokation: ein Schildträger in Reichweite geht vor
 				if n > meiste:
 					meiste = n
 					bestes = g
@@ -1264,7 +1333,9 @@ func _batterien_feuern(delta: float) -> void:
 				rest = Werte.BATTERIE["abklingzeit"]
 				schuss(von, bestes.position, Color("7fe0ff"))
 				schadensquelle = "batterie:%d,%d" % [z.x, z.y]
+				schuss_herkunft = von   # der Frontschild fängt auch die Batterie ab, wenn sie von vorn kommt
 				flaechenschaden(bestes.position, radius, float(Werte.BATTERIE["schaden"]) * (Werte.BATTERIE_ST2_SCHADEN if stufe >= 2 else 1.0), Color("7fe0ff"))
+				schuss_herkunft = Vector2.INF
 		_turm_abkling[z] = maxf(rest, 0.0) if rest <= 0.0 else rest
 
 
@@ -1349,6 +1420,7 @@ func lege_brand(mitte: Vector2, radius: float, schaden_je_sek: float) -> void:
 
 func _braende_wirken(delta: float) -> void:
 	_spielzeit += delta
+	schuss_herkunft = Vector2.INF   # Brandfelder brennen von unten: kein Frontschild
 	for b: Array in _braende:
 		b[2] -= delta
 		schadensquelle = str(b[4]) if b.size() > 4 else ""
@@ -1361,10 +1433,15 @@ func _braende_wirken(delta: float) -> void:
 ## Plasmagel: wenig Schaden, aber alle im Feld werden verlangsamt.
 func gelschuss(mitte: Vector2, radius: float, schaden: float) -> void:
 	effekte.gel(mitte, radius, Werte.PLASMAGEL_SEK)
-	for g in gegner.duplicate():
+	var betroffen: Array = []
+	for g in gegner:
 		if not _geschuetzt(g) and mitte.distance_to(g.position) <= radius:
+			betroffen.append(g)
+	var deckung := schild_deckung(schuss_herkunft, betroffen)
+	for g: Gegner in betroffen:
+		if is_instance_valid(g):
 			g.gebremst = Werte.PLASMAGEL_SEK
-			g.nimm_schaden(schaden)
+			g.nimm_schaden(schaden * float(deckung.get(g, 1.0)))
 
 
 func flaechenschaden(mitte: Vector2, radius: float, schaden: float, farbe: Color) -> void:
@@ -1372,9 +1449,37 @@ func flaechenschaden(mitte: Vector2, radius: float, schaden: float, farbe: Color
 		var a := Vector2.RIGHT.rotated(TAU * i / 12.0) * radius
 		var b := Vector2.RIGHT.rotated(TAU * (i + 1) / 12.0) * radius
 		effekte.linie(mitte + a, mitte + b, farbe)
-	for g in gegner.duplicate():
+	var betroffen: Array = []
+	for g in gegner:
 		if not _geschuetzt(g) and mitte.distance_to(g.position) <= radius:
-			g.nimm_schaden(schaden)
+			betroffen.append(g)
+	var deckung := schild_deckung(schuss_herkunft, betroffen)
+	for g: Gegner in betroffen:
+		if is_instance_valid(g):
+			g.nimm_schaden(schaden * float(deckung.get(g, 1.0)))
+
+
+## Schildabfangen: Fläche und Strahlen von vorn trifft auch die, die direkt hinter einem Schildträger stehen,
+## nur mit SCHILD_FRONT_FAKTOR. Ergebnis: Gegner -> Faktor (nur Gedeckte; den Schildträger selbst regelt nimm_schaden).
+func schild_deckung(herkunft: Vector2, betroffen: Array) -> Dictionary:
+	var deckung := {}
+	if herkunft == Vector2.INF or betroffen.is_empty():
+		return deckung
+	for h: Gegner in gegner:
+		if h.rolle != "schild" or h.leben <= 0.0 or _geschuetzt(h):
+			continue
+		var vor := h.position - herkunft
+		if vor.length() <= 4.0 or absf(h.blick.angle_to(-vor)) > deg_to_rad(Werte.SCHILD_FRONT_WINKEL):
+			continue   # der Schuss kommt nicht von vorn
+		var richtung := vor.normalized()
+		for g: Gegner in betroffen:
+			if g == h:
+				continue
+			var rel := g.position - h.position
+			var tiefe := rel.dot(richtung)
+			if tiefe > 0.0 and tiefe <= Werte.SCHILD_DECKUNG_TIEFE * Werte.ZELLE and absf(rel.cross(richtung)) <= Werte.SCHILD_DECKUNG_BREITE * Werte.ZELLE:
+				deckung[g] = Werte.SCHILD_FRONT_FAKTOR
+	return deckung
 
 
 func starte_welle() -> void:
@@ -1504,6 +1609,8 @@ func _lade_durchgang() -> void:
 	_schlange = []
 	_pausen = []
 	_trupp_nr = 0
+	_ausgaenge = []
+	var ausgaenge: Array = _welle.get("ausgaenge", [])
 	var trupps: Array = _welle["trupps"]
 	var jeder: Array = _welle.get("jeder", [])
 	var pausen: Array = _welle.get("pausen", [])
@@ -1512,6 +1619,7 @@ func _lade_durchgang() -> void:
 			continue
 		_schlange.append((trupps[i] as Array).duplicate())
 		_pausen.append(float(pausen[i]) if i < pausen.size() else 0.0)
+		_ausgaenge.append(str(ausgaenge[i]) if i < ausgaenge.size() else "")
 	var info: Array = _welle.get("wurf_info", [])
 	var wuerfe: Array = _welle["wurf"]
 	for i in wuerfe.size():
@@ -1543,7 +1651,7 @@ func naechste_welle() -> Dictionary:
 	# Sprenger zuerst, dann je Typ Trupps zu fünft (Belagerungstürme einzeln), reihum gemischt
 	var listen: Array = []
 	var gruppen: Array = []
-	for typ: String in ["sprenger", "hund", "fahne", "sphaere", "rauch", "belagerung"]:
+	for typ: String in ["sprenger", "hund", "fahne", "sphaere", "rauch", "belagerung", "schild", "sani", "schwarm"]:
 		var n := int(anzahl.get(typ, 0))
 		if n <= 0:
 			continue
@@ -1669,8 +1777,15 @@ func _naechste_bauphase() -> void:
 	phase = Phase.BAU
 	karte.zeige_pfad_kraeftig = true
 	for e in einheiten:
-		e.queue_free()
+		if e != kommandant:
+			e.queue_free()
 	einheiten.clear()
+	if kommandant != null:
+		kommandant.neue_runde()
+		einheiten.append(kommandant)
+	if klonmaschine != null:
+		klonmaschine.queue_free()
+		klonmaschine = null
 	for z: Vector2i in fabriken:
 		(fabriken[z]["einheiten"] as Array).clear()
 	_auswahl = null
@@ -1851,21 +1966,92 @@ func naechster_gegner(von: Vector2) -> Gegner:
 
 ## Nächster Gegner innerhalb der Reichweite; mit `braucht_sicht` nur, wenn kein Wall dazwischen liegt.
 ## `von_wall` = Erdwall, auf dem der Schütze steht (Stellung, Turm): Dann gilt die Sichtregel von oben.
-func gegner_in_reichweite(von: Vector2, weite: float, braucht_sicht: bool, von_wall: Vector2i = Karte.KEINE) -> Gegner:
+## Ziel in Reichweite und Sicht. `modus`: "erste" (am weitesten auf dem Weg – Grundregel), "letzte", "staerkste".
+## Provokation: Ein Schildträger in Reichweite und Sicht geht in jedem Modus vor (Brakk übergeht das mit `provokation = false`).
+func gegner_in_reichweite(von: Vector2, weite: float, braucht_sicht: bool, von_wall: Vector2i = Karte.KEINE, modus: String = "erste", provokation: bool = true) -> Gegner:
 	var bester: Gegner = null
-	var beste := weite * weite
+	var beste := INF
+	var schildtraeger: Gegner = null
+	var bester_schild := INF
+	var grenze := weite * weite
 	for g in gegner:
 		if _geschuetzt(g):
 			continue
 		var d := von.distance_squared_to(g.position)
-		if d > beste:
+		if d > grenze:
 			continue
 		if von_wall != Karte.KEINE and not karte.sicht_von_wall(von_wall, von, g.position):
 			continue
-		if not braucht_sicht or karte.sicht_frei(von, g.position):
-			beste = d
+		if braucht_sicht and not karte.sicht_frei(von, g.position):
+			continue
+		var wert: float
+		match modus:
+			"letzte":
+				wert = -float(g.rest_weg()) + d * 1e-6
+			"staerkste":
+				wert = -g.leben + d * 1e-6
+			_:
+				wert = float(g.rest_weg()) + d * 1e-6
+		if wert < beste:
+			beste = wert
 			bester = g
-	return bester
+		if provokation and g.rolle == "schild" and wert < bester_schild:
+			bester_schild = wert
+			schildtraeger = g
+	return schildtraeger if schildtraeger != null else bester
+
+
+## Zielwahl der Truppen einer Fabrik (im Fabrikmenü einstellbar).
+func zielmodus(fabrik: Vector2i) -> String:
+	return str(fabriken.get(fabrik, {}).get("ziel", "erste"))
+
+
+func setze_zielmodus(fabrik: Vector2i, modus: String) -> void:
+	if not fabriken.has(fabrik):
+		return
+	fabriken[fabrik]["ziel"] = modus
+	_notiere({"a": "ziel", "x": fabrik.x, "y": fabrik.y, "modus": modus})
+
+
+## Stellungen, die einer Fabrik per Pfeil zugewiesen sind (leer = frei wählen).
+func zugewiesen(fabrik: Vector2i) -> Array:
+	var liste: Array = []
+	for w in fabriken.get(fabrik, {}).get("stellungen", []):
+		if karte.ausbau.get(w, Karte.FREI) == Karte.STELLUNG:
+			liste.append(w)
+	return liste
+
+
+## Für welche Fabrik ist diese Stellung reserviert? (KEINE = frei für alle)
+func reserviert_fuer(stellung: Vector2i) -> Vector2i:
+	for f: Vector2i in fabriken:
+		if (fabriken[f].get("stellungen", []) as Array).has(stellung):
+			return f
+	return Karte.KEINE
+
+
+## Pfeil von der Fabrik auf eine Stellung: zuweisen oder (zweites Mal) wieder lösen.
+func schalte_zuweisung(fabrik: Vector2i, stellung: Vector2i) -> void:
+	if not fabriken.has(fabrik) or karte.ausbau.get(stellung, Karte.FREI) != Karte.STELLUNG or str(fabriken[fabrik]["typ"]) == "pilot":
+		return
+	var liste: Array = fabriken[fabrik].get("stellungen", [])
+	if liste.has(stellung):
+		liste.erase(stellung)
+	else:
+		# Eine Stellung gehört nur einer Fabrik: bei einer anderen austragen
+		for f2: Vector2i in fabriken:
+			if f2 != fabrik:
+				(fabriken[f2].get("stellungen", []) as Array).erase(stellung)
+		liste.append(stellung)
+		# Sitzt dort eine fremde Truppe, räumt sie den Platz
+		var inh: Variant = karte.posten.get(stellung)
+		if inh != null and is_instance_valid(inh) and inh.fabrik_zelle != fabrik:
+			karte.posten.erase(stellung)
+			inh.verdraengt()
+	fabriken[fabrik]["stellungen"] = liste
+	_notiere({"a": "zuweisung", "x": fabrik.x, "y": fabrik.y, "sx": stellung.x, "sy": stellung.y})
+	melde("Stellungen dieser Fabrik: %d zugewiesen%s" % [zugewiesen(fabrik).size(), "" if not zugewiesen(fabrik).is_empty() else " – die Truppen wählen wieder frei"], 3.0)
+	karte.queue_redraw()
 
 
 func naechste_bodeneinheit(von: Vector2, max_abstand: float) -> Einheit:
@@ -2031,6 +2217,10 @@ func haufen_ziel(von: Vector2, weite: float, ohne_rauch: bool = false) -> Varian
 func _prallt_ab(punkt: Vector2) -> bool:
 	if not karte.in_kuppel(punkt):
 		return false
+	for k: Array in karte.kuppeln:
+		if punkt.distance_to(k[0]) <= float(k[1]):
+			objekt_zaehle(k[2], "abgewehrt", 1.0)
+			break
 	effekte.flaeche(punkt, 18.0, Color(0.6, 0.85, 1.0))
 	return true
 
@@ -2105,9 +2295,33 @@ var runde_stats: Dictionary = {}    # Quelle -> {"schaden", "kills", "name", "bl
 var gesamt_stats: Dictionary = {}   # dasselbe über die ganze Partie
 var runde_stats_welle := 0          # zu welcher Runde runde_stats gehört
 
+## Werte je Turm, Batterie und Generator: Zelle -> {"schaden", "kills", "heilung", "gerettet", "instand", "abgefangen", "abgewehrt", "gebremst"}
+var objekt_stats: Dictionary = {}
+var schadensobjekt := Karte.KEINE   # welcher Turm gerade Schaden austeilt
+
+func objekt_zaehle(z: Vector2i, art: String, menge: float) -> void:
+	if z == Karte.KEINE or menge <= 0.0:
+		return
+	if not objekt_stats.has(z):
+		objekt_stats[z] = {}
+	objekt_stats[z][art] = float(objekt_stats[z].get(art, 0.0)) + menge
+
+
+## Kuppel eines Generators hat Schaden an einer Truppe abgefangen.
+func kuppel_abgefangen(punkt: Vector2, menge: float) -> void:
+	for k: Array in karte.kuppeln:
+		if punkt.distance_to(k[0]) <= float(k[1]):
+			objekt_zaehle(k[2], "abgefangen", menge)
+			return
+
+
 func zaehle_schaden(menge: float, getoetet: bool) -> void:
 	if schadensquelle == "" or menge <= 0.0:
 		return
+	if schadensquelle.begins_with("turm:") and schadensobjekt != Karte.KEINE:
+		objekt_zaehle(schadensobjekt, "schaden", menge)
+		if getoetet:
+			objekt_zaehle(schadensobjekt, "kills", 1.0)
 	for tabelle: Dictionary in [runde_stats, gesamt_stats]:
 		if not tabelle.has(schadensquelle):
 			tabelle[schadensquelle] = {"schaden": 0.0, "kills": 0}
@@ -2125,6 +2339,8 @@ func _quelle_info(quelle: String) -> Dictionary:
 		"fabrik":
 			var xy := teile[1].split(",")
 			var z := Vector2i(int(xy[0]), int(xy[1]))
+			if z == Karte.KEINE:
+				return {"name": Werte.KOMMANDANT["name"], "blatt": Werte.KOMMANDANT["blatt"], "zelle": Werte.KOMMANDANT["zelle"]}
 			if not fabriken.has(z):
 				return {}
 			var f: Dictionary = fabriken[z]
@@ -2146,7 +2362,8 @@ func _quelle_info(quelle: String) -> Dictionary:
 
 
 func gegner_besiegt(g: Gegner) -> void:
-	budget += int(g.daten["praemie"])
+	if not g.klon:
+		budget += int(g.daten["praemie"])
 	gegner_entfernt(g)
 
 
@@ -2155,6 +2372,87 @@ func gegner_entfernt(g: Gegner) -> void:
 	g.trupp.erase(g)
 	gegner.erase(g)
 	g.queue_free()
+
+
+## Kommandant Brakk aufs Feld stellen (auch beim Laden eines Phantom-Stands und im Replay).
+func _setze_kommandant(z: Vector2i) -> void:
+	kommandant = Kommandant.new()
+	figuren.add_child(kommandant)
+	kommandant.einrichten_kommandant(self, karte, z)
+	einheiten.append(kommandant)
+
+
+## WASD steuert Brakk, solange kein Menü oder Fenster die Tastatur braucht.
+func kommandant_steuerbar() -> bool:
+	return _menue == null and phase != Phase.ENDE and not (_lexikon != null and _lexikon.visible) and not (_laufband != null and _laufband.visible)
+
+
+func _kommandant_meldung(text: String) -> void:
+	if text != "":
+		melde(text, 4.0)
+
+
+## [R]: Klonmaschine auf ein freies Feld setzen (einmal pro Runde, hält bis zum Rundenende).
+func stelle_klonmaschine(z: Vector2i) -> String:
+	if kommandant == null or kommandant.gefallen:
+		return ""
+	if kommandant.klon_genutzt:
+		return "Die Klonmaschine gibt es nur einmal pro Runde."
+	if not karte.ist_begehbar(z) or z.x < Werte.ZONE_SPALTEN or not karte.in_karte(z):
+		return "Die Klonmaschine braucht ein freies Feld."
+	kommandant.klon_genutzt = true
+	klonmaschine = Klonmaschine.new()
+	klonmaschine.spiel = self
+	klonmaschine.karte = karte
+	klonmaschine.zelle = z
+	klonmaschine.position = karte.mitte(z)
+	figuren.add_child(klonmaschine)
+	_notiere({"a": "klon", "x": z.x, "y": z.y})
+	return "Klonmaschine steht: Wer hindurchgeht, wird einmal geklont – deine Truppen, aber auch Gegner."
+
+
+## Klone aus der Klonmaschine: mit dem aktuellen Leben des Originals.
+func klone_gegner(g: Gegner) -> void:
+	var c := _neuer_gegner(g.typ, karte.zelle_bei(g.position), g._ziel)
+	c.position = g.position + Vector2(randf_range(-8, 8), randf_range(-6, 6))
+	c.leben = g.leben
+	c.klon = true
+	c.trupp = g.trupp
+	g.trupp.append(c)
+	c.plane_neu()
+
+
+func klone_einheit(e: Einheit) -> void:
+	if not fabriken.has(e.fabrik_zelle):
+		return
+	var f: Dictionary = fabriken[e.fabrik_zelle]
+	var c := Einheit.new()
+	figuren.add_child(c)
+	c.start(self, karte, f["typ"], e.fabrik_zelle, int(f.get("stufe", 0)), str(f.get("faehigkeit", "")))
+	c.position = e.position + Vector2(randf_range(-8, 8), randf_range(-6, 6))
+	c.leben = minf(e.leben, c.max_leben)
+	c.klon = true
+	einheiten.append(c)
+	if is_instance_valid(e.folge):
+		c.folge_kommandant(e.folge)
+		(e.folge as Kommandant).gesammelt.append(c)
+
+
+## Schwarmgeist gefallen: er zerfällt in Myr-Drohnen, die als eigener Trupp am Boden weiterkämpfen.
+func zerfall(g: Gegner) -> void:
+	var rudel: Array = []
+	var zelle := karte.zelle_bei(g.position)
+	if not karte.ist_begehbar(zelle):
+		return
+	for i in int(g.daten.get("zerfall", 3)):
+		var d := _neuer_gegner("enterer", zelle, g._ziel)
+		d._auf_wall = false   # Myr-Drohnen aus dem Schwarmgeist kämpfen am Boden
+		d._wall_zelle = Karte.KEINE
+		d.position = g.position + Vector2(randf_range(-14, 14), randf_range(-10, 10))
+		d.trupp = rudel
+		rudel.append(d)
+		d.plane_neu()
+	effekte.flaeche(g.position, Werte.ZELLE * 0.9, Color("ff7ad9"))
 
 
 func _neuer_gegner(typ: String, zelle: Vector2i, erstes_ziel: int) -> Gegner:
@@ -2267,7 +2565,7 @@ func belagerung_dockt(g: Gegner) -> void:
 	_loese_wurf_aus("dock", {"meiden": g.position})
 
 
-## Ein Belagerungsturm hat eine Turmtruppe abgesetzt. Bei der zweiten fliegt – falls geplant – ein Wurf auf die Verteidiger am Turm.
+## Ein Belagerungsturm hat eine Myr-Drohne abgesetzt. Bei der zweiten fliegt – falls geplant – ein Wurf auf die Verteidiger am Turm.
 func turmtruppe_abgesetzt(turm: Gegner) -> void:
 	_abgesetzt[turm] = int(_abgesetzt.get(turm, 0)) + 1
 	if _abgesetzt[turm] == 2:
@@ -2354,7 +2652,7 @@ func sprengung(g: Gegner, wall: Vector2i) -> void:
 		melde("Ein Sprenger hat %d Erdwälle hintereinander gesprengt!" % (reihe.size() + 1), 3.0)
 
 
-## Ein Belagerungsturm setzt eine Turmtruppe auf den Wall.
+## Ein Belagerungsturm setzt eine Myr-Drohne auf den Wall.
 func setze_enterer_ab(wall: Vector2i, leben_faktor: float, erstes_ziel: int) -> Gegner:
 	var g := Gegner.new()
 	figuren.add_child(g)
@@ -2440,6 +2738,9 @@ func gegner_am_ziel(g: Gegner) -> void:
 
 
 func einheit_gefallen(e: Einheit) -> void:
+	if e is Kommandant:
+		(e as Kommandant).faellt()
+		return
 	einheiten.erase(e)
 	if e.posten_zelle != Karte.KEINE and karte.posten.get(e.posten_zelle) == e:
 		karte.posten.erase(e.posten_zelle)
@@ -2486,6 +2787,8 @@ var _gratis: Dictionary = {}
 
 func kosten(typ: int) -> int:
 	match typ:
+		Karte.KOMMANDANT:
+			return Werte.KOSTEN_KOMMANDANT
 		Karte.WALL:
 			return 0 if freie_waelle > 0 else Werte.KOSTEN_WALL
 		Karte.STELLUNG:
@@ -2551,6 +2854,16 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 	typ = bautyp(z, typ)
 	if phantom_modus == "angriff":
 		return "Im Angriff baut der Verteidiger. Du planst die Welle im Taktikplaner [L]."
+	if typ == Karte.KOMMANDANT:
+		if kommandant != null:
+			return "Brakk ist schon im Spiel – es gibt ihn nur einmal."
+		if phase != Phase.BAU:
+			return "Brakk kommt zwischen den Wellen aufs Feld."
+		if not karte.ist_begehbar(z) or not karte.in_karte(z) or z.x < Werte.ZONE_SPALTEN:
+			return "Brakk braucht ein freies Feld."
+		if budget < kosten(typ):
+			return "Nicht genug Budget."
+		return ""
 	if phase == Phase.KAMPF and endkampf and typ != Karte.STELLUNG:
 		# Letzte Runde: alles außer Erdwällen darf auch während des Gegenangriffs gebaut werden.
 		if typ == Karte.WALL:
@@ -2609,6 +2922,12 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if phase == Phase.KAMPF:
 		eintrag["t"] = snappedf(_kampf_sek, 0.1)   # während der Welle gebaut
 	_notiere(eintrag)
+	if typ == Karte.KOMMANDANT:
+		_setze_kommandant(z)
+		werkzeug = Karte.FREI
+		if not still:
+			melde("Kommandant Brakk: [WASD] bewegen · [Q] Sammeln, nochmal [Q] Losschlagen · [E] auf den Wall/herunter · [R] Klonmaschine unter die Maus (einmal pro Runde).", 9.0)
+		return true
 	if typ == Karte.PANZER:
 		karte.panzer[z] = true
 		karte.queue_redraw()
@@ -2968,6 +3287,7 @@ func schild_bei(punkt: Vector2) -> Vector2i:
 func schade_schild(b: Vector2i, menge: float) -> void:
 	if not schilde.has(b):
 		return
+	objekt_zaehle(b, "abgefangen", minf(menge, maxf(float(schilde[b]["leben"]), 0.0)))
 	schilde[b]["leben"] = float(schilde[b]["leben"]) - menge
 	if schilde[b]["leben"] <= 0.0:
 		melde("Ein Energieschild ist zusammengebrochen – er lädt sich bis zur nächsten Runde wieder auf.", 4.0)
@@ -3035,6 +3355,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				waehle(Karte.TOR)
 			KEY_7:
 				waehle(Karte.PANZER)
+			KEY_8:
+				waehle(Karte.KOMMANDANT)
+			KEY_Q:
+				if kommandant != null:
+					_kommandant_meldung(kommandant.taste_q(get_global_mouse_position()))
+			KEY_E:
+				if kommandant != null:
+					_kommandant_meldung(kommandant.taste_e(get_global_mouse_position()))
+			KEY_R:
+				if kommandant != null:
+					_kommandant_meldung(stelle_klonmaschine(karte.zelle_bei(get_global_mouse_position())))
 			KEY_SPACE:
 				starte_welle()
 			KEY_L:
@@ -3094,18 +3425,32 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif werkzeug != Karte.FREI:
 				baue(z, werkzeug)
 			elif not _waehle_aus(get_global_mouse_position(), z):
-				if (fabriken.has(z) or karte.inhalt(z) == Karte.BATTERIE) and phase != Phase.ENDE:
+				if (fabriken.has(z) or karte.inhalt(z) == Karte.BATTERIE or karte.inhalt(z) == Karte.GENERATOR) and phase != Phase.ENDE:
 					_oeffne_fabrikmenue(z)
+					if fabriken.has(z) and str(fabriken[z]["typ"]) != "pilot" and phantom_modus != "angriff":
+						_zieh_von = z   # Maustaste gedrückt halten und auf eine Stellung ziehen = zuweisen
 				else:
 					_schliesse_fabrikmenue()
-			elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM) and phase != Phase.ENDE:
-				_oeffne_fabrikmenue(z)   # Batterie oder Turm angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
+			elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM or karte.inhalt(z) == Karte.GENERATOR) and phase != Phase.ENDE:
+				_oeffne_fabrikmenue(z)   # Batterie, Turm oder Generator angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
 			else:
 				_schliesse_fabrikmenue()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if not _rechtsklick_abriss(z):
 				werkzeug = Karte.FREI
+	elif event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _zieh_von != Karte.KEINE:
+		var von := _zieh_von
+		_zieh_von = Karte.KEINE
+		karte.zuweis_zug = Vector2.INF
+		karte.zuweis_einrast = Karte.KEINE
+		if z != von and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG:
+			schalte_zuweisung(von, z)
+			_oeffne_fabrikmenue(von)
 	elif event is InputEventMouseMotion:
+		if _zieh_von != Karte.KEINE and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			karte.zuweis_zug = get_global_mouse_position() if z != _zieh_von else Vector2.INF
+			karte.zuweis_einrast = z if karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG else Karte.KEINE   # über einer Stellung rastet der Pfeil ein
+			karte.queue_redraw()
 		# Mit gedrückter Maustaste Wälle "malen" bzw. wieder wegwischen
 		if werkzeug == Karte.WALL and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			baue(z, Karte.WALL, true)
@@ -3212,6 +3557,10 @@ func _aktualisiere_hud(delta: float) -> void:
 	for feld in _zins_felder:
 		(feld.get_parent() as Control).visible = not angreifer
 	(_knoepfe[Karte.FABRIK] as Button).text = "[1] Fabrik %d" % kosten(Karte.FABRIK)
+	if _knoepfe.has(Karte.KOMMANDANT):
+		var bk := _knoepfe[Karte.KOMMANDANT] as Button
+		bk.text = "[8] Brakk ✓" if kommandant != null else "[8] Brakk %d" % Werte.KOSTEN_KOMMANDANT
+		bk.disabled = bk.disabled or kommandant != null
 	(_knoepfe[Karte.WALL] as Button).text = "[2] Erdwall gratis ×%d" % freie_waelle if freie_waelle > 0 else "[2] Erdwall %d" % Werte.KOSTEN_WALL
 	_aktualisiere_weganzeige(delta)
 
@@ -3239,6 +3588,8 @@ func _aktualisiere_hud(delta: float) -> void:
 		text = "Stellung: Ausbau eines Erdwalls. Eine Einheit steht oben, schießt weiter und über Wälle hinweg."
 	elif werkzeug == Karte.TURM:
 		text = "Turm: Die Form der Nachbarwälle bestimmt den Typ (die Vorschau nennt ihn). [I] → Bauten zeigt alle Formen."
+	elif werkzeug == Karte.KOMMANDANT:
+		text = "Kommandant Brakk (einmal pro Partie): Klick auf ein freies Feld. Danach [WASD], [Q] Sammeln/Losschlagen, [E] Klettern, [R] Klonmaschine."
 	elif werkzeug == Karte.SPIEGEL:
 		text = "Spiegel: nur an Wallenden. Bodentruppen schießen über ihn um die Ecke (helle Felder)."
 	elif werkzeug == Karte.MAGNET:
@@ -3293,6 +3644,7 @@ func _baue_hud() -> void:
 		[Karte.BATTERIE, "[5] Batterie %d" % Werte.KOSTEN_BATTERIE, ""],
 		[Karte.TOR, "[6] Tor %d" % Werte.KOSTEN_TOR, ""],
 		[Karte.PANZER, "[7] Panzer %d" % Werte.KOSTEN_PANZER, ""],
+		[Karte.KOMMANDANT, "[8] Brakk %d" % Werte.KOSTEN_KOMMANDANT, ""],
 	]:
 		var typ: int = eintrag[0]
 		var muster: String = eintrag[2] if eintrag[2] != "" else eintrag[1]

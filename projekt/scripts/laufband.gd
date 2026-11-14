@@ -14,8 +14,10 @@ const WURF_H := 30.0
 const FUSS_Y := 72.0
 const FUSS_H := 46.0
 const ACHSE_Y := 120.0
-const KURZ := {"hund": "H", "sphaere": "Sp", "fahne": "Fa", "sprenger": "Spr", "rauch": "R", "belagerung": "BT"}
-const AUSLOESER := {"": "auf Zeit", "dock": "wenn angedockt", "drohnen": "nach 2 Turmtruppen"}
+const KURZ := {"hund": "H", "sphaere": "Sp", "fahne": "Fa", "sprenger": "Spr", "rauch": "R", "belagerung": "BT", "schild": "Sch", "sani": "San", "schwarm": "SG"}
+const AUSLOESER := {"": "auf Zeit", "dock": "wenn angedockt", "drohnen": "nach 2 Myr-Drohnen"}
+const AUSGANG := {"": "Mitte (Hauptlinie)", "oben": "oben", "unten": "unten"}
+const AUSGANG_ZEICHEN := {"": "", "oben": "↑ ", "unten": "↓ "}
 const PAUSE_MIN := -2.4       # kürzer geht es nicht: zwei Trupps brauchen 0,6 s Abstand
 const PAUSE_MAX := 60.0
 const RASTER := 0.5           # Kärtchen rasten auf halbe Sekunden ein
@@ -117,6 +119,19 @@ func _schleudern() -> int:
 	return maxi(1, n)   # fehlt sie noch, stellt das Spiel eine hin, sobald der Plan einen Wurf enthält
 
 
+## Nummer jedes Wurfs (Index im Plan -> 1, 2, …), von links nach rechts auf der Zeitachse – wie auf der Karte.
+static func wurf_nummern(p: Array) -> Dictionary:
+	var wuerfe: Array = []
+	for i in p.size():
+		if p[i].get("weg", "l") == "w":
+			wuerfe.append(i)
+	wuerfe.sort_custom(func(a: int, b: int): return float(p[a].get("zeit", 0.0)) < float(p[b].get("zeit", 0.0)) or (float(p[a].get("zeit", 0.0)) == float(p[b].get("zeit", 0.0)) and a < b))
+	var nr := {}
+	for k in wuerfe.size():
+		nr[wuerfe[k]] = k + 1
+	return nr
+
+
 func _ist_wurf(i: int) -> bool:
 	return plan[i]["weg"] == "w"
 
@@ -177,6 +192,7 @@ func _neuer_trupp_bei(typ: String, sek: float, wurf: bool) -> void:
 		plan.append(neu)
 		gewaehlt = plan.size() - 1
 		_neu()
+		spiel.waehle_wurfziel(neu)   # gleich zielen lassen – abbrechen = automatisch
 		return
 	# zu Fuß: Wunschzeiten aller festhalten, den neuen dazwischensetzen, Pausen neu ausrechnen
 	var wunsch := _startzeiten()
@@ -244,9 +260,24 @@ func _wechsle_weg(i: int = -1, sek: float = -1.0) -> bool:
 		t["weg"] = "w"
 		t["pause"] = 0.0
 		t["zeit"] = maxf(0.0, _raste(sek))
+		t.erase("ausgang")
 		gewaehlt = _ordne_nach(wunsch, i)
+		_neu()
+		spiel.waehle_wurfziel(t)   # gleich zielen lassen – abbrechen = automatisch
+		return true
 	_neu()
 	return true
+
+
+func _wechsle_ausgang() -> void:
+	var t: Dictionary = plan[gewaehlt]
+	var folge: Array = AUSGANG.keys()
+	var neu: String = folge[(folge.find(str(t.get("ausgang", ""))) + 1) % folge.size()]
+	if neu == "":
+		t.erase("ausgang")
+	else:
+		t["ausgang"] = neu
+	_neu()
 
 
 func _wechsle_ausloeser() -> void:
@@ -434,6 +465,8 @@ func _neu() -> void:
 	_zeile.add_child(p)
 	_knopf(_zeile, "− 1 s", _schritt.bind(-1.0))
 	_knopf(_zeile, "+ 1 s", _schritt.bind(1.0))
+	if not wurf:
+		_knopf(_zeile, "Ausgang: %s" % AUSGANG[str(g.get("ausgang", ""))], _wechsle_ausgang)
 	if wurf:
 		_knopf(_zeile, "Auslöser: %s" % AUSLOESER[str(g.get("wenn", ""))], _wechsle_ausloeser)
 		_knopf(_zeile, "Ziel: Feld %d/%d  ✕" % [int(g["ziel"][0]), int(g["ziel"][1])] if g.has("ziel") else "Ziel: automatisch → wählen", _wurfziel, str(g.get("wenn", "")) != "")
@@ -462,6 +495,7 @@ func _draw() -> void:
 		sek += 5
 	# Kärtchen
 	var voriges := -1
+	var nummern := wurf_nummern(plan)
 	for i in plan.size():
 		var r: Rect2 = _rechtecke[i]
 		var wurf := _ist_wurf(i)
@@ -469,10 +503,13 @@ func _draw() -> void:
 		draw_rect(r, Color("5a3d12") if wurf else Color("332c40"))
 		draw_rect(r, Color("4aa3ff") if i == gewaehlt else (Color("ef9f27") if wurf else Color("8d84a0")), false, 2.0 if i == gewaehlt else 1.0)
 		var text := _trupp_text(plan[i]["typen"], false)
-		if mit_ausloeser:
-			text = "⚑ " + text
-		elif wurf and plan[i].has("ziel"):
-			text = "◎ " + text
+		if wurf:
+			if mit_ausloeser:
+				text = "⚑ " + text
+			elif plan[i].has("ziel"):
+				text = "W%d◎ %s" % [nummern[i], text]   # dieselbe Nummer wie das Fadenkreuz auf der Karte
+		else:
+			text = AUSGANG_ZEICHEN[str(plan[i].get("ausgang", ""))] + text
 		var breite := _schrift.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 		var farbe_text := Color("fac775") if wurf else Color("ece6f5")
 		var y := r.position.y + r.size.y * 0.5 + 4
@@ -638,13 +675,12 @@ class Marken extends Node2D:
 			for z: Vector2i in spiel.wurf_standorte():
 				draw_arc(spiel.karte.mitte(z), float(Werte.WURF["weit"]) * Werte.ZELLE, 0.0, TAU, 64, Color("ef9f27"), 2.0)
 		var plan: Array = spiel._plaene.get(spiel.welle, [])
-		var nr := 0
-		for t: Dictionary in plan:
-			if t.get("weg", "l") != "w":
+		var nummern := Laufband.wurf_nummern(plan)
+		for i in plan.size():
+			var t: Dictionary = plan[i]
+			if t.get("weg", "l") != "w" or not t.has("ziel"):
 				continue
-			nr += 1
-			if not t.has("ziel"):
-				continue
+			var nr: int = nummern[i]
 			var m: Vector2 = spiel.karte.mitte(Vector2i(int(t["ziel"][0]), int(t["ziel"][1])))
 			draw_arc(m, 22.0, 0.0, TAU, 32, Color("ef9f27"), 3.0)
 			draw_line(m + Vector2(-8, 0), m + Vector2(8, 0), Color("ef9f27"), 2.0)

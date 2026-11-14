@@ -17,11 +17,11 @@ static func ordner(art: String) -> Array:
 		liste_.append(w + "/" + str(UNTERORDNER[art]))
 	return liste_
 # Startwerte, falls „Phantom Dateien/preise.json“ fehlt. Anker: Hund = 10.
-const PREISE := {"hund": 10, "sphaere": 35, "fahne": 60, "sprenger": 55, "rauch": 50, "belagerung": 150}
+const PREISE := {"hund": 10, "sphaere": 35, "fahne": 60, "sprenger": 55, "rauch": 50, "belagerung": 150, "schild": 45, "sani": 50, "schwarm": 70}
 const WURF_AUFSCHLAG: int = 40
 const WURF_HOECHSTENS: int = 4          # so viele Einheiten fasst ein Wurf
 const NICHT_WERFBAR: Array[String] = ["belagerung"]
-const TYPEN: Array[String] = ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung"]
+const TYPEN: Array[String] = ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung", "schild", "sani", "schwarm"]
 
 static var _preise: Dictionary = {}
 static var _wurf: int = -1
@@ -244,6 +244,18 @@ static func _wende_an(zellen: Dictionary, schilde: Dictionary, a: Dictionary) ->
 					zellen[z]["faehigkeit"] = str(a["faehigkeit"])
 		"schild":
 			schilde[Vector2i(int(a["bx"]), int(a["by"]))] = z
+		"ziel":
+			if zellen.has(z):
+				zellen[z]["ziel"] = str(a["modus"])
+		"zuweisung":
+			if zellen.has(z):
+				var liste: Array = zellen[z].get("stellungen", [])
+				var s := [int(a["sx"]), int(a["sy"])]
+				if liste.has(s):
+					liste.erase(s)
+				else:
+					liste.append(s)
+				zellen[z]["stellungen"] = liste
 
 
 static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
@@ -262,6 +274,10 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 				var f := {"x": z.x, "y": z.y, "einheit": c["einheit"], "stufe": c["stufe"]}
 				if c.has("faehigkeit"):
 					f["faehigkeit"] = c["faehigkeit"]
+				if c.has("ziel"):
+					f["ziel"] = c["ziel"]
+				if c.has("stellungen"):
+					f["stellungen"] = c["stellungen"]
 				if c.has("partner"):
 					f["batterie"] = [c["partner"].x, c["partner"].y]
 				fabriken.append(f)

@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/replay.gd -- <partie.json> [Anzahl Läufe] [frei]
 ## "frei" = unbegrenztes Budget (jeder aufgezeichnete Zug klappt, auch wenn das Geld diesmal nicht gereicht hätte).
 
-const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR, "panzer": Karte.PANZER, "spiegel": Karte.SPIEGEL, "magnet": Karte.MAGNET, "generator": Karte.GENERATOR}
+const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR, "panzer": Karte.PANZER, "spiegel": Karte.SPIEGEL, "magnet": Karte.MAGNET, "generator": Karte.GENERATOR, "kommandant": Karte.KOMMANDANT}
 
 var partie: Dictionary
 var laeufe := 5
@@ -92,6 +92,12 @@ func _process(delta: float) -> bool:
 				"upgrade":
 					if not spiel.werte_auf(z, str(a.get("faehigkeit", ""))):
 						gescheitert += 1
+				"ziel":
+					spiel.setze_zielmodus(z, str(a["modus"]))
+				"klon":
+					spiel.stelle_klonmaschine(z)
+				"zuweisung":
+					spiel.schalte_zuweisung(z, Vector2i(int(a["sx"]), int(a["sy"])))
 		spiel.variante = int(runde.get("variante", spiel.variante))
 		runden_index += 1
 		leben_vorher = spiel.leben

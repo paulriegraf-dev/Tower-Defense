@@ -8,8 +8,8 @@ extends Node2D
 ##   "fahne"      – geht dem Trupp voran und macht ihn 30 % schneller, kämpft nicht, nimmt Checkpoints schneller ein
 ##   "sprenger"   – läuft zum Erdwall mit der größten Abkürzung und sprengt ihn
 ##   "rauch"      – wirft Rauch auf Stellungen
-##   "belagerung" – fährt zum Wallstück mit den meisten Stellungen, dockt an, setzt Turmtruppen ab
-##   "enterer"    – Turmtruppe: läuft auf den Wällen und greift Stellungen im Nahkampf an
+##   "belagerung" – fährt zum nächsten Erdwall nach der Zone mit Stellung/Turm in der Nähe, dockt an, setzt Myr-Drohnen ab
+##   "enterer"    – Myr-Drohne: läuft auf den Wällen und greift Stellungen im Nahkampf an
 
 var _ziel_ist_fabrik := false       # Sprenger ohne lohnenden Erdwall: sein Ziel ist eine Fabrik
 var spiel: Node
@@ -40,16 +40,21 @@ var _sonder_index := 0
 var _sonder_plan_in := 0.0
 var _angedockt := -1.0              # Belagerungsturm: Sekunden seit dem Andocken (-1 = noch unterwegs)
 var _abgesetzt := 0
-var _auf_wall := false              # Turmtruppe: läuft noch oben auf den Wällen
+var _auf_wall := false              # Myr-Drohne: läuft noch oben auf den Wällen
 var _wall_zelle := Karte.KEINE
-var _leerlauf := 0.0                # Turmtruppe: Sekunden ohne Ziel auf dem Wall
-var _brut: Array = []               # Belagerungsturm: seine abgesetzten Turmtruppen
+var _leerlauf := 0.0                # Myr-Drohne: Sekunden ohne Ziel auf dem Wall
+var _brut: Array = []               # Belagerungsturm: seine abgesetzten Myr-Drohnen
 var geworfen := false               # von der Wurf-Schleuder hinter die vordere Front geworfen
 var markiert := 0.0                 # Sekunden: von einem Scharfschützen markiert, nimmt mehr Schaden
 var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
 var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schwächer als Plasmagel)
 var eingefroren := 0.0              # Sekunden: Schockfrost – steht ganz still
 var sproede := 0.0                  # Sekunden: Sprödes Eis – nimmt mehr Schaden
+var klon := false                   # aus der Klonmaschine: keine Prämie, wird nicht noch einmal geklont
+var wartet := false                 # gebündelt: wartet in der Zone, bis sein Trupp vollständig ist
+var warte_noch := 0.0               # gestaffelt: so viele Sekunden nach dem Losgehen der Schildträger
+var _im_gefecht := 0.0              # Fernkämpfer: schießt gerade -> läuft langsamer
+var blick := Vector2.RIGHT          # Laufrichtung (Schildträger: dorthin zeigt sein Schild)
 
 
 func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, start_zelle: Vector2i, erstes_ziel: int) -> void:
@@ -59,7 +64,7 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	daten = Werte.GEGNER[typ]
 	rolle = daten["rolle"]
 	leben_faktor = p_leben_faktor
-	max_leben = daten["leben"] * leben_faktor
+	max_leben = (float(daten["leben"]) + Werte.GEGNER_GRUND_LEBEN) * leben_faktor
 	leben = max_leben
 	_versatz = Vector2(randf_range(-6, 6), randf_range(-6, 6))
 	_ziel = erstes_ziel
@@ -68,7 +73,7 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	add_child(_sprite)
 	_sprite.einrichten(daten)
 	if rolle == "enterer":
-		# Turmtruppen beginnen oben auf dem Wall
+		# Myr-Drohnen beginnen oben auf dem Wall
 		_auf_wall = true
 		_wall_zelle = start_zelle
 		position = karte.mitte(start_zelle) + Vector2(0, -12)
@@ -81,6 +86,8 @@ func tempo() -> float:
 	var t := _tempo_ungebremst()
 	if eingefroren > 0.0:
 		return 0.0
+	if _im_gefecht > 0.0 and daten["fernkampf"]:
+		t *= Werte.FERNKAMPF_GEFECHT_TEMPO
 	if gebremst > 0.0:
 		return t * Werte.PLASMAGEL_TEMPO
 	if gefroren > 0.0:
@@ -144,6 +151,10 @@ func rest_weg() -> int:
 
 ## Weg ab dem aktuellen Feld neu berechnen (z. B. nachdem ein Wall gefallen ist).
 func plane_neu() -> void:
+	# Schon eingenommene Checkpoints muss niemand mehr ablaufen: direkt zum nächsten offenen (bzw. zur Basis)
+	if karte.cp_aktiv:
+		while _ziel < karte.checkpoints.size() and karte.cp_feind[_ziel]:
+			_ziel += 1
 	_weg = karte.gegner_weg(typ, karte.zelle_bei(position), karte.ziel_zelle(_ziel))
 	_index = 1
 	_sonder_plan_in = 0.0   # Sprenger und Belagerungsturm wählen ihr Ziel neu
@@ -154,6 +165,14 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
+	if wartet:
+		_sprite.bewegt(false)
+		return
+	if warte_noch > 0.0:
+		warte_noch -= delta
+		_sprite.bewegt(false)
+		return
+	_im_gefecht -= delta
 	# Steht er (nimmt einen Checkpoint ein, kämpft)? Dann warten Abfänger nicht am Treffpunkt, sondern kommen zu ihm.
 	if position.distance_to(_stand_pos) < 2.0:
 		_stand += delta
@@ -195,6 +214,8 @@ func _process(delta: float) -> void:
 				return
 		"rauch":
 			_wirf_rauch(reichweite)
+		"sani":
+			_heile(reichweite)
 
 	# 1) Ziel in Reichweite? Nahkämpfer bleiben stehen und kämpfen.
 	if daten["fernkampf"]:
@@ -206,12 +227,14 @@ func _process(delta: float) -> void:
 			bau = karte.gebaeude_in_reichweite(position, reichweite)
 			if bau == Karte.KEINE:
 				ziel = spiel.fernziel(position, reichweite, 2)
+		if ziel != null or bau != Karte.KEINE:
+			_im_gefecht = 0.4   # beim Schießen läuft sie nur langsam weiter
 		if _abkling <= 0.0 and (ziel != null or bau != Karte.KEINE):
 			_abkling = daten["abklingzeit"]
 			_sprite.angriff(daten["abklingzeit"])
 			if ziel != null:
 				spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
-				ziel.nimm_schaden(daten["schaden"])
+				ziel.nimm_schaden(float(daten.get("schaden_einheit", daten["schaden"])))
 			else:
 				spiel.schuss(position + Vector2(0, -6), karte.mitte(bau), Color("ff7ad9"))
 				karte.beschiesse(bau, daten["schaden"])
@@ -272,7 +295,25 @@ func _laufe_zu(punkt: Vector2, delta: float) -> void:
 	_sprite.bewegt(true)
 	if absf(punkt.x - position.x) > 1.0:
 		_sprite.flip_h = punkt.x < position.x
+	if position.distance_to(punkt) > 0.5:
+		blick = (punkt - position).normalized()
 	position = position.move_toward(punkt, tempo() * Werte.ZELLE * delta)
+
+
+## Sanitäter: alle paar Sekunden die Gegner im Umkreis heilen (sich selbst nicht).
+func _heile(reichweite: float) -> void:
+	if _abkling > 0.0:
+		return
+	_abkling = float(daten["abklingzeit"])
+	var geheilt := false
+	for g in spiel.gegner:
+		if g != self and is_instance_valid(g) and not g._tot and g.leben < g.max_leben and position.distance_to(g.position) <= reichweite:
+			g.leben = minf(g.max_leben, g.leben + float(daten["heilung"]) * leben_faktor)
+			g.queue_redraw()
+			geheilt = true
+	if geheilt:
+		_sprite.angriff(float(daten["angriff_dauer"]))
+		spiel.effekte.flaeche(position, reichweite, Color("5dfc8a"))
 
 
 # ------------------------------------------------- Sprenger und Belagerungsturm
@@ -334,7 +375,7 @@ func _zum_wall(delta: float) -> bool:
 	return true
 
 
-## Angedockter Belagerungsturm: nach einer Wartezeit springt alle paar Sekunden eine Turmtruppe auf den Wall.
+## Angedockter Belagerungsturm: nach einer Wartezeit springt alle paar Sekunden eine Myr-Drohne auf den Wall.
 func _setze_truppen_ab(delta: float) -> void:
 	if karte.inhalt(_sonderziel) != Karte.WALL:
 		# Der Wall ist weg: neues Ziel suchen
@@ -348,7 +389,7 @@ func _setze_truppen_ab(delta: float) -> void:
 		_tot = true
 		spiel.gegner_entfernt(self)
 		return
-	# Solange der Turm steht, kommen Turmtruppen nach – aber nie mehr als ENTERER_GLEICHZEITIG auf einmal.
+	# Solange der Turm steht, kommen Myr-Drohnen nach – aber nie mehr als ENTERER_GLEICHZEITIG auf einmal.
 	_brut = _brut.filter(func(g): return is_instance_valid(g) and not g._tot)
 	var faellig := int((_angedockt - Werte.ANDOCK_SEK) / Werte.ENTERER_ABSTAND) + 1
 	if _angedockt < Werte.ANDOCK_SEK or _abgesetzt >= faellig or _brut.size() >= Werte.ENTERER_GLEICHZEITIG:
@@ -359,7 +400,7 @@ func _setze_truppen_ab(delta: float) -> void:
 	spiel.turmtruppe_abgesetzt(self)
 
 
-# ------------------------------------------------------------- Turmtruppe
+# ------------------------------------------------------------- Myr-Drohne
 
 func _auf_dem_wall(delta: float, reichweite: float) -> void:
 	if karte.inhalt(_wall_zelle) != Karte.WALL:
@@ -397,7 +438,7 @@ func _auf_dem_wall(delta: float, reichweite: float) -> void:
 			else:
 				karte.schade_turm(ziel_zelle, daten["schaden"])
 				if karte.turm_lahm(ziel_zelle):
-					spiel.melde("Turmtruppen haben einen Turm lahmgelegt – er schweigt bis zum Ende der Runde.", 4.0)
+					spiel.melde("Myr-Drohnen haben einen Turm lahmgelegt – er schweigt bis zum Ende der Runde.", 4.0)
 		return
 	if weg.size() < 2:
 		return
@@ -435,6 +476,10 @@ func nimm_schaden(menge: float) -> void:
 		menge *= Werte.MARKIERUNG_FAKTOR
 	if sproede > 0.0:
 		menge *= float(Werte.TURM_STUFE_3["frost"]["sproede"]["sproede"])
+	if rolle == "schild" and spiel.schuss_herkunft != Vector2.INF:
+		var zu: Vector2 = spiel.schuss_herkunft - position
+		if zu.length() > 4.0 and absf(blick.angle_to(zu)) <= deg_to_rad(Werte.SCHILD_FRONT_WINKEL):
+			menge *= Werte.SCHILD_FRONT_FAKTOR
 	var wirksam := minf(menge, maxf(leben, 0.0))
 	leben -= menge
 	_treffer = 0.08
@@ -442,6 +487,8 @@ func nimm_schaden(menge: float) -> void:
 	spiel.zaehle_schaden(wirksam, leben <= 0.0)   # für die Schadensliste [Tab]
 	if leben <= 0.0:
 		_tot = true
+		if rolle == "schwarm":
+			spiel.zerfall(self)
 		spiel.gegner_besiegt(self)
 
 
