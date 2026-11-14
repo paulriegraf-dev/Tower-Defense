@@ -73,7 +73,7 @@ func _zeige_haupt() -> void:
 
 func _zeige_phantom_modus() -> void:
 	_leere("Phantom-Modus")
-	_knopf("Angreifer", "Seitenwechsel: Du greifst den aufgezeichneten Bau eines Spielers an – mit festem Punktebudget je Runde.", _zeige_phantome.bind("verteidigung"))
+	_knopf("Angreifer", "Seitenwechsel: Du greifst den aufgezeichneten Bau eines Spielers an – mit festem Budget je Runde.", _zeige_phantome.bind("verteidigung"))
 	_knopf("Verteidiger", "Normales Spiel, aber die 20 Wellen stammen von einem Angreifer aus dem Phantom-Modus.", _zeige_phantome.bind("angriff"))
 	_zurueck(_zeige_haupt)
 

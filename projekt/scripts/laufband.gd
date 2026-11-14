@@ -129,7 +129,7 @@ func _raste(sek: float) -> float:
 
 func _passt(mehr: int) -> bool:
 	if verbraucht() + mehr > budget():
-		spiel.melde("Nicht genug Punkte: noch %d von %d frei." % [budget() - verbraucht(), budget()], 3.0)
+		spiel.melde("Nicht genug Budget: noch %d von %d frei." % [budget() - verbraucht(), budget()], 3.0)
 		return false
 	return true
 
@@ -401,7 +401,7 @@ func _neu() -> void:
 			_rechtecke.append(Rect2(x, WURF_Y + 3.0, b, WURF_H - 6.0))
 		else:
 			_rechtecke.append(Rect2(x, FUSS_Y + 4.0, b, FUSS_H - 8.0))
-	_kopf.text = "Taktikplaner · Runde %d    %d / %d Punkte    Einheit aufs Band ziehen · Kärtchen verschieben · zwischen den Spuren ziehen = Wurf / zu Fuß" % [spiel.welle, verbraucht(), budget()]
+	_kopf.text = "Taktikplaner · Runde %d    Budget %d / %d    Einheit aufs Band ziehen · Kärtchen verschieben · zwischen den Spuren ziehen = Wurf / zu Fuß" % [spiel.welle, verbraucht(), budget()]
 	for k in _zeile.get_children():
 		_zeile.remove_child(k)
 		k.queue_free()
@@ -416,7 +416,7 @@ func _neu() -> void:
 		return
 	var g: Dictionary = plan[gewaehlt]
 	var wurf: bool = g["weg"] == "w"
-	info.text = "%s · %d Punkte   " % ["Wurf" if wurf else "Trupp", Phantom.trupp_preis(g)]
+	info.text = "%s · %d Budget   " % ["Wurf" if wurf else "Trupp", Phantom.trupp_preis(g)]
 	var gesehen := {}
 	for typ: String in g["typen"]:
 		if gesehen.has(typ):

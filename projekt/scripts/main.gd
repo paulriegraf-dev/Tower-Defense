@@ -60,6 +60,7 @@ var _gefahr: Dictionary = {}        # Felder nahe an Gegnern (Zwischenspeicher f
 var _gefahr_stand := -1
 var _zins_felder: Array[ColorRect] = []
 var _lbl_zins: Label
+var _lbl_zins_titel: Label
 var _wurf_schlange: Array = []      # Würfe dieser Welle: {"typen", "nach", "wenn"}
 var _pausen: Array = []             # zu _schlange: Sekunden mehr/weniger Pause vor dem Trupp
 var _trupp_nr := 0                  # so viele Lauf-Trupps dieses Durchgangs sind schon unterwegs
@@ -2724,6 +2725,14 @@ func _aktualisiere_hud(delta: float) -> void:
 	for i in _zins_felder.size():
 		_zins_felder[i].color = Color("ffd34d") if (i + 1) * Werte.ZINS_JE_SCHRITT <= zins else Color("1b1722")
 	_lbl_zins.text = "+%d" % zins
+	# Als Angreifer baut und spart man nicht: Bauknöpfe und Zinsen ausblenden
+	var angreifer := phantom_modus == "angriff"
+	for typ: int in _knoepfe:
+		(_knoepfe[typ] as Button).visible = not angreifer
+	_lbl_zins_titel.visible = not angreifer
+	_lbl_zins.visible = not angreifer
+	for feld in _zins_felder:
+		(feld.get_parent() as Control).visible = not angreifer
 	(_knoepfe[Karte.FABRIK] as Button).text = "[1] Fabrik  %d" % kosten(Karte.FABRIK)
 
 	# Hinweiszeile: kurze Meldung hat Vorrang, sonst ein Tipp passend zur Lage.
@@ -2808,7 +2817,8 @@ func _baue_hud() -> void:
 	_btn_start.text = "[Leertaste] Welle starten"
 
 	# Zinsanzeige wie in Teamfight Tactics: ein Feld je Zinsschritt, gefüllt = schon erreicht
-	_label(unten, Vector2(x + 8, 10), 15, Color("d8cfe6")).text = "Zinsen"
+	_lbl_zins_titel = _label(unten, Vector2(x + 8, 10), 15, Color("d8cfe6"))
+	_lbl_zins_titel.text = "Zinsen"
 	for i in Werte.ZINS_STUFEN:
 		var rahmen := ColorRect.new()
 		rahmen.color = Color("3a3344")
@@ -2918,7 +2928,7 @@ func _baue_hud() -> void:
 	kopf.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	spalte.add_child(kopf)
 	var was := Label.new()
-	was.text = "Du wechselst die Seite.\n\nEin Phantom geht gegen dich in die Defensive: der Bau aus einer anderen Verteidigerrunde, Runde für Runde so nachgebaut, wie er damals stand.\n\nJede Runde steht dir ein festes Punktebudget zur Verfügung. Im Taktikplaner stellst du daraus deine Angriffswelle zusammen – du bestimmst die Einheiten, ihre Reihenfolge, die Pausen dazwischen und was über die Mauer geworfen wird.\n\nDein Ziel: Besiege das Phantom, indem du ihm alle 15 Leben nimmst – oder halte in Runde 20 so lange durch wie möglich. Aus deiner Leistung wird am Ende ein Score.\n\nDeine eben gespielte Partie ist gespeichert und steht ab jetzt selbst als Verteidiger-Phantom im Pool."
+	was.text = "Du wechselst die Seite.\n\nEin Phantom geht gegen dich in die Defensive: der Bau aus einer anderen Verteidigerrunde, Runde für Runde so nachgebaut, wie er damals stand.\n\nJede Runde steht dir ein festes Budget zur Verfügung. Im Taktikplaner stellst du daraus deine Angriffswelle zusammen – du bestimmst die Einheiten, ihre Reihenfolge, die Pausen dazwischen und was über die Mauer geworfen wird.\n\nDein Ziel: Besiege das Phantom, indem du ihm alle 15 Leben nimmst – oder halte in Runde 20 so lange durch wie möglich. Aus deiner Leistung wird am Ende ein Score.\n\nDeine eben gespielte Partie ist gespeichert und steht ab jetzt selbst als Verteidiger-Phantom im Pool."
 	was.add_theme_font_size_override("font_size", 18)
 	was.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	was.custom_minimum_size = Vector2(740, 0)
