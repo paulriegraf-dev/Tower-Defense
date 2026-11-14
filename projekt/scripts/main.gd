@@ -223,7 +223,9 @@ func starte_phantom_angriff(pfad: String) -> bool:
 	_geknackt = 0
 	nebel.vergiss()
 	_ersatz = []
-	for f: Dictionary in Phantom.liste("verteidigung"):
+	var pool := Phantom.liste("verteidigung")
+	pool.shuffle()   # Ersatz-Phantome zufällig aus dem Pool
+	for f: Dictionary in pool:
 		if str(f["pfad"]).get_file() != pfad.get_file() and _ersatz.size() < 2:
 			_ersatz.append(f["pfad"])
 	leben = Werte.START_LEBEN

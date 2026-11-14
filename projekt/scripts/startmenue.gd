@@ -1,5 +1,5 @@
 class_name Startmenue extends CanvasLayer
-## Startmenü: normales Spiel, Sandbox oder Phantom-Modus (dort weiter: Angreifer oder Verteidiger, dann das Phantom).
+## Startmenü: normales Spiel, Sandbox oder Phantom-Modus (dort weiter: Angreifer oder Verteidiger; das Phantom wird zufällig gezogen).
 ## Bedient wird es nur mit der Maus.
 
 signal gewaehlt(sandbox: bool)
@@ -73,30 +73,24 @@ func _zeige_haupt() -> void:
 
 func _zeige_phantom_modus() -> void:
 	_leere("Phantom-Modus")
-	_knopf("Angreifer", "Seitenwechsel: Du greifst den aufgezeichneten Bau eines Spielers an – mit festem Budget je Runde.", _zeige_phantome.bind("verteidigung"))
-	_knopf("Verteidiger", "Normales Spiel, aber die 20 Wellen stammen von einem Angreifer aus dem Phantom-Modus.", _zeige_phantome.bind("angriff"))
+	_knopf("Angreifer", "Seitenwechsel: Du greifst den aufgezeichneten Bau eines zufälligen Spielers an – mit festem Budget je Runde.", _zeige_phantome.bind("verteidigung"))
+	_knopf("Verteidiger", "Normales Spiel, aber die 20 Wellen stammen von einem zufälligen Angreifer aus dem Phantom-Modus.", _zeige_phantome.bind("angriff"))
 	_zurueck(_zeige_haupt)
 
 
-## Liste der Phantome einer Art; ein Klick startet den Modus damit.
+## Zieht ein zufälliges Phantom dieser Art und startet den Modus damit (14.11.: keine Auswahl mehr).
 func zeige_phantome(art: String) -> void:
 	_zeige_phantome(art)
 
 
 func _zeige_phantome(art: String) -> void:
 	var funde := Phantom.liste(art)
-	_leere("Welchen Bau greifst du an?" if art == "verteidigung" else "Gegen wessen Angriff verteidigst du?", 26)
-	if funde.is_empty():
-		var leer := Label.new()
-		leer.text = "Noch kein Phantom im Ordner „Phantom Dateien“." if art == "verteidigung" else "Noch kein Angriff gespeichert. Spiele zuerst einmal als Angreifer."
-		leer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_box.add_child(leer)
-	for f: Dictionary in funde.slice(0, 8):
-		var b := Button.new()
-		b.text = f["titel"]
-		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(560, 44)
-		b.add_theme_font_size_override("font_size", 17)
-		b.pressed.connect(func(): phantom_gewaehlt.emit(art, f["pfad"]))
-		_box.add_child(b)
+	if not funde.is_empty():
+		phantom_gewaehlt.emit(art, str((funde.pick_random() as Dictionary)["pfad"]))
+		return
+	_leere("Angreifer" if art == "verteidigung" else "Verteidiger", 26)
+	var leer := Label.new()
+	leer.text = "Noch kein Phantom im Ordner „Phantom Dateien“." if art == "verteidigung" else "Noch kein Angriff gespeichert. Spiele zuerst einmal als Angreifer."
+	leer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_box.add_child(leer)
 	_zurueck(_zeige_phantom_modus)

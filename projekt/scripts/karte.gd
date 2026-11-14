@@ -925,9 +925,9 @@ func bestes_ziel_ab(z: Vector2i, ab: int) -> int:
 
 
 ## Geworfene Gegner stürmen Checkpoints: der nächste Checkpoint ab `z`, der noch nicht dem Gegner gehört
-## (auch wenn er auf der Route schon hinter ihnen liegt). Gibt es keinen, geht es zur Basis.
+## (auch wenn er auf der Route schon hinter ihnen liegt). Gibt es keinen, geht es über den letzten Checkpoint zur Basis.
 func sturmziel_ab(z: Vector2i) -> int:
-	var bestes := checkpoints.size()
+	var bestes := checkpoints.size() - 1 if cp_aktiv and checkpoints.size() > 0 else checkpoints.size()
 	var beste_laenge := 1 << 30
 	if not cp_aktiv:
 		return bestes

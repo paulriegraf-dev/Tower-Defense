@@ -151,9 +151,10 @@ func rest_weg() -> int:
 
 ## Weg ab dem aktuellen Feld neu berechnen (z. B. nachdem ein Wall gefallen ist).
 func plane_neu() -> void:
-	# Schon eingenommene Checkpoints muss niemand mehr ablaufen: direkt zum nächsten offenen (bzw. zur Basis)
+	# Schon eingenommene Checkpoints muss niemand mehr ablaufen: direkt zum nächsten offenen.
+	# Der letzte Checkpoint ist Pflicht (14.11.): Zur Basis geht es immer über ihn, auch wenn er schon eingenommen ist.
 	if karte.cp_aktiv:
-		while _ziel < karte.checkpoints.size() and karte.cp_feind[_ziel]:
+		while _ziel < karte.checkpoints.size() - 1 and karte.cp_feind[_ziel]:
 			_ziel += 1
 	_weg = karte.gegner_weg(typ, karte.zelle_bei(position), karte.ziel_zelle(_ziel))
 	_index = 1

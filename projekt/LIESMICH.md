@@ -32,7 +32,7 @@
 - **Kommandant Brakk** ([8], 500, einmal pro Partie, ab Welle 2): auf ein freies Feld stellen; [WASD] bewegt ihn, er schießt selbst auf den vordersten Gegner (Reichweite 3,5, je Angriff zwei Laserschüsse zu 18 Schaden im Takt seiner Animation, alle 1,2 s, 500 Leben). [Q] Sammeln (Bodentruppen im Umkreis 4 folgen ihm, 4 s Abklingzeit), nochmal [Q] = Losschlagen auf das Feld unter der Maus (8 s schneller laufen und 40 % rascher feuern, dann 12 s Pause). [E] klettert auf einen angrenzenden Erdwall bzw. herunter (3 s): oben +1,5 Reichweite, Sicht über sein Wallstück, läuft nur auf Wällen. [R] Klonmaschine auf das freie Feld unter der Maus, einmal pro Runde bis Rundenende: Wer hindurchgeht, wird einmal geklont (aktuelles Leben) – eigene Truppen wie Gegner; Klone geben keine Prämie. Auf einem verlorenen Checkpoint holt er ihn 4-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder an seinem Aufstellungsort. Replay und Phantom kennen seine Bewegungen nicht.
 - **Gestaffelt:** Hat ein Trupp Schildträger, gehen sie 4 Sekunden vor dem Rest los und fangen vorne die Schüsse ab.
 - **Battlesphäre:** Solange sie schießt, läuft sie nur mit 35 % ihres Tempos weiter – sie rennt nicht mehr durch die Verteidigung.
-- **Eingenommene Checkpoints:** Ist ein Checkpoint schon beim Gegner, läuft niemand mehr extra darüber; die Gegner gehen direkt zum nächsten offenen Checkpoint bzw. zur Basis.
+- **Eingenommene Checkpoints:** Ist ein Checkpoint schon beim Gegner, läuft niemand mehr extra darüber; die Gegner gehen direkt zum nächsten offenen Checkpoint. **Der letzte Checkpoint ist Pflicht:** Zur Basis geht es immer über ihn, auch wenn er schon eingenommen ist (auch für geworfene Gegner).
 - **Reservierte Stellungen:** Eine per Pfeil zugewiesene Stellung gehört nur dieser Fabrik. Truppen anderer Fabriken gehen nicht hinein; sitzt beim Zuweisen eine fremde Truppe darin, räumt sie den Platz.
 - **Werte je Bauwerk:** Ein Klick auf einen Turm, eine Batterie oder einen Schildgenerator zeigt seine Werte über die ganze Partie: Schaden und Kills, beim Frostturm gebremste Gegner, beim Heilturm Heilung/Gerettete/Instandsetzungen, beim Generator abgefangenen Schaden und abgewehrte Steine, bei der Batterie zusätzlich, was ihr Energieschild abgefangen hat.
 - **Gebündelte Trupps:** Jeder Trupp startet an einem Fleck in der Zone und wartet dort (im Schildbereich), bis er vollständig ist; dann läuft er gemeinsam los. Fahnenträger haben 190 Leben (vorher 135), Battlesphären machen an Truppen 22 Schaden (an Gebäuden weiter 16).
@@ -219,7 +219,7 @@ Rechtsklick reißt ab. Was in derselben Bauphase gebaut oder aufgewertet wurde, 
 
 ## Phantom-Modus (Zusatz, ersetzt das normale Spiel nicht)
 
-Im Startmenü unter **Phantom-Modus** (alles per Mausklick):
+Im Startmenü unter **Phantom-Modus** (alles per Mausklick). Das Phantom wird **zufällig** aus dem Pool gezogen, es gibt keine Auswahlliste; auch die Ersatz-Phantome sind zufällig. „Nochmal angreifen“ im Schlussbild bleibt beim selben Bau.
 
 - **Angreifer** – Seitenwechsel. Der aufgezeichnete Bau eines Spielers verteidigt (jede Runde frisch, ohne Dauerschaden, 15 Leben), du planst die Welle auf dem **Laufband**. Budget je Runde = Preis der entworfenen Welle dieser Runde. Bauen kannst du dort nicht.
 - **Verteidiger** – normales Spiel, aber die 20 Wellen stammen von einem gespeicherten Angriff. Die Ansage oben zeigt den Plan der Runde. Runden ohne Plan laufen mit der entworfenen Welle.
@@ -228,9 +228,9 @@ Laufband: unten die Trupps zu Fuß (Breite = Dauer, Lücke = Pause), darüber di
 
 Im Phantom-Modus kommt jeder Trupp geschlossen aus der Zone, damit die geplante Reihenfolge hält – standardmäßig über die Hauptlinie vor dem HQ, wahlweise oben oder unten („Ausgang“ am Kärtchen, ↑/↓ auf dem Band). Wer einen Wurf aufs Band legt, wählt gleich danach sein Ziel auf der Karte (Rechtsklick/Esc = automatisch); gesetzte Ziele stehen als W1, W2 … auf Karte und Band.
 
-Fällt die Verteidigung vor Runde 20, übernimmt ein Ersatz-Phantom (bis zu zwei weitere aus `phantome/`) ab der nächsten Runde mit eigener Karte und vollen Leben. Wertung am Ende: 100 je genommenes Leben × (1 + Anteil des ungenutzten Budgets der Runde), 1000 je geknackter Verteidigung + 50 je Runde vor 20, 10 je Sekunde, die das eigene HQ in Runde 20 hält (Werte in `scripts/phantom.gd`).
+Fällt die Verteidigung vor Runde 20, übernimmt ein Ersatz-Phantom (bis zu zwei weitere, zufällig aus `Phantom Dateien/Verteidiger/`) ab der nächsten Runde mit eigener Karte und vollen Leben. Wertung am Ende: 100 je genommenes Leben × (1 + Anteil des ungenutzten Budgets der Runde), 1000 je geknackter Verteidigung + 50 je Runde vor 20, 10 je Sekunde, die das eigene HQ in Runde 20 hält (Werte in `scripts/phantom.gd`).
 
-Schlussbild (nur per Mausklick): Neustart ohne Menü, Startmenü, nach einem Sieg im normalen Spiel „In die Offensive“ (mit Bestätigung, danach Auswahl des Baus), dazu „Phantom-Protokoll hochladen“. Auch das Fabrikmenü wird nur noch geklickt; die Tasten 1–6 zum Platzieren bleiben.
+Schlussbild (nur per Mausklick): Neustart ohne Menü, Startmenü, nach einem Sieg im normalen Spiel „In die Offensive“ (mit Bestätigung, danach ein zufälliger Bau), dazu „Phantom-Protokoll hochladen“. Auch das Fabrikmenü wird nur noch geklickt; die Tasten 1–6 zum Platzieren bleiben.
 
 Dateien liegen im Ordner `Phantom Dateien/`: `Verteidiger/` (entsteht automatisch bei jedem Sieg im normalen Spiel), `Angreifer/` (entsteht am Ende jedes Angriffs), `preise.json` (Preise – dort änderbar). Was in diesen Ordnern liegt, wird beim Web-Export mit ausgeliefert: Das ist der Pool für alle Spieler.
 
