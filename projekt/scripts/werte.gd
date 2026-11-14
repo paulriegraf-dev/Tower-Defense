@@ -312,7 +312,7 @@ const TURMARTEN := {
 	"geschuetz": {"name": "Geschützturm", "form": "T-Stück", "nachbarn": 3, "farbe": "7fe0ff",
 		"reichweite": 3.5, "schaden": 16.0, "abklingzeit": 0.9,
 		"text": "Schießt schnell auf ein Ziel. Der Allrounder."},
-	"frost": {"name": "Frostturm", "form": "Lange Ecke", "nachbarn": 2, "farbe": "bfefff",
+	"frost": {"name": "Frostturm", "form": "Lange Ecke", "nachbarn": 4, "farbe": "bfefff",
 		"reichweite": 3.0, "schaden": 0.0, "abklingzeit": 1.5, "bremse_sek": 1.2, "bremse_tempo": 0.8,
 		"text": "Frostpuls auf alle Gegner in Reichweite und Sicht: kein Schaden, aber 1,2 Sekunden auf 80 % Tempo verlangsamt."},
 	"funk": {"name": "Funkturm", "form": "Kreuzung", "nachbarn": 4, "farbe": "ffd34d",
@@ -321,9 +321,50 @@ const TURMARTEN := {
 	"heil": {"name": "Heilturm", "form": "Treppe", "nachbarn": 2, "farbe": "7dff9a",
 		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 2.0, "heilung": 8.0,
 		"text": "Schießt nicht. Heilt alle 2 Sekunden eigene Truppen im Umkreis um 8 Leben."},
-	"lanze": {"name": "Lanzenturm", "form": "Klammer", "nachbarn": 2, "farbe": "ff8a3d",
+	"lanze": {"name": "Lanzenturm", "form": "Klammer", "nachbarn": 4, "farbe": "ff8a3d",
 		"reichweite": 6.0, "schaden": 45.0, "abklingzeit": 4.0, "breite": 0.35,
 		"text": "Langsamer, schwerer Strahl in gerader Linie: trifft alles, was in der Linie steht – ideal für lange Gänge."},
+}
+# Turmupgrades (Klick auf den Turm), wie bei den Fabriken: Stufe 2 fest, auf Stufe 3 eine von zwei Fähigkeiten.
+const KOSTEN_TURM_STUFE: Array[int] = [175, 450]
+const TURM_STUFE_2 := {
+	"geschuetz": {"abklingzeit": 0.65, "text": "Feuert schneller: alle 0,65 statt 0,9 Sekunden."},
+	"frost": {"bremse_sek": 1.8, "text": "Bremst länger: 1,8 statt 1,2 Sekunden."},
+	"funk": {"reichweite": 3.5, "text": "Größerer Umkreis: 3,5 statt 2,5 Felder."},
+	"lanze": {"schaden": 65.0, "text": "Stärkerer Strahl: 65 statt 45 Schaden."},
+	"heil": {"heilung": 12.0, "text": "Heilt mehr: 12 statt 8 Leben."},
+}
+const TURM_STUFE_3 := {
+	"geschuetz": {
+		"doppelschuss": {"name": "Doppelschuss", "ziele": 2, "text": "Trifft zwei Gegner zugleich.",
+			"stark": "gegen Rudel", "schwach": "nicht stärker gegen einzelne zähe Gegner"},
+		"schwer": {"name": "Schwere Munition", "schaden": 35.0, "abklingzeit": 1.1, "text": "35 statt 16 Schaden, dafür alle 1,1 Sekunden.",
+			"stark": "gegen Belagerungsturm und Sphären", "schwach": "schwach gegen Hunderudel"},
+	},
+	"frost": {
+		"schockfrost": {"name": "Schockfrost", "schock_sek": 0.5, "schock_alle": 6.0, "text": "Alle 6 Sekunden friert er die Gegner im Umkreis 0,5 Sekunden komplett ein.",
+			"stark": "stoppt den Fahnensturm", "schwach": "dazwischen nur der normale Puls"},
+		"sproede": {"name": "Sprödes Eis", "sproede": 1.15, "text": "Gegner, die er bremst, nehmen 15 % mehr Schaden von allem.",
+			"stark": "stark neben Lanze und Stellungen", "schwach": "nutzlos ohne Schützen in der Nähe"},
+	},
+	"funk": {
+		"verstaerker": {"name": "Verstärker", "feuer_faktor": 0.6, "text": "Stellungen im Umkreis feuern 40 % statt 25 % schneller.",
+			"stark": "reiner Schadensbonus", "schwach": "hilft nicht gegen Rauch"},
+		"peilsender": {"name": "Peilsender", "peilung": true, "text": "Truppen in Stellungen im Umkreis sehen durch Rauch (Klarsicht).",
+			"stark": "gegen Rauchwerfer", "schwach": "kein zusätzliches Tempo"},
+	},
+	"lanze": {
+		"durchschlag": {"name": "Durchschlag", "reichweite": 8.0, "abklingzeit": 5.0, "durch_waelle": true, "text": "Der Strahl geht durch Erdwälle und reicht 8 Felder, dafür alle 5 Sekunden.",
+			"stark": "trifft auch den Gang dahinter", "schwach": "feuert seltener"},
+		"doppelstrahl": {"name": "Doppelstrahl", "strahlen": 2, "text": "Zwei Strahlen kurz hintereinander.",
+			"stark": "mehr Schaden im langen Gang", "schwach": "nicht breiter, nicht weiter"},
+	},
+	"heil": {
+		"lazarett": {"name": "Feldlazarett", "lazarett": true, "text": "Fällt eine Truppe im Umkreis, steht sie mit halbem Leben wieder auf – einmal pro Runde.",
+			"stark": "spart teure Truppen", "schwach": "nur einmal pro Runde"},
+		"instand": {"name": "Instandsetzung", "instand_sek": 8.0, "text": "Türme im Umkreis, die Turmtruppen lahmgelegt haben, laufen nach 8 Sekunden wieder.",
+			"stark": "Antwort auf den Belagerungsturm", "schwach": "kein Bonus für Truppen"},
+	},
 }
 const KOSTEN_SPIEGEL: int = 50     # Spiegel auf einem Erdwall: Bodentruppen schießen über ihn um die Ecke
 const KOSTEN_MAGNET: int = 60      # Magnet auf einem Erdwall: zieht Gegner in einer Linie zu sich heran (Richtung mit [T])

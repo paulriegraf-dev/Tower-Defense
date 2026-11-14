@@ -48,6 +48,8 @@ var geworfen := false               # von der Wurf-Schleuder hinter die vordere 
 var markiert := 0.0                 # Sekunden: von einem Scharfschützen markiert, nimmt mehr Schaden
 var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
 var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schwächer als Plasmagel)
+var eingefroren := 0.0              # Sekunden: Schockfrost – steht ganz still
+var sproede := 0.0                  # Sekunden: Sprödes Eis – nimmt mehr Schaden
 
 
 func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, start_zelle: Vector2i, erstes_ziel: int) -> void:
@@ -77,6 +79,8 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 ## Führt ein Fahnenträger den Trupp an, stürmen alle in seinem Tempo.
 func tempo() -> float:
 	var t := _tempo_ungebremst()
+	if eingefroren > 0.0:
+		return 0.0
 	if gebremst > 0.0:
 		return t * Werte.PLASMAGEL_TEMPO
 	if gefroren > 0.0:
@@ -158,12 +162,14 @@ func _process(delta: float) -> void:
 		_stand_pos = position
 	if rolle == "sprenger":
 		queue_redraw()   # Warnzeichen blinkt
-	if markiert > 0.0 or gebremst > 0.0 or gefroren > 0.0:
+	if markiert > 0.0 or gebremst > 0.0 or gefroren > 0.0 or eingefroren > 0.0 or sproede > 0.0:
 		markiert -= delta
 		gebremst -= delta
 		gefroren -= delta
+		eingefroren -= delta
+		sproede -= delta
 		queue_redraw()
-	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 else Color.WHITE))
+	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 or eingefroren > 0.0 else Color.WHITE))
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
 
 	# Energieschild einer Batterie im Weg: stehen bleiben und draufschlagen, bis er bricht.
@@ -427,6 +433,8 @@ func nimm_schaden(menge: float) -> void:
 		return
 	if markiert > 0.0:
 		menge *= Werte.MARKIERUNG_FAKTOR
+	if sproede > 0.0:
+		menge *= float(Werte.TURM_STUFE_3["frost"]["sproede"]["sproede"])
 	var wirksam := minf(menge, maxf(leben, 0.0))
 	leben -= menge
 	_treffer = 0.08

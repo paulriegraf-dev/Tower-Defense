@@ -428,7 +428,7 @@ func _repariere(delta: float) -> void:
 func _feuere_auf(ziel: Node2D) -> void:
 	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]   # Schadensliste: alles von hier zählt für die Fabrik
 	# Im Rauch sieht die Einheit nichts – außer mit Klarsicht (Scharfschütze ab Stufe 2) oder auf ein markiertes Ziel.
-	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
+	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (in_stellung() and spiel.peilung(posten_zelle)) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
 	if ziel == null or blind:
 		# Minigun: Rauch stoppt den Anlauf sofort, ohne Ziel läuft sie langsam aus
 		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * get_process_delta_time())
@@ -553,7 +553,7 @@ func nimm_schaden(menge: float) -> void:
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()
-	if leben <= 0.0:
+	if leben <= 0.0 and not spiel.lazarett_rettet(self):
 		spiel.einheit_gefallen(self)
 
 

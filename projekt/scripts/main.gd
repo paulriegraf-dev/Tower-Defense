@@ -93,6 +93,10 @@ var _im_flug := 0                   # geworfene Hunde, die noch in der Luft sind
 var _tempo_faktor := 1.0            # 1, 2 oder 3 (Taste F schaltet weiter), wird mit Werte.SPIELTEMPO multipliziert
 var _spawn_in := 0.0
 var _turm_abkling: Dictionary = {}  # Turm-Zelle -> Sekunden bis zum nächsten Schuss
+var _turm_schock: Dictionary = {}    # Frost mit Schockfrost: Turm-Zelle -> Sekunden bis zum nächsten Einfrieren
+var _turm_nachschuss: Dictionary = {}   # Lanze mit Doppelstrahl: Turm-Zelle -> [Sekunden, Strahlende]
+var _lazarett_genutzt: Dictionary = {}  # Heilturm mit Feldlazarett: schon in dieser Runde jemanden gerettet
+var _instand_zeit: Dictionary = {}      # lahmgelegter Turm -> Sekunden unter einem Heilturm mit Instandsetzung
 var _meldung := ""
 var _meldung_zeit := 0.0
 
@@ -256,6 +260,10 @@ func _lade_phantom_stand() -> void:
 			var art := str(w[2])
 			if art != "" and (art == "turm") == (durchgang == 1):
 				karte.baue_aus(Vector2i(int(w[0]), int(w[1])), ausbauten[art])
+				if art == "turm" and w.size() > 5 and int(w[5]) > 1:
+					karte.turm_stufe[Vector2i(int(w[0]), int(w[1]))] = int(w[5])
+					if w.size() > 6 and str(w[6]) != "":
+						karte.turm_faehigkeit[Vector2i(int(w[0]), int(w[1]))] = str(w[6])
 				if art == "magnet" and w.size() > 4 and (w[4] as Array).size() == 2:
 					karte.magnet_richtung[Vector2i(int(w[0]), int(w[1]))] = Vector2i(int(w[4][0]), int(w[4][1]))
 	for f: Dictionary in stand["fabriken"]:
@@ -973,37 +981,82 @@ func _tuerme_feuern(delta: float) -> void:
 			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
 		schadensquelle = "turm:" + art_name
-		var weite: float = float(art["reichweite"]) * Werte.ZELLE
+		var weite: float = float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
 		var farbe := Color(art["farbe"])
+		var von := karte.mitte(z) + Vector2(0, -14)
+		var schaden := float(karte.turm_wert(z, "schaden"))
+		# Lanze mit Doppelstrahl: der zweite Strahl folgt kurz nach dem ersten auf derselben Linie
+		if _turm_nachschuss.has(z):
+			var n: Array = _turm_nachschuss[z]
+			n[0] = float(n[0]) - delta
+			if float(n[0]) <= 0.0:
+				_turm_nachschuss.erase(z)
+				_lanzenstrahl(von, n[1], farbe, float(karte.turm_wert(z, "breite")) * Werte.ZELLE, schaden)
+		# Frost mit Schockfrost: eigener Takt, friert alle Gegner im Umkreis kurz ganz ein
+		var schock := float(karte.turm_wert(z, "schock_alle", 0.0))
+		if schock > 0.0:
+			var t: float = float(_turm_schock.get(z, schock)) - delta
+			if t <= 0.0:
+				var getroffen := false
+				for g in gegner:
+					if is_instance_valid(g) and not _geschuetzt(g) and von.distance_to(g.position) <= weite and karte.sicht_von_wall(z, von, g.position):
+						g.eingefroren = maxf(g.eingefroren, float(karte.turm_wert(z, "schock_sek")))
+						getroffen = true
+				if getroffen:
+					effekte.flaeche(von, weite, Color.WHITE)
+					t = schock
+				else:
+					t = 0.25
+			_turm_schock[z] = t
 		var rest: float = _turm_abkling.get(z, 0.0) - delta
 		if rest <= 0.0:
-			var von := karte.mitte(z) + Vector2(0, -14)
-			var ziel := gegner_in_reichweite(von, weite, false, z)   # Türme folgen derselben Sichtregel wie Stellungen
+			var durch: bool = karte.turm_wert(z, "durch_waelle", false)
+			var ziel := gegner_in_reichweite(von, weite, false, Karte.KEINE if durch else z)   # Türme folgen derselben Sichtregel wie Stellungen
 			if ziel != null:
-				rest = float(art["abklingzeit"])
+				rest = float(karte.turm_wert(z, "abklingzeit"))
 				match art_name:
 					"frost":
-						# Frostpuls: alle Gegner in Reichweite und Sicht werden verlangsamt und leicht getroffen
+						# Frostpuls: alle Gegner in Reichweite und Sicht werden verlangsamt
 						effekte.flaeche(von, weite, farbe)
+						var sproede := float(karte.turm_wert(z, "sproede", 0.0))
 						for g in gegner.duplicate():
 							if is_instance_valid(g) and not _geschuetzt(g) and von.distance_to(g.position) <= weite and karte.sicht_von_wall(z, von, g.position):
-								g.gefroren = maxf(g.gefroren, float(art["bremse_sek"]))
-								if float(art["schaden"]) > 0.0:
-									g.nimm_schaden(float(art["schaden"]))
+								var sek := float(karte.turm_wert(z, "bremse_sek"))
+								g.gefroren = maxf(g.gefroren, sek)
+								if sproede > 0.0:
+									g.sproede = maxf(g.sproede, sek)
+								if schaden > 0.0:
+									g.nimm_schaden(schaden)
 					"lanze":
-						# Strahl in gerader Linie bis zum Ende der Reichweite: trifft alles in der Linie
+						# Strahl in gerader Linie bis zum Ende der Reichweite: trifft alles in der Linie (auch hinter Wällen)
 						var ende := von + (ziel.position - von).normalized() * weite
-						strahl(von, ende, farbe, 6.0)
-						var breite := float(art["breite"]) * Werte.ZELLE
-						for g in gegner.duplicate():
-							if is_instance_valid(g) and not _geschuetzt(g):
-								var p := Geometry2D.get_closest_point_to_segment(g.position, von, ende)
-								if p.distance_to(g.position) <= breite:
-									g.nimm_schaden(float(art["schaden"]))
+						_lanzenstrahl(von, ende, farbe, float(karte.turm_wert(z, "breite")) * Werte.ZELLE, schaden)
+						if int(karte.turm_wert(z, "strahlen", 1)) >= 2:
+							_turm_nachschuss[z] = [0.35, ende]
 					_:
 						schuss(von, ziel.position, farbe)
-						ziel.nimm_schaden(float(art["schaden"]))
+						ziel.nimm_schaden(schaden)
+						if int(karte.turm_wert(z, "ziele", 1)) >= 2:
+							# Doppelschuss: der nächste andere Gegner in Reichweite und Sicht
+							var zweit: Gegner = null
+							var nah := INF
+							for g in gegner:
+								if is_instance_valid(g) and g != ziel and not _geschuetzt(g) and von.distance_to(g.position) <= weite and von.distance_to(g.position) < nah and karte.sicht_von_wall(z, von, g.position):
+									zweit = g
+									nah = von.distance_to(g.position)
+							if zweit != null:
+								schuss(von, zweit.position, farbe)
+								zweit.nimm_schaden(schaden)
 		_turm_abkling[z] = rest
+
+
+func _lanzenstrahl(von: Vector2, ende: Vector2, farbe: Color, breite: float, schaden: float) -> void:
+	strahl(von, ende, farbe, 6.0)
+	for g in gegner.duplicate():
+		if is_instance_valid(g) and not _geschuetzt(g):
+			var p := Geometry2D.get_closest_point_to_segment(g.position, von, ende)
+			if p.distance_to(g.position) <= breite:
+				g.nimm_schaden(schaden)
 
 
 ## Magnete: alle paar Sekunden die Gegner in ihrer Zuglinie heranziehen (höchstens bis vor den Magneten, nicht durch Wälle).
@@ -1091,7 +1144,7 @@ func _aktualisiere_weganzeige(delta: float) -> void:
 			Karte.TURM:
 				var art: String = karte.turm_art.get(z, "geschuetz")
 				if not art in ["funk", "heil"]:
-					quellen.append([karte.mitte(z), float(Werte.TURMARTEN[art]["reichweite"]) * Werte.ZELLE])
+					quellen.append([karte.mitte(z), float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE])
 	for z: Vector2i in karte.feld:
 		if karte.feld[z] == Karte.BATTERIE:
 			quellen.append([karte.mitte(z), float(Werte.BATTERIE["reichweite"]) * Werte.ZELLE])
@@ -1110,15 +1163,26 @@ func _aktualisiere_weganzeige(delta: float) -> void:
 ## Heilturm: alle paar Sekunden eigene Truppen im Umkreis heilen.
 func _heilturm(z: Vector2i, delta: float) -> void:
 	var art: Dictionary = Werte.TURMARTEN["heil"]
+	var instand := float(karte.turm_wert(z, "instand_sek", 0.0))
+	if instand > 0.0:
+		for t: Vector2i in karte.turm_schaden.keys():
+			if karte.turm_lahm(t) and Vector2(t - z).length() <= float(karte.turm_wert(z, "reichweite")):
+				_instand_zeit[t] = float(_instand_zeit.get(t, 0.0)) + delta
+				if float(_instand_zeit[t]) >= instand:
+					karte.turm_schaden.erase(t)
+					_instand_zeit.erase(t)
+					effekte.flaeche(karte.mitte(t), Werte.ZELLE * 0.8, Color(art["farbe"]))
+					karte.queue_redraw()
 	var rest: float = _turm_abkling.get(z, 0.0) - delta
 	if rest <= 0.0:
 		rest = float(art["abklingzeit"])
 		var m := karte.mitte(z)
-		var weite := float(art["reichweite"]) * Werte.ZELLE
+		var weite := float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
+		var heilung := float(karte.turm_wert(z, "heilung"))
 		var geheilt := false
 		for e in einheiten:
 			if is_instance_valid(e) and not e.in_batterie() and e.leben < e.max_leben and m.distance_to(e.position) <= weite:
-				e.leben = minf(e.max_leben, e.leben + float(art["heilung"]))
+				e.leben = minf(e.max_leben, e.leben + heilung)
 				e.queue_redraw()
 				geheilt = true
 		if geheilt:
@@ -1135,11 +1199,34 @@ func schild_faktor(punkt: Vector2) -> float:
 func funk_faktor(stellung: Vector2i) -> float:
 	if stellung == Karte.KEINE:
 		return 1.0
-	var art: Dictionary = Werte.TURMARTEN["funk"]
+	var bester := 1.0
 	for z: Vector2i in karte.turm_art:
-		if karte.turm_art[z] == "funk" and karte.turm_aktiv(z) and Vector2(stellung - z).length() <= float(art["reichweite"]):
-			return float(art["feuer_faktor"])
-	return 1.0
+		if karte.turm_art[z] == "funk" and karte.turm_aktiv(z) and Vector2(stellung - z).length() <= float(karte.turm_wert(z, "reichweite")):
+			bester = minf(bester, float(karte.turm_wert(z, "feuer_faktor")))
+	return bester
+
+
+## Funkturm mit Peilsender: Truppen in dieser Stellung sehen durch Rauch.
+func peilung(stellung: Vector2i) -> bool:
+	if stellung == Karte.KEINE:
+		return false
+	for z: Vector2i in karte.turm_art:
+		if karte.turm_art[z] == "funk" and karte.turm_aktiv(z) and karte.turm_wert(z, "peilung", false) and Vector2(stellung - z).length() <= float(karte.turm_wert(z, "reichweite")):
+			return true
+	return false
+
+
+## Heilturm mit Feldlazarett: Fällt die Truppe `e` in seinem Umkreis, steht sie mit halbem Leben wieder auf (einmal pro Runde je Turm).
+func lazarett_rettet(e: Einheit) -> bool:
+	for z: Vector2i in karte.turm_art:
+		if karte.turm_art[z] == "heil" and karte.turm_aktiv(z) and not _lazarett_genutzt.has(z) and karte.turm_wert(z, "lazarett", false) \
+				and karte.mitte(z).distance_to(e.position) <= float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE:
+			_lazarett_genutzt[z] = true
+			e.leben = e.max_leben * 0.5
+			effekte.flaeche(e.position, Werte.ZELLE * 0.6, Color(Werte.TURMARTEN["heil"]["farbe"]))
+			melde("Feldlazarett: %s steht wieder auf." % e.daten["name"], 3.0)
+			return true
+	return false
 
 
 ## Voll bemannte Batterien feuern auf die dichteste Gegnergruppe in Reichweite – über Wälle hinweg.
@@ -1308,6 +1395,10 @@ func starte_welle() -> void:
 	_abriss_merk = Karte.KEINE
 	phase = Phase.KAMPF
 	runde_stats.clear()   # Schadensliste [Tab]: zählt je Runde neu
+	_lazarett_genutzt.clear()
+	_instand_zeit.clear()
+	_turm_schock.clear()
+	_turm_nachschuss.clear()
 	runde_stats_welle = welle
 	werkzeug = Karte.FREI
 	_runde_start_ms = Time.get_ticks_msec()
@@ -2596,6 +2687,9 @@ func erstattung(z: Vector2i) -> int:
 		alt += kosten(ausbau)
 	if karte.panzer.has(z) and not frisch_bau.has("panzer"):
 		alt += Werte.KOSTEN_PANZER
+	if ausbau == Karte.TURM:
+		for i in maxi(0, int(karte.turm_stufe.get(z, 1)) - 1 - int(frisch_stufen.get("stufen_n", 0))):
+			alt += Werte.KOSTEN_TURM_STUFE[i]
 	if fabriken.has(stufenfeld):
 		var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if paar else Werte.KOSTEN_STUFE
 		for i in maxi(0, int(fabriken[stufenfeld].get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0))):
@@ -2685,7 +2779,7 @@ func _aktualisiere_sichtanzeige() -> void:
 	var z := karte.auswahl
 	var art: int = karte.ausbau.get(z, Karte.FREI)
 	if art == Karte.TURM:
-		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -14), z, float(Werte.TURMARTEN[karte.turm_art.get(z, "geschuetz")]["reichweite"]))
+		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -14), z, float(karte.turm_wert(z, "reichweite")))
 	elif art == Karte.STELLUNG:
 		var scharf: Dictionary = Werte.EINHEITEN["scharfschuetze"]
 		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -12), z, scharf["reichweite"] + karte.posten_bonus(z, scharf))
@@ -2729,6 +2823,8 @@ func stelle_um(z: Vector2i, neu: String) -> void:
 ## Nächste Ausbaustufe einer Fabrik kaufen (nur in der Bauphase). Für Stufe 3 gehört die gewählte Fähigkeit dazu.
 ## Gibt true zurück, wenn es geklappt hat.
 func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
+	if ausbau_moeglich() and karte.ausbau.get(z, Karte.FREI) == Karte.TURM:
+		return werte_turm_auf(z, faehigkeit)
 	if not ausbau_moeglich() or not fabriken.has(z):
 		return false
 	if karte.paar.has(z):
@@ -2759,6 +2855,35 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 		melde("Spezialisiert auf %s: hält jetzt drei Truppen und bleibt bei dieser Truppe." % d["name"], 4.0)
 	else:
 		melde("%s Stufe 2: %s." % [d["name"], Werte.STUFE_2[fabriken[z]["typ"]]["text"]], 5.0)
+	return true
+
+
+## Turm aufwerten: Stufe 2 fest, Stufe 3 mit einer Fähigkeit aus Werte.TURM_STUFE_3.
+func werte_turm_auf(z: Vector2i, faehigkeit: String = "") -> bool:
+	var stufe := int(karte.turm_stufe.get(z, 1))
+	if stufe > Werte.KOSTEN_TURM_STUFE.size():
+		return false
+	var art: String = karte.turm_art.get(z, "geschuetz")
+	if stufe == 2 and not (Werte.TURM_STUFE_3[art] as Dictionary).has(faehigkeit):
+		return false
+	var preis: int = Werte.KOSTEN_TURM_STUFE[stufe - 1]
+	if budget < preis:
+		melde("Nicht genug Budget.")
+		return false
+	_merke_bezahlt(z, "stufen", preis)
+	budget -= preis
+	karte.turm_stufe[z] = stufe + 1
+	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
+	var name: String = Werte.TURMARTEN[art]["name"]
+	if stufe == 2:
+		karte.turm_faehigkeit[z] = faehigkeit
+		eintrag["faehigkeit"] = faehigkeit
+		var f3: Dictionary = Werte.TURM_STUFE_3[art][faehigkeit]
+		melde("%s Stufe 3 – %s: %s" % [name, f3["name"], f3["text"]], 6.0)
+	else:
+		melde("%s Stufe 2: %s" % [name, Werte.TURM_STUFE_2[art]["text"]], 5.0)
+	_notiere(eintrag)
+	karte.queue_redraw()
 	return true
 
 
@@ -2973,8 +3098,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					_oeffne_fabrikmenue(z)
 				else:
 					_schliesse_fabrikmenue()
-			elif karte.inhalt(z) == Karte.BATTERIE and phase != Phase.ENDE:
-				_oeffne_fabrikmenue(z)   # Batterie angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
+			elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM) and phase != Phase.ENDE:
+				_oeffne_fabrikmenue(z)   # Batterie oder Turm angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
 			else:
 				_schliesse_fabrikmenue()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:

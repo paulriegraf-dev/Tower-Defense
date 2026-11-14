@@ -257,7 +257,7 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 		var c: Dictionary = zellen[z]
 		match str(c["typ"]):
 			"wall":
-				waelle.append([z.x, z.y, str(c.get("ausbau", "")), bool(c.get("panzer", false)), c.get("richtung", [])])
+				waelle.append([z.x, z.y, str(c.get("ausbau", "")), bool(c.get("panzer", false)), c.get("richtung", []), int(c.get("stufe", 1)), str(c.get("faehigkeit", ""))])
 			"fabrik":
 				var f := {"x": z.x, "y": z.y, "einheit": c["einheit"], "stufe": c["stufe"]}
 				if c.has("faehigkeit"):

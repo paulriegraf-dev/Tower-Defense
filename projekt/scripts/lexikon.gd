@@ -300,9 +300,9 @@ func _skizze(art: String, o: Vector2, s: float) -> void:
 ## je Form: [Stützen (in Turmfarbe), weitere Erdwälle, die die Form braucht (nur Erde)]
 const FORMEN := {
 	"geschuetz": [[Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)], []],
-	"frost": [[Vector2i(1, 0), Vector2i(0, 1)], [Vector2i(2, 0), Vector2i(0, 2)]],
+	"frost": [[Vector2i(1, 0), Vector2i(0, 1), Vector2i(2, 0), Vector2i(0, 2)], []],
 	"heil": [[Vector2i(-1, -1), Vector2i(1, 1)], []],
-	"lanze": [[Vector2i(0, -1), Vector2i(0, 1)], [Vector2i(-1, -1), Vector2i(-1, 1)]],
+	"lanze": [[Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, -1), Vector2i(-1, 1)], []],
 	"funk": [[Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)], []],
 }
 
@@ -413,9 +413,12 @@ func _turmkarte(art: String, extra: Array) -> Dictionary:
 		w.append(["Angriff alle", _z(d["abklingzeit"]) + " s"])
 	var regeln: Array = [d["text"]]
 	regeln.append_array(extra)
+	var stufen: Array = ["Stufe 2 (%d): %s" % [W.KOSTEN_TURM_STUFE[0], W.TURM_STUFE_2[art]["text"]], "Stufe 3 (%d), eine Fähigkeit wählen:" % W.KOSTEN_TURM_STUFE[1]]
+	for f: Dictionary in (W.TURM_STUFE_3[art] as Dictionary).values():
+		stufen.append("%s – %s (+ %s, – %s)" % [f["name"], f["text"], f["stark"], f["schwach"]])
 	return {"name": d["name"], "unter": "Turm auf " + {"Ecke": "einer Ecke", "Kreuzung": "einer Kreuzung", "T-Stück": "einem T-Stück", "gerades Stück": "einem geraden Stück", "Bogen": "einem Bogen", "Linie mit Enden": "einer Linie mit Enden"}.get(d["form"], d["form"]),
 		"marke": "%d  [4]" % W.KOSTEN_TURM, "skizze": "form:" + art, "werte": w,
-		"abschnitte": [["Was er macht", TITEL, regeln], ["Für alle Türme", TEXT_BLASS, [
+		"abschnitte": [["Was er macht", TITEL, regeln], ["Ausbau (Turm anklicken)", TITEL, stufen], ["Für alle Türme", TEXT_BLASS, [
 			"Welcher Turm entsteht, entscheidet die Form der Erdwälle drumherum: T-Stück = Geschütz, Kreuzung = Funk, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilung. Ein schlichtes gerades Stück oder eine kurze Ecke trägt keinen Turm. Die Vorschau nennt den Turm.",
 			"Stützregel: Diese Erdwälle dürfen keinen anderen Turm stützen. Stellungen darauf sind erlaubt.",
 			"Schießt ohne Truppe und auch im Rauch. Sicht wie aus einer Stellung. Sein Erdwall hält Sprengern stand.",
@@ -578,7 +581,7 @@ func _baue_daten() -> void:
 		_turmkarte("frost", ["Braucht eine lange Ecke: Der Turm steht im Knick, beide Arme sind mindestens 2 Erdwälle lang.",
 			"Bremst ganze Trupps – gut gegen Fahnensturm und schnelle Rudel."]),
 		_turmkarte("funk", ["Zählt alle Stellungen im Umkreis, nicht nur eine – je mehr Stellungen drumherum, desto mehr lohnt er."]),
-		_turmkarte("lanze", ["Braucht eine Klammer: drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer ab (⊐). Der Turm steht in der Mitte.",
+		_turmkarte("lanze", ["Braucht eine Klammer: drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer zur selben Seite ab (⊐). Der Turm steht in der Mitte.",
 			"Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
 		{"name": "Schildgenerator", "unter": "Großbau in einem Hof", "marke": "%d  [4]" % W.KOSTEN_GENERATOR, "skizze": "generator",
 			"werte": [["Preis", str(W.KOSTEN_GENERATOR)], ["Felder", "1"], ["Hof", "%d–%d Felder" % [W.HOF_MIN, W.HOF_MAX]], ["Schutz", "%d %%" % roundi(W.KUPPEL_SCHUTZ * 100)]],
@@ -588,7 +591,7 @@ func _baue_daten() -> void:
 				"Steine der Schleuder prallen an der Kuppel ab; Schleudern und Rauchwerfer suchen sich Ziele außerhalb.",
 				"Bricht der Ring auf (Sprenger), erlischt die Kuppel, bis er wieder geschlossen ist. Pro Hof ein Generator."]],
 				["Dagegen spricht", SCHLECHT, ["Teuer, und der Hof bindet Platz und Erdwälle, die sonst den Weg verlängern."]]]},
-		_turmkarte("heil", ["Braucht eine Treppe: drei Erdwälle schräg hintereinander, die sich nur an den Ecken berühren. Der Turm steht in der Mitte.",
+		_turmkarte("heil", ["Braucht eine Treppe: drei Erdwälle schräg hintereinander, der Turm in der Mitte. Andere Erdwälle daneben stören nicht, solange keine andere Turmform passt.",
 			"Truppen sind knapp: Wer überlebt, muss nicht nachgebaut werden."]),
 		{"name": "Panzerung", "unter": "Ausbau eines Erdwalls", "marke": "%d  [7]" % W.KOSTEN_PANZER, "skizze": "panzer",
 			"werte": [["Preis", str(W.KOSTEN_PANZER)]],

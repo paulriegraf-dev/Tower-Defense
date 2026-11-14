@@ -15,6 +15,8 @@ var feld: Dictionary = {}          # Zelle -> WALL / FABRIK
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
 var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
 var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN (aus der Form der Nachbarwälle)
+var turm_stufe: Dictionary = {}    # Turm-Zelle -> Stufe 2 oder 3 (fehlt = Stufe 1)
+var turm_faehigkeit: Dictionary = {}   # Turm-Zelle -> gewählte Stufe-3-Fähigkeit (Schlüssel in Werte.TURM_STUFE_3)
 var generator_paar: Dictionary = {}   # Schildgenerator: Feld -> sein zweites Feld (beide Richtungen)
 var kuppeln: Array = []              # aktive Schildkuppeln: [Mitte, Radius in Pixeln, Generatorfeld]
 var _hoefe: Array = []               # Höfe: je eine Liste der Felder (frei oder mit Gebäude), rundum von Erdwällen eingeschlossen
@@ -195,6 +197,8 @@ func entferne(z: Vector2i) -> void:
 	leben.erase(z)
 	ausbau.erase(z)
 	turm_art.erase(z)
+	turm_stufe.erase(z)
+	turm_faehigkeit.erase(z)
 	magnet_richtung.erase(z)
 	if generator_paar.has(z):
 		generator_paar.erase(generator_paar[z])
@@ -355,45 +359,80 @@ func posten_bonus(z: Vector2i, daten: Dictionary) -> float:
 
 ## Welcher Turm entstünde auf `z`? Bestimmt durch die freien Nachbarwälle (siehe Werte.TURMARTEN). "" = keiner.
 func turm_form(z: Vector2i) -> String:
-	if wall_nachbarn(z) == 0:
-		# Treppe: Erdwälle nur schräg an zwei gegenüberliegenden Ecken -> Heilturm
-		return "heil" if _diagonal_paar(z).size() == 2 else ""
-	var frei := freie_stuetzen(z)
-	match frei.size():
+	var form := _gerade_form(z)
+	if form == "" and _diagonal_paar(z).size() == 2:
+		# Treppe: Erdwälle schräg an zwei gegenüberliegenden Ecken -> Heilturm (wenn keine andere Form passt)
+		return "heil"
+	return form
+
+
+## Form aus den geraden Nachbarwällen (Kreuzung, T-Stück, Klammer, lange Ecke) – "" = keine.
+func _gerade_form(z: Vector2i) -> String:
+	match freie_stuetzen(z).size():
 		4:
 			return "funk"
 		3:
 			return "geschuetz"
 		2:
-			var a := frei[0]
-			var b := frei[1]
-			if a + b == z * 2:
-				# gerades Stück: biegt die Mauer an beiden Enden ab (Klammer ⊐), wird es ein Lanzenturm
-				return "lanze" if _ende_biegt_ab(z, a) and _ende_biegt_ab(z, b) else ""
-			# Ecke: beide Arme mindestens 2 Erdwälle lang -> Frostturm
-			return "frost" if inhalt(a * 2 - z) == WALL and inhalt(b * 2 - z) == WALL else ""
+			if not _form_waelle(z, "lanze").is_empty():
+				return "lanze"
+			if not _form_waelle(z, "frost").is_empty():
+				return "frost"
 	return ""
 
 
-## Hängt am Erdwall `e` (Nachbar des Turms `z`) seitlich ein weiterer Erdwall (die Linie biegt ab)?
-func _ende_biegt_ab(z: Vector2i, e: Vector2i) -> bool:
-	var d := e - z
-	var quer := Vector2i(d.y, d.x)
-	return inhalt(e + quer) == WALL or inhalt(e - quer) == WALL
+## Erdwall `n` kann den Turm auf `z` stützen: steht, trägt keinen Turm, stützt keinen anderen.
+func _stuetzbar(n: Vector2i, z: Vector2i) -> bool:
+	return inhalt(n) == WALL and ausbau.get(n, FREI) != TURM and (not stuetze_von.has(n) or stuetze_von[n] == z)
+
+
+## Alle Erdwälle der Form, die der Turm auf `z` belegt (leer = Form passt nicht):
+##   Klammer: die zwei Nachbarn in einer Linie + die beiden Enden, die zur selben Seite abbiegen (⊐)
+##   lange Ecke: die zwei Nachbarn über Eck + je ein weiterer Erdwall in Verlängerung der Arme
+func _form_waelle(z: Vector2i, art: String) -> Array[Vector2i]:
+	var frei := freie_stuetzen(z)
+	var waelle: Array[Vector2i] = []
+	for i in frei.size():
+		for j in range(i + 1, frei.size()):
+			var a := frei[i]
+			var b := frei[j]
+			var gerade := a + b == z * 2
+			if art == "lanze" and gerade:
+				var d := a - z
+				for s: Vector2i in [Vector2i(d.y, d.x), -Vector2i(d.y, d.x)]:
+					if _stuetzbar(a + s, z) and _stuetzbar(b + s, z):
+						waelle = [a, b, a + s, b + s]
+						return waelle
+			elif art == "frost" and not gerade:
+				if _stuetzbar(a * 2 - z, z) and _stuetzbar(b * 2 - z, z):
+					waelle = [a, b, a * 2 - z, b * 2 - z]
+					return waelle
+	return waelle
 
 
 ## Zwei schräg gegenüberliegende Erdwälle von `z` (Treppe), frei für einen Turm – sonst leer.
 func _diagonal_paar(z: Vector2i) -> Array[Vector2i]:
 	var paar: Array[Vector2i] = []
 	for d: Vector2i in [Vector2i(1, 1), Vector2i(1, -1)]:
-		var ok := true
-		for n: Vector2i in [z + d, z - d]:
-			if inhalt(n) != WALL or ausbau.get(n, FREI) == TURM or (stuetze_von.has(n) and stuetze_von[n] != z):
-				ok = false
-		if ok:
+		if _stuetzbar(z + d, z) and _stuetzbar(z - d, z):
 			paar = [z + d, z - d]
 			return paar
 	return paar
+
+
+## Ein Wert des Turms auf `z` mit seiner Stufe: Stufe 2 und die Stufe-3-Fähigkeit überschreiben Werte.TURMARTEN.
+## `vorgabe`, wenn der Turm den Wert gar nicht hat (z. B. Fähigkeiten wie "ziele").
+func turm_wert(z: Vector2i, schluessel: String, vorgabe: Variant = null) -> Variant:
+	var art: String = turm_art.get(z, "geschuetz")
+	var wert: Variant = Werte.TURMARTEN[art].get(schluessel, vorgabe)
+	var stufe := int(turm_stufe.get(z, 1))
+	if stufe >= 2 and (Werte.TURM_STUFE_2[art] as Dictionary).has(schluessel):
+		wert = Werte.TURM_STUFE_2[art][schluessel]
+	if stufe >= 3:
+		var f: Dictionary = (Werte.TURM_STUFE_3[art] as Dictionary).get(str(turm_faehigkeit.get(z, "")), {})
+		if f.has(schluessel):
+			wert = f[schluessel]
+	return wert
 
 
 ## So viele Stützen braucht der Turm auf `z`.
@@ -401,21 +440,13 @@ func turm_noetig(z: Vector2i) -> int:
 	return int(Werte.TURMARTEN[turm_art.get(z, "geschuetz")]["nachbarn"])
 
 
-## Die Stützen, die ein Turm der Art `art` auf `z` belegt: bei Ecke und geradem Stück genau das passende Paar.
+## Die Stützen, die ein Turm der Art `art` auf `z` belegt – bei Formtürmen alle Erdwälle der Form.
 func _waehle_stuetzen(z: Vector2i, art: String) -> Array[Vector2i]:
-	var frei := freie_stuetzen(z)
-	var paar: Array[Vector2i] = []
 	if art == "heil":
 		return _diagonal_paar(z)
 	if art in ["lanze", "frost"]:
-		for i in frei.size():
-			for j in range(i + 1, frei.size()):
-				var gegenueber := frei[i] + frei[j] == z * 2
-				if gegenueber == (art == "lanze"):
-					paar = [frei[i], frei[j]]
-					return paar
-		return paar
-	return frei.slice(0, int(Werte.TURMARTEN[art]["nachbarn"]))
+		return _form_waelle(z, art)
+	return freie_stuetzen(z).slice(0, int(Werte.TURMARTEN[art]["nachbarn"]))
 
 
 ## Nachbarwälle von `z`, die einen Turm auf `z` stützen könnten: kein Turm darauf und noch keinem anderen Turm zugeteilt.
@@ -455,6 +486,8 @@ func pruefe_stuetzen() -> void:
 			stuetzen.erase(z)
 			turm_schaden.erase(z)
 			turm_art.erase(z)
+			turm_stufe.erase(z)
+			turm_faehigkeit.erase(z)
 	for z: Vector2i in ausbau:
 		if ausbau[z] != TURM:
 			continue
@@ -1319,7 +1352,7 @@ func _draw() -> void:
 	if auswahl != KEINE:
 		var kreise: Array[float] = []
 		if ausbau.get(auswahl, FREI) == TURM:
-			kreise = [float(Werte.TURMARTEN[turm_art.get(auswahl, "geschuetz")]["reichweite"])]
+			kreise = [float(turm_wert(auswahl, "reichweite"))]
 		elif ausbau.get(auswahl, FREI) == STELLUNG:
 			# leere Stellung in der Bauphase: innen Technogunner, außen Scharfschütze
 			for typ: String in ["technogunner", "scharfschuetze"]:
@@ -1495,6 +1528,9 @@ func _zeichne_ausbau(z: Vector2i, typ: int, alpha: float) -> void:
 				_r(z, 26, 12, 12, 12, licht * a)
 				_r(z, 2, 14, 12, 8, TECH_DUNKEL * a)    # Rohre links/rechts
 				_r(z, 50, 14, 12, 8, TECH_DUNKEL * a)
+		# Stufe: goldene Punkte unten am Sockel
+		for i in int(turm_stufe.get(z, 1)) - 1:
+			_r(z, 22 + i * 12, 34, 8, 6, Color("ffd34d") * a)
 
 
 ## Felder, die ein Spiegel auf `z` sieht (Umkreis 3 Felder): dorthin können Bodentruppen über ihn schießen.

@@ -28,12 +28,16 @@ func _ready() -> void:
 
 
 func oeffne(z: Vector2i) -> void:
-	if not spiel.fabriken.has(z):
+	if not spiel.fabriken.has(z) and not _ist_turm(z):
 		return
 	zelle = z
 	_stand = ""
 	visible = true
 	_baue()
+
+
+func _ist_turm(z: Vector2i) -> bool:
+	return spiel.karte.ausbau.get(z, Karte.FREI) == Karte.TURM
 
 
 func schliesse() -> void:
@@ -54,7 +58,7 @@ func taste(code: int) -> void:
 func _process(_delta: float) -> void:
 	if not visible:
 		return
-	if not spiel.fabriken.has(zelle):
+	if not spiel.fabriken.has(zelle) and not _ist_turm(zelle):
 		schliesse()
 		return
 	_baue()
@@ -69,13 +73,16 @@ func _quelle() -> String:
 
 
 func _zeige_stats() -> void:
-	if not is_instance_valid(_lbl_stats):
+	if not is_instance_valid(_lbl_stats) or _ist_turm(zelle):
 		return
 	var g: Dictionary = spiel.gesamt_stats.get(_quelle(), {})
 	_lbl_stats.text = "Gesamt: %d Schaden · %d Kills" % [roundi(float(g.get("schaden", 0.0))), int(g.get("kills", 0))]
 
 
 func _baue() -> void:
+	if _ist_turm(zelle):
+		_baue_turm()
+		return
 	var f: Dictionary = spiel.fabriken[zelle]
 	var stufe := int(f.get("stufe", 0))
 	var bauphase: bool = spiel.ausbau_moeglich()   # Bauphase – oder die letzte Runde, dort geht Ausbauen auch während des Angriffs
@@ -155,6 +162,62 @@ func _baue() -> void:
 		_zeile(w3["name"], 14, Color("7fe0ff"))
 		_zeile(w3["text"], 12, Color("d8cfe6"))
 		_zeile("+ %s    – %s" % [w3["stark"], w3["schwach"]], 11, Color("a79fb3"))
+	if naechste and not bauphase:
+		_zeile("Ausbauen geht nur zwischen den Wellen.", 12, Color("a79fb3"))
+	reset_size()
+	_setze_ort()
+
+
+## Turm: Stufe 2 fest, Stufe 3 eine von zwei Fähigkeiten (wie bei den Fabriken).
+func _baue_turm() -> void:
+	var k: Karte = spiel.karte
+	var art: String = k.turm_art.get(zelle, "geschuetz")
+	var stufe := int(k.turm_stufe.get(zelle, 1))
+	var bauphase: bool = spiel.ausbau_moeglich()
+	var preise: Array[int] = Werte.KOSTEN_TURM_STUFE
+	var naechste := stufe - 1 < preise.size()
+	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe - 1]
+	var stand := "turm|%s|%d|%s|%s|%s" % [art, stufe, bauphase, kann_zahlen, k.turm_aktiv(zelle)]
+	if stand == _stand:
+		_setze_ort()
+		return
+	_stand = stand
+	for kind in _inhalt.get_children():
+		_inhalt.remove_child(kind)
+		kind.queue_free()
+	_truppen_knoepfe = []
+	_upgrade_knopf = null
+	var d: Dictionary = Werte.TURMARTEN[art]
+	_zeile("%s · Stufe %d" % [d["name"], stufe], 17, Color("ffe9a8"))
+	_zeile(d["text"], 12, Color("a79fb3"))
+	if not k.turm_aktiv(zelle):
+		_zeile("Schweigt gerade: Stütze fehlt oder lahmgelegt.", 12, Color("ff8a7a"))
+	if stufe >= 2:
+		_zeile("✓ Stufe 2: " + str(Werte.TURM_STUFE_2[art]["text"]), 12, Color("7fe0ff"))
+	if stufe == 1:
+		_upgrade_knopf = _knopf("Stufe 2  –  %d" % preise[0])
+		_upgrade_knopf.disabled = not bauphase or not kann_zahlen
+		_upgrade_knopf.pressed.connect(spiel.werte_auf.bind(zelle))
+		_inhalt.add_child(_upgrade_knopf)
+		_zeile(Werte.TURM_STUFE_2[art]["text"], 12, Color("d8cfe6"))
+	elif stufe == 2:
+		_zeile("Stufe 3 – eine Fähigkeit wählen (%d):" % preise[1], 13, Color("ffe9a8"))
+		var wahl: Dictionary = Werte.TURM_STUFE_3[art]
+		for kennung: String in wahl:
+			var w: Dictionary = wahl[kennung]
+			var b := _knopf(str(w["name"]))
+			b.disabled = not bauphase or not kann_zahlen
+			b.pressed.connect(spiel.werte_auf.bind(zelle, kennung))
+			_inhalt.add_child(b)
+			_truppen_knoepfe.append(b)
+			_zeile(w["text"], 12, Color("d8cfe6"))
+			_zeile("+ %s    – %s" % [w["stark"], w["schwach"]], 11, Color("a79fb3"))
+	else:
+		var w3: Dictionary = Werte.TURM_STUFE_3[art].get(str(k.turm_faehigkeit.get(zelle, "")), {})
+		if not w3.is_empty():
+			_zeile(w3["name"], 14, Color("7fe0ff"))
+			_zeile(w3["text"], 12, Color("d8cfe6"))
+			_zeile("+ %s    – %s" % [w3["stark"], w3["schwach"]], 11, Color("a79fb3"))
 	if naechste and not bauphase:
 		_zeile("Ausbauen geht nur zwischen den Wellen.", 12, Color("a79fb3"))
 	reset_size()
