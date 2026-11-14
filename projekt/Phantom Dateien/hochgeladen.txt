@@ -4,3 +4,6 @@
 angriff-20261114-114057.json
 angriff-20261114-115218.json
 verteidigung-20261113-222441.json
+# 14.11.2026 mit der Entwicklungsversion (Commit 3f99b44):
+angriff-20261114-155524.json
+verteidigung-20261114-154828.json

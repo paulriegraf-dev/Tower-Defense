@@ -6,7 +6,7 @@ signal zerstoert(zelle: Vector2i, typ: int)
 signal ausgefallen_ist(zelle: Vector2i, typ: int)
 
 ## FREI/WALL/FABRIK stehen im Raster; STELLUNG und TURM sind Ausbauten eines Erdwalls.
-enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE, TOR }
+enum { FREI, WALL, FABRIK, STELLUNG, TURM, BATTERIE, TOR, PANZER, SPIEGEL, MAGNET }   # PANZER ist nur Bauwerkzeug; SPIEGEL und MAGNET sind Ausbauten
 
 const NACHBARN: Array[Vector2i] = [Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN, Vector2i.RIGHT]
 const KEINE := Vector2i(-1, -1)
@@ -14,6 +14,10 @@ const KEINE := Vector2i(-1, -1)
 var feld: Dictionary = {}          # Zelle -> WALL / FABRIK
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
 var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
+var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN (aus der Form der Nachbarwälle)
+var magnet_richtung: Dictionary = {}   # Magnet-Zelle -> Richtung seiner Zuglinie
+var vorschau_richtung := Vector2i.RIGHT   # Bauvorschau des Magneten
+var panzer: Dictionary = {}        # gepanzerte Erdwälle -> true (die erste Sprengung nimmt nur die Panzerung)
 var stuetzen: Dictionary = {}      # Turm-Zelle -> die Erdwälle, die ihn stützen (Array[Vector2i])
 var stuetze_von: Dictionary = {}   # Erdwall -> Zelle des Turms, den er stützt (jeder Wall stützt höchstens einen)
 var turm_schaden: Dictionary = {}  # Turm-Zelle -> Schaden durch Turmtruppen in dieser Runde
@@ -187,6 +191,9 @@ func entferne(z: Vector2i) -> void:
 	feld.erase(z)
 	leben.erase(z)
 	ausbau.erase(z)
+	turm_art.erase(z)
+	magnet_richtung.erase(z)
+	panzer.erase(z)
 	besatzung.erase(z)
 	fabrik_typ.erase(z)
 	posten.erase(z)
@@ -323,11 +330,42 @@ func ausbau_hindernis(z: Vector2i, typ: int) -> String:
 	if typ == TURM:
 		if stuetze_von.has(z):
 			return "Dieser Erdwall stützt schon einen anderen Turm."
-		if wall_nachbarn(z) < Werte.TURM_NACHBARN:
-			return "Ein Turm braucht %d angrenzende Erdwälle als Stützen (T-Stück oder Kreuzung)." % Werte.TURM_NACHBARN
-		if freie_stuetzen(z).size() < Werte.TURM_NACHBARN:
-			return "Zu wenig freie Stützen: Nachbarwälle mit Turm oder schon vergebene Stützen zählen nicht."
+		if turm_form(z) == "":
+			return "Ein Turm braucht mindestens 2 freie Nachbarwälle: Ecke = Frost, gerade = Lanze, T-Stück = Geschütz, Kreuzung = Funk."
 	return ""
+
+
+## Welcher Turm entstünde auf `z`? Bestimmt durch die freien Nachbarwälle (siehe Werte.TURMARTEN). "" = keiner.
+func turm_form(z: Vector2i) -> String:
+	var frei := freie_stuetzen(z)
+	match frei.size():
+		4:
+			return "funk"
+		3:
+			return "geschuetz"
+		2:
+			return "lanze" if frei[0] + frei[1] == z * 2 else "frost"
+	return ""
+
+
+## So viele Stützen braucht der Turm auf `z`.
+func turm_noetig(z: Vector2i) -> int:
+	return int(Werte.TURMARTEN[turm_art.get(z, "geschuetz")]["nachbarn"])
+
+
+## Die Stützen, die ein Turm der Art `art` auf `z` belegt: bei Ecke und geradem Stück genau das passende Paar.
+func _waehle_stuetzen(z: Vector2i, art: String) -> Array[Vector2i]:
+	var frei := freie_stuetzen(z)
+	var paar: Array[Vector2i] = []
+	if art == "lanze" or art == "frost":
+		for i in frei.size():
+			for j in range(i + 1, frei.size()):
+				var gegenueber := frei[i] + frei[j] == z * 2
+				if gegenueber == (art == "lanze"):
+					paar = [frei[i], frei[j]]
+					return paar
+		return paar
+	return frei.slice(0, int(Werte.TURMARTEN[art]["nachbarn"]))
 
 
 ## Nachbarwälle von `z`, die einen Turm auf `z` stützen könnten: kein Turm darauf und noch keinem anderen Turm zugeteilt.
@@ -350,11 +388,11 @@ func _stuetze_turm(z: Vector2i) -> bool:
 	for alt: Vector2i in stuetzen.get(z, []):
 		if stuetze_von.get(alt) == z:
 			stuetze_von.erase(alt)
-	var neu: Array[Vector2i] = freie_stuetzen(z).slice(0, Werte.TURM_NACHBARN)
+	var neu: Array[Vector2i] = _waehle_stuetzen(z, turm_art.get(z, "geschuetz"))
 	stuetzen[z] = neu
 	for n in neu:
 		stuetze_von[n] = z
-	return neu.size() >= Werte.TURM_NACHBARN
+	return neu.size() >= turm_noetig(z)
 
 
 ## Nach jeder Änderung an Erdwällen: Türme, denen eine Stütze fehlt, suchen sich neue.
@@ -366,10 +404,11 @@ func pruefe_stuetzen() -> void:
 					stuetze_von.erase(alt)
 			stuetzen.erase(z)
 			turm_schaden.erase(z)
+			turm_art.erase(z)
 	for z: Vector2i in ausbau:
 		if ausbau[z] != TURM:
 			continue
-		var ganz := stuetzen.has(z) and (stuetzen[z] as Array).size() >= Werte.TURM_NACHBARN
+		var ganz := stuetzen.has(z) and (stuetzen[z] as Array).size() >= turm_noetig(z)
 		if ganz:
 			for n: Vector2i in stuetzen[z]:
 				if inhalt(n) != WALL or stuetze_von.get(n) != z:
@@ -382,7 +421,7 @@ func pruefe_stuetzen() -> void:
 func turm_aktiv(z: Vector2i) -> bool:
 	if ausbau.get(z, FREI) != TURM or turm_lahm(z):
 		return false
-	return (stuetzen.get(z, []) as Array).size() >= Werte.TURM_NACHBARN
+	return (stuetzen.get(z, []) as Array).size() >= turm_noetig(z)
 
 
 func turm_lahm(z: Vector2i) -> bool:
@@ -397,6 +436,7 @@ func schade_turm(z: Vector2i, menge: float) -> void:
 func baue_aus(z: Vector2i, typ: int) -> void:
 	ausbau[z] = typ
 	if typ == TURM:
+		turm_art[z] = turm_form(z)
 		_stuetze_turm(z)
 	if typ == TOR:
 		_gewichte_fuer(z)
@@ -716,7 +756,7 @@ func sprengt_reihe(w: Vector2i, zugang: Vector2i) -> Array[Vector2i]:
 		return reihe
 	var quer := Vector2i(richtung.y, richtung.x)
 	var hinter := w + richtung
-	while reihe.size() < Werte.SPRENGER_TIEFE - 1 and inhalt(hinter) == WALL and ausbau.get(hinter, FREI) == FREI \
+	while reihe.size() < Werte.SPRENGER_TIEFE - 1 and inhalt(hinter) == WALL and ausbau.get(hinter, FREI) == FREI and not panzer.has(hinter) \
 			and (inhalt(hinter + quer) == WALL or inhalt(hinter - quer) == WALL):
 		reihe.append(hinter)
 		hinter += richtung
@@ -843,12 +883,18 @@ func sprengziel(von: Vector2i, belegt: Array = [], min_weg: int = Werte.SPRENGER
 	return bester if not bester.is_empty() else fern
 
 
-## Fußweg für Gegner zu einem freien Feld: wie der Weg eigener Truppen, aber nicht durch deren Tore.
+## Fußweg für Gegner zu einem freien Feld: wie der Weg eigener Truppen, aber Tore sind für sie zu
+## (vorher wurde ein Weg durch ein Tor nur verworfen – oder, beim Belagerungsturm, gar nicht geprüft).
 func _weg_ohne_tor(von: Vector2i, nach: Vector2i) -> Array[Vector2i]:
+	var tore: Array[Vector2i] = []
+	for z: Vector2i in ausbau:
+		if ausbau[z] == TOR:
+			tore.append(z)
+	for z in tore:
+		_astar_einheiten.set_point_solid(z, true)
 	var weg := einheiten_weg(von, nach)
-	for z in weg:
-		if ist_tor(z):
-			return []
+	for z in tore:
+		_astar_einheiten.set_point_solid(z, false)
 	return weg
 
 
@@ -880,7 +926,7 @@ func _weg_an_wall(von: Vector2i, w: Vector2i) -> Array[Vector2i]:
 			continue
 		var weg: Array[Vector2i] = [von]
 		if zugang != von:
-			weg = einheiten_weg(von, zugang)
+			weg = _weg_ohne_tor(von, zugang)   # Gegner (Belagerungsturm): nicht durch Tore
 		if not weg.is_empty() and (bester.is_empty() or weg.size() < bester.size()):
 			bester = weg
 	return bester
@@ -1175,8 +1221,10 @@ func _draw() -> void:
 	for z: Vector2i in feld:
 		if feld[z] == WALL:
 			_zeichne_wall(z, 1.0)
+			if panzer.has(z):
+				_zeichne_panzer(z, 1.0)
 			if stuetze_von.has(z):
-				_zeichne_stuetze(z, TECH_HELL, 0.5)
+				_zeichne_stuetze(z, Color(Werte.TURMARTEN[turm_art.get(stuetze_von[z], "geschuetz")]["farbe"]).darkened(0.25), 0.5)
 			if ausbau.has(z):
 				_zeichne_ausbau(z, ausbau[z], 1.0)
 				if ausbau[z] == TURM and not turm_aktiv(z):
@@ -1215,13 +1263,15 @@ func _draw() -> void:
 	if auswahl != KEINE:
 		var kreise: Array[float] = []
 		if ausbau.get(auswahl, FREI) == TURM:
-			kreise = [Werte.TURM["reichweite"]]
+			kreise = [float(Werte.TURMARTEN[turm_art.get(auswahl, "geschuetz")]["reichweite"])]
 		elif ausbau.get(auswahl, FREI) == STELLUNG:
 			# leere Stellung in der Bauphase: innen Technogunner, außen Scharfschütze
 			for typ: String in ["technogunner", "scharfschuetze"]:
 				kreise.append(Werte.EINHEITEN[typ]["reichweite"] + Werte.stellung_bonus(Werte.EINHEITEN[typ]))
 		elif inhalt(auswahl) == BATTERIE:
 			kreise = [Werte.BATTERIE["reichweite"]]
+		elif ausbau.get(auswahl, FREI) == MAGNET:
+			_zeichne_magnetlinie(auswahl, magnet_richtung.get(auswahl, Vector2i.RIGHT), 0.8)
 		var m := (Vector2(auswahl) + Vector2(0.5, 0.5)) * zg
 		for weite in kreise:
 			draw_circle(m, weite * zg, Color(0.5, 0.88, 1.0, 0.06))
@@ -1232,20 +1282,30 @@ func _draw() -> void:
 		# mögliche Turmplätze hervorheben
 		for z: Vector2i in feld:
 			if ausbau_hindernis(z, TURM) == "":
-				_r(z, 26, 16, 12, 12, Color(TECH_LICHT, 0.5 + 0.3 * sin(_zeit * 5.0)))
+				_r(z, 26, 16, 12, 12, Color(Color(Werte.TURMARTEN[turm_form(z)]["farbe"]), 0.5 + 0.3 * sin(_zeit * 5.0)))
 	if vorschau_typ != FREI and in_karte(vorschau_zelle):
 		var rahmen := Rect2(Vector2(vorschau_zelle) * zg + Vector2(2, 2), Vector2(zg - 4, zg - 4))
 		if not vorschau_ok:
 			draw_rect(rahmen, WARNUNG, false, 4.0)
 		elif vorschau_typ == TOR:
 			_zeichne_ausbau(vorschau_zelle, TOR, 0.7)
+		elif vorschau_typ == PANZER:
+			_zeichne_panzer(vorschau_zelle, 0.7)
+		elif vorschau_typ == SPIEGEL:
+			_zeichne_ausbau(vorschau_zelle, SPIEGEL, 0.7)
+		elif vorschau_typ == MAGNET:
+			_zeichne_ausbau(vorschau_zelle, MAGNET, 0.7)
+			_zeichne_magnetlinie(vorschau_zelle, vorschau_richtung, 0.8)
 		elif vorschau_typ == STELLUNG or vorschau_typ == TURM:
 			if vorschau_typ == TURM:
 				# die Stützen, die dieser Turm belegen würde
-				for n in freie_stuetzen(vorschau_zelle).slice(0, Werte.TURM_NACHBARN):
-					_zeichne_stuetze(n, TECH_LICHT, 0.5)
+				for n in _waehle_stuetzen(vorschau_zelle, turm_form(vorschau_zelle)):
+					_zeichne_stuetze(n, Color(Werte.TURMARTEN[turm_form(vorschau_zelle)]["farbe"]), 0.5)
 			_zeichne_ausbau(vorschau_zelle, vorschau_typ, 0.7)
-			var radius: float = Werte.TURM["reichweite"] if vorschau_typ == TURM else 3.0 + Werte.POSTEN_REICHWEITE_BONUS
+			var radius: float = float(Werte.TURMARTEN[turm_form(vorschau_zelle)]["reichweite"]) if vorschau_typ == TURM else 3.0 + Werte.POSTEN_REICHWEITE_BONUS
+			if vorschau_typ == TURM:
+				var vart: Dictionary = Werte.TURMARTEN[turm_form(vorschau_zelle)]
+				draw_string(ThemeDB.fallback_font, Vector2(vorschau_zelle) * zg + Vector2(-20, -6), vart["name"], HORIZONTAL_ALIGNMENT_CENTER, zg + 40, 14, Color(vart["farbe"]))
 			draw_arc((Vector2(vorschau_zelle) + Vector2(0.5, 0.5)) * zg, radius * zg, 0.0, TAU, 64, Color(TECH_LICHT, 0.6), 2.0)
 		else:
 			if vorschau_typ == WALL:
@@ -1302,13 +1362,88 @@ func _zeichne_ausbau(z: Vector2i, typ: int, alpha: float) -> void:
 		_r(z, 48, 12, 10, 50, STEIN * a)
 		_r(z, 26, 4, 12, 6, TECH_LICHT * a)
 		_r(z, 20, 52, 24, 4, TECH_LICHT * Color(1, 1, 1, 0.6 * alpha))
+	elif typ == SPIEGEL:
+		# Sockel mit schräger Spiegelscheibe
+		_r(z, 10, 26, 44, 18, STEIN_DUNKEL * a)
+		var o := Vector2(z) * Werte.ZELLE
+		draw_colored_polygon(PackedVector2Array([o + Vector2(14, 30), o + Vector2(26, 4), o + Vector2(50, 4), o + Vector2(38, 30)]), Color("cfe8f5") * a)
+		draw_line(o + Vector2(24, 24), o + Vector2(34, 8), Color(1, 1, 1, 0.9 * alpha), 3.0)
+		draw_polyline(PackedVector2Array([o + Vector2(14, 30), o + Vector2(26, 4), o + Vector2(50, 4), o + Vector2(38, 30), o + Vector2(14, 30)]), Color("6a7d8c") * a, 2.0)
+	elif typ == MAGNET:
+		# Hufeisen, die offene Seite zeigt in Zugrichtung
+		var r: Vector2i = magnet_richtung.get(z, vorschau_richtung)
+		var m := (Vector2(z) + Vector2(0.5, 0.4)) * Werte.ZELLE
+		var vor := Vector2(r)
+		var quer := Vector2(-vor.y, vor.x)
+		_r(z, 14, 8, 36, 34, TECH_DUNKEL * a)
+		draw_arc(m - vor * 4.0, 13.0, quer.angle(), quer.angle() + PI, 16, Color("8c96a8") * a, 7.0)
+		draw_line(m + quer * 13.0 - vor * 4.0, m + quer * 13.0 + vor * 10.0, Color("e0453a") * a, 7.0)
+		draw_line(m - quer * 13.0 - vor * 4.0, m - quer * 13.0 + vor * 10.0, Color("3a7be0") * a, 7.0)
 	else:
+		var art: String = turm_art.get(z, turm_form(z))
+		if art == "":
+			art = "geschuetz"
+		var licht := Color(Werte.TURMARTEN[art]["farbe"])
 		_r(z, 12, 2, 40, 42, TECH_DUNKEL * a)
 		_r(z, 14, 4, 36, 38, TECH * a)
 		_r(z, 18, 8, 28, 20, TECH_HELL * a)
-		_r(z, 26, 12, 12, 12, TECH_LICHT * a)
-		_r(z, 2, 14, 12, 8, TECH_DUNKEL * a)    # Rohre links/rechts
-		_r(z, 50, 14, 12, 8, TECH_DUNKEL * a)
+		match art:
+			"frost":
+				# Kristall statt Rohr
+				_r(z, 28, 6, 8, 24, licht * a)
+				_r(z, 22, 12, 20, 8, licht * a)
+				_r(z, 30, 2, 4, 4, Color.WHITE * a)
+			"funk":
+				# Antenne mit Querstreben
+				_r(z, 30, -10, 4, 30, MESSING * a)
+				_r(z, 22, -6, 20, 3, licht * a)
+				_r(z, 25, 2, 14, 3, licht * a)
+				_r(z, 26, 14, 12, 8, licht * a)
+			"lanze":
+				# langes Rohr nach beiden Seiten
+				_r(z, 26, 12, 12, 12, licht * a)
+				_r(z, 0, 15, 26, 6, TECH_DUNKEL * a)
+				_r(z, 38, 15, 26, 6, TECH_DUNKEL * a)
+				_r(z, 0, 16, 6, 4, licht * a)
+				_r(z, 58, 16, 6, 4, licht * a)
+			_:
+				_r(z, 26, 12, 12, 12, licht * a)
+				_r(z, 2, 14, 12, 8, TECH_DUNKEL * a)    # Rohre links/rechts
+				_r(z, 50, 14, 12, 8, TECH_DUNKEL * a)
+
+
+## Die Zuglinie eines Magneten: die Felder vor ihm bis zum ersten Hindernis (höchstens MAGNET.laenge).
+func magnet_linie(z: Vector2i, r: Vector2i) -> Array[Vector2i]:
+	var linie: Array[Vector2i] = []
+	var c := z + r
+	for i in int(Werte.MAGNET["laenge"]):
+		if not in_karte(c) or not ist_frei(c):
+			break
+		linie.append(c)
+		c += r
+	return linie
+
+
+func _zeichne_magnetlinie(z: Vector2i, r: Vector2i, staerke: float) -> void:
+	for c in magnet_linie(z, r):
+		var o := Vector2(c) * Werte.ZELLE
+		draw_rect(Rect2(o + Vector2(6, 6), Vector2(52, 52)), Color(0.9, 0.3, 0.3, 0.12 * staerke))
+		draw_rect(Rect2(o + Vector2(6, 6), Vector2(52, 52)), Color(0.95, 0.4, 0.35, 0.6 * staerke), false, 2.0)
+		var mitte := o + Vector2(32, 32)
+		draw_line(mitte, mitte - Vector2(r) * 14.0, Color(1, 0.8, 0.8, 0.8 * staerke), 3.0)
+
+
+## Gepanzerter Erdwall: Stahlbeschlag an den Kanten mit Nieten.
+func _zeichne_panzer(z: Vector2i, alpha: float) -> void:
+	var a := Color(1, 1, 1, alpha)
+	var stahl := Color("8c96a8")
+	var dunkel := Color("4a5160")
+	_r(z, 0, 0, 64, 6, stahl * a)
+	_r(z, 0, 0, 6, 46, stahl * a)
+	_r(z, 58, 0, 6, 46, stahl * a)
+	_r(z, 0, 40, 64, 6, dunkel * a)
+	for x: int in [2, 30, 58]:
+		_r(z, x, 1, 4, 4, Color("d8dee9") * a)
 
 
 func _zeichne_wall(z: Vector2i, alpha: float) -> void:

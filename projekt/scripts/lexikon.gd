@@ -200,7 +200,10 @@ func _skizze(art: String, o: Vector2, s: float) -> void:
 	var stein := Color("8d8a96")
 	var stein_hell := Color("b4b1bd")
 	var stein_dunkel := Color("5c5966")
-	if art in ["wall", "stellung", "turm", "tor"]:
+	if art.begins_with("form:"):
+		_skizze_form(art.trim_prefix("form:"), o, s)
+		return
+	if art in ["wall", "stellung", "turm", "tor", "panzer", "spiegel", "magnet"]:
 		_q(o, s, 0, 0, 64, 64, erde)
 		_q(o, s, 0, 0, 64, 4, Color("c49b63"))
 		_q(o, s, 8, 8, 48, 32, krone)
@@ -247,6 +250,23 @@ func _skizze(art: String, o: Vector2, s: float) -> void:
 			for i in 3:
 				_q(o, s, 8 + i * 18, 50, 14, 8, tech_dunkel)
 				_q(o, s, 10 + i * 18, 52, 10, 4, licht)
+		"spiegel":
+			_q(o, s, 10, 26, 44, 18, stein_dunkel)
+			draw_colored_polygon(PackedVector2Array([o + Vector2(14, 30) * s, o + Vector2(26, 4) * s, o + Vector2(50, 4) * s, o + Vector2(38, 30) * s]), Color("cfe8f5"))
+			draw_line(o + Vector2(24, 24) * s, o + Vector2(34, 8) * s, Color.WHITE, maxf(1.0, 3.0 * s))
+		"magnet":
+			_q(o, s, 14, 8, 36, 34, tech_dunkel)
+			draw_arc(o + Vector2(28, 26) * s, 13.0 * s, PI / 2.0, PI * 1.5, 16, Color("8c96a8"), maxf(2.0, 7.0 * s))
+			_q(o, s, 24, 10, 14, 7, Color("e0453a"))
+			_q(o, s, 24, 35, 14, 7, Color("3a7be0"))
+		"panzer":
+			var stahl := Color("8c96a8")
+			_q(o, s, 0, 0, 64, 6, stahl)
+			_q(o, s, 0, 0, 6, 46, stahl)
+			_q(o, s, 58, 0, 6, 46, stahl)
+			_q(o, s, 0, 40, 64, 6, Color("4a5160"))
+			for x: int in [2, 30, 58]:
+				_q(o, s, x, 1, 4, 4, Color("d8dee9"))
 		"checkpoint":
 			_q(o, s, 10, 52, 44, 8, Color(0, 0, 0, 0.3))
 			_q(o, s, 28, 6, 5, 52, stein_hell)
@@ -263,6 +283,27 @@ func _skizze(art: String, o: Vector2, s: float) -> void:
 			draw_circle(o + Vector2(32, 34) * s, 24 * s, GOLD)
 			draw_circle(o + Vector2(32, 34) * s, 17 * s, Color("f0b92e"))
 			_q(o, s, 29, 22, 6, 24, Color("fff2b8"))
+
+
+## Formturm als 3×3-Skizze: in der Mitte der Turm in seiner Farbe, drumherum die Erdwälle, die seine Form ergeben.
+const FORMEN := {
+	"geschuetz": [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)],
+	"frost": [Vector2i(1, 0), Vector2i(0, 1)],
+	"funk": [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)],
+	"lanze": [Vector2i(-1, 0), Vector2i(1, 0)],
+}
+
+func _skizze_form(art: String, o: Vector2, s: float) -> void:
+	var k := 64.0 / 3.0
+	var farbe := Color(Werte.TURMARTEN[art]["farbe"])
+	_q(o, s, 0, 0, 64, 64, Color(0.31, 0.49, 0.27, 0.5))
+	for n: Vector2i in FORMEN[art]:
+		var x := (n.x + 1) * k
+		var y := (n.y + 1) * k
+		_q(o, s, x + 1, y + 1, k - 2, k - 2, Color("a87b4a"))
+		_q(o, s, x + 4, y + 4, k - 8, k - 8, farbe.darkened(0.45))
+	_q(o, s, k + 1, k + 1, k - 2, k - 2, Color("2a2038"))
+	_q(o, s, k + 4, k + 4, k - 8, k - 8, farbe)
 
 
 func _q(o: Vector2, s: float, x: float, y: float, w: float, h: float, farbe: Color) -> void:
@@ -347,6 +388,25 @@ func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictiona
 	return {"name": d["name"], "unter": unter, "marke": "Fabrik", "bild": _bild(d), "gross": true, "werte": w, "abschnitte": abschnitte}
 
 
+## Karte eines Formturms: Form als Skizze, Werte aus Werte.TURMARTEN, gemeinsame Regeln für alle Türme.
+func _turmkarte(art: String, extra: Array) -> Dictionary:
+	var W := Werte
+	var d: Dictionary = W.TURMARTEN[art]
+	var w: Array = [["Preis", str(W.KOSTEN_TURM)], ["Form", d["form"]], ["Stützen", str(d["nachbarn"])], ["Reichweite", _z(d["reichweite"])]]
+	if float(d["schaden"]) > 0.0:
+		w.append(["Schaden", _z(d["schaden"])])
+		w.append(["Angriff alle", _z(d["abklingzeit"]) + " s"])
+	var regeln: Array = [d["text"]]
+	regeln.append_array(extra)
+	return {"name": d["name"], "unter": "Turm auf " + {"Ecke": "einer Ecke", "Kreuzung": "einer Kreuzung", "T-Stück": "einem T-Stück", "gerades Stück": "einem geraden Stück"}.get(d["form"], d["form"]),
+		"marke": "%d  [4]" % W.KOSTEN_TURM, "skizze": "form:" + art, "werte": w,
+		"abschnitte": [["Was er macht", TITEL, regeln], ["Für alle Türme", TEXT_BLASS, [
+			"Welcher Turm entsteht, entscheidet die Form der freien Nachbarwälle: Ecke = Frost, gerade = Lanze, T-Stück = Geschütz, Kreuzung = Funk.",
+			"Stützregel: Diese Erdwälle dürfen keinen anderen Turm stützen. Stellungen darauf sind erlaubt.",
+			"Schießt ohne Truppe und auch im Rauch. Sicht wie aus einer Stellung. Sein Erdwall hält Sprengern stand.",
+			"Turmtruppen können ihn lahmlegen – dann schweigt er bis zum Rundenende."]]]}
+
+
 func _baue_daten() -> void:
 	var W := Werte
 	var schleuder: Dictionary = W.SCHLEUDER
@@ -377,7 +437,7 @@ func _baue_daten() -> void:
 			"Am Ziel zündet er %s Sekunden lang und steht dabei still (Ring über dem Warnzeichen). Fällt er vorher, gibt es keine Sprengung." % _z(W.SPRENGER_ZUENDZEIT),
 			"Das Ziel blinkt erst in der Welle. Der Sprenger trägt ein Warnzeichen."], [
 			"Vor dem Ziel abfangen – er hält wenig aus. Spätestens beim Zünden ist er ein stehendes Ziel.",
-			"Erdwälle mit Turm halten stand."]),
+			"Erdwälle mit Turm halten stand, gepanzerte überstehen eine Sprengung."]),
 		_gegner("rauch", "ab Runde 11", [
 			"Wirft Rauch auf die dichteste Gruppe von Stellungen; ohne Stellungen auf einen Truppenhaufen.",
 			"Truppen im Rauch schießen %s Sekunden nicht. Türme schießen weiter." % _z(W.RAUCH_SEK),
@@ -434,7 +494,8 @@ func _baue_daten() -> void:
 				"In der Zone kann nicht gebaut werden. Ein Schild schützt alles darin bis zur letzten Runde.",
 				"Eigene Truppen halten Abstand zur Zone, damit die Gegner herauskommen.",
 				"Runde %d ist der Gegenangriff: Das HQ muss fallen. Gegner kommen ohne Ende, niemand geht mehr in Stellungen, und jede Fabrik hat bis zu %d aktive Truppen." % [W.LETZTE_RUNDE, W.MAX_JE_FABRIK_ENDKAMPF],
-				"Ausgefallene Gebäude laufen dort nach einiger Zeit wieder an."]]]},
+				"Ausgefallene Gebäude laufen dort nach einiger Zeit wieder an.",
+				"Während des Gegenangriffs darfst du weiterbauen und ausbauen – nur keine neuen Erdwälle."]]]},
 	]
 
 	var truppen: Array = [
@@ -497,14 +558,30 @@ func _baue_daten() -> void:
 				"Kein Schuss durch die Lücke zwischen Erdwällen, die sich nur an den Ecken berühren.",
 				"Nahkämpfer am Boden kommen nicht heran. Gefährlich sind Sphären, Schleudern, Rauch und Turmtruppen.",
 				"Darf auch in der Welle gebaut werden, solange kein Gegner in der Nähe ist."]]]},
-		{"name": "Turm", "unter": "Ausbau eines Erdwalls", "marke": "%d  [4]" % W.KOSTEN_TURM, "skizze": "turm",
-			"werte": [["Preis", str(W.KOSTEN_TURM)], ["Reichweite", _z(W.TURM["reichweite"])], ["Schaden", _z(W.TURM["schaden"])], ["Angriff alle", _z(W.TURM["abklingzeit"]) + " s"]],
+		_turmkarte("geschuetz", ["Das ist der bisherige Turm."]),
+		_turmkarte("frost", ["Bremst ganze Trupps – gut gegen Fahnensturm und schnelle Rudel."]),
+		_turmkarte("funk", ["Zählt alle Stellungen im Umkreis, nicht nur eine – je mehr Stellungen drumherum, desto mehr lohnt er."]),
+		_turmkarte("lanze", ["Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
+		{"name": "Spiegel", "unter": "Ausbau eines Erdwalls", "marke": "%d  [8]" % W.KOSTEN_SPIEGEL, "skizze": "spiegel",
+			"werte": [["Preis", str(W.KOSTEN_SPIEGEL)], ["für", "Bodentruppen"]],
 			"abschnitte": [["Was er macht", TITEL, [
-				"Braucht mindestens %d angrenzende Erdwälle (T-Stück oder Kreuzung)." % W.TURM_NACHBARN,
-				"Stützregel: Diese Erdwälle dürfen keinen anderen Turm stützen. Stellungen darauf sind erlaubt.",
-				"Schießt ohne Truppe und auch im Rauch. Sicht wie aus einer Stellung.",
-				"Sein Erdwall hält Sprengern stand.",
-				"Nur Turmtruppen können ihn lahmlegen – dann schweigt er bis zum Rundenende."]]]},
+				"Bodentruppen, die den Spiegel sehen, schießen über ihn um die Ecke auf Gegner, die sie selbst nicht sehen.",
+				"Truppe → Spiegel und Spiegel → Gegner brauchen freie Sicht; beide Strecken zusammen müssen in ihrer Reichweite liegen.",
+				"Truppen in Stellungen nutzen ihn nicht.",
+				"Am besten an Ecken und Gangbiegungen, hinter denen die Gegner verschwinden."]]]},
+		{"name": "Magnet", "unter": "Ausbau eines Erdwalls", "marke": "%d  [9]" % W.KOSTEN_MAGNET, "skizze": "magnet",
+			"werte": [["Preis", str(W.KOSTEN_MAGNET)], ["Linie", "%d Felder" % int(W.MAGNET["laenge"])], ["Zug", _z(W.MAGNET["zug"]) + " Felder"], ["Zug alle", _z(W.MAGNET["abklingzeit"]) + " s"]],
+			"abschnitte": [["Was er macht", TITEL, [
+				"Zieht die Gegner in seiner Linie zu sich heran – nur in der Linie, in die er zeigt. Die Richtung stellst du beim Bauen mit [T] ein.",
+				"Die Linie endet am ersten Erdwall oder Gebäude; durch Wälle zieht er nicht. Gezogene Gegner suchen sich danach einen neuen Weg.",
+				"Der Belagerungsturm ist zu schwer für ihn.",
+				"So holst du Trupps aus dem Gang vor deine Stellungen oder ziehst sie auf langen Wegen zurück."]]]},
+		{"name": "Panzerung", "unter": "Ausbau eines Erdwalls", "marke": "%d  [7]" % W.KOSTEN_PANZER, "skizze": "panzer",
+			"werte": [["Preis", str(W.KOSTEN_PANZER)]],
+			"abschnitte": [["Was sie macht", TITEL, [
+				"Die erste Sprengung reißt nur die Panzerung weg, erst ein zweiter Sprenger bringt den Erdwall zu Fall.",
+				"Eine Sprengung in die Tiefe hört an einem gepanzerten Erdwall auf.",
+				"Lässt sich mit Stellung, Turm und Tor kombinieren."]]]},
 		{"name": "Tor", "unter": "Ausbau eines Erdwalls", "marke": "%d  [6]" % W.KOSTEN_TOR, "skizze": "tor",
 			"werte": [["Preis", str(W.KOSTEN_TOR)]],
 			"abschnitte": [["Was es macht", TITEL, [
@@ -522,13 +599,13 @@ func _baue_daten() -> void:
 				"Stufe 1 (%d) %s: %s" % [W.KOSTEN_BATTERIE_STUFE[0], W.BATTERIE_STUFEN[0]["name"], "Ein vierter Pilot rückt nach und repariert Ausgefallenes."],
 				"Stufe 2 (%d) %s: %s" % [W.KOSTEN_BATTERIE_STUFE[1], W.BATTERIE_STUFEN[1]["name"], W.BATTERIE_STUFEN[1]["text"]],
 				"Stufe 3 (%d) %s: %s" % [W.KOSTEN_BATTERIE_STUFE[2], W.BATTERIE_STUFEN[2]["name"], "Schild auf einem Wegfeld in Reichweite. Gegner müssen ihn erst zerschlagen, eigene Truppen gehen hindurch."]]]]},
-		{"name": "Budget", "unter": "woher das Geld kommt", "marke": "Regeln", "skizze": "geld",
+	]
+	truppen.append({"name": "Budget", "unter": "woher das Geld kommt", "marke": "Regeln", "skizze": "geld",
 			"werte": [["Start", str(W.START_BUDGET)], ["Leben", str(W.START_LEBEN)], ["Abriss", "%d %% zurück" % int(W.ERSTATTUNG * 100)]],
 			"abschnitte": [["Einkommen", TITEL, [
-				"Nach jeder Runde: %d + %d je Rundennummer, ab Runde %d zusätzlich %d je Runde." % [W.BONUS_JE_WELLE, W.BONUS_ZUWACHS, W.BONUS_MITTE_AB, W.BONUS_MITTE_ZUWACHS],
+				"Nach jeder Runde: %d + %d je Rundennummer." % [W.BONUS_JE_WELLE, W.BONUS_ZUWACHS],
 				"Je Checkpoint, der am Rundenende dir gehört: %d." % W.BONUS_JE_CHECKPOINT,
 				"Zinsen: für je %d Budget, das am Rundenende übrig ist, %d dazu – höchstens %d." % [W.ZINS_SCHRITT, W.ZINS_JE_SCHRITT, W.ZINS_STUFEN * W.ZINS_JE_SCHRITT],
 				"Dazu eine kleine Prämie je besiegtem Gegner.",
-				"Runde 1: nur Fabriken. Erdwälle gibt es ab Runde %d." % W.WAELLE_AB_WELLE]]]},
-	]
+				"Runde 1: nur Fabriken. Erdwälle gibt es ab Runde %d." % W.WAELLE_AB_WELLE]]]})
 	_daten = [gegner, truppen, bauten]

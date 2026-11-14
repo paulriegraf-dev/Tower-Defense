@@ -31,6 +31,7 @@ var letztes_ziel: Node2D = null    # Feuerteam: worauf zuletzt geschossen wurde 
 var letzter_schuss := -100.0       # ... und wann (Spielzeit in Sekunden)
 var _laser_ziel: Node2D = null
 var _laser_zeit := 0.0
+var _spiegel_punkt := Vector2.INF   # Schuss über einen Spiegel: dort knickt er ab (INF = direkt)
 var _ohne_ziel := 0.0              # Aufräumen: so lange (Sekunden) hat die Truppe in der Stellung kein Ziel mehr
 var _anlauf := 0.0                 # Minigun: 0..1
 
@@ -294,6 +295,13 @@ func _process(delta: float) -> void:
 			var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true)
 			if ziel == null:
 				ziel = spiel.zonenbau_in_reichweite(position, weite, true)
+			_spiegel_punkt = Vector2.INF
+			if ziel == null:
+				# Spiegel: um die Ecke schießen (nur Bodentruppen)
+				var ueber: Dictionary = spiel.ziel_ueber_spiegel(position, weite)
+				if not ueber.is_empty():
+					ziel = ueber["ziel"]
+					_spiegel_punkt = ueber["spiegel"]
 			var drueckt: bool = spiel.im_endkampf() and karte.zelle_bei(position) != _marschziel and _marschziel != Karte.KEINE
 			if ziel != null and drueckt and (ziel is Zonenbau or position.distance_to(ziel.position) > Werte.ENDKAMPF_ABSTAND * Werte.ZELLE):
 				# Letzte Runde: im Gehen schießen und weiter auf das eigene Feld in der Zone vorrücken – stehen bleibt nur,
@@ -429,6 +437,13 @@ func _feuere_auf(ziel: Node2D) -> void:
 	var farbe := Color(daten["schussfarbe"])
 	var muendung := position + Vector2(18 * (-1 if _sprite.flip_h else 1), -10)
 	var oben := zustand == Zustand.AUF_POSTEN
+	if _spiegel_punkt != Vector2.INF and not oben:
+		# über den Spiegel: erst zum Spiegel, von dort weiter zum Ziel
+		if faehigkeit == "laser":
+			spiel.strahl(muendung, _spiegel_punkt, Color(1.0, 0.35, 0.3), 2.0)
+		elif _abkling <= 0.0:
+			spiel.schuss(muendung, _spiegel_punkt, farbe)
+		muendung = _spiegel_punkt
 
 	# Laserstrahl: kein Einzelschuss, sondern Dauerschaden, der am selben Ziel anwächst
 	if faehigkeit == "laser" and ziel is Gegner:
@@ -454,6 +469,8 @@ func _feuere_auf(ziel: Node2D) -> void:
 		_anlauf = minf(1.0, _anlauf + Werte.MINIGUN_JE_SCHUSS)
 	elif faehigkeit == "markierung" and oben:
 		pause *= Werte.MARKIERUNG_ABKLING
+	if oben:
+		pause *= spiel.funk_faktor(posten_zelle)   # Funkturm in der Nähe: schneller feuern
 	_abkling = pause
 	letztes_ziel = ziel
 	letzter_schuss = spiel.spielzeit()
@@ -466,15 +483,16 @@ func _feuere_auf(ziel: Node2D) -> void:
 		return
 	if faehigkeit == "durchschuss" and ziel is Gegner:
 		# gerade Linie durch alle Gegner bis ans Ende der Reichweite
-		var richtung := (ziel.position - position).normalized()
-		var ende := position + richtung * reichweite_jetzt() * Werte.ZELLE
+		var start := muendung if _spiegel_punkt != Vector2.INF and not oben else position
+		var richtung := (ziel.position - start).normalized()
+		var ende := start + richtung * reichweite_jetzt() * Werte.ZELLE
 		spiel.strahl(muendung, ende, farbe, 3.0)
-		spiel.linienschaden(self, position, ende, float(daten["schaden"]), posten_zelle if oben else Karte.KEINE)
+		spiel.linienschaden(self, start, ende, float(daten["schaden"]), posten_zelle if oben else Karte.KEINE)
 		return
 	if daten.has("flaeche") and ziel is Gegner:
 		# Flächenschaden: trifft alle Gegner rund um das Ziel
 		var radius: float = float(daten["flaeche"]) * Werte.ZELLE
-		spiel.schuss(position + Vector2(0, -10), ziel.position, farbe)
+		spiel.schuss(muendung if _spiegel_punkt != Vector2.INF and not oben else position + Vector2(0, -10), ziel.position, farbe)
 		if faehigkeit == "plasmagel" and oben:
 			spiel.gelschuss(ziel.position, radius, float(daten["schaden"]) * Werte.PLASMAGEL_SCHADEN)
 			return

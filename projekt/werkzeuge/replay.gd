@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/replay.gd -- <partie.json> [Anzahl Läufe] [frei]
 ## "frei" = unbegrenztes Budget (jeder aufgezeichnete Zug klappt, auch wenn das Geld diesmal nicht gereicht hätte).
 
-const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR}
+const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR, "panzer": Karte.PANZER, "spiegel": Karte.SPIEGEL, "magnet": Karte.MAGNET}
 
 var partie: Dictionary
 var laeufe := 5
@@ -75,6 +75,8 @@ func _process(delta: float) -> bool:
 			var z := Vector2i(int(a["x"]), int(a["y"]))
 			match a["a"]:
 				"bau":
+					if a.has("rx"):
+						spiel._paar_richtung = maxi(0, spiel.PAAR_RICHTUNGEN.find(Vector2i(int(a["rx"]), int(a["ry"]))))
 					if a.has("px"):
 						# Batterie: die aufgezeichnete Lage der Pilotenfabrik einstellen
 						spiel._paar_richtung = maxi(0, spiel.PAAR_RICHTUNGEN.find(Vector2i(int(a["px"]), int(a["py"])) - z))

@@ -62,7 +62,7 @@ func _process(_delta: float) -> void:
 func _baue() -> void:
 	var f: Dictionary = spiel.fabriken[zelle]
 	var stufe := int(f.get("stufe", 0))
-	var bauphase: bool = spiel.phase == 0
+	var bauphase: bool = spiel.ausbau_moeglich()   # Bauphase – oder die letzte Runde, dort geht Ausbauen auch während des Angriffs
 	var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if f["typ"] == "pilot" else Werte.KOSTEN_STUFE
 	var naechste := stufe < preise.size()
 	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe]

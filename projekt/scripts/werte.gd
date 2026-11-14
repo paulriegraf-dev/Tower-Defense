@@ -14,7 +14,7 @@ const START_ZELLE := Vector2i(0, 4)    # HQ des Gegners; Mitte seiner Zone
 # Die linken Spalten gehören dem Gegner: dort kann nicht gebaut werden, Gegner kommen verteilt über die ganze Höhe heraus.
 # Bis zur letzten Runde liegt ein Schutzschild darüber: Was in der Zone steht, kann nicht beschossen werden.
 const ZONE_SPALTEN: int = 3
-const HQ_LEBEN: float = 3000.0
+const HQ_LEBEN: float = 2200.0   # vorher 3000 (14.11.: letzte Runde dauerte über 3 Minuten)
 const ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
 const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
 const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
@@ -160,10 +160,10 @@ const BONUS_JE_CHECKPOINT: int = 20    # zusätzlich je Checkpoint, der am Runde
 # Zinsen wie in Teamfight Tactics: Für je ZINS_SCHRITT Budget, das am Rundenende noch da ist, gibt es ZINS_JE_SCHRITT dazu.
 const ZINS_SCHRITT: int = 100
 const ZINS_JE_SCHRITT: int = 10
-const ZINS_STUFEN: int = 5         # höchstens so viele Schritte zählen (also höchstens 50 Zinsen)
+const ZINS_STUFEN: int = 3         # höchstens so viele Schritte zählen (also höchstens 30 Zinsen; vorher 5, bis 14.11.)
 const BONUS_ZUWACHS: int = 5       # ... plus so viel je Wellennummer
 const BONUS_MITTE_AB: int = 6      # ab dieser Runde wächst der Bonus schneller (Geld für Fabriken UND Upgrades)
-const BONUS_MITTE_ZUWACHS: int = 8 # ... um so viel je Runde zusätzlich
+const BONUS_MITTE_ZUWACHS: int = 0 # ... um so viel je Runde zusätzlich (0 = aus; war 8, am 14.11. gestrichen: zu viel Geld zum Sparen)
 
 # --- Gebäude -----------------------------------------------------------
 const LEBEN_WALL: float = 120.0
@@ -178,8 +178,8 @@ const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plas
 # Stufe 1: spezialisiert – bleibt bei ihrer Truppe und hält eine Truppe mehr.
 # Stufe 2: Wertepaket je Truppe (siehe STUFE_2).
 # Stufe 3: Sonderfähigkeit zur Wahl (siehe STUFE_3) – ändert, wie die Truppe kämpft.
-const KOSTEN_STUFE: Array[int] = [50, 150, 400]      # Preis für Stufe 1, 2 und 3
-const KOSTEN_BATTERIE_STUFE: Array[int] = [100, 150, 400]   # dasselbe für die Batterie
+const KOSTEN_STUFE: Array[int] = [75, 175, 450]   # vorher 50/150/400 (14.11. erhöht)      # Preis für Stufe 1, 2 und 3
+const KOSTEN_BATTERIE_STUFE: Array[int] = [125, 175, 450]   # vorher 100/150/400 (14.11. erhöht)   # dasselbe für die Batterie
 const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
 const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
 const ABFANG_JE_FELD: int = 2        # höchstens so viele Bodentruppen fangen auf demselben Feld ab
@@ -299,6 +299,30 @@ const GEFAHR_RADIUS: float = 2.0   # Felder: Truppen auf dem Weg zu Stellung/Bat
 # --- Stellungen und Türme ------------------------------------------------
 const POSTEN_REICHWEITE_BONUS: float = 1.0 # Extra-Reichweite von oben, falls eine Einheit keinen eigenen Wert hat ("stellung_bonus")
 const TURM_NACHBARN: int = 3               # so viele angrenzende Erdwälle braucht ein Turm (T-Stück oder Kreuzung)
+# Formtürme: Die Form der freien Nachbarwälle bestimmt, welcher Turm entsteht (Stützregel wie bisher).
+#   Kreuzung (4) = Funkturm · T-Stück (3) = Geschützturm · Ecke (2 über Eck) = Frostturm · gerades Stück (2 gegenüber) = Lanzenturm
+const TURMARTEN := {
+	"geschuetz": {"name": "Geschützturm", "form": "T-Stück", "nachbarn": 3, "farbe": "7fe0ff",
+		"reichweite": 3.5, "schaden": 16.0, "abklingzeit": 0.9,
+		"text": "Schießt schnell auf ein Ziel. Der Allrounder."},
+	"frost": {"name": "Frostturm", "form": "Ecke", "nachbarn": 2, "farbe": "bfefff",
+		"reichweite": 3.0, "schaden": 4.0, "abklingzeit": 1.5, "bremse_sek": 2.0,
+		"text": "Frostpuls auf alle Gegner in Reichweite und Sicht: wenig Schaden, aber 2 Sekunden stark verlangsamt."},
+	"funk": {"name": "Funkturm", "form": "Kreuzung", "nachbarn": 4, "farbe": "ffd34d",
+		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 0.0, "feuer_faktor": 0.75,
+		"text": "Schießt nicht selbst. Truppen in Stellungen im Umkreis feuern 25 % schneller."},
+	"lanze": {"name": "Lanzenturm", "form": "gerades Stück", "nachbarn": 2, "farbe": "ff8a3d",
+		"reichweite": 6.0, "schaden": 45.0, "abklingzeit": 4.0, "breite": 0.35,
+		"text": "Langsamer, schwerer Strahl in gerader Linie: trifft alles, was in der Linie steht – ideal für lange Gänge."},
+}
+const KOSTEN_SPIEGEL: int = 50     # Spiegel auf einem Erdwall: Bodentruppen schießen über ihn um die Ecke
+const KOSTEN_MAGNET: int = 60      # Magnet auf einem Erdwall: zieht Gegner in einer Linie zu sich heran (Richtung mit [T])
+const MAGNET := {
+	"laenge": 4,                 # so viele Felder reicht die Linie vor dem Magneten (endet am ersten Hindernis)
+	"abklingzeit": 6.0,          # Sekunden zwischen zwei Zügen
+	"zug": 1.5,                  # so weit (Felder) zieht er die Gegner heran – höchstens bis vor den Magneten
+}
+const KOSTEN_PANZER: int = 30      # Panzerung eines Erdwalls: Die erste Sprengung nimmt nur die Panzerung
 const TURM := {
 	"leben": 90.0,               # so viel Schaden durch Turmtruppen, dann ist er für den Rest der Runde lahmgelegt
 	"reichweite": 3.5,

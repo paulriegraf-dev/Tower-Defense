@@ -236,15 +236,19 @@ func _lade_phantom_stand() -> void:
 	fabriken.clear()
 	schilde.clear()
 	_turm_abkling.clear()
-	var ausbauten := {"stellung": Karte.STELLUNG, "turm": Karte.TURM, "tor": Karte.TOR}
+	var ausbauten := {"stellung": Karte.STELLUNG, "turm": Karte.TURM, "tor": Karte.TOR, "spiegel": Karte.SPIEGEL, "magnet": Karte.MAGNET}
 	for w: Array in stand["waelle"]:
 		karte.setze(Vector2i(int(w[0]), int(w[1])), Karte.WALL)
+		if w.size() > 3 and bool(w[3]):
+			karte.panzer[Vector2i(int(w[0]), int(w[1]))] = true
 	# Tore und Stellungen zuerst, Türme zuletzt: ein Turm sucht sich seine Stützen unter den fertigen Erdwällen
 	for durchgang in 2:
 		for w: Array in stand["waelle"]:
 			var art := str(w[2])
 			if art != "" and (art == "turm") == (durchgang == 1):
 				karte.baue_aus(Vector2i(int(w[0]), int(w[1])), ausbauten[art])
+				if art == "magnet" and w.size() > 4 and (w[4] as Array).size() == 2:
+					karte.magnet_richtung[Vector2i(int(w[0]), int(w[1]))] = Vector2i(int(w[4][0]), int(w[4][1]))
 	for f: Dictionary in stand["fabriken"]:
 		var z := Vector2i(int(f["x"]), int(f["y"]))
 		var stufe := int(f.get("stufe", 0))
@@ -490,7 +494,7 @@ func _angriff_bestaetigt() -> void:
 # -------------------------------------------------------------- Bauprotokoll
 # -------------------------------------------------------------- Bauprotokoll
 
-const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor"}
+const BAU_NAMEN := {Karte.WALL: "wall", Karte.FABRIK: "fabrik", Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.BATTERIE: "batterie", Karte.TOR: "tor", Karte.PANZER: "panzer", Karte.SPIEGEL: "spiegel", Karte.MAGNET: "magnet"}
 
 
 func _beginne_protokoll() -> void:
@@ -729,6 +733,7 @@ func _process(delta: float) -> void:
 	_kampf_sek += delta
 	_braende_wirken(delta)
 	_tuerme_feuern(delta)
+	_magnete_ziehen(delta)
 	_batterien_feuern(delta)
 	_checkpoints_halten(delta)
 
@@ -933,19 +938,106 @@ func checkpoint_erreicht(i: int) -> void:
 
 
 func _tuerme_feuern(delta: float) -> void:
-	var weite: float = Werte.TURM["reichweite"] * Werte.ZELLE
 	for z: Vector2i in karte.ausbau:
 		if not karte.turm_aktiv(z):
 			continue   # kein Turm, lahmgelegt oder ohne Stützen
+		var art_name: String = karte.turm_art.get(z, "geschuetz")
+		if art_name == "funk":
+			continue   # der Funkturm schießt nicht selbst (siehe funk_faktor)
+		var art: Dictionary = Werte.TURMARTEN[art_name]
+		var weite: float = float(art["reichweite"]) * Werte.ZELLE
+		var farbe := Color(art["farbe"])
 		var rest: float = _turm_abkling.get(z, 0.0) - delta
 		if rest <= 0.0:
 			var von := karte.mitte(z) + Vector2(0, -14)
 			var ziel := gegner_in_reichweite(von, weite, false, z)   # Türme folgen derselben Sichtregel wie Stellungen
 			if ziel != null:
-				rest = Werte.TURM["abklingzeit"]
-				schuss(von, ziel.position, Color("7fe0ff"))
-				ziel.nimm_schaden(Werte.TURM["schaden"])
+				rest = float(art["abklingzeit"])
+				match art_name:
+					"frost":
+						# Frostpuls: alle Gegner in Reichweite und Sicht werden verlangsamt und leicht getroffen
+						effekte.flaeche(von, weite, farbe)
+						for g in gegner.duplicate():
+							if is_instance_valid(g) and not _geschuetzt(g) and von.distance_to(g.position) <= weite and karte.sicht_von_wall(z, von, g.position):
+								g.gebremst = maxf(g.gebremst, float(art["bremse_sek"]))
+								g.nimm_schaden(float(art["schaden"]))
+					"lanze":
+						# Strahl in gerader Linie bis zum Ende der Reichweite: trifft alles in der Linie
+						var ende := von + (ziel.position - von).normalized() * weite
+						strahl(von, ende, farbe, 6.0)
+						var breite := float(art["breite"]) * Werte.ZELLE
+						for g in gegner.duplicate():
+							if is_instance_valid(g) and not _geschuetzt(g):
+								var p := Geometry2D.get_closest_point_to_segment(g.position, von, ende)
+								if p.distance_to(g.position) <= breite:
+									g.nimm_schaden(float(art["schaden"]))
+					_:
+						schuss(von, ziel.position, farbe)
+						ziel.nimm_schaden(float(art["schaden"]))
 		_turm_abkling[z] = rest
+
+
+## Magnete: alle paar Sekunden die Gegner in ihrer Zuglinie heranziehen (höchstens bis vor den Magneten, nicht durch Wälle).
+func _magnete_ziehen(delta: float) -> void:
+	for z: Vector2i in karte.magnet_richtung:
+		if karte.ausbau.get(z, Karte.FREI) != Karte.MAGNET:
+			continue
+		var rest: float = _turm_abkling.get(z, 0.0) - delta
+		if rest <= 0.0:
+			var r: Vector2i = karte.magnet_richtung[z]
+			var linie := karte.magnet_linie(z, r)
+			var gezogen := 0
+			if not linie.is_empty():
+				var vorne := karte.mitte(linie[0])
+				var achse := Vector2(r)
+				for g in gegner:
+					if _geschuetzt(g) or g.rolle == "belagerung" or not linie.has(karte.zelle_bei(g.position)):
+						continue
+					var ziel: Vector2 = g.position - achse * float(Werte.MAGNET["zug"]) * Werte.ZELLE
+					if (ziel - vorne).dot(achse) < 0.0:
+						ziel -= achse * (ziel - vorne).dot(achse)   # nicht weiter als bis vor den Magneten
+					g.position = ziel
+					g.plane_neu()
+					gezogen += 1
+				if gezogen > 0:
+					var von := karte.mitte(z)
+					effekte.linie(von, karte.mitte(linie[-1]), Color("ff7a6a"))
+					effekte.linie(von + Vector2(-achse.y, achse.x) * 8.0, karte.mitte(linie[-1]) + Vector2(-achse.y, achse.x) * 8.0, Color("7aa8ff"))
+			rest = float(Werte.MAGNET["abklingzeit"]) if gezogen > 0 else 0.25
+		_turm_abkling[z] = rest
+
+
+## Spiegel: Ziel für eine Bodentruppe, das sie selbst nicht sieht, aber über einen Spiegel trifft.
+## Ergebnis: {"ziel": Gegner, "spiegel": Punkt} oder {} – beide Strecken zusammen höchstens `weite`.
+func ziel_ueber_spiegel(von: Vector2, weite: float) -> Dictionary:
+	var bestes := {}
+	var beste := INF
+	for s: Vector2i in karte.ausbau:
+		if karte.ausbau[s] != Karte.SPIEGEL:
+			continue
+		var sp := karte.mitte(s)
+		var d1 := von.distance_to(sp)
+		if d1 >= weite or not karte.sicht_frei(sp, von):
+			continue
+		for g in gegner:
+			if _geschuetzt(g):
+				continue
+			var d := d1 + sp.distance_to(g.position)
+			if d <= weite and d < beste and karte.sicht_frei(sp, g.position):
+				beste = d
+				bestes = {"ziel": g, "spiegel": sp}
+	return bestes
+
+
+## Funkturm: Truppen in Stellungen in seinem Umkreis feuern schneller. Faktor auf ihre Pause (1.0 = kein Funkturm in der Nähe).
+func funk_faktor(stellung: Vector2i) -> float:
+	if stellung == Karte.KEINE:
+		return 1.0
+	var art: Dictionary = Werte.TURMARTEN["funk"]
+	for z: Vector2i in karte.turm_art:
+		if karte.turm_art[z] == "funk" and karte.turm_aktiv(z) and Vector2(stellung - z).length() <= float(art["reichweite"]):
+			return float(art["feuer_faktor"])
+	return 1.0
 
 
 ## Voll bemannte Batterien feuern auf die dichteste Gegnergruppe in Reichweite – über Wälle hinweg.
@@ -1976,6 +2068,14 @@ func sprengung(g: Gegner, wall: Vector2i) -> void:
 	for i in 8:
 		effekte.linie(mitte, mitte + Vector2.RIGHT.rotated(TAU * i / 8.0) * 44.0, Color("ffb347"))
 	# Die Sprengung geht in die Tiefe: auch die Erdwälle direkt dahinter fallen (höchstens SPRENGER_TIEFE, ein Turm hält stand).
+	if karte.panzer.has(wall):
+		# Gepanzert: Die Sprengung reißt nur die Panzerung weg, der Erdwall bleibt stehen.
+		gegner_entfernt(g)
+		karte.panzer.erase(wall)
+		karte.queue_redraw()
+		effekte.flaeche(mitte, 30.0, Color("d8dee9"))
+		melde("Die Panzerung hat einen Sprenger abgefangen – der Erdwall steht noch.", 3.0)
+		return
 	var reihe := karte.sprengt_reihe(wall, karte.zelle_bei(g.position))
 	gegner_entfernt(g)
 	if OS.get_environment("TD_WURF_LOG") != "":
@@ -2106,7 +2206,7 @@ func _bei_zerstoert(zelle: Vector2i, typ: int) -> void:
 	_turm_abkling.erase(zelle)
 	if typ == Karte.WALL:
 		for t: Vector2i in karte.ausbau:
-			if karte.ausbau[t] == Karte.TURM and (karte.stuetzen.get(t, []) as Array).size() < Werte.TURM_NACHBARN:
+			if karte.ausbau[t] == Karte.TURM and (karte.stuetzen.get(t, []) as Array).size() < karte.turm_noetig(t):
 				melde("Ein Turm hat eine Stütze verloren und schweigt, bis der Erdwall wieder steht.", 4.0)
 				break
 	for e in einheiten:
@@ -2128,6 +2228,12 @@ func kosten(typ: int) -> int:
 			return Werte.KOSTEN_TURM
 		Karte.TOR:
 			return Werte.KOSTEN_TOR
+		Karte.PANZER:
+			return Werte.KOSTEN_PANZER
+		Karte.SPIEGEL:
+			return Werte.KOSTEN_SPIEGEL
+		Karte.MAGNET:
+			return Werte.KOSTEN_MAGNET
 		Karte.BATTERIE:
 			return Werte.KOSTEN_BATTERIE
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
@@ -2164,14 +2270,18 @@ func partner_feld(z: Vector2i) -> Vector2i:
 
 
 func _ist_ausbau(typ: int) -> bool:
-	return typ == Karte.STELLUNG or typ == Karte.TURM or typ == Karte.TOR
+	return typ == Karte.STELLUNG or typ == Karte.TURM or typ == Karte.TOR or typ == Karte.SPIEGEL or typ == Karte.MAGNET
 
 
 ## Leerer Text = Bauen erlaubt, sonst der Grund, warum nicht.
 func bau_hindernis(z: Vector2i, typ: int) -> String:
 	if phantom_modus == "angriff":
 		return "Im Angriff baut der Verteidiger. Du planst die Welle im Taktikplaner [L]."
-	if phase == Phase.KAMPF:
+	if phase == Phase.KAMPF and endkampf and typ != Karte.STELLUNG:
+		# Letzte Runde: alles außer Erdwällen darf auch während des Gegenangriffs gebaut werden.
+		if typ == Karte.WALL:
+			return "In der letzten Runde gibt es keine neuen Erdwälle – sonst wären die Sprenger wertlos."
+	elif phase == Phase.KAMPF:
 		# Während der Welle gehen nur Stellungen – und nur dort, wo gerade kein Gegner in der Nähe ist.
 		if typ != Karte.STELLUNG:
 			return "Während der Welle gehen nur Stellungen [3] und das Umstellen von Fabriken."
@@ -2181,7 +2291,12 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 		return "Gebaut wird zwischen den Wellen."
 	if typ != Karte.FABRIK and welle < Werte.WAELLE_AB_WELLE and not sandbox:
 		return "Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE
-	if _ist_ausbau(typ):
+	if typ == Karte.PANZER:
+		if karte.inhalt(z) != Karte.WALL:
+			return "Panzerung geht nur auf einem Erdwall."
+		if karte.panzer.has(z):
+			return "Dieser Erdwall ist schon gepanzert."
+	elif _ist_ausbau(typ):
 		var grund := karte.ausbau_hindernis(z, typ)
 		if grund != "":
 			return grund
@@ -2200,14 +2315,26 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		if not still:
 			melde(grund)
 		return false
-	_merke_bezahlt(z, "ausbau" if _ist_ausbau(typ) else "bau", kosten(typ))
+	_merke_bezahlt(z, "panzer" if typ == Karte.PANZER else ("ausbau" if _ist_ausbau(typ) else "bau"), kosten(typ))
 	budget -= kosten(typ)
 	var eintrag := {"a": "bau", "typ": BAU_NAMEN[typ], "x": z.x, "y": z.y}
 	if phase == Phase.KAMPF:
 		eintrag["t"] = snappedf(_kampf_sek, 0.1)   # während der Welle gebaut
 	_notiere(eintrag)
+	if typ == Karte.PANZER:
+		karte.panzer[z] = true
+		karte.queue_redraw()
+		return true
+	if typ == Karte.MAGNET:
+		var r := PAAR_RICHTUNGEN[_paar_richtung]
+		eintrag["rx"] = r.x
+		eintrag["ry"] = r.y
+		karte.magnet_richtung[z] = r
 	if _ist_ausbau(typ):
 		karte.baue_aus(z, typ)
+		if typ == Karte.TURM and not still:
+			var art: Dictionary = Werte.TURMARTEN[karte.turm_art[z]]
+			melde("%s (%s): %s" % [art["name"], art["form"], art["text"]], 5.0)
 		return true
 	karte.setze(z, typ)
 	if typ == Karte.FABRIK:
@@ -2249,7 +2376,7 @@ func erstattung(z: Vector2i) -> int:
 		stufenfeld = z if fabriken.has(z) else partner
 	var frisch_bau: Dictionary = _bezahlt.get(haupt, {})
 	var frisch_stufen: Dictionary = _bezahlt.get(stufenfeld, {})
-	var voll := int(frisch_bau.get("bau", 0)) + int(frisch_bau.get("ausbau", 0)) + int(frisch_stufen.get("stufen", 0))
+	var voll := int(frisch_bau.get("bau", 0)) + int(frisch_bau.get("ausbau", 0)) + int(frisch_bau.get("panzer", 0)) + int(frisch_stufen.get("stufen", 0))
 	var alt := 0
 	if not frisch_bau.has("bau"):
 		if paar:
@@ -2262,6 +2389,8 @@ func erstattung(z: Vector2i) -> int:
 	var ausbau: int = karte.ausbau.get(z, Karte.FREI)
 	if ausbau != Karte.FREI and not frisch_bau.has("ausbau"):
 		alt += kosten(ausbau)
+	if karte.panzer.has(z) and not frisch_bau.has("panzer"):
+		alt += Werte.KOSTEN_PANZER
 	if fabriken.has(stufenfeld):
 		var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if paar else Werte.KOSTEN_STUFE
 		for i in maxi(0, int(fabriken[stufenfeld].get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0))):
@@ -2345,7 +2474,7 @@ func _aktualisiere_sichtanzeige() -> void:
 	var z := karte.auswahl
 	var art: int = karte.ausbau.get(z, Karte.FREI)
 	if art == Karte.TURM:
-		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -14), z, Werte.TURM["reichweite"])
+		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -14), z, float(Werte.TURMARTEN[karte.turm_art.get(z, "geschuetz")]["reichweite"]))
 	elif art == Karte.STELLUNG:
 		var scharf: Dictionary = Werte.EINHEITEN["scharfschuetze"]
 		karte.zeige_sicht(true, karte.mitte(z) + Vector2(0, -12), z, scharf["reichweite"] + Werte.stellung_bonus(scharf))
@@ -2389,7 +2518,7 @@ func stelle_um(z: Vector2i, neu: String) -> void:
 ## Nächste Ausbaustufe einer Fabrik kaufen (nur in der Bauphase). Für Stufe 3 gehört die gewählte Fähigkeit dazu.
 ## Gibt true zurück, wenn es geklappt hat.
 func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
-	if phase != Phase.BAU or not fabriken.has(z):
+	if not ausbau_moeglich() or not fabriken.has(z):
 		return false
 	if karte.paar.has(z):
 		return _werte_batterie_auf(z)
@@ -2523,10 +2652,20 @@ func _pflege_schilde() -> void:
 	effekte.schilde = liste
 
 
+## Darf `typ` gerade während der Welle gebaut werden? Sonst nur Stellungen; in der letzten Runde alles außer Erdwällen.
+func darf_in_welle(typ: int) -> bool:
+	return typ == Karte.STELLUNG or (endkampf and typ != Karte.WALL)
+
+
+## Ausbauen (Fabrik-Stufen) geht in der Bauphase – und in der letzten Runde auch während des Gegenangriffs.
+func ausbau_moeglich() -> bool:
+	return phase == Phase.BAU or (phase == Phase.KAMPF and endkampf)
+
+
 func waehle(typ: int) -> void:
 	if phantom_modus == "angriff":
 		return
-	if phase == Phase.ENDE or (phase == Phase.KAMPF and typ != Karte.STELLUNG):
+	if phase == Phase.ENDE or (phase == Phase.KAMPF and not darf_in_welle(typ)):
 		return
 	if typ != Karte.FABRIK and welle < Werte.WAELLE_AB_WELLE and not sandbox:
 		melde("Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE)
@@ -2558,6 +2697,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				waehle(Karte.BATTERIE)
 			KEY_6:
 				waehle(Karte.TOR)
+			KEY_7:
+				waehle(Karte.PANZER)
+			KEY_8:
+				waehle(Karte.SPIEGEL)
+			KEY_9:
+				waehle(Karte.MAGNET)
 			KEY_SPACE:
 				starte_welle()
 			KEY_L:
@@ -2652,6 +2797,7 @@ func _schliesse_fabrikmenue() -> void:
 func _aktualisiere_vorschau() -> void:
 	var z := karte.zelle_bei(get_global_mouse_position())
 	karte.vorschau_partner = partner_feld(z) if werkzeug == Karte.BATTERIE else Karte.KEINE
+	karte.vorschau_richtung = PAAR_RICHTUNGEN[_paar_richtung]
 	if phase != Phase.ENDE and werkzeug != Karte.FREI:
 		karte.setze_vorschau(z, werkzeug, bau_hindernis(z, werkzeug) == "")
 	else:
@@ -2700,7 +2846,7 @@ func _aktualisiere_hud(delta: float) -> void:
 	_lbl_status.text = "Runde %d/%d    Budget %s    Leben %d" % [welle, Werte.LETZTE_RUNDE, "∞" if sandbox else str(budget), leben]
 	if phantom_modus == "angriff":
 		_lbl_status.text = "Runde %d/%d    Verteidigung: %d Leben" % [welle, Werte.LETZTE_RUNDE, leben]
-		_btn_start.text = "[Leertaste] Angriff starten"
+		_btn_start.text = "[Leertaste] Angriff"
 	if endkampf and phantom_modus == "angriff":
 		_lbl_vorschau.text = "Letzte Runde: Dein HQ hält %d/%d. Durchgang %d." % [ceili(hq.leben) if is_instance_valid(hq) else 0, int(Werte.HQ_LEBEN), _durchgang]
 	elif endkampf:
@@ -2718,9 +2864,9 @@ func _aktualisiere_hud(delta: float) -> void:
 	for typ: int in _knoepfe:
 		var b: Button = _knoepfe[typ]
 		b.button_pressed = werkzeug == typ
-		b.disabled = (phase != Phase.BAU and not (phase == Phase.KAMPF and typ == Karte.STELLUNG)) or (typ != Karte.FABRIK and not ab_welle_2) or phantom_modus == "angriff"
+		b.disabled = (phase != Phase.BAU and not (phase == Phase.KAMPF and darf_in_welle(typ))) or (typ != Karte.FABRIK and not ab_welle_2) or phantom_modus == "angriff"
 	_btn_start.disabled = phase != Phase.BAU
-	_btn_tempo.text = "[F] Tempo ×%d" % roundi(_tempo_faktor)
+	_btn_tempo.text = "[F] ×%d" % roundi(_tempo_faktor)
 	var zins := Werte.zinsen(budget)
 	for i in _zins_felder.size():
 		_zins_felder[i].color = Color("ffd34d") if (i + 1) * Werte.ZINS_JE_SCHRITT <= zins else Color("1b1722")
@@ -2733,7 +2879,7 @@ func _aktualisiere_hud(delta: float) -> void:
 	_lbl_zins.visible = not angreifer
 	for feld in _zins_felder:
 		(feld.get_parent() as Control).visible = not angreifer
-	(_knoepfe[Karte.FABRIK] as Button).text = "[1] Fabrik  %d" % kosten(Karte.FABRIK)
+	(_knoepfe[Karte.FABRIK] as Button).text = "[1] Fabrik %d" % kosten(Karte.FABRIK)
 
 	# Hinweiszeile: kurze Meldung hat Vorrang, sonst ein Tipp passend zur Lage.
 	# Meldungen laufen in Echtzeit ab, nicht schneller bei Tempo ×2.
@@ -2758,7 +2904,13 @@ func _aktualisiere_hud(delta: float) -> void:
 	elif werkzeug == Karte.STELLUNG:
 		text = "Stellung: Ausbau eines Erdwalls. Eine Einheit steht oben, schießt weiter und über Wälle hinweg."
 	elif werkzeug == Karte.TURM:
-		text = "Turm: nur auf Erdwällen mit %d angrenzenden Erdwällen (leuchtende Punkte)." % Werte.TURM_NACHBARN
+		text = "Turm: Die Form bestimmt den Typ – Ecke = Frost, gerade = Lanze, T-Stück = Geschütz, Kreuzung = Funk. [I] zeigt alle."
+	elif werkzeug == Karte.SPIEGEL:
+		text = "Spiegel: Bodentruppen, die ihn sehen, schießen über ihn um die Ecke (beide Strecken zusammen in ihrer Reichweite)."
+	elif werkzeug == Karte.MAGNET:
+		text = "Magnet: zieht alle %d s die Gegner in seiner Linie (%d Felder) heran. [T] dreht die Richtung." % [int(Werte.MAGNET["abklingzeit"]), int(Werte.MAGNET["laenge"])]
+	elif werkzeug == Karte.PANZER:
+		text = "Panzerung: Die erste Sprengung nimmt nur die Panzerung, der Erdwall bleibt stehen. Stoppt auch die Sprengung in die Tiefe."
 	elif werkzeug == Karte.BATTERIE:
 		text = "Batterie mit Pilotenfabrik (zwei Felder, [T] dreht): feuert weit und flächig, sobald %d Piloten darin sitzen." % int(Werte.BATTERIE["plaetze"])
 	elif werkzeug == Karte.WALL:
@@ -2800,29 +2952,35 @@ func _baue_hud() -> void:
 	ebene.add_child(unten)
 	var x := 8.0
 	for eintrag: Array in [
-		[Karte.FABRIK, "[1] Fabrik  %d" % Werte.KOSTEN_FABRIK, 112],
-		[Karte.WALL, "[2] Erdwall  %d" % Werte.KOSTEN_WALL, 112],
-		[Karte.STELLUNG, "[3] Stellung  %d" % Werte.KOSTEN_STELLUNG, 122],
-		[Karte.TURM, "[4] Turm  %d" % Werte.KOSTEN_TURM, 100],
-		[Karte.BATTERIE, "[5] Batterie  %d" % Werte.KOSTEN_BATTERIE, 132],
-		[Karte.TOR, "[6] Tor  %d" % Werte.KOSTEN_TOR, 92],
+		[Karte.FABRIK, "[1] Fabrik %d" % Werte.KOSTEN_FABRIK, "[1] Fabrik 999"],
+		[Karte.WALL, "[2] Erdwall %d" % Werte.KOSTEN_WALL, ""],
+		[Karte.STELLUNG, "[3] Stellung %d" % Werte.KOSTEN_STELLUNG, ""],
+		[Karte.TURM, "[4] Turm %d" % Werte.KOSTEN_TURM, ""],
+		[Karte.BATTERIE, "[5] Batterie %d" % Werte.KOSTEN_BATTERIE, ""],
+		[Karte.TOR, "[6] Tor %d" % Werte.KOSTEN_TOR, ""],
+		[Karte.PANZER, "[7] Panzer %d" % Werte.KOSTEN_PANZER, ""],
+		[Karte.SPIEGEL, "[8] Spiegel %d" % Werte.KOSTEN_SPIEGEL, ""],
+		[Karte.MAGNET, "[9] Magnet %d" % Werte.KOSTEN_MAGNET, ""],
 	]:
 		var typ: int = eintrag[0]
-		var b := _knopf(unten, x, eintrag[2], waehle.bind(typ), true)
+		var muster: String = eintrag[2] if eintrag[2] != "" else eintrag[1]
+		var w := ThemeDB.fallback_font.get_string_size(muster, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 14.0
+		var b := _knopf(unten, x, w, waehle.bind(typ), true)
+		b.add_theme_font_size_override("font_size", 13)
 		b.text = eintrag[1]
 		_knoepfe[typ] = b
-		x += eintrag[2] + 6.0
-	_btn_tempo = _knopf(unten, breite - 138, 130, _tempo_umschalten, false)
-	_btn_start = _knopf(unten, breite - 364, 220, starte_welle, false)
-	_btn_start.text = "[Leertaste] Welle starten"
+		x += w + 4.0
+	_btn_tempo = _knopf(unten, breite - 74, 66, _tempo_umschalten, false)
+	_btn_start = _knopf(unten, breite - 230, 150, starte_welle, false)
+	_btn_start.text = "[Leertaste] Start"
 
 	# Zinsanzeige wie in Teamfight Tactics: ein Feld je Zinsschritt, gefüllt = schon erreicht
-	_lbl_zins_titel = _label(unten, Vector2(x + 8, 10), 15, Color("d8cfe6"))
-	_lbl_zins_titel.text = "Zinsen"
+	_lbl_zins_titel = _label(unten, Vector2(x + 4, 11), 13, Color("d8cfe6"))
+	_lbl_zins_titel.text = "Zins"
 	for i in Werte.ZINS_STUFEN:
 		var rahmen := ColorRect.new()
 		rahmen.color = Color("3a3344")
-		rahmen.position = Vector2(x + 66 + i * 20, 12)
+		rahmen.position = Vector2(x + 36 + i * 20, 12)
 		rahmen.size = Vector2(16, 16)
 		rahmen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		unten.add_child(rahmen)
@@ -2832,7 +2990,7 @@ func _baue_hud() -> void:
 		feld.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		rahmen.add_child(feld)
 		_zins_felder.append(feld)
-	_lbl_zins = _label(unten, Vector2(x + 66 + Werte.ZINS_STUFEN * 20 + 4, 10), 15, Color("ffd34d"))
+	_lbl_zins = _label(unten, Vector2(x + 36 + Werte.ZINS_STUFEN * 20 + 2, 11), 13, Color("ffd34d"))
 
 	# Hinweiszeile liegt halb durchsichtig am unteren Rand der Karte
 	_hinweis_grund = ColorRect.new()

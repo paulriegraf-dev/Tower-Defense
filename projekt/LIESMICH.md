@@ -3,7 +3,7 @@
 Öffnen: Godot starten → **Importieren** → diesen Ordner (`project.godot`) wählen → **F5** spielt.
 
 ## Steuerung
-- **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie, **6** Tor (2–6 ab Welle 2), **Esc** abwählen
+- **1** Fabrik, **2** Erdwall, **3** Stellung, **4** Turm, **5** Batterie, **6** Tor, **7** Panzerung, **8** Spiegel, **9** Magnet (2–9 ab Welle 2), **T** dreht Batterie und Magnet, **Esc** abwählen
 - **Linksklick** bauen (Erdwälle: Maustaste halten und ziehen)
 - **Linksklick auf eine Fabrik** (ohne Werkzeug): Fabrikmenü öffnen – Truppe wählen (Technogunner / Scharfschütze / Plasmawerfer) und ausbauen, siehe unten. **T** dreht beim Bauen einer Batterie die Lage ihrer Pilotenfabrik.
 - **Linksklick auf eine Truppe, einen Turm, eine Stellung oder eine Batterie** (ohne Werkzeug): Reichweite anzeigen.
@@ -28,7 +28,11 @@
 - **Sicht von oben** (Stellungen und Türme): Über das eigene Wallstück – alle Erdwälle, die über Kanten mit dem
   eigenen zusammenhängen – wird hinweggeschossen. Jeder fremde Erdwall versperrt die Sicht. Fabriken und
   Batterien stehen am Boden und verdecken nichts.
-- **Turm** = Ausbau eines Erdwalls mit mindestens drei angrenzenden Erdwällen als **Stützen**. Jeder Erdwall stützt höchstens einen Turm, und auf einer Stütze darf kein Turm stehen (Stellungen schon). Die Stützfelder sind in der Turmfarbe eingefärbt. Fällt eine Stütze, schweigt der Turm, bis der Wall wieder steht. Schießt selbst.
+- **Formtürme** = Ausbau eines Erdwalls. Welcher Turm entsteht, bestimmt die Form der freien Nachbarwälle (**Stützen**): **Kreuzung** (4) = Funkturm – schießt nicht, Truppen in Stellungen im Umkreis von 2,5 Feldern feuern 25 % schneller; **T-Stück** (3) = Geschützturm – der bisherige Turm; **Ecke** (2 über Eck) = Frostturm – Frostpuls alle 1,5 s, verlangsamt alle Gegner in Reichweite 2 s stark; **gerades Stück** (2 gegenüber) = Lanzenturm – alle 4 s ein Strahl in gerader Linie (6 Felder), der alles in der Linie trifft. Jeder Erdwall stützt höchstens einen Turm, und auf einer Stütze darf kein anderer Turm stehen. Alle Türme kosten 75; [I] zeigt die Formen.
+- **Spiegel [8]** (50) = Ausbau eines Erdwalls: Bodentruppen, die ihn sehen, schießen über ihn um die Ecke auf Gegner, die sie selbst nicht sehen (Truppe → Spiegel → Gegner, beide Strecken zusammen in ihrer Reichweite). Truppen in Stellungen nutzen ihn nicht.
+- **Magnet [9]** (60) = Ausbau eines Erdwalls mit Richtung ([T] dreht): zieht alle 6 Sekunden die Gegner in seiner Linie (bis 4 Felder, endet am ersten Hindernis) bis zu 1,5 Felder zu sich heran, höchstens bis vor den Magneten. Der Belagerungsturm ist zu schwer.
+- **Panzerung [7]** (30) = Ausbau eines Erdwalls, auch zusätzlich zu Stellung, Turm oder Tor: Die erste Sprengung nimmt nur die Panzerung, erst der zweite Sprenger bringt den Erdwall zu Fall. Eine Sprengung in die Tiefe endet an einem gepanzerten Erdwall.
+  Die Stützfelder sind in der Farbe ihres Turms eingefärbt. Fällt eine Stütze, schweigt der Turm, bis der Wall wieder steht.
 - Fabriken bauen während der Welle ihre gewählte Einheit. Jede geht zur nächsten freien Stellung (Fußweg ab Fabrik).
   Wer keine Stellung findet, geht dem Gegner entgegen und schießt nur bei freier Sicht.
   Eine nähere Einheit übernimmt eine Stellung, zu der eine andere noch weit unterwegs ist.
@@ -78,12 +82,12 @@
 - **Abstand zur Zone:** Eigene Truppen bleiben 2 Felder vor der Zone stehen (ein Checkpoint näher an der Zone wird trotzdem verteidigt) (außer in der letzten Runde), damit die Gegner herauskommen.
 
 ## Truppen sind knapp
-- **Eine Fabrik hält 2 Truppen.** Stufe 1 (50) legt sie auf eine Truppe fest und gibt die dritte. Stufe 2 kostet 150, Stufe 3 400. Batterie-Stufen: 100 / 150 / 400.
+- **Eine Fabrik hält 2 Truppen.** Stufe 1 (75) legt sie auf eine Truppe fest und gibt die dritte. Stufe 2 kostet 175, Stufe 3 450. Batterie-Stufen: 125 / 175 / 450.
 - **Entgegenlaufen, nie hinterher:** Bodentruppen suchen ein Feld auf dem Weg eines Gegners, an dem sie vor ihm ankommen (auch durch ein Tor), höchstens zwei je Feld. Wer nicht mehr abzufangen ist, gehört den Stellungen, Türmen und Batterien weiter hinten.
 - **Runden 1 und 2:** Alle Gegner kommen über die Hauptlinie, nichts verteilt sich.
 - **Reservepilot (Batterie Stufe 1):** Der vierte Pilot läuft zu ausgefallenen Fabriken, Batterien und lahmgelegten Türmen und repariert sie in 5 Sekunden.
 - **Sprengung einer Fabrik** legt sie 25 Sekunden lahm (Beschuss durch Sphären und Schleudern weiter bis zum Rundenende).
-- **Runde 20:** Niemand geht mehr in eine Stellung, alle greifen an. Das HQ hat 3000 Leben. Ausgefallene Gebäude laufen dort nach 25 Sekunden von selbst wieder an.
+- **Runde 20:** Niemand geht mehr in eine Stellung, alle greifen an. Das HQ hat 2200 Leben. Ausgefallene Gebäude laufen dort nach 25 Sekunden von selbst wieder an. Während des Gegenangriffs darfst du weiterbauen und ausbauen – alles außer neuen Erdwällen.
 
 ## Die 20 Wellen
 Jede Runde hat einen Plan mit Namen; die Vorschau zeigt ihn („Nebelwand: 3 Rauch · 6 Sphäre …“). Ein Plan legt fest, welche Trupps in welcher Reihenfolge kommen, was geworfen wird und wann. Alle Pläne stehen in `scripts/werte.gd` unter `WELLEN` (Vorlage: `wellen-entwurf-20.xlsx`).
@@ -108,7 +112,7 @@ Jede Runde hat einen Plan mit Namen; die Vorschau zeigt ihn („Nebelwand: 3 Rau
 | 17 | Köder und Abriss | Prüfung | Köder, dann Sprenger zu Fuß und geworfen |
 | 18 | Doppelbelagerung | Prüfung | zwei Türme, Rauch voraus |
 | 19 | Generalprobe | Prüfung | alles gestaffelt |
-| 20 | Gegenangriff | Finale | Wettlauf: je Durchgang 4 Sprenger, Türme jeden 3. Durchgang, HQ hat 3000 Leben |
+| 20 | Gegenangriff | Finale | Wettlauf: je Durchgang 4 Sprenger, Türme jeden 3. Durchgang, HQ hat 2200 Leben, Bauen außer Erdwällen erlaubt |
 
 Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×3,4.
 
@@ -125,11 +129,11 @@ Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×
 | 15 | Letzte Runde | Gegenangriff auf das HQ. Drei Laser verteidigen die Zone (flach, nur gegen Bodentruppen, Wälle geben Deckung), Gegner kommen in dichter Folge. |
 
 ## Preise
-Erdwall 10, Stellung 25, Turm 75, Tor 40, Batterie mit Pilotenfabrik 290. Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 50, Stufe 2 150, Stufe 3 400.
+Erdwall 10, Stellung 25, Turm 75 (jede Form), Tor 40, Panzerung 30, Batterie mit Pilotenfabrik 290. Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 75, Stufe 2 175, Stufe 3 450; Batterie 125 / 175 / 450.
 
 **Übersicht [I]:** Karten für alle Gegner, eigenen Truppen und Bauten mit Werten, Verhalten und Gegenmitteln (Reiter unten, Karte anklicken). Die Texte stehen in `scripts/lexikon.gd`, die Zahlen kommen aus `werte.gd`.
 Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennummer) und Prämien je besiegtem Gegner.
-**Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 50. Die fünf Felder
+**Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 30. Die drei Felder
 unten neben den Bauknöpfen zeigen, wie viele Schritte du gerade erreicht hast.
 
 ## Bauprotokoll und Nachspielen
@@ -173,9 +177,9 @@ Die Pläne stehen in `werkzeuge/plaene.gd` als Zeichenraster und lassen sich dor
 Ein Klick auf eine Fabrik (ohne Bauwerkzeug) öffnet eine Tafel daneben. Truppe und Ausbaustufe werden dort angeklickt (keine Tasten mehr). **Esc** schließt.
 
 - **Stufe 0:** Grundfabrik, hält 3 Truppen, die Truppe lässt sich jederzeit umstellen (in der Welle gilt das für die nächste Truppe).
-- **Stufe 1, Spezialisieren (100):** bleibt bei ihrer Truppe, hält dafür eine Truppe mehr. Umstellen geht danach nicht mehr.
-- **Stufe 2 (150):** Wertepaket je Truppe – Scharfschütze: Klarsicht (schießt auch im Rauch), +30 % Schaden, feuert 20 % schneller. Technogunner: +50 % Leben, +30 % Schaden, +0,5 Reichweite. Plasmawerfer: +0,4 Fläche, +30 % Schaden, läuft 25 % schneller.
-- **Stufe 3 (400):** eine Fähigkeit zur Wahl, die ändert, wie die Truppe kämpft.
+- **Stufe 1, Spezialisieren (75):** bleibt bei ihrer Truppe, hält dafür eine Truppe mehr. Umstellen geht danach nicht mehr.
+- **Stufe 2 (175):** Wertepaket je Truppe – Scharfschütze: Klarsicht (schießt auch im Rauch), +30 % Schaden, feuert 20 % schneller. Technogunner: +50 % Leben, +30 % Schaden, +0,5 Reichweite. Plasmawerfer: +0,4 Fläche, +30 % Schaden, läuft 25 % schneller.
+- **Stufe 3 (450):** eine Fähigkeit zur Wahl, die ändert, wie die Truppe kämpft.
   - Scharfschütze: **Durchschuss** (gerade Linie durch alle Gegner), **Laserstrahl** (Dauerstrahl, wächst am selben Ziel bis auf das Dreifache), **Zielmarkierung** (nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte, wenig eigener Schaden, das Ziel nimmt 5 Sekunden lang 40 % mehr Schaden und kann auch aus dem Rauch heraus getroffen werden).
   - Technogunner: **Bollwerk** (Nahkämpfer mit 3,5-fachem Leben, nimmt keine Stellung), **Feuerteam** (feuert schneller, je mehr Feuerteam-Schützen dasselbe Ziel beschießen), **Minigun** (nur in der Stellung: läuft an und feuert bis zu dreimal so schnell; Treffer und Rauch unterbrechen sie).
   - Plasmawerfer: **Abpraller** (springt bis zu zweimal zum nächsten Gegner weiter), **Brandfeld** (der Einschlag brennt 3 Sekunden nach), **Plasmagel** (nur aus der Stellung: kaum Schaden, bremst Getroffene 3 Sekunden auf weniger als halbes Tempo).
@@ -197,8 +201,8 @@ Ausbauen geht nur zwischen den Wellen. Beim Abriss gibt es 75 % zurück, die Upg
 
 ## Einkommen
 
-Nach jeder Runde gibt es 100 + 5 je Runde, ab Runde 6 zusätzlich 8 je Runde (Runde 8: 164, Runde 12: 216). Dazu 20 für jeden
-Checkpoint, der am Rundenende dir gehört, und Zinsen (10 je 100 übriges Budget, höchstens 50).
+Nach jeder Runde gibt es 100 + 5 je Runde (Runde 8: 140, Runde 12: 160). Dazu 20 für jeden
+Checkpoint, der am Rundenende dir gehört, und Zinsen (10 je 100 übriges Budget, höchstens 30).
 
 ## Abreißen und Erstattung
 

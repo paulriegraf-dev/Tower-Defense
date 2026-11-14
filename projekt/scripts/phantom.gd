@@ -204,10 +204,15 @@ static func _wende_an(zellen: Dictionary, schilde: Dictionary, a: Dictionary) ->
 	match str(a["a"]):
 		"bau":
 			var typ := str(a["typ"])
-			if typ == "stellung" or typ == "turm" or typ == "tor":
+			if typ == "panzer":
+				if zellen.has(z) and zellen[z]["typ"] == "wall":
+					zellen[z]["panzer"] = true
+			elif typ == "stellung" or typ == "turm" or typ == "tor" or typ == "spiegel" or typ == "magnet":
 				if not zellen.has(z) or zellen[z]["typ"] != "wall":
 					zellen[z] = {"typ": "wall"}
 				zellen[z]["ausbau"] = typ
+				if typ == "magnet":
+					zellen[z]["richtung"] = [int(a.get("rx", 1)), int(a.get("ry", 0))]
 			elif typ == "wall":
 				zellen[z] = {"typ": "wall"}
 			elif typ == "fabrik":
@@ -246,7 +251,7 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 		var c: Dictionary = zellen[z]
 		match str(c["typ"]):
 			"wall":
-				waelle.append([z.x, z.y, str(c.get("ausbau", ""))])
+				waelle.append([z.x, z.y, str(c.get("ausbau", "")), bool(c.get("panzer", false)), c.get("richtung", [])])
 			"fabrik":
 				var f := {"x": z.x, "y": z.y, "einheit": c["einheit"], "stufe": c["stufe"]}
 				if c.has("faehigkeit"):
