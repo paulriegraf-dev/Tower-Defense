@@ -204,7 +204,7 @@ func _naechster() -> void:
 	_setze_text(str(s["text"]))
 	var handgriff := s.has("fertig")
 	_btn_weiter.visible = not handgriff
-	_btn_skip.visible = handgriff
+	_btn_skip.visible = false   # nur, wenn der Handgriff gerade nicht geht (siehe "kann" in _process)
 	_fortschritt.text = "Schritt %d / %d" % [_index + 1, _schritte.size()]
 
 
@@ -225,7 +225,8 @@ func sperrt_welle() -> bool:
 		return false
 	if _frage:
 		return true
-	return _index >= 0 and _index < _schritte.size() and bool((_schritte[_index] as Dictionary).get("sperre", false))
+	# Streng Schritt für Schritt (15.11.): Die Welle startet nur in den Schritten, die genau das verlangen.
+	return not (_index >= 0 and _index < _schritte.size() and bool((_schritte[_index] as Dictionary).get("welle", false)))
 
 
 func _setze_text(t: String) -> void:
@@ -252,6 +253,7 @@ func _process(delta: float) -> void:
 		if s.has("fertig") and (s["fertig"] as Callable).call():
 			_naechster()
 			return
+		_btn_skip.visible = s.has("kann") and not (s["kann"] as Callable).call()
 		var h: Variant = s.get("hinweis", "")
 		_hinweis.text = (h as Callable).call() if h is Callable else str(h)
 	_lege_box()
@@ -265,12 +267,12 @@ func _process(delta: float) -> void:
 func _lege_box() -> void:
 	_box.reset_size()
 	var groesse := _box.size
-	var y := 720.0 - 40.0 - groesse.y - 12.0
+	var y := 720.0 - 40.0 - groesse.y - 34.0   # über der Hinweiszeile unten
 	var ziel := _ziel_rect()
 	if ziel.size != Vector2.ZERO and ziel.end.y > y - 30.0:
 		y = 52.0
 	_box.position = Vector2((1280.0 - groesse.x) / 2.0, y)
-	_hinweis.position = _box.position + Vector2(12, -22)
+	_hinweis.position = _box.position + (Vector2(12, groesse.y + 4) if y < 100.0 else Vector2(12, -22))
 	_hinweis.visible = _hinweis.text != ""
 
 
@@ -296,7 +298,7 @@ func _zeichne_ziel() -> void:
 	var oben := r.position.y > 90.0
 	var spitze := Vector2(r.get_center().x, (r.position.y - 6.0 - 6.0 * puls) if oben else (r.end.y + 6.0 + 6.0 * puls))
 	var d := -1.0 if oben else 1.0
-	var pfeil := PackedVector2Array([spitze, spitze + Vector2(-11, -16 * d), spitze + Vector2(11, -16 * d)])
+	var pfeil := PackedVector2Array([spitze, spitze + Vector2(-11, 16 * d), spitze + Vector2(11, 16 * d)])
 	_zeichner.draw_colored_polygon(pfeil, HOLO)
 	_zeichner.draw_polyline(PackedVector2Array([pfeil[0], pfeil[1], pfeil[2], pfeil[0]]), Color(0, 0, 0, 0.6), 1.5)
 
@@ -346,6 +348,22 @@ func _erster_ausbau(typ: int) -> Vector2i:
 func _erste_fabrik() -> Vector2i:
 	for z: Vector2i in spiel.fabriken:
 		if str(spiel.fabriken[z].get("typ", "")) != "pilot":
+			return z
+	return Karte.KEINE
+
+
+func _anzahl_fabriken() -> int:
+	var n := 0
+	for z: Vector2i in spiel.fabriken:
+		if str(spiel.fabriken[z].get("typ", "")) != "pilot":
+			n += 1
+	return n
+
+
+func _zweite_fabrik() -> Vector2i:
+	var erste := _erste_fabrik()
+	for z: Vector2i in spiel.fabriken:
+		if z != erste and str(spiel.fabriken[z].get("typ", "")) != "pilot":
 			return z
 	return Karte.KEINE
 
@@ -413,31 +431,45 @@ func _baue_schritte() -> Array:
 	return [
 		# --- Spielprinzip
 		{"text": "So läuft es: Links liegt die Zone der Myriaden, geschützt von ihrem Schild. Von dort ziehen ihre Trupps zu deiner Basis rechts. Jeder Gegner, der sie erreicht, kostet dich ein Leben – du hast 15.",
-			"ziel": func(): return _feld(p.karte.basis, 0.6), "sperre": true},
-		{"text": "Die gepunktete Linie zeigt den Weg der nächsten Welle: immer der kürzeste, und immer über die zwei Checkpoints (Fahnen). Wie dieser Weg verläuft, bestimmst gleich du.",
-			"ziel": func(): return _feld(p.karte.checkpoints[0], 0.6), "sperre": true},
+			"ziel": func(): return _feld(p.karte.basis, 0.6)},
+		{"text": "Die gepunktete Linie zeigt den Weg der nächsten Welle: immer der kürzeste, und immer erst über Checkpoint 1, dann über Checkpoint 2. Wie dieser Weg verläuft, bestimmst gleich du.",
+			"ziel": func(): return _feld(p.karte.checkpoints[0], 0.6)},
 		{"text": "20 Runden musst du halten. In Runde 20 drehst du den Spieß um: Dann greifen deine Truppen das HQ der Myriaden an, während deren Wellen ohne Ende weiterlaufen.",
-			"sperre": true},
+			},
 		# --- Fabrik und Truppen
 		{"text": "Deine Truppen kommen aus Fabriken – Türme allein reichen hier nicht. Wähle unten die Fabrik.",
 			"hinweis": "Taste 1 · oder Klick unten auf „Fabrik“",
 			"ziel": func(): return _knopf_von(Karte.FABRIK),
-			"fertig": func(): return p.werkzeug == Karte.FABRIK or not p.fabriken.is_empty(), "sperre": true},
+			"fertig": func(): return p.werkzeug == Karte.FABRIK or not p.fabriken.is_empty()},
 		{"text": "Setz sie auf das markierte Feld, nah am Weg der Gegner. Fabriken versperren auch den Weg – die Gegner gehen außen herum.",
 			"hinweis": "Linksklick aufs Feld · Rechtsklick bricht ab",
 			"ziel": func(): return _feld(_fabrikplatz()) if p.werkzeug == Karte.FABRIK else _knopf_von(Karte.FABRIK),
-			"fertig": func(): return not p.fabriken.is_empty(), "sperre": true},
+			"fertig": func(): return not p.fabriken.is_empty()},
 		{"text": "Eine Fabrik hält 2 Truppen und ersetzt Gefallene laufend. Klick sie an – dort wählst du, was sie baut.",
 			"hinweis": "Linksklick auf deine Fabrik",
 			"ziel": func(): return _feld(_erste_fabrik()) if _erste_fabrik() != Karte.KEINE else Rect2(),
-			"fertig": func(): return _menue_offen(), "sperre": true},
+			"fertig": func(): return _menue_offen()},
 		{"text": "Drei Truppen: Technogunner (robust, schnell), Scharfschütze (große Reichweite, langsamer Schuss) und Plasmawerfer (Flächenschaden auf kurze Distanz). Solange die Fabrik nicht ausgebaut ist, kannst du jederzeit umstellen.",
-			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else Rect2(), "sperre": true},
+			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else Rect2()},
+		{"text": "Eine Fabrik allein hält nicht lange. Bau eine zweite – jede weitere kostet 25 % mehr als die vorige, der Preis steht unten am Knopf.",
+			"hinweis": "Taste 1 · Fabrik, dann aufs markierte Feld",
+			"ziel": func(): return _feld(_fabrikplatz()) if p.werkzeug == Karte.FABRIK else _knopf_von(Karte.FABRIK),
+			"kann": func(): return p.budget >= p.kosten(Karte.FABRIK),
+			"fertig": func(): return _anzahl_fabriken() >= 2},
+		{"text": "Mischen lohnt sich: Klick die neue Fabrik an und stell sie auf Scharfschütze. Er trifft von weit hinten – am besten später aus einer Stellung.",
+			"hinweis": "Linksklick auf die neue Fabrik · „Scharfschütze“",
+			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else (_feld(_zweite_fabrik()) if _zweite_fabrik() != Karte.KEINE else Rect2()),
+			"kann": func(): return _zweite_fabrik() != Karte.KEINE,
+			"fertig": func():
+				for z: Vector2i in p.fabriken:
+					if str(p.fabriken[z].get("typ", "")) != "technogunner" and str(p.fabriken[z].get("typ", "")) != "pilot":
+						return true
+				return false},
 		# --- Erste Welle
-		{"text": "Bereit. Starte die erste Welle. Deine Truppen laufen den Gegnern selbst entgegen und kämpfen, sobald sie sie sehen.",
+		{"text": "Bereit. Starte jetzt die erste Welle. Deine Truppen laufen den Gegnern selbst entgegen und kämpfen, sobald sie sie sehen.",
 			"hinweis": "Leertaste · oder Klick auf „Start“",
 			"ziel": func(): return (p._btn_start as Control).get_global_rect(),
-			"fertig": func(): return p.phase == KAMPF},
+			"fertig": func(): return p.phase == KAMPF, "welle": true},
 		{"text": "Mit [F] schaltest du das Tempo auf ×2 oder ×3. Oben siehst du Budget und Leben. Nach jeder Welle gibt es Geld – dazu Zinsen: je 100 Budget, das du übrig lässt, 10 mehr (bis 50). Sparen lohnt sich also.",
 			"hinweis": "Taste F · Tempo",
 			"fertig": func(): return p.phase == BAU and p.welle >= 2},
@@ -446,17 +478,17 @@ func _baue_schritte() -> Array:
 			"hinweis": func(): return "Taste 2 · Erdwall – Erdwälle: %d / 3" % mini(_anzahl_waelle(), 3),
 			"ziel": func(): return _feld(_wegfeld(), 1.5) if p.werkzeug == Karte.WALL else _knopf_von(Karte.WALL),
 			"start": func(): _merk["w0"] = _anzahl_waelle(),
-			"fertig": func(): return _anzahl_waelle() >= int(_merk.get("w0", 0)) + 3, "sperre": true},
+			"fertig": func(): return _anzahl_waelle() >= int(_merk.get("w0", 0)) + 3},
 		{"text": "Sieh auf die Linie: Der Weg hat sich geändert. Sperrst du ihn ganz zu, reißen die Gegner den Wall ein, der ihnen im Weg steht – also lieber lange Umwege bauen als Mauern.",
-			"sperre": true},
+			},
 		{"text": "Auf einem Erdwall baust du eine Stellung. Eine Truppe steigt hinauf, sieht über Wälle hinweg und hat mehr Reichweite. Bau eine Stellung auf einen deiner Erdwälle.",
 			"hinweis": "Taste 3 · Stellung, dann Klick auf einen Erdwall",
 			"ziel": func(): return (_feld(_blanker_wall()) if _blanker_wall() != Karte.KEINE else Rect2()) if p.werkzeug == Karte.STELLUNG else _knopf_von(Karte.STELLUNG),
-			"fertig": func(): return _hat_ausbau(Karte.STELLUNG), "sperre": true},
+			"fertig": func(): return _hat_ausbau(Karte.STELLUNG)},
 		{"text": "Stellungen werden automatisch besetzt und aufgefüllt, wenn dort jemand fällt – aber nur, wenn der Weg dorthin frei ist. Du kannst sie sogar während einer Welle bauen. Starte Welle 2.",
 			"hinweis": "Leertaste · Start",
 			"ziel": func(): return (p._btn_start as Control).get_global_rect(),
-			"fertig": func(): return p.phase == KAMPF},
+			"fertig": func(): return p.phase == KAMPF, "welle": true},
 		{"text": "Klick während der Welle auf eine Truppe: Dann siehst du ihre Reichweite – und dunkel, wohin sie nicht schießen kann, weil Wälle die Sicht versperren.",
 			"hinweis": "Linksklick auf eine Truppe",
 			"fertig": func(): return p.phase == BAU and p.welle >= 3},
@@ -470,6 +502,7 @@ func _baue_schritte() -> Array:
 		{"text": "Bau einen Turm: Setz Erdwälle zu einem T – ein Wall mit drei Nachbarn – und dann den Turm auf den mittleren. Komische Wallformen sind hier ausdrücklich erwünscht.",
 			"hinweis": "Taste 2 · Erdwälle, dann Taste 4 · Turm auf den Wall in der Mitte",
 			"ziel": func(): return _feld(_wegfeld(), 1.5),
+			"kann": func(): return p.budget >= Werte.KOSTEN_TURM,
 			"fertig": func(): return _hat_ausbau(Karte.TURM)},
 		{"text": "Klick deinen Turm an. Dort siehst du seine Werte über die ganze Partie und baust ihn aus: Stufe 2 fest, auf Stufe 3 wählst du eine von zwei Fähigkeiten.",
 			"hinweis": "Linksklick auf den Turm",
@@ -479,6 +512,7 @@ func _baue_schritte() -> Array:
 		{"text": "Auch Fabriken wachsen: Stufe 1 legt sie auf eine Truppe fest und gibt eine dritte. Stufe 2 bringt ein Wertepaket, Stufe 3 eine Fähigkeit zur Wahl, die verändert, wie die Truppe kämpft. Bau deine Fabrik auf Stufe 1 aus.",
 			"hinweis": "Fabrik anklicken · Knopf „Stufe 1“",
 			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else (_feld(_erste_fabrik()) if _erste_fabrik() != Karte.KEINE else Rect2()),
+			"kann": func(): return p.budget >= Werte.KOSTEN_STUFE[0],
 			"fertig": func():
 				for z: Vector2i in p.fabriken:
 					if int(p.fabriken[z].get("stufe", 0)) >= 1:

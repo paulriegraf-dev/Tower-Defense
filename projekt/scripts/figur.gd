@@ -13,6 +13,7 @@ var _reihe := STEHEN
 var _zeit := 0.0
 var _angriff_sek := 0.0            # > 0, solange die Angriffsanimation läuft
 var _angriff_dauer := 1.0
+var _angriff_basis := 1.0         # Dauer laut Blatt; jeder Angriff wird höchstens auf die Pause gekürzt
 
 
 func einrichten(daten: Dictionary) -> void:
@@ -20,6 +21,7 @@ func einrichten(daten: Dictionary) -> void:
 	_zelle = daten["zelle"]
 	_bilder = daten["bilder"]
 	_angriff_dauer = daten["angriff_dauer"]
+	_angriff_basis = _angriff_dauer
 	scale = Vector2.ONE * float(daten["massstab"])
 	centered = false
 	offset = Vector2(-_zelle / 2.0, -_zelle)   # Fußpunkt = Position des Knotens
@@ -38,7 +40,7 @@ func bewegt(laeuft: bool) -> void:
 
 ## Angriffsanimation einmal abspielen, höchstens `max_sek` lang.
 func angriff(max_sek: float) -> void:
-	_angriff_dauer = minf(_angriff_dauer, max_sek)
+	_angriff_dauer = minf(_angriff_basis, max_sek)
 	_angriff_sek = _angriff_dauer
 	_reihe = ANGRIFF
 	_zeit = 0.0

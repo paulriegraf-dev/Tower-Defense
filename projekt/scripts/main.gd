@@ -364,8 +364,42 @@ func _phantom_gefallen() -> void:
 		_angriff_runde_fertig(true)
 		_angriff_ende("durchbruch", true)
 		return
-	_geknackt += 1
 	_angriff_runde_fertig(true)
+	_zeige_geknackt(neu)
+
+
+## Angriff: Eine Verteidigung ist gefallen und ein Ersatz-Phantom steht bereit. Zwischenwertung zeigen (15.11.):
+## Weiterspielen gegen das Ersatz-Phantom – oder hier aufhören und die Wertung sichern.
+func _zeige_geknackt(neu: Dictionary) -> void:
+	phase = Phase.ENDE
+	_laufband.visible = false
+	var probe: Array = _angriff_log.duplicate(true)
+	var wertung := Phantom.wertung(probe)
+	var zeilen: PackedStringArray = []
+	zeilen.append("Verteidigung geknackt – in Runde %d!" % welle)
+	zeilen.append("Zwischenwertung: %d Punkte" % wertung["gesamt"])
+	zeilen.append("  ·  ".join(wertung["zeilen"]))
+	zeilen.append("Ein Ersatz-Phantom (%s) wartet: neue Karte, volle %d Leben." % [str(neu.get("spieler", "?")), Werte.START_LEBEN])
+	zeilen.append("Jede weitere geknackte Verteidigung bringt mehr Punkte.")
+	_ende_text.add_theme_font_size_override("font_size", 24)
+	_ende_text.text = "\n".join(zeilen)
+	for k in _ende_knoepfe.get_children():
+		k.queue_free()
+	for k in _export_knoepfe.get_children():
+		k.queue_free()
+	_export_hinweis.text = ""
+	var weiter := _ende_knopf("⚔  Weiter gegen %s" % str(neu.get("spieler", "das Ersatz-Phantom")), func():
+		_ende.visible = false
+		_ersatz_uebernimmt(neu))
+	weiter.add_theme_color_override("font_color", Color("ffe9a8"))
+	_ende_knopf("Angriff beenden · Wertung sichern", func():
+		_ende.visible = false
+		_angriff_ende("durchbruch", true))
+	_ende.visible = true
+
+
+func _ersatz_uebernimmt(neu: Dictionary) -> void:
+	_geknackt += 1
 	nebel.vergiss()
 	nebel.frei_runde = welle + 1   # das neue Phantom zeigt sich eine Runde lang ohne Nebel
 	for g in gegner:
@@ -414,7 +448,7 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 	var zeilen: PackedStringArray = []
 	match grund:
 		"durchbruch":
-			zeilen.append("Durchbruch! Die Verteidigung ist in Runde %d gefallen." % welle)
+			zeilen.append("Durchbruch! Die Verteidigung ist in Runde %d gefallen." % welle if _geknackt == 0 else "Durchbruch! %d Verteidigungen geknackt, die letzte in Runde %d." % [_geknackt + 1, welle])
 		"hq":
 			zeilen.append("Dein HQ ist gefallen – das Phantom hat den Gegenangriff gewonnen.")
 		_:
@@ -3224,7 +3258,8 @@ func stelle_um(z: Vector2i, neu: String) -> void:
 	if d.has("info"):
 		melde("Diese Fabrik bildet jetzt aus: " + d["info"], 5.0)
 	else:
-		melde("Diese Fabrik baut jetzt: %s (Reichweite %s, Schaden %s alle %s s)." % [d["name"], d["reichweite"], d["schaden"], d["abklingzeit"]], 4.0)
+		var stoss: int = (d.get("schuss_bilder", [0]) as Array).size()
+		melde("Diese Fabrik baut jetzt: %s (Reichweite %s, Schaden %s%s alle %s s)." % [d["name"], d["reichweite"], ("%d × " % stoss) if stoss > 1 else "", d["schaden"], d["abklingzeit"]], 4.0)
 
 
 ## Nächste Ausbaustufe einer Fabrik kaufen (nur in der Bauphase). Für Stufe 3 gehört die gewählte Fähigkeit dazu.

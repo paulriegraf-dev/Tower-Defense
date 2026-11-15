@@ -29,6 +29,7 @@ var _treffer := 0.0
 var faehigkeit := ""               # Stufe-3-Fähigkeit aus der Fabrik
 var letztes_ziel: Node2D = null    # Feuerteam: worauf zuletzt geschossen wurde ...
 var letzter_schuss := -100.0       # ... und wann (Spielzeit in Sekunden)
+var _ausstehend: Array = []        # 15.11.: Treffer, die erst im Bild mit dem Mündungsblitz fallen ({"t", "ziel", "pos", "muendung", "erster", "minigun"})
 var _laser_ziel: Node2D = null
 var _laser_zeit := 0.0
 var _spiegel_punkt := Vector2.INF   # Schuss über einen Spiegel: dort knickt er ab (INF = direkt)
@@ -175,6 +176,8 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
+	if not _ausstehend.is_empty():
+		_ausstehende_treffer(delta)
 	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else Color.WHITE)
 	if ausgewaehlt:
 		queue_redraw()
@@ -485,7 +488,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 		# je mehr Feuerteam-Schützen gerade dasselbe Ziel beschießen, desto kürzer die Pause
 		pause *= maxf(Werte.FEUERTEAM_HOECHST, 1.0 - Werte.FEUERTEAM_JE_MITSCHUETZE * spiel.mitschuetzen(self, ziel))
 	elif faehigkeit == "minigun" and oben:
-		pause *= lerpf(1.0, Werte.MINIGUN_SCHNELLSTE, _anlauf)
+		pause = Werte.MINIGUN_ABKLING * lerpf(1.0, Werte.MINIGUN_SCHNELLSTE, _anlauf)
 		_anlauf = minf(1.0, _anlauf + Werte.MINIGUN_JE_SCHUSS)
 	elif faehigkeit == "markierung" and oben:
 		pause *= Werte.MARKIERUNG_ABKLING
@@ -511,21 +514,63 @@ func _feuere_auf(ziel: Node2D) -> void:
 		spiel.strahl(muendung, ende, farbe, 3.0)
 		spiel.linienschaden(self, start, ende, float(daten["schaden"]), posten_zelle if oben else Karte.KEINE)
 		return
-	if daten.has("flaeche") and ziel is Gegner:
-		# Flächenschaden: trifft alle Gegner rund um das Ziel
+	# 15.11.: Treffer im Takt der Animation – je Mündungsblitz (Werte: schuss_bilder) einer.
+	# Die Minigun zeigt vorerst nur den ersten Blitz und trifft einmal.
+	var minigun := faehigkeit == "minigun" and oben
+	var bilder: Array = daten.get("schuss_bilder", [0])
+	if minigun or (faehigkeit == "plasmagel" and oben):
+		bilder = [bilder[0]]   # Plasmagel aus der Stellung: ein Gelschuss statt zwei Flächentreffer
+	var dauer := minf(float(daten["angriff_dauer"]), pause)
+	var n_bilder := float(daten["bilder"][2])
+	var start := muendung if _spiegel_punkt != Vector2.INF and not oben else position + Vector2(0, -10)
+	for i in bilder.size():
+		var e := {"t": float(bilder[i]) / n_bilder * dauer, "ziel": ziel, "pos": ziel.position,
+			"muendung": muendung, "start": start, "erster": i == 0, "minigun": minigun,
+			"flaeche": daten.has("flaeche") and ziel is Gegner}
+		if e["t"] <= 0.0:
+			_treffe(e)
+		else:
+			_ausstehend.append(e)
+
+
+## 15.11.: wartende Treffer herunterzählen und im Bild des Mündungsblitzes auslösen.
+func _ausstehende_treffer(delta: float) -> void:
+	var faellig: Array = []
+	for e: Dictionary in _ausstehend:
+		e["t"] = float(e["t"]) - delta
+		if e["t"] <= 0.0:
+			faellig.append(e)
+	for e: Dictionary in faellig:
+		_ausstehend.erase(e)
+		_treffe(e)
+
+
+## Ein Treffer: Fläche (Plasmawerfer) oder Einzelziel. Fähigkeiten der Fläche nur beim ersten Schuss eines Angriffs.
+func _treffe(e: Dictionary) -> void:
+	var ziel = e["ziel"]
+	var lebt: bool = is_instance_valid(ziel) and not ziel.is_queued_for_deletion() and not (ziel is Gegner and (ziel as Gegner)._tot)
+	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]
+	spiel.schuss_herkunft = position
+	var farbe := Color(daten["schussfarbe"])
+	var schaden := float(daten["schaden"]) * (Werte.MINIGUN_SCHADEN_FAKTOR if e["minigun"] else 1.0)
+	if e["flaeche"]:
+		# Flächenschaden: trifft alle Gegner rund um das Ziel (ist es schon weg, dort, wo es zuletzt war)
+		var ort: Vector2 = (ziel as Node2D).position if lebt else e["pos"]
 		var radius: float = float(daten["flaeche"]) * Werte.ZELLE
-		spiel.schuss(muendung if _spiegel_punkt != Vector2.INF and not oben else position + Vector2(0, -10), ziel.position, farbe)
-		if faehigkeit == "plasmagel" and oben:
-			spiel.gelschuss(ziel.position, radius, float(daten["schaden"]) * Werte.PLASMAGEL_SCHADEN)
+		spiel.schuss(e["start"], ort, farbe)
+		if e["erster"] and faehigkeit == "plasmagel" and zustand == Zustand.AUF_POSTEN:
+			spiel.gelschuss(ort, radius, schaden * Werte.PLASMAGEL_SCHADEN)
 			return
-		spiel.flaechenschaden(ziel.position, radius, daten["schaden"], farbe)
-		if faehigkeit == "abpraller":
-			spiel.abpraller(ziel as Gegner, radius, float(daten["schaden"]), farbe)
-		elif faehigkeit == "brandfeld":
-			spiel.lege_brand(ziel.position, radius, float(daten["schaden"]) * Werte.BRANDFELD_SCHADEN)
+		spiel.flaechenschaden(ort, radius, schaden, farbe)
+		if e["erster"] and lebt and faehigkeit == "abpraller":
+			spiel.abpraller(ziel as Gegner, radius, schaden, farbe)
+		elif e["erster"] and faehigkeit == "brandfeld":
+			spiel.lege_brand(ort, radius, schaden * Werte.BRANDFELD_SCHADEN)
 		return
-	spiel.schuss(muendung, ziel.position + Vector2(0, 4), farbe)
-	ziel.call("nimm_schaden", daten["schaden"])
+	if not lebt:
+		return   # Einzelschuss: Ziel ist schon gefallen, der Schuss geht ins Leere
+	spiel.schuss(e["muendung"], (ziel as Node2D).position + Vector2(0, 4), farbe)
+	ziel.call("nimm_schaden", schaden)
 
 
 ## Vom Kommandanten gesammelt: Stellung freigeben und ihm folgen.

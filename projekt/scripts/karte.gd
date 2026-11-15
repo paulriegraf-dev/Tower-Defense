@@ -1801,6 +1801,7 @@ func _zeichne_checkpoint(i: int) -> void:
 	if not cp_aktiv:
 		# noch nicht im Spiel: nur der freigehaltene Platz
 		draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(10, 10), Vector2(44, 44)), Color(STEIN_HELL, 0.45), false, 4.0)
+		_cp_nummer(i, farbe)
 		return
 	_r(z, 8, 8, 48, 48, STEIN_DUNKEL)
 	_r(z, 12, 12, 40, 40, STEIN)
@@ -1817,6 +1818,15 @@ func _zeichne_checkpoint(i: int) -> void:
 		if cp_fortschritt[i] > 0.0:
 			_r(z, 8, 54, 48, 6, Color(0, 0, 0, 0.7))
 			_r(z, 10, 56, 44.0 * clampf(cp_fortschritt[i] / Werte.RUECKEROBERUNG_SEK, 0.0, 1.0), 2, TECH_LICHT)
+	_cp_nummer(i, farbe)
+
+
+## Nummer des Checkpoints (1 = der erste auf dem Weg der Gegner) als Plakette oben links.
+func _cp_nummer(i: int, farbe: Color) -> void:
+	var m := Vector2(checkpoints[i]) * Werte.ZELLE + Vector2(13, 14)
+	draw_circle(m, 10.0, Color(0.05, 0.05, 0.08, 0.9))
+	draw_arc(m, 10.0, 0.0, TAU, 20, farbe, 2.0)
+	draw_string(ThemeDB.fallback_font, m + Vector2(-10, 5), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, 20, 14, Color.WHITE)
 
 
 func _zeichne_basis() -> void:

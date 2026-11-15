@@ -251,6 +251,9 @@ const FEUERTEAM_HOECHST: float = 0.5         # höchstens halbe Pause
 const MINIGUN_JE_SCHUSS: float = 0.2         # Anlauf je Schuss (0..1); 15.11.: vorher 0,1 (voller Anlauf nach 5 statt 10 Schüssen)
 const MINIGUN_TREFFER_VERLUST: float = 0.5   # ein Treffer kostet nur diesen Anteil des Anlaufs (vorher alles); Rauch stoppt ihn weiter ganz
 const MINIGUN_SCHNELLSTE: float = 0.3        # bei vollem Anlauf nur noch dieser Anteil der Pause
+const MINIGUN_ABKLING: float = 0.6           # 15.11.: Grundpause der Minigun (die alte Gunner-Pause); der Gunner selbst feuert jetzt alle 1,4 s im Zweierstoß
+const MINIGUN_SCHADEN_FAKTOR: float = 0.86   # 15.11.: Minigun-Treffer = Schaden je Treffer × dies (8 / 9,3: wie vorher)
+                                             # Übergang: die Minigun zeigt nur den ersten Mündungsblitz, bis sie eine eigene Dauerfeuer-Animation hat
 const ABPRALLER_SPRUENGE: int = 2
 const ABPRALLER_WEITE: float = 2.5           # Felder bis zum nächsten Ziel
 const ABPRALLER_SCHADEN: float = 0.7         # jeder Sprung richtet so viel vom vorigen an
@@ -410,13 +413,14 @@ const EINHEITEN := {
 		"zelle": 48,                # Pixel je Bild im Blatt
 		"bilder": [4, 8, 9],        # Bilder je Zeile
 		"angriff_dauer": 1.4,       # Sekunden (wird auf die Abklingzeit gekürzt)
+		"schuss_bilder": [1, 7],    # 15.11.: Feuerstoß mit zwei Mündungsblitzen – in diesen Bildern fällt je ein Treffer
 		"massstab": 2.0,
 		"schussfarbe": "7fe0ff",
 		"leben": 60.0,
 		"tempo": 1.6,
 		"reichweite": 3.0,
-		"schaden": 8.0,
-		"abklingzeit": 0.6,
+		"schaden": 9.3,             # je Treffer; 15.11.: vorher 8 alle 0,6 s – jetzt 2 Treffer alle 1,4 s (gleicher Schaden je Sekunde)
+		"abklingzeit": 1.4,         # 15.11.: vorher 0,6 – die Animation kam nicht hinterher
 	},
 	"plasmawerfer": {
 		"name": "Plasmawerfer",
@@ -424,13 +428,14 @@ const EINHEITEN := {
 		"zelle": 48,
 		"bilder": [4, 8, 9],
 		"angriff_dauer": 1.4,
+		"schuss_bilder": [1, 6],    # 15.11.: zwei Plasmaschüsse je Angriff, wie in der Animation
 		"massstab": 2.0,
 		"schussfarbe": "ff8ad8",
 		"leben": 70.0,
 		"tempo": 1.4,
 		"reichweite": 2.6,
 		"stellung_bonus": 0.0,      # Plasma fliegt von oben nicht weiter: in der Stellung nur der Schuss über Wälle
-		"schaden": 13.0,
+		"schaden": 6.5,             # je Treffer; 15.11.: vorher einmal 13 – jetzt zwei Treffer im Takt der Animation
 		"flaeche": 1.2,             # trifft alle Gegner in diesem Radius (Felder) um das Ziel
 		"abklingzeit": 1.4,
 	},
@@ -456,6 +461,7 @@ const EINHEITEN := {
 		"zelle": 48,
 		"bilder": [4, 8, 9],
 		"angriff_dauer": 1.4,
+		"schuss_bilder": [3],       # 15.11.: der Treffer fällt mit dem Strahl, nicht schon beim Anlegen
 		"massstab": 2.0,
 		"schussfarbe": "9dff8a",
 		"leben": 40.0,

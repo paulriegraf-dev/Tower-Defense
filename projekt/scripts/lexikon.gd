@@ -373,7 +373,7 @@ func _bild(d: Dictionary, reihe: int = 1, faktor: float = 1.0) -> Dictionary:
 
 func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 	var d: Dictionary = Werte.GEGNER[id]
-	var w: Array = [["Leben", _z(d["leben"]) + (" (+%s ab R%d)" % [_z(Werte.GEGNER_GRUND_LEBEN), Werte.GRUND_LEBEN_AB_RUNDE])], ["Tempo", _z(d["tempo"])]]
+	var w: Array = [["Leben", _z(d["leben"])], ["Tempo", _z(d["tempo"])]]
 	if d["reichweite"] > 0.0:
 		w.append(["Reichweite", _z(d["reichweite"])])
 	if d["schaden"] > 0.0:
@@ -388,7 +388,7 @@ func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictionary:
 	var d: Dictionary = Werte.EINHEITEN[id]
 	var w: Array = [["Leben", _z(d["leben"])], ["Tempo", _z(d["tempo"])], ["Reichweite", _z(d["reichweite"])],
-		["Schaden", _z(d["schaden"])], ["Angriff alle", _z(d["abklingzeit"]) + " s"]]
+		["Schaden", ("%d × " % (d["schuss_bilder"] as Array).size() if (d.get("schuss_bilder", []) as Array).size() > 1 else "") + _z(d["schaden"])], ["Angriff alle", _z(d["abklingzeit"]) + " s"]]
 	if d.has("flaeche"):
 		w.append(["Fläche", _z(d["flaeche"])])
 	var abschnitte: Array = [["Was sie macht", TITEL, tut], ["In der Stellung", TEXT_BLASS, stellung]]
