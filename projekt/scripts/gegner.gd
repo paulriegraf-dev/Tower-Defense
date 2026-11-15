@@ -54,6 +54,7 @@ var klon := false                   # aus der Klonmaschine: keine Prämie, wird 
 var wartet := false                 # gebündelt: wartet in der Zone, bis sein Trupp vollständig ist
 var warte_noch := 0.0               # gestaffelt: so viele Sekunden nach dem Losgehen der Schildträger
 var _im_gefecht := 0.0              # Fernkämpfer: schießt gerade -> läuft langsamer
+var ohne_treffer := 0.0           # Sekunden seit dem letzten Treffer (Aufräumen: niemand erreicht ihn mehr)
 var blick := Vector2.RIGHT          # Laufrichtung (Schildträger: dorthin zeigt sein Schild)
 
 
@@ -64,7 +65,8 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	daten = Werte.GEGNER[typ]
 	rolle = daten["rolle"]
 	leben_faktor = p_leben_faktor
-	max_leben = (float(daten["leben"]) + Werte.GEGNER_GRUND_LEBEN) * leben_faktor
+	var grund := Werte.GEGNER_GRUND_LEBEN if int(spiel.welle) >= Werte.GRUND_LEBEN_AB_RUNDE else 0.0   # Grund-Leben erst ab Runde 6
+	max_leben = (float(daten["leben"]) + grund) * leben_faktor
 	leben = max_leben
 	_versatz = Vector2(randf_range(-6, 6), randf_range(-6, 6))
 	_ziel = erstes_ziel
@@ -166,6 +168,7 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
+	ohne_treffer += delta
 	if wartet:
 		_sprite.bewegt(false)
 		return
@@ -481,6 +484,7 @@ func nimm_schaden(menge: float) -> void:
 		var zu: Vector2 = spiel.schuss_herkunft - position
 		if zu.length() > 4.0 and absf(blick.angle_to(zu)) <= deg_to_rad(Werte.SCHILD_FRONT_WINKEL):
 			menge *= Werte.SCHILD_FRONT_FAKTOR
+	ohne_treffer = 0.0
 	var wirksam := minf(menge, maxf(leben, 0.0))
 	leben -= menge
 	_treffer = 0.08

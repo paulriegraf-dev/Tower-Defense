@@ -14,14 +14,15 @@ const START_ZELLE := Vector2i(0, 4)    # HQ des Gegners; Mitte seiner Zone
 # Die linken Spalten gehören dem Gegner: dort kann nicht gebaut werden, Gegner kommen verteilt über die ganze Höhe heraus.
 # Bis zur letzten Runde liegt ein Schutzschild darüber: Was in der Zone steht, kann nicht beschossen werden.
 const ZONE_SPALTEN: int = 3
-const HQ_LEBEN: float = 2200.0   # vorher 3000 (14.11.: letzte Runde dauerte über 3 Minuten)
+const HQ_LEBEN: float = 1500.0   # 15.11.: vorher 2200 (Runde 20 war kaum zu gewinnen)
 const ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
 const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
 const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
-const ENDKAMPF_PAUSE: float = 3.0     # Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
-const ENDKAMPF_LEBEN: float = 3.4      # Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
+const ENDKAMPF_PAUSE: float = 6.0     # 15.11.: vorher 3 – Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
+const ENDKAMPF_LEBEN: float = 2.6      # 15.11.: vorher 3,4 – Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
 const LEBEN_JE_RUNDE: float = 0.23     # so viel zäher werden die Gegner je Runde (Runde 19: ×5,1)
-const GEGNER_GRUND_LEBEN: float = 20.0  # jeder Gegner bekommt so viel Leben dazu, vor dem Rundenfaktor (14.11.: gegen zu starken Flächenschaden; hilft vor allem den kleinen)
+const GEGNER_GRUND_LEBEN: float = 10.0  # ab GRUND_LEBEN_AB_RUNDE bekommt jeder Gegner so viel Leben dazu, vor dem Rundenfaktor (gegen zu starken Flächenschaden; hilft vor allem den kleinen). 15.11.: 20 ab R1 war zu hart
+const GRUND_LEBEN_AB_RUNDE: int = 6
 # Schleudern stehen in der Zone und werfen auf Truppen in Stellungen und auf Fabriken in Reichweite.
 # art: "schleuder" wirft Steine auf Stellungen und Fabriken, "wurf" wirft Hunde über die ersten Wälle,
 #      "laser" schießt flach auf Bodentruppen (Wälle geben Deckung).
@@ -191,6 +192,9 @@ const KOSTEN_STUFE: Array[int] = [75, 175, 450]   # vorher 50/150/400 (14.11. er
 const KOSTEN_BATTERIE_STUFE: Array[int] = [125, 175, 450]   # vorher 100/150/400 (14.11. erhöht)   # dasselbe für die Batterie
 const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
 const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
+const AUFRAEUM_STEHT_SEK: float = 3.0         # Aufräumen am Rundenende: Truppen steigen nur für Gegner ab, die so lange feststehen ...
+const AUFRAEUM_OHNE_TREFFER_SEK: float = 8.0  # ... oder die so lange niemand mehr getroffen hat (außer Reichweite)
+const AUFRAEUM_JAEGER_JE_GEGNER: int = 2      # höchstens so viele Truppen steigen je solchem Gegner ab
 const ABFANG_JE_FELD: int = 2        # höchstens so viele Bodentruppen fangen auf demselben Feld ab
 const ABFANG_WEIT: int = 14          # so viele Felder voraus auf dem Gegnerweg wird ein Abfangfeld gesucht
 const STUFE_1_TRUPPEN: int = 1                  # so viele Truppen hält eine spezialisierte Fabrik zusätzlich
@@ -200,8 +204,8 @@ const STUFE_2 := {
 		"plus": {}, "mal": {"schaden": 1.3, "abklingzeit": 0.8}, "setze": {"klarsicht": true}},
 	"technogunner": {"text": "+50 % Leben, +30 % Schaden, +0,5 Reichweite",
 		"plus": {"reichweite": 0.5}, "mal": {"leben": 1.5, "schaden": 1.3}},
-	"plasmawerfer": {"text": "+0,4 Fläche, +30 % Schaden, läuft 25 % schneller",
-		"plus": {"flaeche": 0.4}, "mal": {"schaden": 1.3, "tempo": 1.25}},
+	"plasmawerfer": {"text": "+0,2 Fläche, +30 % Schaden, läuft 25 % schneller",
+		"plus": {"flaeche": 0.2}, "mal": {"schaden": 1.3, "tempo": 1.25}},
 }
 
 
@@ -238,19 +242,20 @@ const LASER_HOECHST: float = 3.0             # höchstens das Dreifache
 const MARKIERUNG_SEK: float = 5.0
 const MARKIERUNG_FAKTOR: float = 1.4         # markierte Gegner nehmen so viel mehr Schaden
 const MARKIERUNG_EIGENER_SCHADEN: float = 0.4
-const MARKIERUNG_ABKLING: float = 1.5        # feuert so viel langsamer als normal
+const MARKIERUNG_ABKLING: float = 0.45       # Pause mal ...: feuert gut doppelt so schnell wie normal (15.11.; vorher 1,5 = langsamer)
 const BOLLWERK_LEBEN: float = 3.5
 const BOLLWERK_SCHADEN: float = 1.5
 const BOLLWERK_REICHWEITE: float = 0.95      # Felder: Nahkampf
-const FEUERTEAM_JE_MITSCHUETZE: float = 0.12 # so viel kürzer wird die Pause je Mitschütze am selben Ziel
+const FEUERTEAM_JE_MITSCHUETZE: float = 0.2  # 15.11.: vorher 0,12 – so viel kürzer wird die Pause je Mitschütze am selben Ziel
 const FEUERTEAM_HOECHST: float = 0.5         # höchstens halbe Pause
-const MINIGUN_JE_SCHUSS: float = 0.1         # Anlauf je Schuss (0..1)
+const MINIGUN_JE_SCHUSS: float = 0.2         # Anlauf je Schuss (0..1); 15.11.: vorher 0,1 (voller Anlauf nach 5 statt 10 Schüssen)
+const MINIGUN_TREFFER_VERLUST: float = 0.5   # ein Treffer kostet nur diesen Anteil des Anlaufs (vorher alles); Rauch stoppt ihn weiter ganz
 const MINIGUN_SCHNELLSTE: float = 0.3        # bei vollem Anlauf nur noch dieser Anteil der Pause
 const ABPRALLER_SPRUENGE: int = 2
 const ABPRALLER_WEITE: float = 2.5           # Felder bis zum nächsten Ziel
 const ABPRALLER_SCHADEN: float = 0.7         # jeder Sprung richtet so viel vom vorigen an
 const BRANDFELD_SEK: float = 3.0
-const BRANDFELD_SCHADEN: float = 0.35        # Anteil des Schusses je Sekunde im Feuer
+const BRANDFELD_SCHADEN: float = 0.25        # 15.11.: vorher 0,35 – Anteil des Schusses je Sekunde im Feuer
 const PLASMAGEL_SEK: float = 3.0
 const PLASMAGEL_TEMPO: float = 0.45          # Gebremste laufen nur noch so schnell
 const PLASMAGEL_SCHADEN: float = 0.25
@@ -282,6 +287,7 @@ const BATTERIE_STUFEN := [
 	{"name": "Energieschild", "text": "Die bemannte Batterie spannt auf einem Wegfeld in Reichweite einen Schild auf. Gegner müssen ihn erst zerschlagen, eigene Truppen gehen hindurch. Er lädt sich zwischen den Runden wieder auf."},
 ]
 const BATTERIE_ST2_SCHADEN: float = 1.3      # Schaden mal ... ab Stufe 2
+const BATTERIE_RAND_FAKTOR: float = 0.5      # Batterie-Einschlag: in der Mitte voller Schaden, zum Rand hin abfallend bis auf diesen Anteil (15.11.)
 const BATTERIE_ST2_REICHWEITE: float = 1.5   # Felder mehr Reichweite ab Stufe 2
 const BATTERIE_RAUCH_SEK: float = 2.5        # alle so viele Sekunden bläst eine Stufe-2-Batterie eine Rauchwolke weg
 const SCHILD_LEBEN: float = 450.0            # so viel hält der Energieschild aus
@@ -297,7 +303,7 @@ const BATTERIE := {
 	"plaetze": 3,
 	"leben": 300.0,
 	"reichweite": 8.0,          # weit, über Wälle hinweg
-	"flaeche": 1.5,             # Radius des Einschlags in Feldern
+	"flaeche": 1.2,             # Radius des Einschlags in Feldern (15.11.: vorher 1,5)
 	"schaden": 65.0,            # vorher 45 (14.11.: Batterie für ihren Preis gestärkt)
 	"abklingzeit": 3.5,         # vorher 4
 }
@@ -319,8 +325,8 @@ const TURMARTEN := {
 		"reichweite": 3.5, "schaden": 16.0, "abklingzeit": 0.9,
 		"text": "Schießt schnell auf ein Ziel. Der Allrounder."},
 	"frost": {"name": "Frostturm", "form": "Lange Ecke", "nachbarn": 4, "farbe": "bfefff",
-		"reichweite": 3.0, "schaden": 0.0, "abklingzeit": 1.5, "bremse_sek": 1.2, "bremse_tempo": 0.8,
-		"text": "Frostpuls auf alle Gegner in Reichweite und Sicht: kein Schaden, aber 1,2 Sekunden auf 80 % Tempo verlangsamt."},
+		"reichweite": 3.0, "schaden": 0.0, "abklingzeit": 1.5, "bremse_sek": 1.6, "bremse_tempo": 0.65,   # 15.11. gebufft (vorher 1,2 s auf 80 %)
+		"text": "Frostpuls auf alle Gegner in Reichweite und Sicht: kein Schaden, aber 1,6 Sekunden auf 65 % Tempo verlangsamt – wer im Umkreis bleibt, bleibt langsam."},
 	"funk": {"name": "Funkturm", "form": "Kreuzung", "nachbarn": 4, "farbe": "ffd34d",
 		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 0.0, "feuer_faktor": 0.75,
 		"text": "Schießt nicht selbst. Truppen in Stellungen im Umkreis feuern 25 % schneller."},
@@ -335,7 +341,7 @@ const TURMARTEN := {
 const KOSTEN_TURM_STUFE: Array[int] = [175, 450]
 const TURM_STUFE_2 := {
 	"geschuetz": {"abklingzeit": 0.65, "text": "Feuert schneller: alle 0,65 statt 0,9 Sekunden."},
-	"frost": {"bremse_sek": 1.8, "text": "Bremst länger: 1,8 statt 1,2 Sekunden."},
+	"frost": {"bremse_sek": 2.4, "text": "Bremst länger: 2,4 statt 1,6 Sekunden."},
 	"funk": {"reichweite": 3.5, "text": "Größerer Umkreis: 3,5 statt 2,5 Felder."},
 	"lanze": {"schaden": 65.0, "text": "Stärkerer Strahl: 65 statt 45 Schaden."},
 	"heil": {"heilung": 12.0, "text": "Heilt mehr: 12 statt 8 Leben."},

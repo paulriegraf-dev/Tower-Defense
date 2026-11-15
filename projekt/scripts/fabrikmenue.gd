@@ -175,13 +175,7 @@ func _baue() -> void:
 	zl.add_theme_font_size_override("font_size", 13)
 	zl.add_theme_color_override("font_color", Color("a79fb3"))
 	zreihe.add_child(zl)
-	for m: Array in [["erste", "Erste"], ["letzte", "Letzte"], ["staerkste", "Stärkste"]]:
-		var zb := _knopf(m[1])
-		zb.add_theme_font_size_override("font_size", 12)
-		zb.toggle_mode = true
-		zb.button_pressed = str(f.get("ziel", "erste")) == m[0]
-		zb.pressed.connect(spiel.setze_zielmodus.bind(zelle, m[0]))
-		zreihe.add_child(zb)
+	_zielknoepfe(zreihe, [["erste", "Erste"], ["letzte", "Letzte"], ["staerkste", "Stärkste"]], str(f.get("ziel", "erste")))
 	var n_zu: int = spiel.zugewiesen(zelle).size()
 	_zeile("Stellungen: %s" % ("frei – Maus von der Fabrik auf eine Stellung ziehen, um sie fest zuzuweisen" if n_zu == 0 else "%d zugewiesen (Pfeile; nochmal ziehen löst)" % n_zu), 11, Color("a79fb3"))
 
@@ -296,10 +290,30 @@ func _baue_turm() -> void:
 	_setze_ort()
 
 
+func _zielknoepfe(zreihe: HBoxContainer, modi: Array, aktiv: String) -> void:
+	for m: Array in modi:
+		var zb := _knopf(m[1])
+		zb.add_theme_font_size_override("font_size", 12)
+		zb.toggle_mode = true
+		zb.button_pressed = aktiv == m[0]
+		zb.pressed.connect(spiel.setze_zielmodus.bind(zelle, m[0]))
+		zreihe.add_child(zb)
+
+
 ## Batterie mit Pilotenfabrik: feste Stufen statt Truppenwahl.
 func _baue_batterie(stufe: int, bauphase: bool, naechste: bool, kann_zahlen: bool) -> void:
 	_zeile("Batterie mit Pilotenfabrik · Stufe %d" % stufe, 17, Color("ffe9a8"))
 	_zeile("hält %d Piloten, %d bemannen die Batterie" % [spiel.truppen_limit(zelle), int(Werte.BATTERIE["plaetze"])], 13, Color("a79fb3"))
+	# Zielwahl der Batterie: dichteste Gruppe (Standard) oder Erste/Letzte/Stärkste
+	var zreihe := HBoxContainer.new()
+	zreihe.add_theme_constant_override("separation", 4)
+	_inhalt.add_child(zreihe)
+	var zl := Label.new()
+	zl.text = "Ziel:"
+	zl.add_theme_font_size_override("font_size", 13)
+	zl.add_theme_color_override("font_color", Color("a79fb3"))
+	zreihe.add_child(zl)
+	_zielknoepfe(zreihe, [["dichteste", "Gruppe"], ["erste", "Erste"], ["letzte", "Letzte"], ["staerkste", "Stärkste"]], str(spiel.fabriken.get(zelle, {}).get("ziel", "dichteste")))
 	for i in stufe:
 		_zeile("✓ " + Werte.BATTERIE_STUFEN[i]["name"], 13, Color("7fe0ff"))
 	if naechste:

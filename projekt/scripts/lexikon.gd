@@ -373,7 +373,7 @@ func _bild(d: Dictionary, reihe: int = 1, faktor: float = 1.0) -> Dictionary:
 
 func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 	var d: Dictionary = Werte.GEGNER[id]
-	var w: Array = [["Leben", _z(float(d["leben"]) + Werte.GEGNER_GRUND_LEBEN)], ["Tempo", _z(d["tempo"])]]
+	var w: Array = [["Leben", _z(d["leben"]) + (" (+%s ab R%d)" % [_z(Werte.GEGNER_GRUND_LEBEN), Werte.GRUND_LEBEN_AB_RUNDE])], ["Tempo", _z(d["tempo"])]]
 	if d["reichweite"] > 0.0:
 		w.append(["Reichweite", _z(d["reichweite"])])
 	if d["schaden"] > 0.0:

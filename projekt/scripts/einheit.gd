@@ -274,7 +274,7 @@ func _process(delta: float) -> void:
 			# Aufräumen: Nichts kommt mehr nach und von hier oben ist kein Ziel zu treffen – absteigen und hinterher.
 			if oben_ziel == null and spiel.aufraeumen():
 				_ohne_ziel += delta
-				if _ohne_ziel >= 1.5:
+				if _ohne_ziel >= 1.5 and spiel.darf_absteigen(self):
 					_ohne_ziel = 0.0
 					if karte.posten.get(posten_zelle) == self:
 						karte.posten.erase(posten_zelle)
@@ -611,7 +611,7 @@ func posten_verloren() -> void:
 
 
 func nimm_schaden(menge: float) -> void:
-	_anlauf = 0.0   # Minigun: ein Treffer unterbricht den Anlauf
+	_anlauf *= 1.0 - Werte.MINIGUN_TREFFER_VERLUST   # Minigun: ein Treffer kostet einen Teil des Anlaufs
 	var f: float = spiel.schild_faktor(position)   # Schildgenerator-Kuppel
 	if f < 1.0:
 		spiel.kuppel_abgefangen(position, menge * (1.0 - f))

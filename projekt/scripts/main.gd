@@ -860,6 +860,24 @@ func _truppe_kann_checkpoint_holen() -> bool:
 
 ## Kein Gegner mehr auf dem Feld und keiner mehr unterwegs: Jetzt holt die nächste Truppe einen verlorenen Checkpoint
 ## zurück – notfalls verlässt sie dafür ihre Stellung. Sonst startet die nächste Welle von dort.
+## Aufräumen: Darf diese Truppe ihre Stellung verlassen? Nur für Gegner, die feststehen oder die niemand mehr trifft,
+## und höchstens AUFRAEUM_JAEGER_JE_GEGNER Truppen je solchem Gegner (15.11.: vorher stieg jede Truppe ohne Ziel ab).
+var _jaeger: Array = []
+
+func darf_absteigen(e: Einheit) -> bool:
+	var ziele := 0
+	for g in gegner:
+		if not _geschuetzt(g) and g.rest_weg() < (1 << 20) and (g._stand >= Werte.AUFRAEUM_STEHT_SEK or g.ohne_treffer >= Werte.AUFRAEUM_OHNE_TREFFER_SEK):
+			ziele += 1
+	if ziele == 0:
+		return false
+	_jaeger = _jaeger.filter(func(u): return is_instance_valid(u) and einheiten.has(u) and u.am_boden())
+	if _jaeger.size() >= ziele * Werte.AUFRAEUM_JAEGER_JE_GEGNER:
+		return false
+	_jaeger.append(e)
+	return true
+
+
 func raeumen() -> bool:
 	return phase == Phase.KAMPF and not endkampf and gegner.is_empty() and _schlange.is_empty() and _wurf_schlange.is_empty() and _wurf_aktiv.is_empty() and _im_flug == 0
 
@@ -1319,7 +1337,11 @@ func _batterien_feuern(delta: float) -> void:
 			var von := karte.mitte(z) + Vector2(0, -20)
 			var bestes: Gegner = null
 			var meiste := 0
-			for g in gegner:
+			# Zielwahl im Batteriemenü (an der Pilotenfabrik): "dichteste" Gruppe (Standard) oder wie bei Truppen Erste/Letzte/Stärkste
+			var modus := str(fabriken.get(karte.paar.get(z, z), {}).get("ziel", "dichteste"))
+			if modus != "dichteste":
+				bestes = gegner_in_reichweite(von, weite, false, Karte.KEINE, modus)
+			for g in (gegner if modus == "dichteste" else []):
 				if _geschuetzt(g) or von.distance_to(g.position) > weite:
 					continue
 				var n := 0
@@ -1336,7 +1358,7 @@ func _batterien_feuern(delta: float) -> void:
 				schuss(von, bestes.position, Color("7fe0ff"))
 				schadensquelle = "batterie:%d,%d" % [z.x, z.y]
 				schuss_herkunft = von   # der Frontschild fängt auch die Batterie ab, wenn sie von vorn kommt
-				flaechenschaden(bestes.position, radius, float(Werte.BATTERIE["schaden"]) * (Werte.BATTERIE_ST2_SCHADEN if stufe >= 2 else 1.0), Color("7fe0ff"))
+				flaechenschaden(bestes.position, radius, float(Werte.BATTERIE["schaden"]) * (Werte.BATTERIE_ST2_SCHADEN if stufe >= 2 else 1.0), Color("7fe0ff"), Werte.BATTERIE_RAND_FAKTOR)
 				schuss_herkunft = Vector2.INF
 		_turm_abkling[z] = maxf(rest, 0.0) if rest <= 0.0 else rest
 
@@ -1446,7 +1468,8 @@ func gelschuss(mitte: Vector2, radius: float, schaden: float) -> void:
 			g.nimm_schaden(schaden * float(deckung.get(g, 1.0)))
 
 
-func flaechenschaden(mitte: Vector2, radius: float, schaden: float, farbe: Color) -> void:
+## `rand`: Schadensanteil am Rand des Einschlags (1 = überall voll; Batterie: fällt zum Rand ab).
+func flaechenschaden(mitte: Vector2, radius: float, schaden: float, farbe: Color, rand: float = 1.0) -> void:
 	for i in 12:
 		var a := Vector2.RIGHT.rotated(TAU * i / 12.0) * radius
 		var b := Vector2.RIGHT.rotated(TAU * (i + 1) / 12.0) * radius
@@ -1458,7 +1481,8 @@ func flaechenschaden(mitte: Vector2, radius: float, schaden: float, farbe: Color
 	var deckung := schild_deckung(schuss_herkunft, betroffen)
 	for g: Gegner in betroffen:
 		if is_instance_valid(g):
-			g.nimm_schaden(schaden * float(deckung.get(g, 1.0)))
+			var abfall := lerpf(1.0, rand, clampf(mitte.distance_to(g.position) / maxf(radius, 1.0), 0.0, 1.0))
+			g.nimm_schaden(schaden * abfall * float(deckung.get(g, 1.0)))
 
 
 ## Schildabfangen: Fläche und Strahlen von vorn trifft auch die, die direkt hinter einem Schildträger stehen,
