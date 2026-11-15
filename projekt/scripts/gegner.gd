@@ -68,7 +68,8 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	var grund := Werte.GEGNER_GRUND_LEBEN if int(spiel.welle) >= Werte.GRUND_LEBEN_AB_RUNDE else 0.0   # Grund-Leben erst ab Runde 6
 	max_leben = (float(daten["leben"]) + grund) * leben_faktor
 	leben = max_leben
-	_versatz = Vector2(randf_range(-6, 6), randf_range(-6, 6))
+	var v := Werte.VERSATZ * Werte.ZELLE
+	_versatz = Vector2(randf_range(-v, v), randf_range(-v, v))
 	_ziel = erstes_ziel
 	position = karte.mitte(start_zelle) + _versatz
 	_sprite = Figur.new()
@@ -276,7 +277,7 @@ func _process(delta: float) -> void:
 	if not karte.ist_frei(naechstes):
 		var eigenes := karte.mitte(_weg[_index - 1]) + _versatz
 		_sprite.flip_h = naechstes.x < _weg[_index - 1].x
-		if position.distance_to(eigenes) > 2.0:
+		if not _angekommen(eigenes):
 			_sprite.bewegt(true)
 			position = position.move_toward(eigenes, tempo() * Werte.ZELLE * delta)
 		else:
@@ -290,8 +291,18 @@ func _process(delta: float) -> void:
 
 	# 4) Sonst weiterlaufen.
 	_laufe_zu(karte.mitte(naechstes) + _versatz, delta)
-	if position == karte.mitte(naechstes) + _versatz:
+	if _angekommen(karte.mitte(naechstes) + _versatz):
 		_index += 1
+
+
+## Platz auf dem Feld: Radius dieses Gegners in Pixeln (Abstand halten, siehe main.gd _abstand_halten).
+func radius() -> float:
+	return float(Werte.GEGNER_RADIUS.get(typ, Werte.RADIUS_KLEIN)) * Werte.ZELLE
+
+
+## Nah genug am Wegpunkt? Andere Gegner schieben ihn ein wenig – genau treffen muss er ihn nicht.
+func _angekommen(punkt: Vector2) -> bool:
+	return position.distance_to(punkt) <= Werte.ANKUNFT * Werte.ZELLE
 
 
 ## Geht einen Schritt auf `punkt` zu und richtet die Figur aus.
@@ -354,7 +365,7 @@ func _zum_wall(delta: float) -> bool:
 	if _sonder_index < _sonderweg.size():
 		var punkt := karte.mitte(_sonderweg[_sonder_index]) + _versatz
 		_laufe_zu(punkt, delta)
-		if position == punkt:
+		if _angekommen(punkt):
 			_sonder_index += 1
 		return true
 	# angekommen
@@ -449,7 +460,7 @@ func _auf_dem_wall(delta: float, reichweite: float) -> void:
 	# zum nächsten Wallfeld auf dem Weg zur Stellung
 	var punkt := karte.mitte(weg[1]) + Vector2(0, -12)
 	_laufe_zu(punkt, delta)
-	if position == punkt:
+	if position.distance_to(punkt) <= 2.0:   # oben auf dem Wall gibt es keinen Abstand: genau treffen
 		_wall_zelle = weg[1]
 
 

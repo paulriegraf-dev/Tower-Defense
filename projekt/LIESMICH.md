@@ -12,6 +12,10 @@
 - **Rechtsklick** abreißen (zwischen den Wellen; in derselben Bauphase Gebautes voll zurück, sonst 75 % – siehe „Abreißen und Erstattung“)
 - **Leertaste** Welle starten, **F** Tempo ×1 / ×2 / ×3 (schaltet weiter), **Tab** (gedrückt halten) Schadensliste der Runde je Fabrik, Turmart und Batterie, **R** Neustart nach Niederlage
 
+## Tutorial
+
+Startest du im Menü ein **normales Spiel**, fragt Sonde 7 (Funkfenster im Hologramm-Stil wie in Terrain-Conquester), ob du das Tutorial möchtest („Tutorial starten“ / „Direkt spielen“). Das Tutorial läuft in einer echten Partie mit fester Basis (18,5) und festen Checkpoints (7,3) und (13,6): je Schritt ein Handgriff mit kurzem Warum, Ring und Pfeil zeigen auf Feld oder Knopf, es wartet, bis du es getan hast. Reine Hinweise haben „Weiter“, Handgriffe „Überspringen“, „Tutorial beenden“ geht jederzeit. Klick aufs Fenster zeigt den Text sofort ganz. Die Welle lässt sich erst starten, wenn der jeweilige Schritt es erlaubt. Inhalt (28 Schritte, Runden 1–3): Spielprinzip, Weg und Checkpoints, Runde 20, Fabrik und Truppenwahl, Welle und Tempo, Einkommen und Zinsen, Erdwälle, Stellungen, Sicht, Formtürme und [H], Turm- und Fabrik-Upgrades, Zielwahl und Zuweisung, Tor, Panzerung, Batterie, Brakk, Checkpoints, [I] Übersicht, Schadensliste, Abreißen. Danach läuft die Partie normal weiter. Code: `scripts/tutorial.gd`, Porträt `assets/sprites/tutorial/sonde7.png` (aus `faces.png` von Terrain-Conquester).
+
 ## Regeln im Prototyp
 - **Zone des Gegners** (linke drei Spalten, abgedunkelt): Dort kann nicht gebaut werden, und bis zur letzten Runde
   schützt ein Schild alles, was darin steht, vor Beschuss. Gegner kommen verteilt über

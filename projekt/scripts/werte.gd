@@ -578,6 +578,14 @@ const KOMMANDANT := {
 	"cp_faktor": 4.0,             # holt verlorene Checkpoints so viel schneller zurück
 }
 const FERNKAMPF_GEFECHT_TEMPO := 0.35   # Battlesphäre: solange sie schießt, läuft sie nur mit diesem Anteil ihres Tempos
+# Platz auf dem Feld (15.11.): Felder sind nur das Wegraster. Einheiten stehen frei darin und halten Abstand nach ihrem Radius
+# (Anteil einer Feldbreite): etwa 4 kleine, 2 mittlere oder 1 große je Feld. Bauwerke bleiben eins je Feld.
+const RADIUS_KLEIN := 0.2
+const GEGNER_RADIUS := {"schild": 0.28, "sphaere": 0.28, "belagerung": 0.42, "schwarm": 0.38}   # alle anderen: RADIUS_KLEIN
+const TRUPPE_RADIUS := 0.2               # eigene Bodentruppen
+const ABSTAND_HAERTE := 10.0             # wie schnell Überlappungen aufgelöst werden (je Sekunde)
+const ANKUNFT := 0.22                    # so nah (Felder) an einem Wegpunkt gilt ein Gegner als angekommen
+const VERSATZ := 0.24                    # Zielpunkte je Gegner bis zu so weit (Felder) neben der Feldmitte
 const SCHILD_VORLAUF_SEK := 1.5         # gestaffelt: Schildträger gehen so viele Sekunden vor dem Rest ihres Trupps los
 const SCHILD_FRONT_FAKTOR := 0.25   # Schildträger: Schüsse von vorn (innerhalb SCHILD_FRONT_WINKEL zur Laufrichtung) machen nur so viel Schaden
 const SCHILD_FRONT_WINKEL := 60.0

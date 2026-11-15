@@ -10,6 +10,7 @@ var leben: int = Werte.START_LEBEN
 var welle: int = 1
 var sandbox := false                # Übergangsmenü: 5000 Budget, alle Bauwerke ab Runde 1
 var _menue: Startmenue
+var tutorial: Tutorial = null       # läuft gerade das Tutorial (Sonde 7)? Fragt beim Start des normalen Spiels
 var phantom_modus := ""             # "" = normales Spiel, "angriff" = du greifst den Bau eines Phantoms an, "verteidigung" = du spielst gegen die Wellen eines Phantoms
 var _angriff_phantom: Dictionary = {}   # Verteidigung: die 20 Wellen eines anderen Spielers
 var _phantom: Dictionary = {}       # das geladene Verteidigungs-Phantom
@@ -166,6 +167,10 @@ func _menue_gewaehlt(mit_sandbox: bool) -> void:
 		melde("Sandbox: unendlich Budget, alle Bauwerke freigeschaltet.", 5.0)
 	else:
 		_normales_spiel()
+		# Normales Spiel aus dem Menü: Sonde 7 fragt, ob man das Tutorial möchte
+		tutorial = Tutorial.new()
+		tutorial.spiel = self
+		add_child(tutorial)
 	_menue.queue_free()
 	_menue = null
 
@@ -740,6 +745,7 @@ func _process(delta: float) -> void:
 	_pflege_schilde()
 	if phase != Phase.KAMPF:
 		return
+	_abstand_halten(delta)
 
 	if endkampf and _schlange.is_empty():
 		# letzte Runde: nach kurzer Pause beginnt dieselbe Reihe Trupps von vorn
@@ -876,6 +882,59 @@ func darf_absteigen(e: Einheit) -> bool:
 		return false
 	_jaeger.append(e)
 	return true
+
+
+## Platz auf dem Feld (15.11.): Gegner untereinander und eigene Bodentruppen untereinander schieben sich sanft auseinander,
+## bis sie sich nach ihrem Radius nicht mehr überlappen. Geschoben wird nur innerhalb des eigenen Felds oder auf freie Felder.
+func _abstand_halten(delta: float) -> void:
+	var haerte := clampf(Werte.ABSTAND_HAERTE * delta, 0.0, 0.5)
+	var gs: Array = []
+	for g in gegner:
+		if is_instance_valid(g) and not g._tot and not g._auf_wall:
+			gs.append([g, g.radius()])
+	_schiebe(gs, haerte, false)
+	var es: Array = []
+	var r := Werte.TRUPPE_RADIUS * Werte.ZELLE
+	for e in einheiten:
+		if is_instance_valid(e) and not (e is Kommandant) and e.zustand == Einheit.Zustand.BODEN and karte.ist_frei(karte.zelle_bei(e.position)) and not e._im_tor():
+			es.append([e, r])
+	_schiebe(es, haerte, true)
+
+
+func _schiebe(liste: Array, haerte: float, _truppen: bool) -> void:
+	var n := liste.size()
+	if n < 2:
+		return
+	var schub: Array[Vector2] = []
+	schub.resize(n)
+	schub.fill(Vector2.ZERO)
+	for i in n:
+		var a: Node2D = liste[i][0]
+		var ra: float = liste[i][1]
+		for j in range(i + 1, n):
+			var b: Node2D = liste[j][0]
+			var rb: float = liste[j][1]
+			var abstand := a.position - b.position
+			var d := abstand.length()
+			var soll := ra + rb
+			if d >= soll:
+				continue
+			var richtung := abstand / d if d > 0.01 else Vector2.RIGHT.rotated(randf() * TAU)
+			# Schwere schieben Leichte: Anteile nach Fläche (Radius²)
+			var ma := ra * ra
+			var mb := rb * rb
+			var tief := (soll - d) * haerte
+			schub[i] += richtung * tief * mb / (ma + mb)
+			schub[j] -= richtung * tief * ma / (ma + mb)
+	for i in n:
+		if schub[i] == Vector2.ZERO:
+			continue
+		var u: Node2D = liste[i][0]
+		var neu := u.position + schub[i]
+		var alt_z := karte.zelle_bei(u.position)
+		var neu_z := karte.zelle_bei(neu)
+		if neu_z == alt_z or karte.ist_frei(neu_z):
+			u.position = neu
 
 
 func raeumen() -> bool:
@@ -1510,6 +1569,9 @@ func schild_deckung(herkunft: Vector2, betroffen: Array) -> Dictionary:
 
 func starte_welle() -> void:
 	if phase != Phase.BAU:
+		return
+	if tutorial != null and tutorial.sperrt_welle():
+		melde("Sonde 7: Erst noch den Schritt im Tutorial – oder „Tutorial beenden“.", 3.0)
 		return
 	if phantom_modus == "angriff":
 		if Werte.welle_aus_plan({"name": "", "trupps": _plaene.get(welle, [])}, welle)["gruppen"].is_empty():
