@@ -54,7 +54,7 @@ const TURM_FORMEN := [
 	["frost", ["T##", "#..", "#.."]],
 	["lanze", ["#T#", "#.#", "..."]],
 	["heil", ["#..", ".T.", "..#"]],
-	["schild", ["####", "#T.#", "####"]],   # Schildgenerator: in einem Hof (2–12 freie Felder, rundum Erdwälle oder Tor)
+	["schild", [".##.", "#T.#", "#..#", ".##."]],   # Schildgenerator in einem Hof: 2–12 freie Felder, rundum Erdwälle oder Tor (Ecken egal)
 ]
 const SCHILD_FARBE := Color("b48cff")
 
@@ -627,8 +627,8 @@ func _male_formen(ci: Control) -> void:
 		var an := art == unter or art == formvorlage
 		Stil.platte(ci, r, 3.0, Stil.METALL if an else Stil.METALL_TIEF, farbe if an else Stil.RAHMEN)
 		var spalten := (raster[0] as String).length()
-		var feld := 8.0
-		var ecke := Vector2(r.get_center().x - feld * spalten / 2.0, r.position.y + 4.0 + (3 - raster.size()) * feld / 2.0).round()
+		var feld := 8.0 if raster.size() <= 3 else 6.0
+		var ecke := Vector2(r.get_center().x - feld * spalten / 2.0, r.position.y + 4.0 + (3.0 * 8.0 - raster.size() * feld) / 2.0).round()
 		for y in raster.size():
 			for x in spalten:
 				var c: String = (raster[y] as String)[x]

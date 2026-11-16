@@ -1,13 +1,13 @@
 class_name Ton
 ## Kampfgeräusche (16.11.2026). Die Klänge stammen aus Terrain-Conquester (dort im Browser erzeugt, hier als OGG
 ## aufgenommen, assets/ton). Paul: „weniger ist mehr“ – deshalb:
-##   - Geräusche aus dem Gefecht (Schüsse, Tod) nur, wenn weit genug herangezoomt ist (ZOOM_AB) und die Quelle
-##     im Bild liegt; je näher, desto lauter. Einzelne Treffer klingen gar nicht.
+##   - Geräusche aus dem Gefecht (Schüsse, Tod) nur, wenn die Quelle im Bild liegt; je näher herangezoomt, desto
+##     lauter (ganz heraus 7 dB leiser). Einzelne Treffer klingen gar nicht.
 ##   - Meldungen (Wellenstart, Bauen, Explosionen) immer.
 ##   - höchstens 2 gleiche Klänge zugleich, 0,09 s Abstand, insgesamt höchstens 8 Stimmen; Tonhöhe schwankt leicht.
 ## Lautstärke über Werte.toene in Prozent (Einstellungen, 10er-Schritte).
 
-const ZOOM_AB := 0.45
+const ZOOM_AB := 0.0   # 16.11. (Paul): auf jeder Zoomstufe hörbar – leiser, je weiter weg (Lautstärke in den Einstellungen)
 const GLEICHE := 2
 const ABSTAND := 0.09
 const STIMMEN := 8

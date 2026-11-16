@@ -43,6 +43,8 @@ var _tcz := _cz
 var _z_min := 0.0
 var _einrast_in := -1.0
 var _zieht := false
+var _rad_bild := -1             # Mausrad: Bildnummer und schon gezählter Zoom in diesem Bild
+var _rad_summe := 0.0
 
 
 func einrichten(p_spiel: Node) -> void:
@@ -2042,7 +2044,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 			var richtung := 1.0 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -1.0
-			_tz = clampf(_tz + richtung * 0.05 * maxf(mb.factor, 1.0), _z_min, 1.0)
+			# 16.11. (Paul): weniger empfindlich – feine Räder/Touchpads schicken viele kleine Schritte (factor < 1),
+			# und je Bild zählt höchstens ein Rastschritt, damit ein leichtes Drehen nicht gleich ganz hineinzoomt.
+			var schritt := 0.035 * clampf(mb.factor if mb.factor > 0.0 else 1.0, 0.15, 1.0)
+			var frame := Engine.get_process_frames()
+			if frame != _rad_bild:
+				_rad_bild = frame
+				_rad_summe = 0.0
+			schritt = minf(schritt, 0.035 - _rad_summe)
+			if schritt > 0.0:
+				_rad_summe += schritt
+				_tz = clampf(_tz + richtung * schritt, _z_min, 1.0)
 			pass   # kein Einrasten auf Pixelstufen mehr (wirkte wie ein Autozoom)
 			get_viewport().set_input_as_handled()
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
