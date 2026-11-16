@@ -17,6 +17,8 @@ var _abkling := 0.0
 var _sprite: Figur
 var _treffer := 0.0
 var _zeit := 0.0
+var bedroht: Array = []           # Stein-Schleuder, Bauphase: Felder mit Stellung/Fabrik/Batterie in Reichweite (16.11.)
+var bedroht_vorschau := false     # ... und das Bauwerk unter der Maus läge in Reichweite
 var _umzug_in := 0.0               # Stein-Schleuder: Sekunden bis zum nächsten Platzwechsel in der Runde
 var _faehrt := false
 var _fahrziel := Vector2.ZERO
@@ -66,6 +68,8 @@ func _process(delta: float) -> void:
 	modulate = (Color(1, 0.88, 0.86) if Werte.grafik_neu else Color(1, 0.6, 0.6)) if _treffer > 0.0 else Color.WHITE
 	queue_redraw()
 	if not spiel.im_kampf():
+		if art == "schleuder":
+			_pruefe_bedroht()
 		return
 	if art == "schleuder" and spiel.welle >= Werte.SPRENGER_AB_WELLE:
 		# Platzwechsel während der Runde: hinfahren, dabei wird nicht geworfen
@@ -168,7 +172,7 @@ func _draw() -> void:
 		# Bauphase: Reichweite zeigen (Schleuder pink, Wurf-Schleuder orange, Laser hellrot)
 		match art:
 			"schleuder":
-				draw_arc(Vector2.ZERO, Werte.SCHLEUDER["reichweite"] * Werte.ZELLE, 0.0, TAU, 96, Color(pink, 0.45), 2.0)
+				_male_reichweite(pink)
 			"wurf":
 				draw_arc(Vector2.ZERO, Werte.WURF["reichweite"] * Werte.ZELLE, 0.0, TAU, 96, Color(1.0, 0.6, 0.1, 0.45), 2.0)
 				draw_arc(Vector2.ZERO, Werte.WURF["weit" if spiel.phantom_modus != "" else "tasche_weit"] * Werte.ZELLE, 0.0, TAU, 128, Color(1.0, 0.6, 0.1, 0.18), 1.0)   # Taschenwürfe
@@ -177,3 +181,42 @@ func _draw() -> void:
 	if leben < max_leben:
 		draw_rect(Rect2(-24, -46, 48, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-22, -44, 44.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("ff5a4d"))
+
+
+## Stein-Schleuder in der Bauphase (16.11., Paul: deutlicher): Was läge in Reichweite? Gebaute Stellungen, Fabriken und
+## Batterien – und das Bauwerk, das gerade unter der Maus platziert wird. Die Oberfläche setzt dann ein „!“ über die Schleuder.
+func _pruefe_bedroht() -> void:
+	var weite: float = Werte.SCHLEUDER["reichweite"] * Werte.ZELLE
+	bedroht = []
+	for z: Vector2i in karte.feld:
+		var typ: int = karte.feld[z]
+		var ziel: bool = typ == Karte.FABRIK or typ == Karte.BATTERIE or (typ == Karte.WALL and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG)
+		if ziel and position.distance_to(karte.mitte(z)) <= weite and not karte.in_kuppel(karte.mitte(z)):
+			bedroht.append(z)
+	bedroht_vorschau = false
+	var w: int = spiel.werkzeug
+	if w == Karte.STELLUNG or w == Karte.FABRIK or w == Karte.BATTERIE:
+		var m: Vector2i = karte.zelle_bei(spiel.maus_welt())
+		var p := karte.mitte(m)
+		bedroht_vorschau = position.distance_to(p) <= weite and not karte.in_kuppel(p) and karte.in_karte(m)
+
+
+## Reichweite der Stein-Schleuder: getönte Fläche, kräftiger pulsierender Rand, wandernde Striche; was darin steht, ist
+## kupfern umrandet. Liegt das Bauwerk unter der Maus in Reichweite, leuchtet alles auf.
+func _male_reichweite(farbe: Color) -> void:
+	var r: float = Werte.SCHLEUDER["reichweite"] * Werte.ZELLE
+	var warn := bedroht_vorschau
+	var puls := 0.5 + 0.5 * sin(_zeit * (7.0 if warn else 3.0))
+	var f := Color(1.0, 0.45, 0.25) if warn else farbe
+	draw_circle(Vector2.ZERO, r, Color(f, (0.20 if warn else 0.11) + 0.05 * puls))
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 128, Color(0, 0, 0, 0.45), 16.0)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 128, Color(f, 0.75 + 0.25 * puls), 9.0)
+	draw_arc(Vector2.ZERO, r - 7.0, 0.0, TAU, 128, Color(1, 1, 1, 0.25 + 0.2 * puls), 2.0)
+	for i in 24:
+		var w := TAU * i / 24.0 + _zeit * 0.25
+		draw_arc(Vector2.ZERO, r + 16.0, w, w + 0.12, 4, Color(f, 0.8), 7.0)
+	for z: Vector2i in bedroht:
+		var m := karte.mitte(z) - position
+		var rr := Rect2(m - Vector2(Werte.ZELLE, Werte.ZELLE) * 0.46, Vector2(Werte.ZELLE, Werte.ZELLE) * 0.92)
+		draw_rect(rr, Color(f, 0.25 + 0.15 * puls))
+		draw_rect(rr, Color(f, 1.0), false, 6.0)
