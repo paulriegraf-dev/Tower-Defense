@@ -173,6 +173,12 @@ func _ready() -> void:
 	_zuweis.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_zuweis.draw.connect(_male_zuweisung)
 	add_child(_zuweis)
+	# „!“ über einer Stein-Schleuder, die in der Bauphase etwas von dir in Reichweite hat (16.11.)
+	_warnung = Control.new()
+	_warnung.size = Vector2(1280, 720)
+	_warnung.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_warnung.draw.connect(_male_schleuder_warnung)
+	add_child(_warnung)
 	wurzel = Control.new()
 	wurzel.size = Vector2(BREITE, HOEHE)
 	wurzel.scale = Vector2(2, 2)
@@ -318,7 +324,7 @@ func aktualisiere(_delta: float) -> void:
 	_aktualisiere_oben_rechts()
 	_aktualisiere_tipps()
 	_ordne_an()
-	for f: Control in [_status, _welle, _konsole, _tipp, _tipp_oben, weg_grund, _zuweis]:
+	for f: Control in [_status, _welle, _konsole, _tipp, _tipp_oben, weg_grund, _zuweis, _warnung]:
 		f.queue_redraw()
 	for b: Control in [start, tempo, menue, _neu]:
 		b.queue_redraw()
@@ -903,6 +909,32 @@ func _unhandled_input(event: InputEvent) -> void:
 # ------------------------------------------------------------------ Zuweisungspfeil (HD-2D)
 ## Wie früher in 2D: kräftiger Pfeil mit Spitze, Einrastrahmen auf der Stellung. In HD-2D lag er auf dem Boden und
 ## verschwand unter den Mauern – jetzt im Bild, oben auf der Mauerkrone. Dazu laufen Lichtpunkte zum Ziel.
+var _warnung: Control
+
+func _male_schleuder_warnung() -> void:
+	if spiel == null or spiel.im_kampf():
+		return
+	var t := _jetzt()
+	for b: Zonenbau in spiel.zonenbauten:
+		if not is_instance_valid(b) or b.art != "schleuder" or (b.bedroht.is_empty() and not b.bedroht_vorschau):
+			continue
+		var warn: bool = b.bedroht_vorschau
+		var hoch := 74.0 if spiel.hd != null else 64.0
+		var m: Vector2 = spiel.welt_zu_bild(b.position) + Vector2(0, -hoch - 4.0 * absf(sin(t * (8.0 if warn else 3.0))))
+		var gr := 15.0 if warn else 12.0
+		var farbe := Color(1.0, 0.42, 0.2) if warn else Stil.KUPFER
+		# Warnschild: Raute mit dunklem Rand, darin ein „!“
+		var raute := PackedVector2Array([m + Vector2(0, -gr), m + Vector2(gr, 0), m + Vector2(0, gr), m + Vector2(-gr, 0)])
+		var rand := PackedVector2Array([m + Vector2(0, -gr - 3), m + Vector2(gr + 3, 0), m + Vector2(0, gr + 3), m + Vector2(-gr - 3, 0)])
+		_warnung.draw_colored_polygon(rand, Color(0.06, 0.05, 0.08, 0.85))
+		_warnung.draw_colored_polygon(raute, farbe)
+		_warnung.draw_rect(Rect2(m + Vector2(-2, -gr * 0.55), Vector2(4, gr * 0.7)), Color(0.08, 0.05, 0.04))
+		_warnung.draw_rect(Rect2(m + Vector2(-2, gr * 0.3), Vector2(4, 4)), Color(0.08, 0.05, 0.04))
+		if warn:
+			var txt := "Schleuder trifft hier!"
+			Stil.schreibe_mittig(_warnung, m + Vector2(0, -gr - 14.0), txt, Stil.NORMAL, Color.WHITE)
+
+
 func _male_zuweisung() -> void:
 	if spiel.hd == null:
 		return
