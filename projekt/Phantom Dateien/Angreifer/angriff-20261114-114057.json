@@ -1,0 +1,415 @@
+{
+	"art": "angriff",
+	"begonnen": "2026-11-14T11:40:57",
+	"ergebnis": {
+		"ausgang": "durchbruch",
+		"durchgaenge_runde_20": 0,
+		"geknackt": 1,
+		"leben_genommen": 15,
+		"punkte": 2750,
+		"runde": 10,
+		"wertung": 3006
+	},
+	"format": 1,
+	"gegen": "partie-20261113-222441.json",
+	"runden": [
+		{
+			"budget": 60,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 60,
+			"runde": 1,
+			"sekunden": 9.9,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 80,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 80,
+			"runde": 2,
+			"sekunden": 11.9,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 135,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 3,
+			"punkte": 135,
+			"runde": 3,
+			"sekunden": 24.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 190,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 190,
+			"runde": 4,
+			"sekunden": 18.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"sprenger",
+						"fahne"
+					],
+					"weg": "w"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 210,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 210,
+			"runde": 5,
+			"sekunden": 42.2,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 270,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 270,
+			"runde": 6,
+			"sekunden": 38.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w"
+				}
+			]
+		},
+		{
+			"budget": 365,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 2,
+			"punkte": 365,
+			"runde": 7,
+			"sekunden": 41.5,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 385,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 5,
+			"punkte": 380,
+			"runde": 8,
+			"sekunden": 39.6,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 490,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 490,
+			"runde": 9,
+			"sekunden": 54.2,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch",
+						"hund",
+						"hund",
+						"hund",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 570,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": true,
+			"leben_genommen": 1,
+			"punkte": 570,
+			"runde": 10,
+			"sekunden": 29.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"rauch",
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "w"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"fahne",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"sphaere",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		}
+	],
+	"spieler": "Paul"
+}

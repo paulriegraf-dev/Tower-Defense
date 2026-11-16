@@ -1,5 +1,5 @@
 extends SceneTree
-## Lässt die Formationen aus werkzeuge/plaene.gd gegen die 15 Runden laufen und schreibt je Lauf eine JSON-Zeile.
+## Lässt die Formationen aus werkzeuge/plaene.gd gegen die 20 Runden laufen und schreibt je Lauf eine JSON-Zeile.
 ##
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/formtest.gd -- <Ausgabedatei> <frei|budget> <Läufe> [Plan ...]
 ##
@@ -102,6 +102,13 @@ func _baue_fabriken(hoechstens: int) -> void:
 		var typ: String = EINHEITEN[(offen["fabrik"] as Array).find(z) % EINHEITEN.size()]
 		spiel.fabriken[z]["typ"] = typ
 		spiel.karte.fabrik_typ[z] = typ
+		# Umgebungsvariable FORM_UPGRADES="scharfschuetze:laser,technogunner:minigun,...": Fabriken gleich auf Stufe 3 setzen
+		for paar in OS.get_environment("FORM_UPGRADES").split(",", false):
+			var teile := paar.split(":")
+			if teile.size() == 2 and teile[0] == typ:
+				spiel.fabriken[z]["stufe"] = 3
+				spiel.fabriken[z]["faehigkeit"] = teile[1]
+				spiel.karte.fabrik_stufe[z] = 3
 
 
 ## Baut fehlende Ausbauten dieser Art nach (auch solche, die mit ihrem Wall verloren gingen).
@@ -138,6 +145,32 @@ func _bauphase() -> void:
 	_baue_fabriken(5)
 	if frei:
 		spiel.budget = 100000
+	elif modus == "echt":
+		_werte_auf()
+
+
+## Modus "echt": wie budget, dazu fließt das Restbudget in Fabrik-Upgrades (Umgebungsvariable FORM_SATZ = A|B|C|N).
+const SAETZE := {
+	"A": {"scharfschuetze": "durchschuss", "technogunner": "bollwerk", "plasmawerfer": "abpraller"},
+	"B": {"scharfschuetze": "laser", "technogunner": "feuerteam", "plasmawerfer": "brandfeld"},
+	"C": {"scharfschuetze": "markierung", "technogunner": "minigun", "plasmawerfer": "plasmagel"},
+}
+
+
+func _werte_auf() -> void:
+	var satz: Dictionary = SAETZE.get(OS.get_environment("FORM_SATZ"), {})
+	if satz.is_empty():
+		return
+	var weiter := true
+	while weiter:
+		weiter = false
+		var zs: Array = spiel.fabriken.keys()
+		zs.sort_custom(func(a: Vector2i, b: Vector2i): return int(spiel.fabriken[a].get("stufe", 0)) < int(spiel.fabriken[b].get("stufe", 0)))
+		for z: Vector2i in zs:
+			var typ: String = spiel.fabriken[z]["typ"]
+			if satz.has(typ) and spiel.werte_auf(z, satz[typ]):
+				weiter = true
+				break
 
 
 func _zaehle() -> Dictionary:

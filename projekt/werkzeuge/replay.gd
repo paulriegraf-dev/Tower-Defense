@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/replay.gd -- <partie.json> [Anzahl Läufe] [frei]
 ## "frei" = unbegrenztes Budget (jeder aufgezeichnete Zug klappt, auch wenn das Geld diesmal nicht gereicht hätte).
 
-const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR}
+const TYPEN := {"wall": Karte.WALL, "fabrik": Karte.FABRIK, "stellung": Karte.STELLUNG, "turm": Karte.TURM, "batterie": Karte.BATTERIE, "tor": Karte.TOR, "panzer": Karte.PANZER, "spiegel": Karte.SPIEGEL, "magnet": Karte.MAGNET, "generator": Karte.GENERATOR, "kommandant": Karte.KOMMANDANT}
 
 var partie: Dictionary
 var laeufe := 5
@@ -60,6 +60,8 @@ func _process(delta: float) -> bool:
 		# erst jetzt ist das Spiel fertig aufgebaut
 		eingerichtet = true
 		spiel.setze_checkpoints(partie["checkpoints"])
+		var b: Array = partie.get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])   # alte Partien: Basis am festen Platz
+		spiel.setze_basis(Vector2i(int(b[0]), int(b[1])))
 	if spiel.phase == 0:      # Bauphase: Ergebnis der letzten Runde festhalten, Züge der nächsten ausführen
 		if runden_index > 0 and zeile.size() < runden_index:
 			_halte_fest("geschafft")
@@ -73,15 +75,30 @@ func _process(delta: float) -> bool:
 			var z := Vector2i(int(a["x"]), int(a["y"]))
 			match a["a"]:
 				"bau":
+					if a.has("rx"):
+						spiel._paar_richtung = maxi(0, spiel.PAAR_RICHTUNGEN.find(Vector2i(int(a["rx"]), int(a["ry"]))))
+					if a.has("px"):
+						# Batterie: die aufgezeichnete Lage der Pilotenfabrik einstellen
+						spiel._paar_richtung = maxi(0, spiel.PAAR_RICHTUNGEN.find(Vector2i(int(a["px"]), int(a["py"])) - z))
 					if not spiel.baue(z, TYPEN[a["typ"]], true):
 						gescheitert += 1
 				"abriss":
 					spiel.reisse_ab(z)
 				"einheit":
-					var n := 0
-					while spiel.fabriken.has(z) and spiel.fabriken[z]["typ"] != a["typ"] and n < 6:
-						spiel.wechsle_einheit(z)
-						n += 1
+					spiel.stelle_um(z, a["typ"])
+				"schild":
+					if not a.has("x2") or spiel.setze_schild(Vector2i(int(a["bx"]), int(a["by"])), z, Vector2i(int(a["x2"]), int(a["y2"]))) != "":
+						gescheitert += 1
+				"upgrade":
+					if not spiel.werte_auf(z, str(a.get("faehigkeit", ""))):
+						gescheitert += 1
+				"ziel":
+					spiel.setze_zielmodus(z, str(a["modus"]))
+				"klon":
+					spiel.stelle_klonmaschine(z)
+				"zuweisung":
+					spiel.schalte_zuweisung(z, Vector2i(int(a["sx"]), int(a["sy"])))
+		spiel.variante = int(runde.get("variante", spiel.variante))
 		runden_index += 1
 		leben_vorher = spiel.leben
 		runde_start = sim_zeit
