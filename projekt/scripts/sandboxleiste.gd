@@ -1,113 +1,143 @@
-extends PanelContainer
+extends Control
 ## Sandbox-Leiste (nur im Sandbox-Modus, nur in der Bauphase): Runde wählen, Gegner der nächsten Welle und
-## Truppen je Fabrik einstellen. Übergangswerkzeug zum Ausprobieren.
+## Truppen je Fabrik einstellen, Basis versetzen, Checkpoint-Route. 16.11.: im Stil der neuen Oberfläche
+## (Metall, VT323, kleine Gegnerbilder), gezeichnet im UI-Raster (zweifach skaliert). Umschalt + −/+ = 5er-Schritte.
+## Alte Fassung: _vor_sandbox/sandboxleiste.gd.
 
+const Stil := preload("res://scripts/ui/ui_stil.gd")
 const TYPEN := ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung", "schild", "sani", "schwarm"]
+const W := 150.0
+const ZEILE := 12.0
+const GOLD_HELL := Color("ffe9a8")
 
 var spiel: Node
-var _inhalt: VBoxContainer
-var _kopf: Button
-var _zahlen: Dictionary = {}    # Kennung -> Label
 var _offen := true
-var _basis_knoepfe: Dictionary = {}   # Art -> Button
-var _route: CheckButton
+var _maus := Vector2(-100, -100)
+var _knoepfe: Array = []        # [Rechteck, Aktion]
+var _figuren := {}
+var _route := true              # Checkpoint-Route ab Runde 1 (main.gd stellt sie beim Start der Sandbox an)
 
 
 func _ready() -> void:
+	scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var kasten := StyleBoxFlat.new()
-	kasten.bg_color = Color(0.1, 0.08, 0.14, 0.94)
-	kasten.border_color = Color("ffe9a8")
-	kasten.set_border_width_all(2)
-	kasten.set_content_margin_all(8)
-	add_theme_stylebox_override("panel", kasten)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 3)
-	add_child(box)
-	_kopf = Button.new()
-	_kopf.focus_mode = Control.FOCUS_NONE
-	_kopf.pressed.connect(func():
-		_offen = not _offen
-		_inhalt.visible = _offen
-		reset_size())
-	box.add_child(_kopf)
-	_inhalt = VBoxContainer.new()
-	_inhalt.add_theme_constant_override("separation", 2)
-	box.add_child(_inhalt)
-	_zeile("runde", "Runde", func(d: int): spiel.sandbox_springe(spiel.welle + d))
-	for typ: String in TYPEN:
-		_zeile(typ, Werte.GEGNER[typ]["name"], func(d: int): spiel.sandbox_aendere_gegner(typ, d))
-	_zeile("truppen", "Truppen je Fabrik", func(d: int): spiel.sandbox_truppen = clampi(spiel.sandbox_truppen + d, -2, 9))
-	# Basis versetzen (fester Platz, zufällig oder per Klick) und Checkpoint-Route ab Runde 1
-	var basis_text := Label.new()
-	basis_text.text = "Basis"
-	basis_text.add_theme_font_size_override("font_size", 13)
-	_inhalt.add_child(basis_text)
-	var basis_reihe := HBoxContainer.new()
-	for wahl: Array in [["fest", "fest"], ["rechts", "rechts"], ["ueberall", "überall"], ["klick", "setzen"]]:
-		var k := Button.new()
-		k.text = wahl[1]
-		k.focus_mode = Control.FOCUS_NONE
-		k.add_theme_font_size_override("font_size", 12)
-		k.tooltip_text = {"fest": "alter Platz rechts in der Mitte", "rechts": "zufällig im rechten Drittel", "ueberall": "zufällig, mindestens 8 Felder vom HQ des Gegners", "klick": "per Klick auf ein freies Feld"}[wahl[0]]
-		k.pressed.connect(func(): spiel.sandbox_basis(wahl[0]))
-		basis_reihe.add_child(k)
-		_basis_knoepfe[wahl[0]] = k
-	_inhalt.add_child(basis_reihe)
-	_route = CheckButton.new()
-	_route.text = "Checkpoint-Route ab Runde 1"
-	_route.focus_mode = Control.FOCUS_NONE
-	_route.add_theme_font_size_override("font_size", 12)
-	_route.button_pressed = true
-	_route.toggled.connect(func(an: bool): spiel.sandbox_cp_route(an))
-	_inhalt.add_child(_route)
-	var b := Button.new()
-	b.text = "Welle wie im Spiel"
-	b.focus_mode = Control.FOCUS_NONE
-	b.pressed.connect(func(): spiel.sandbox_gegner = {})
-	_inhalt.add_child(b)
-
-
-func _zeile(kennung: String, text: String, aendere: Callable) -> void:
-	var reihe := HBoxContainer.new()
-	var l := Label.new()
-	l.text = text
-	l.custom_minimum_size.x = 132
-	l.add_theme_font_size_override("font_size", 13)
-	reihe.add_child(l)
-	for d: int in [-1, 1]:
-		var b := Button.new()
-		b.text = "−" if d < 0 else "+"
-		b.custom_minimum_size = Vector2(26, 24)
-		b.focus_mode = Control.FOCUS_NONE
-		# Umschalt = 5er-Schritte
-		b.pressed.connect(func(): aendere.call(d * (5 if Input.is_key_pressed(KEY_SHIFT) else 1)))
-		reihe.add_child(b)
-		if d < 0:
-			var z := Label.new()
-			z.custom_minimum_size.x = 30
-			z.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			z.add_theme_font_size_override("font_size", 13)
-			reihe.add_child(z)
-			_zahlen[kennung] = z
-	_inhalt.add_child(reihe)
 
 
 func _process(_delta: float) -> void:
 	visible = spiel.sandbox and spiel.phase == 0
 	if not visible:
 		return
-	_kopf.text = "Sandbox %s" % ("▾" if _offen else "▸")
-	(_zahlen["runde"] as Label).text = str(spiel.welle)
+	_maus = get_local_mouse_position()
+	var h := 16.0 if not _offen else 16.0 + (TYPEN.size() + 2) * ZEILE + 60.0
+	size = Vector2(W, h)
+	position = Vector2((640.0 - 6.0 - W) * Stil.UI_SKALA, 32.0 * Stil.UI_SKALA)   # unter den Knöpfen oben rechts
+	queue_redraw()
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		for k: Array in _knoepfe:
+			if (k[0] as Rect2).has_point(event.position):
+				(k[1] as Callable).call()
+				accept_event()
+				return
+		accept_event()
+
+
+func _schritt(d: int) -> int:
+	return d * (5 if Input.is_key_pressed(KEY_SHIFT) else 1)
+
+
+func _draw() -> void:
+	_knoepfe = []
+	Stil.platte(self, Rect2(Vector2.ZERO, size), 4.0, Stil.METALL_DUNKEL, GOLD_HELL.darkened(0.25))
+	# Kopf: Titel, auf-/zuklappen
+	var kopf := Rect2(4, 3, W - 8.0, 11)
+	Stil.schreibe(self, Vector2(8, 8.5), "Sandbox", Stil.NORMAL, GOLD_HELL)
+	_dreieck(Vector2(W - 12.0, 8.5), _offen)
+	_knoepfe.append([kopf, func(): _offen = not _offen])
+	if not _offen:
+		return
+	var y := 18.0
 	var w: Dictionary = spiel.naechste_welle()
 	var anzahl := {}
 	for g: Dictionary in w["gruppen"]:
 		anzahl[g["typ"]] = g["anzahl"]
+	_zeile(y, "", "Runde", str(spiel.welle), false, func(d: int): spiel.sandbox_springe(spiel.welle + _schritt(d)))
+	y += ZEILE
+	self.draw_rect(Rect2(6, y + 1.0, W - 12.0, 1), Stil.RAHMEN)
+	y += 3.0
 	for typ: String in TYPEN:
-		var l: Label = _zahlen[typ]
-		l.text = str(int(anzahl.get(typ, 0)))
-		l.modulate = Color("ffe9a8") if spiel.sandbox_gegner.has(typ) else Color.WHITE
-	(_zahlen["truppen"] as Label).text = str(spiel.truppen_limit(Karte.KEINE))
-	for art: String in _basis_knoepfe:
-		(_basis_knoepfe[art] as Button).modulate = Color("ffe9a8") if spiel.basis_art == art else Color.WHITE
-	position = Vector2(1272.0 - size.x, Werte.KARTE_OBEN + 6.0)
+		_zeile(y, typ, Werte.GEGNER[typ]["name"], str(int(anzahl.get(typ, 0))), spiel.sandbox_gegner.has(typ), func(d: int): spiel.sandbox_aendere_gegner(typ, _schritt(d)))
+		y += ZEILE
+	self.draw_rect(Rect2(6, y + 1.0, W - 12.0, 1), Stil.RAHMEN)
+	y += 3.0
+	_zeile(y, "", "Truppen je Fabrik", str(spiel.truppen_limit(Karte.KEINE)), false, func(d: int): spiel.sandbox_truppen = clampi(spiel.sandbox_truppen + _schritt(d), -2, 9))
+	y += ZEILE + 3.0
+	# Basis
+	Stil.schreibe(self, Vector2(8, y + 5.0), "Basis", Stil.KLEIN, Stil.TEXT_BLASS)
+	y += 10.0
+	var x := 6.0
+	for wahl: Array in [["fest", "fest"], ["rechts", "rechts"], ["ueberall", "überall"], ["klick", "setzen"]]:
+		var bw := Stil.breite(wahl[1], Stil.KLEIN) + 6.0
+		var r := Rect2(x, y, bw, 10)
+		var an: bool = spiel.basis_art == wahl[0]
+		_chip(r, wahl[1], an)
+		_knoepfe.append([r, func(): spiel.sandbox_basis(wahl[0])])
+		x += bw + 3.0
+	y += 13.0
+	# Checkpoint-Route
+	var route := _route
+	var rr := Rect2(6, y, W - 12.0, 10)
+	_chip(rr, ("[x] " if route else "[ ] ") + "Checkpoint-Route ab Runde 1", route)
+	_knoepfe.append([rr, func():
+		_route = not _route
+		spiel.sandbox_cp_route(_route)])
+	y += 13.0
+	var wr := Rect2(6, y, W - 12.0, 11)
+	_chip(wr, "Welle wie im Spiel", spiel.sandbox_gegner.is_empty())
+	_knoepfe.append([wr, func(): spiel.sandbox_gegner = {}])
+
+
+func _zeile(y: float, typ: String, text: String, wert: String, geaendert: bool, aendere: Callable) -> void:
+	var x := 8.0
+	if typ != "":
+		_figur(typ, Vector2(x + 4.0, y + ZEILE - 1.0))
+		x += 11.0
+	Stil.schreibe(self, Vector2(x, y + ZEILE / 2.0), text, Stil.KLEIN, Stil.TEXT)
+	var minus := Rect2(W - 50.0, y + 1.0, 10, ZEILE - 2.0)
+	var plus := Rect2(W - 16.0, y + 1.0, 10, ZEILE - 2.0)
+	for k: Array in [[minus, "−", -1], [plus, "+", 1]]:
+		var r: Rect2 = k[0]
+		var drueber := r.has_point(_maus)
+		Stil.platte(self, r, 1.5, Stil.METALL_TIEF, Stil.LEUCHT if drueber else Stil.RAHMEN)
+		Stil.schreibe_mittig(self, r.get_center(), k[1], Stil.KLEIN, Stil.LEUCHT if drueber else Stil.TEXT)
+		_knoepfe.append([r, aendere.bind(k[2])])
+	Stil.schreibe_mittig(self, Vector2(W - 28.0, y + ZEILE / 2.0), wert, Stil.KLEIN, GOLD_HELL if geaendert else Stil.TEXT)
+
+
+func _chip(r: Rect2, text: String, an: bool) -> void:
+	var drueber := r.has_point(_maus)
+	Stil.platte(self, r, 1.5, Color(GOLD_HELL, 0.15) if an else Stil.METALL_TIEF, GOLD_HELL if an else (Stil.LEUCHT if drueber else Stil.RAHMEN))
+	Stil.schreibe(self, Vector2(r.position.x + 3.0, r.get_center().y), text, Stil.KLEIN, GOLD_HELL if an else Stil.TEXT)
+
+
+func _dreieck(m: Vector2, offen: bool) -> void:
+	var p := PackedVector2Array([m + Vector2(-3, -1.5), m + Vector2(3, -1.5), m + Vector2(0, 2)]) if offen else PackedVector2Array([m + Vector2(-1.5, -3), m + Vector2(2, 0), m + Vector2(-1.5, 3)])
+	draw_colored_polygon(p, GOLD_HELL)
+
+
+## Kleine Gegnerfigur (Standbild), Füße auf `fuss`, ca. 10 UI-Pixel hoch.
+func _figur(typ: String, fuss: Vector2) -> void:
+	if not _figuren.has(typ):
+		var g := Werte.grafik_daten(Werte.GEGNER[typ])
+		_figuren[typ] = {"tex": load(str(g["blatt"])), "zelle": float(g["zelle"])}
+	var f: Dictionary = _figuren[typ]
+	var z: float = f["zelle"]
+	var sk := Stil.skala()
+	var g2 := Vector2(z, z) / sk   # 1 Bildpunkt = 1 Bildschirmpixel
+	var o := ((fuss - Vector2(g2.x / 2.0, g2.y * 0.9)) * sk).round() / sk
+	var ziel := Rect2(o, g2)
+	if typ in ["sprenger", "enterer"]:
+		ziel = Rect2(o, Vector2(-g2.x, g2.y))
+	draw_texture_rect_region(f["tex"], ziel, Rect2(0, 0, z, z))

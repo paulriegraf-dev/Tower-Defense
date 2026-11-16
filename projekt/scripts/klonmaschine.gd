@@ -28,17 +28,18 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	# kenntlicher Generator: dunkler Sockel, zwei Säulen, violetter Kern, pulsierender Ring
-	var m := Vector2.ZERO
+	if Werte.grafik_hd:
+		return   # HD-2D: Bodenplatte und Laserfeld stehen in 3D (hd_ansicht.gd)
+	# 16.11.: Bodenplatte mit lila Rand, aus der ein Laserfeld emporsteigt
 	var puls := 0.5 + 0.5 * sin(_zeit * 4.0)
-	draw_circle(m + Vector2(0, 8), 26.0, Color(0.79, 0.65, 1.0, 0.12 + 0.1 * puls))
-	draw_rect(Rect2(m + Vector2(-24, 2), Vector2(48, 20)), Color("2a2038"))
-	draw_rect(Rect2(m + Vector2(-22, 4), Vector2(44, 16)), Color("4a3b63"))
-	for x in [-20.0, 14.0]:
-		draw_rect(Rect2(m + Vector2(x, -18), Vector2(6, 24)), Color("2a2038"))
-		draw_rect(Rect2(m + Vector2(x + 1, -16), Vector2(4, 20)), Color("8c96a8"))
-	draw_circle(m + Vector2(0, -4), 9.0 + 2.0 * puls, Color(0.79, 0.65, 1.0, 0.85))
-	draw_circle(m + Vector2(0, -4), 4.0, Color.WHITE)
-	draw_line(m + Vector2(-14, -12), m + Vector2(-4, -6), Color(0.85, 0.75, 1.0, 0.7 * puls), 2.0)
-	draw_line(m + Vector2(14, -12), m + Vector2(4, -6), Color(0.85, 0.75, 1.0, 0.7 * puls), 2.0)
-	draw_arc(m + Vector2(0, 10), 30.0, 0.0, TAU, 40, Color(0.79, 0.65, 1.0, 0.5 + 0.4 * puls), 2.0)
+	draw_rect(Rect2(Vector2(-26, 10), Vector2(52, 16)), Color("2a2038"))
+	draw_rect(Rect2(Vector2(-24, 12), Vector2(48, 2)), Color("c9a6ff"))
+	draw_rect(Rect2(Vector2(-24, 22), Vector2(48, 2)), Color("c9a6ff"))
+	for i in 8:
+		var x := -21.0 + i * 6.0
+		var hoch := 40.0 + 8.0 * sin(_zeit * 3.0 + i)
+		for s in 10:
+			var a := (1.0 - s / 10.0) * (0.35 + 0.25 * puls)
+			draw_rect(Rect2(Vector2(x, 12 - (s + 1) * hoch / 10.0), Vector2(2, hoch / 10.0)), Color(0.79, 0.55, 1.0, a))
+	var band := fmod(_zeit * 0.6, 1.0)
+	draw_rect(Rect2(Vector2(-24, 12 - band * 44.0), Vector2(48, 2)), Color(0.9, 0.8, 1.0, 0.7 * (1.0 - band)))

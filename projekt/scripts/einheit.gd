@@ -35,6 +35,7 @@ var _laser_zeit := 0.0
 var _spiegel_punkt := Vector2.INF   # Schuss über einen Spiegel: dort knickt er ab (INF = direkt)
 var _ohne_ziel := 0.0              # Aufräumen: so lange (Sekunden) hat die Truppe in der Stellung kein Ziel mehr
 var _anlauf := 0.0                 # Minigun: 0..1
+var _bruestung: Sprite2D = null    # neue Grafik: Vorderkante der Stellung vor der Figur
 
 
 var ist_pilot := false
@@ -58,7 +59,7 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 	ist_pilot = typ == "pilot"
 	spiel = p_spiel
 	karte = p_karte
-	daten = Werte.einheit_daten(typ, stufe, p_faehigkeit)
+	daten = Werte.grafik_einheit(Werte.einheit_daten(typ, stufe, p_faehigkeit), typ, stufe)
 	faehigkeit = daten["faehigkeit"]
 	max_leben = daten["leben"]
 	leben = max_leben
@@ -68,6 +69,14 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 	_sprite = Figur.new()
 	add_child(_sprite)
 	_sprite.einrichten(daten)
+	if Werte.grafik_neu and Werte.NEU_HALTUNG.has(typ):
+		# Neue Grafik: in der Stellung kniend bzw. liegend, die Brüstung verdeckt die Beine
+		_sprite.setze_haltung(Werte.NEU_HALTUNG[typ])
+		_bruestung = Sprite2D.new()   # (in HD-2D unsichtbar: dort ist die Brüstung ein 3D-Block)
+		_bruestung.texture = load(Werte.NEU + "wand/bruestung.png")
+		_bruestung.position = Vector2(0, 14)
+		_bruestung.visible = false
+		add_child(_bruestung)
 
 	_suche_posten()
 
@@ -111,9 +120,23 @@ func _suche_posten() -> void:
 		bisher.verdraengt()
 
 
+## Drang in die Stellung dieser Truppe (Werte.STELLUNG_DRANG).
+func _drang() -> Dictionary:
+	var b := str(daten.get("blatt", ""))
+	for id: String in Werte.STELLUNG_DRANG:
+		if id in b:
+			return Werte.STELLUNG_DRANG[id]
+	return {}
+
+
 ## Führt der restliche Weg zur Stellung an Gegnern vorbei? Dann einen sicheren Umweg nehmen – oder warten.
+## 16.11.: je nach Truppe kleinerer Gefahrenkreis (Scharfschütze gar keiner); kurz vor der Stellung wird immer gegangen.
 func _pruefe_weg_zur_stellung() -> void:
-	var gefahr: Dictionary = spiel.gefahrenzellen()
+	var radius := float(_drang().get("gefahr", Werte.GEFAHR_RADIUS))
+	if radius <= 0.0 or (_punkte.size() <= Werte.STELLUNG_TROTZDEM_FELDER and not _wartet):
+		_wartet = false
+		return
+	var gefahr: Dictionary = spiel.gefahrenzellen(radius)
 	var bedroht := false
 	for i in _punkte.size() - 1:   # der letzte Punkt ist die Stellung selbst
 		if gefahr.has(karte.zelle_bei(_punkte[i])):
@@ -172,13 +195,17 @@ func in_batterie() -> bool:
 
 
 func _process(delta: float) -> void:
+	if _bruestung != null:
+		var oben := zustand == Zustand.AUF_POSTEN
+		_sprite.haltung(oben)
+		_bruestung.visible = oben and not Werte.grafik_hd
 	if not spiel.im_kampf():
 		return
 	_abkling -= delta
 	_treffer -= delta
 	if not _ausstehend.is_empty():
 		_ausstehende_treffer(delta)
-	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else Color.WHITE)
+	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else Color.WHITE)
 	if ausgewaehlt:
 		queue_redraw()
 	if sturm_bis > 0.0:
@@ -218,9 +245,12 @@ func _process(delta: float) -> void:
 			if _im_tor():
 				_gehe(delta)   # im Tor wird nicht angehalten: erst ganz hindurch
 				return
-			# Die Stellung ist ein Nebenauftrag: erst schießen, was in Reichweite und Sicht ist ...
-			if karte.ist_begehbar(karte.zelle_bei(position)):
-				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, daten["reichweite"] * Werte.ZELLE, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
+			# Unterwegs zur Stellung nur stehen bleiben und schießen, wenn ein Gegner wirklich nah ist (16.11., Paul: die
+			# Scharfschützen blieben mit ihrer großen Reichweite sonst unten stehen und kamen nie in die Stellung). Die
+			# letzten Felder bis zur Stellung werden immer gegangen.
+			if karte.ist_begehbar(karte.zelle_bei(position)) and _punkte.size() > Werte.STELLUNG_DURCHGEHEN_FELDER:
+				var nah_weite: float = minf(float(daten["reichweite"]), float(_drang().get("nahwehr", Werte.STELLUNG_NAHWEHR_FELDER))) * Werte.ZELLE
+				var gegner_nah: Gegner = spiel.gegner_in_reichweite(position, nah_weite, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
 				if gegner_nah != null:
 					_sprite.bewegt(false)
 					_feuere_auf(gegner_nah)
@@ -499,6 +529,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 	_abkling = pause
 	letztes_ziel = ziel
 	letzter_schuss = spiel.spielzeit()
+	Ton.am_ort(spiel, Ton.fuer_truppe(daten), position)
 	_sprite.angriff(pause)
 
 	if faehigkeit == "markierung" and oben and ziel is Gegner:
@@ -568,7 +599,14 @@ func _treffe(e: Dictionary) -> void:
 			spiel.lege_brand(ort, radius, schaden * Werte.BRANDFELD_SCHADEN)
 		return
 	if not lebt:
-		return   # Einzelschuss: Ziel ist schon gefallen, der Schuss geht ins Leere
+		# Ziel ist schon gefallen: wie bei Brakk aufs nächste Ziel in Reichweite umschwenken (sonst ginge der Schuss ins Leere)
+		var oben := zustand == Zustand.AUF_POSTEN
+		ziel = spiel.gegner_in_reichweite(position, reichweite_jetzt() * Werte.ZELLE, not oben, posten_zelle if oben else Karte.KEINE, spiel.zielmodus(fabrik_zelle))
+		if ziel == null:
+			return
+		var m: Vector2 = e["muendung"]
+		_sprite.flip_h = ziel.position.x < position.x
+		e["muendung"] = position + Vector2(absf(m.x - position.x) * (-1 if _sprite.flip_h else 1), m.y - position.y)
 	spiel.schuss(e["muendung"], (ziel as Node2D).position + Vector2(0, 4), farbe)
 	ziel.call("nimm_schaden", schaden)
 
@@ -686,10 +724,10 @@ func _draw() -> void:
 			draw_rect(Rect2(links + i * 10.0 - 1.0, -57, 8, 8), Color(0.08, 0.06, 0.12, 0.9))
 			draw_rect(Rect2(links + i * 10.0, -56, 6, 6), farbe)
 		if faehigkeit != "":
-			draw_arc(Vector2(0, 14), 15.0, 0.0, TAU, 20, Color(farbe, 0.85), 2.0)
+			draw_arc(Vector2(0, 14), 13.0 if Werte.grafik_neu else 15.0, 0.0, TAU, 20, Color(farbe, 0.5 if Werte.grafik_neu else 0.85), 2.0)
 	if _rep_zeit > 0.0:
 		# Reparatur läuft: Fortschrittsring
 		draw_arc(Vector2(0, -30), 12.0, -PI / 2.0, -PI / 2.0 + TAU * clampf(_rep_zeit / Werte.REPARATUR_SEK, 0.0, 1.0), 20, Color("7fe0ff"), 4.0)
-	if leben < max_leben:
+	if leben < max_leben and not Werte.grafik_hd:   # HD-2D: Balken als 3D-Bild über der Figur (hd_ansicht.gd)
 		draw_rect(Rect2(-16, -46, 32, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-14, -44, 28.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("7fe0ff"))

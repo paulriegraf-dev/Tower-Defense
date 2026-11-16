@@ -15,6 +15,9 @@ var _ziel_ist_fabrik := false       # Sprenger ohne lohnenden Erdwall: sein Ziel
 var spiel: Node
 var karte: Karte
 var typ := ""
+## Sprenger und Myr-Drohne schauen in ihren Blättern nach links (alle anderen nach rechts): Spiegelung umdrehen (16.11.).
+const BLICKT_LINKS := ["sprenger", "enterer"]
+var _blickt_links := false
 var rolle := ""
 var daten: Dictionary
 var leben := 1.0
@@ -62,6 +65,7 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	spiel = p_spiel
 	karte = p_karte
 	typ = p_typ
+	_blickt_links = typ in BLICKT_LINKS
 	daten = Werte.GEGNER[typ]
 	rolle = daten["rolle"]
 	leben_faktor = p_leben_faktor
@@ -193,7 +197,7 @@ func _process(delta: float) -> void:
 		eingefroren -= delta
 		sproede -= delta
 		queue_redraw()
-	_sprite.modulate = Color(1, 0.55, 0.55) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 or eingefroren > 0.0 else Color.WHITE))
+	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 or eingefroren > 0.0 else Color.WHITE))
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
 
 	# Energieschild einer Batterie im Weg: stehen bleiben und draufschlagen, bis er bricht.
@@ -247,7 +251,7 @@ func _process(delta: float) -> void:
 		var opfer: Einheit = spiel.naechste_bodeneinheit(position, reichweite)
 		if opfer != null:
 			_sprite.bewegt(false)
-			_sprite.flip_h = opfer.position.x < position.x
+			_sprite.flip_h = (opfer.position.x < position.x) != _blickt_links
 			if _abkling <= 0.0:
 				_abkling = daten["abklingzeit"]
 				_sprite.angriff(daten["abklingzeit"])
@@ -276,7 +280,7 @@ func _process(delta: float) -> void:
 	var naechstes := _weg[_index]
 	if not karte.ist_frei(naechstes):
 		var eigenes := karte.mitte(_weg[_index - 1]) + _versatz
-		_sprite.flip_h = naechstes.x < _weg[_index - 1].x
+		_sprite.flip_h = (naechstes.x < _weg[_index - 1].x) != _blickt_links
 		if not _angekommen(eigenes):
 			_sprite.bewegt(true)
 			position = position.move_toward(eigenes, tempo() * Werte.ZELLE * delta)
@@ -309,7 +313,7 @@ func _angekommen(punkt: Vector2) -> bool:
 func _laufe_zu(punkt: Vector2, delta: float) -> void:
 	_sprite.bewegt(true)
 	if absf(punkt.x - position.x) > 1.0:
-		_sprite.flip_h = punkt.x < position.x
+		_sprite.flip_h = (punkt.x < position.x) != _blickt_links
 	if position.distance_to(punkt) > 0.5:
 		blick = (punkt - position).normalized()
 	position = position.move_toward(punkt, tempo() * Werte.ZELLE * delta)
@@ -328,7 +332,8 @@ func _heile(reichweite: float) -> void:
 			geheilt = true
 	if geheilt:
 		_sprite.angriff(float(daten["angriff_dauer"]))
-		spiel.effekte.flaeche(position, reichweite, Color("5dfc8a"))
+		# neue Grafik: nur ein leichter grüner Ring (der große Heil-Effekt schwebte in HD-2D in der Luft und war zu laut)
+		spiel.effekte.flaeche(position, reichweite, Color("5dfc8a", 0.35) if Werte.grafik_neu else Color("5dfc8a"))
 
 
 # ------------------------------------------------- Sprenger und Belagerungsturm
@@ -370,7 +375,7 @@ func _zum_wall(delta: float) -> bool:
 		return true
 	# angekommen
 	_sprite.bewegt(false)
-	_sprite.flip_h = karte.mitte(_sonderziel).x < position.x
+	_sprite.flip_h = (karte.mitte(_sonderziel).x < position.x) != _blickt_links
 	if rolle == "sprenger":
 		# Zündzeit: Er steht still am Ziel und ist leicht zu treffen. Fällt er vorher, gibt es keine Sprengung.
 		_zuendung = maxf(_zuendung, 0.0) + delta
@@ -442,7 +447,7 @@ func _auf_dem_wall(delta: float, reichweite: float) -> void:
 	var ziel_punkt := karte.mitte(ziel_zelle) + Vector2(0, -12)
 	if position.distance_to(ziel_punkt) <= reichweite:
 		_sprite.bewegt(false)
-		_sprite.flip_h = ziel_punkt.x < position.x
+		_sprite.flip_h = (ziel_punkt.x < position.x) != _blickt_links
 		if _abkling <= 0.0:
 			_abkling = daten["abklingzeit"]
 			_sprite.angriff(daten["abklingzeit"])
@@ -484,6 +489,17 @@ func _wirf_rauch(reichweite: float) -> void:
 	spiel.lege_rauch(position, punkt)
 
 
+## Nach dem Wurf über die Mauer: geduckt landen und aufrichten (nur Optik, 16.11.).
+func aufrappeln() -> void:
+	if _sprite == null:
+		return
+	var grund := _sprite.scale
+	_sprite.scale = grund * Vector2(1.3, 0.6)
+	var tw := create_tween()
+	tw.tween_property(_sprite, "scale", grund * Vector2(0.9, 1.12), 0.14)
+	tw.tween_property(_sprite, "scale", grund, 0.16)
+
+
 func nimm_schaden(menge: float) -> void:
 	if _tot:
 		return
@@ -503,6 +519,8 @@ func nimm_schaden(menge: float) -> void:
 	spiel.zaehle_schaden(wirksam, leben <= 0.0)   # für die Schadensliste [Tab]
 	if leben <= 0.0:
 		_tot = true
+		if Werte.grafik_neu:
+			spiel.effekte.fx("g_tod", position + Vector2(0, 22), 1.0 if rolle == "belagerung" else 0.6)
 		if rolle == "schwarm":
 			spiel.zerfall(self)
 		spiel.gegner_besiegt(self)
@@ -516,12 +534,15 @@ func sprengt() -> Vector2i:
 func _draw() -> void:
 	if markiert > 0.0:
 		# Zielmarkierung: Fadenkreuz
-		var rot := Color(1.0, 0.25, 0.3, 0.9)
-		draw_arc(Vector2(0, -8), 20.0, 0.0, TAU, 24, rot, 2.0)
-		draw_line(Vector2(-26, -8), Vector2(-12, -8), rot, 2.0)
-		draw_line(Vector2(12, -8), Vector2(26, -8), rot, 2.0)
-		draw_line(Vector2(0, -34), Vector2(0, -20), rot, 2.0)
-		draw_line(Vector2(0, 4), Vector2(0, 18), rot, 2.0)
+		# neue Grafik: kleiner und leiser (Lesbarkeit), am Fuß der Figur
+		var k := 0.65 if Werte.grafik_neu else 1.0
+		var m := Vector2(0, 6) if Werte.grafik_neu else Vector2(0, -8)
+		var rot := Color(1.0, 0.25, 0.3, 0.6 if Werte.grafik_neu else 0.9)
+		draw_arc(m, 20.0 * k, 0.0, TAU, 24, rot, 2.0)
+		draw_line(m + Vector2(-26, 0) * k, m + Vector2(-12, 0) * k, rot, 2.0)
+		draw_line(m + Vector2(12, 0) * k, m + Vector2(26, 0) * k, rot, 2.0)
+		draw_line(m + Vector2(0, -26) * k, m + Vector2(0, -12) * k, rot, 2.0)
+		draw_line(m + Vector2(0, 12) * k, m + Vector2(0, 26) * k, rot, 2.0)
 	if rolle == "sprenger":
 		# Warnzeichen über dem Kopf, blinkend
 		var an := fmod(Time.get_ticks_msec() / 1000.0, 0.6) < 0.4
@@ -537,7 +558,7 @@ func _draw() -> void:
 	if rolle == "fahne":
 		draw_rect(Rect2(-2, -84, 4, 40), Color("3a2a1c"))
 		draw_rect(Rect2(2, -84, 22, 14), Color("ff5ad0"))
-	if leben < max_leben:
+	if leben < max_leben and not Werte.grafik_hd:   # HD-2D: Balken als 3D-Bild über der Figur (hd_ansicht.gd)
 		var y := -92.0 if rolle == "fahne" else (-66.0 if rolle == "belagerung" else -46.0)
 		draw_rect(Rect2(-16, y, 32, 6), Color(0, 0, 0, 0.7))
 		draw_rect(Rect2(-14, y + 2, 28.0 * clampf(leben / max_leben, 0.0, 1.0), 2), Color("ff5a4d"))

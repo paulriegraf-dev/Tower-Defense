@@ -252,3 +252,70 @@ Werkzeuge: `werkzeuge/angrifftest.gd` (greift ein Phantom ohne Bild mit den entw
 - **Schadensliste [Tab]:** Solange Tab gedrückt ist, zeigt eine Liste, wer in dieser Runde wie viel Schaden gemacht hat – je Fabrik (alle ihre Truppen, mit Stufe und Fähigkeit), je Turmart und je Batterie, mit Kills und Balken im Verhältnis. Ein Klick auf eine Fabrik zeigt ihren Gesamtschaden und ihre Kills über die ganze Partie.
 - **Schildgenerator (Großbau, 150):** Ein Hof sind 2–12 freie Felder, rundum von Erdwällen eingeschlossen (ein Tor zählt mit). Mit [4] auf ein freies Hof-Feld gesetzt entsteht ein Generator (1 Feld). Seine Kuppel deckt den ganzen Ring plus ein Feld: Truppen darunter nehmen 40 % weniger Schaden, Steine der Schleuder prallen ab, Schleudern und Rauchwerfer zielen auf Truppen außerhalb. Bricht der Ring auf, erlischt die Kuppel. Pro Hof ein Generator. Ersetzt den Schildturm.
 - **Grund-Leben:** Ab Runde 6 hat jeder Gegner 10 Leben mehr, vor dem Rundenfaktor. Werte: `GEGNER_GRUND_LEBEN`, `GRUND_LEBEN_AB_RUNDE` in `werte.gd`.
+
+## Grafik: Klassisch / Neu (2D) / HD-2D (16.11.)
+
+Im Startmenü schaltet der Knopf **„Grafik: …“** zwischen drei Darstellungen um. Die Wahl wird in `user://einstellungen.cfg` gespeichert. Spielregeln und Werte sind in allen drei gleich, nur die Darstellung ändert sich.
+
+- **Klassisch:** die bisherige Grafik, unverändert.
+- **Neu (2D):** der Stil der HD-2D-Stilprobe, weiter von oben gesehen.
+  - Tech-Mauer statt Erdwall. Stellungen mit Plattform und Brüstung, die Truppen knien dort bzw. liegen (Scharfschütze).
+  - Türme als Bilder: Gefechtsturm mit 8 Richtungen und Schuss-Animation, Lanzen- und Gefechtsturm mit eigenem Bild für Stufe 2 und 3.
+  - Upgrade-Figuren (Stufe 2 und Stufe-3-Fähigkeiten) mit eigener Schuss-Animation; Laufen wie Stufe 1.
+  - Batterie mit Bild je Ausbaustufe.
+  - Gegner auf die Pixelgröße der Truppen umgerechnet.
+  - PixelFX-Effekte: Mündungsfeuer, Geschosse, Treffer, Laser der Battlesphäre, Rauch, Sprengung, Heilpuls, Todeseffekte für Gegner und eigene Truppen.
+- **HD-2D:** dieselben Bilder in einer 3D-Ansicht wie die Stilprobe. Mauern und Fabriken sind Blöcke, Figuren und Türme stehen als Sprites in 3D, Umrisse scheinen durch Wände, und ein Turm wird halb durchsichtig, wenn eine Figur dahinter steht.
+  - **Mausrad:** zoomen, die Neigung folgt dem Zoom (kein Einrasten mehr – der Zoom bleibt, wo man ihn hinstellt).
+  - **Linke Maustaste ziehen** (ohne Bauwerkzeug), **mittlere Maustaste ziehen, [A]/[D]/[W]/[S] oder Pfeiltasten:** schwenken.
+  - **Zoom-Regler** rechts am Rand (+/−), gilt auch für die 2D-Kamera.
+  - **[V]:** Draufsicht an/aus. **[M]:** Mauerstil (Tech-Mauer, Energiewand, Blöcke; auch im Startmenü).
+  - **Pos1:** ganze Karte. Weiter heraus als „ganze Karte“ geht es nicht, damit ringsum immer Landschaft im Bild ist.
+  - Bauen, Anklicken und alle Tasten wie gewohnt.
+  - Tore mit zwei Pfeilern und Energiebalken.
+  - Das Spielfeld liegt auf Bodenhöhe in einer gemalten Landschaft (keine Plattform): das Gras läuft mit denselben Flecken weiter, nach außen trockenes Gras, Erde und Bewuchs, links setzt sich die Brut-Zone fort, dahinter Wald. Weiche Schatten unter Figuren und Türmen, Vignette und eine leichte Unschärfe oben und unten (Miniatur-Look).
+  - Gelände mit Höhen: hinten steigt ein Hang an (mit Gebirge dahinter), an den Seiten Hügel. Vorn endet das Spielfeld an einer Kante mit Felsbrocken, dahinter fällt eine Erdböschung zu einer tieferen Wiese mit Baumkronen ab.
+  - Kulisse (`assets/neu/kulisse/`): links das Myr-Brutgebiet in Kupfer (Brutstöcke, Eiergelege, kupferner Felsboden, läuft nach etwa 4 Feldern aus), rechts der Technoclan-Außenposten (zerstörte Depots, Radarmasten), Wracks.
+  - Fabriken in HD so groß wie ein Mauerblock (Maßstab 1,4). Umrisse (Gegner rot, Truppen lila) nur noch als dünner Rand mit Hauch Füllung und nur, wenn ein Erdwall direkt davor steht ([U] schaltet sie ganz aus); Bäume und Kulisse lösen keinen Umriss aus. Treffer färben Figuren in der neuen Grafik nur noch leicht.
+- **Vollbild:** Das Spiel startet im Vollbild (Projekteinstellung). [F11] oder Startmenü „Vollbild“ schaltet um, wird gespeichert. Das Bild skaliert mit (16:9 bleibt). Im Godot-Editor läuft das Spiel standardmäßig eingebettet im Reiter „Spiel“ – dort gibt es kein Vollbild; im Menü ⋮ des Reiters „Spiel bei nächstem Start einbetten“ ausschalten, dann öffnet F5 ein eigenes Vollbild-Fenster.
+- **Myriaden in Kupfer (neue Grafik):** Zone, Grenzlinie, eingenommene Checkpoint-Fahnen und Brut-Boden kupfern; in HD-2D stehen links kupferne Schwarmbauten und Drohnenkapseln (Maschinen, keine organische Brut).
+- **Zuschauer (HD-2D):** 20 Helden aus „Pauls Mini-Adventure“ (Neue Grafik, `assets/neu/zuschauer/`) stehen vorn auf der Böschung und hinten am Hang, schauen sich um und jubeln. Anklicken = tanzen (Tanzschritte wie im RPG), beim Tanzen nochmal anklicken = Angriffs-Pose. Große Kulissenbauten stehen auf ebenem Grund.
+- **Basis 3×2 (16.11.):** Die eigene Basis belegt 3 Felder breit und 2 tief (`karte.ist_basis`, `Karte.basis_felder`). `karte.basis` ist das untere mittlere Feld – dorthin laufen die Gegner, die übrigen Felder sind begehbar, aber nicht bebaubar. Zufällige Plätze prüfen alle 6 Felder; alte Partien mit Basis am Rand rücken nach innen (`main.basis_einpassen`). Fester Platz jetzt (18, 5) bzw. (26, 7) auf der großen Karte.
+- **HQs (16.11.):** Myr-HQ als kupferne Maschinen-Kuppel (`gebaeude/myr_hq_gross.png`), eigenes HQ als Technoclan-Festung (`gebaeude/basis_gross.png`), je 128 px; in 2D Maßstab 1, in HD-2D 1,7.
+- **Lesbarkeit:** kürzere Lebensbalken (16 bzw. 26 Pixel), Schatten mit einem Hauch Teamfarbe (Gegner warm, Truppen blau), leisere Zielmarkierung und Fähigkeitsringe.
+  - Bauvorschau als richtige Form: Mauer als durchsichtiger Block, Fabrik, Turm, Batterie (mit Pilotenfabrik) und Schildgenerator halb durchsichtig an ihrem Platz; rot = geht dort nicht.
+- **Brut-Boden (neue Grafik):** Gehört ein Checkpoint zu Rundenbeginn (Wellenstart oder Beginn der Bauphase) dem Gegner, breitet sich um ihn Myr-Boden aus. Während der Welle ändert er sich nicht.
+
+Gebäude der neuen Grafik (`assets/neu/gebaeude/`): Hauptquartier, Checkpoint-Fahne (pink = vom Gegner eingenommen), Myr-HQ und die Fabriken.
+Die Grundfabrik ist ein Bau mit zwei Flügeln; spezialisiert bekommt sie die Flügel ihrer Truppe (Gunner: Munitionslager, Scharfschütze: schlanke Türme mit Zielfernrohr, Plasma: grüne Tanks). Die Pilotenfabrik ist eine eigene Kaserne mit Pilotenabzeichen.
+Upgrade-Truppen laufen mit ihrem Upgrade-Aussehen zur Stellung und knien bzw. liegen erst dort.
+Der Boden ist aus nahtlosen Grasfliesen mit großen hellen und dunklen Flecken, damit er nicht nach Kacheln aussieht.
+
+## Kommandant Brakk: anklicken zum Steuern (16.11.)
+
+Brakk handelt selbst: Im Kampf geht er auf Gegner in der Nähe seines Postens los (3,5 Felder), danach kehrt er zurück.
+**Anklicken** = steuern: [WASD] bewegen (sein Posten wandert mit), [Q] Sammeln/Losschlagen, [E] Klettern, [R] Klonmaschine.
+**[Esc]** oder Klick ins Leere lässt ihn los. Solange er nicht angeklickt ist, schwenken [A]/[D]/[W]/[S] die Kamera.
+
+## Kartengröße: Normal / Groß (16.11.)
+
+Der Knopf **„Karte: …“** im Startmenü wechselt zwischen **Normal (20×10)** und **Groß (28×14)**; die Wahl wird gespeichert, das Menü baut die Karte neu auf.
+Auf der großen Karte liegt alles an denselben Stellen, nur gestreckt (HQ in der Mitte der Zone, Checkpoint-Bereiche und Basis weiter rechts).
+In den 2D-Ansichten schwenkt dann eine Kamera: linke Maustaste ziehen (ohne Bauwerkzeug), mittlere Maustaste oder Pfeiltasten; Mausrad wechselt zwischen ganzer Karte und Pixel 1:1; Pos1 = ganze Karte.
+Die Spielwerte sind auf „Normal“ abgestimmt. Verteidigungs-Phantome werden nur auf der Kartengröße gezogen, auf der sie gebaut wurden. Für Testläufe: Umgebungsvariable `TD_KARTE=normal|gross`.
+
+Dateien:
+- `assets/neu/`: die neuen Bilder.
+- `scripts/turmbild.gd`: Türme als Bild.
+- `scripts/hd_ansicht.gd`: 3D-Ansicht.
+- `scripts/kamera_2d.gd`: Kamera der 2D-Ansichten für die große Karte.
+- Umschaltung und Zuordnung der Blätter in `werte.gd` (Abschnitt „Grafik“).
+- Effekte in `effekte.gd` (`fx`, `geschoss`, `neu_schuss`).
+- Sicherungen der vorherigen Skripte: `_vor_grafik_neu/`.
+
+## Enge Gänge (16.11.)
+
+Einheiten sind enger gepackt, damit in den schmalen Gängen viele in ein Feld passen und sich darin verteilen:
+Radius klein 0,13 (vorher 0,2), Schildträger/Sphäre 0,2 (0,28), Schwarmgeist 0,28 (0,38), Belagerungsturm 0,32 (0,42), eigene Bodentruppen 0,15 (0,2), Versatz der Zielpunkte 0,33 (0,24) – `werte.gd`, Abschnitt „Platz auf dem Feld“.
+Das macht Flächenschaden etwas stärker (mehr Gegner im Umkreis). In HD-2D sind Gegner (außer Belagerungsturm und Schwarmgeist) 15 % kleiner gezeichnet.
+Der Sanitäter zeigt in der neuen Grafik nur noch einen leichten grünen Ring.

@@ -31,6 +31,16 @@ func start(p_spiel: Node, p_karte: Karte, p_art: String, p_zelle: Vector2i) -> v
 	match art:
 		"hq":
 			max_leben = Werte.HQ_LEBEN
+			if Werte.grafik_neu:
+				# Neue Grafik: Myr-Bau als Bild (Pixel ×2 wie die Truppen)
+				var bild := Sprite2D.new()
+				# 16.11.: kupferne Maschinen-Kuppel (128 px) im Stil der Schwarmbauten; in HD-2D größer
+				bild.texture = load(Werte.NEU + "gebaeude/myr_hq_gross.png")
+				bild.centered = false
+				bild.offset = -Vector2(58, 108)
+				bild.scale = Vector2(1.7, 1.7) if Werte.grafik_hd else Vector2(1.0, 1.0)
+				bild.position = Vector2(0, 26)
+				add_child(bild)
 		"laser":
 			max_leben = Werte.LASER["leben"]
 			_figur(Werte.LASER)
@@ -53,7 +63,7 @@ func _figur(daten: Dictionary) -> void:
 func _process(delta: float) -> void:
 	_zeit += delta
 	_treffer -= delta
-	modulate = Color(1, 0.6, 0.6) if _treffer > 0.0 else Color.WHITE
+	modulate = (Color(1, 0.88, 0.86) if Werte.grafik_neu else Color(1, 0.6, 0.6)) if _treffer > 0.0 else Color.WHITE
 	queue_redraw()
 	if not spiel.im_kampf():
 		return
@@ -81,7 +91,8 @@ func _process(delta: float) -> void:
 				_abkling = 0.5
 				return
 			_abkling = Werte.SCHLEUDER["abklingzeit"]
-			_sprite.angriff(Werte.SCHLEUDER["angriff_dauer"])
+			_sprite.angriff(Werte.SCHLEUDER_ABWURF * 2.0)   # Arm holt aus und schlägt vor; der Stein löst sich zur Hälfte
+			get_tree().create_timer(Werte.SCHLEUDER_ABWURF).timeout.connect(ruck)
 			spiel.wurf(self, ziel)
 		"laser":
 			var opfer: Einheit = spiel.laserziel(position, Werte.LASER["reichweite"] * Werte.ZELLE)
@@ -114,6 +125,18 @@ func hat_geworfen() -> void:
 	_sprite.angriff(Werte.SCHLEUDER["angriff_dauer"])
 
 
+## Kurzer Ruck beim Abwurf: die Schleuder staucht sich und federt zurück (16.11.).
+func ruck() -> void:
+	if not is_instance_valid(_sprite):
+		return
+	var grund: Vector2 = _sprite.get_meta("grund_massstab", _sprite.scale)
+	_sprite.set_meta("grund_massstab", grund)
+	var tw := create_tween()
+	_sprite.scale = grund * Vector2(1.12, 0.86)
+	tw.tween_property(_sprite, "scale", grund * Vector2(0.95, 1.06), 0.08)
+	tw.tween_property(_sprite, "scale", grund, 0.12)
+
+
 func nimm_schaden(menge: float) -> void:
 	if not spiel.im_endkampf() or leben <= 0.0:
 		return
@@ -125,8 +148,12 @@ func nimm_schaden(menge: float) -> void:
 
 
 func _draw() -> void:
-	var pink := Color("ff5ad0")
-	if art == "hq":
+	var pink := Karte.feind_farbe()   # neue Grafik: kupfern
+	if art == "hq" and Werte.grafik_neu:
+		if spiel.im_endkampf():
+			var puls_n := 0.5 + 0.5 * sin(_zeit * 4.0)
+			draw_rect(Rect2(-32, -34, 64, 66), Color(pink, 0.3 + 0.6 * puls_n), false, 4.0)
+	elif art == "hq":
 		# Messingkuppel der Myriaden
 		draw_rect(Rect2(-30, -22, 60, 52), Color("3a2a1c"))
 		draw_rect(Rect2(-26, -18, 52, 44), Color("8a6a35"))

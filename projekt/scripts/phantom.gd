@@ -118,7 +118,7 @@ static func wertung(runden: Array) -> Dictionary:
 
 
 ## Alle Phantome einer Art ("verteidigung" oder "angriff"), neueste zuerst: [{"pfad", "titel"}].
-static func liste(art: String) -> Array:
+static func liste(art: String, alle_groessen: bool = false) -> Array:
 	var funde: Array = []
 	var gesehen := {}
 	for o: String in ordner(art):
@@ -131,6 +131,10 @@ static func liste(art: String) -> Array:
 			var daten := lade(o + "/" + datei)
 			if daten.is_empty() or str(daten.get("art", "")) != art:
 				continue
+			# Verteidigungs-Phantome sind ein Bau auf einer bestimmten Kartengröße: nur passende ziehen
+			var spalten := int((daten.get("karte", {}) as Dictionary).get("spalten", 20))
+			if art == "verteidigung" and spalten != Werte.SPALTEN and not alle_groessen:
+				continue
 			gesehen[datei] = true
 			var e: Dictionary = daten.get("ergebnis", {})
 			var titel := "%s · %s" % [str(daten.get("spieler", "?")), str(daten.get("begonnen", datei)).replace("T", " ").left(16)]
@@ -138,7 +142,7 @@ static func liste(art: String) -> Array:
 				titel += " · %s in Runde %d, %d Leben" % [str(e.get("ausgang", "?")), int(e.get("runde", 0)), int(e.get("leben", 0))]
 			else:
 				titel += " · %d Leben genommen" % int(e.get("leben_genommen", 0))
-			funde.append({"pfad": o + "/" + datei, "titel": titel, "datei": datei, "begonnen": str(daten.get("begonnen", ""))})
+			funde.append({"pfad": o + "/" + datei, "titel": titel, "datei": datei, "begonnen": str(daten.get("begonnen", "")), "spalten": spalten})
 	funde.sort_custom(func(a, b): return str(a["begonnen"]) > str(b["begonnen"]))
 	return funde
 
@@ -169,7 +173,7 @@ static func speichere(art: String, daten: Dictionary) -> String:
 ## Dauerschaden steckt nicht drin – der Bau steht jede Runde so, wie er geplant war.
 static func aus_partie(partie: Dictionary, quelle: String = "") -> Dictionary:
 	var zellen := {}     # Vector2i -> {"typ", ...}
-	var schilde := {}    # Batterie -> Schildfeld
+	var schilde := {}    # Batterie -> [Erdwall, Erdwall]
 	var runden: Array = []
 	for r: Dictionary in partie.get("runden", []):
 		if not r.has("ergebnis"):
@@ -243,7 +247,8 @@ static func _wende_an(zellen: Dictionary, schilde: Dictionary, a: Dictionary) ->
 				if str(a.get("faehigkeit", "")) != "":
 					zellen[z]["faehigkeit"] = str(a["faehigkeit"])
 		"schild":
-			schilde[Vector2i(int(a["bx"]), int(a["by"]))] = z
+			if a.has("x2"):   # 16.11.: Schild von Erdwall zu Erdwall
+				schilde[Vector2i(int(a["bx"]), int(a["by"]))] = [z, Vector2i(int(a["x2"]), int(a["y2"]))]
 		"ziel":
 			if zellen.has(z):
 				zellen[z]["ziel"] = str(a["modus"])
@@ -288,7 +293,7 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 				var pz: Vector2i = c["partner"]
 				var b := {"x": z.x, "y": z.y, "px": pz.x, "py": pz.y, "stufe": int(zellen[pz]["stufe"]) if zellen.has(pz) else 0}
 				if schilde.has(z):
-					b["schild"] = [schilde[z].x, schilde[z].y]
+					b["schild"] = [schilde[z][0].x, schilde[z][0].y, schilde[z][1].x, schilde[z][1].y]
 				batterien.append(b)
 	return {"waelle": waelle, "fabriken": fabriken, "batterien": batterien, "generatoren": generatoren}
 

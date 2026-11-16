@@ -14,9 +14,13 @@ var _zeit := 0.0
 var _angriff_sek := 0.0            # > 0, solange die Angriffsanimation läuft
 var _angriff_dauer := 1.0
 var _angriff_basis := 1.0         # Dauer laut Blatt; jeder Angriff wird höchstens auf die Pause gekürzt
+var _normal := {}                  # neue Grafik: Blatt für Stand und Laufen ...
+var _haltung := {}                 # ... und die Stellungs-Haltung (kniend bzw. liegend)
+var _in_haltung := false
 
 
 func einrichten(daten: Dictionary) -> void:
+	daten = Werte.grafik_daten(daten)
 	texture = load(daten["blatt"])
 	_zelle = daten["zelle"]
 	_bilder = daten["bilder"]
@@ -27,6 +31,27 @@ func einrichten(daten: Dictionary) -> void:
 	offset = Vector2(-_zelle / 2.0, -_zelle)   # Fußpunkt = Position des Knotens
 	position = Vector2(0, 22)                  # Füße im unteren Teil des Felds
 	region_enabled = true
+	_zeige(0)
+	_normal = {"tex": texture, "zelle": _zelle, "bilder": _bilder, "y": position.y}
+
+
+## Neue Grafik: Blatt für die Stellungs-Haltung (Zeile 0/1 Warten, Zeile 2 Schuss mit 8 Bildern).
+func setze_haltung(h: Dictionary) -> void:
+	_haltung = {"tex": load(h["blatt"]), "zelle": 48, "bilder": [1, 1, 8], "y": float(h["y"])}
+
+
+## In der Stellung die Haltung zeigen, sonst das normale Blatt.
+func haltung(an: bool) -> void:
+	if an == _in_haltung or _haltung.is_empty():
+		return
+	_in_haltung = an
+	var h: Dictionary = _haltung if an else _normal
+	texture = h["tex"]
+	_zelle = h["zelle"]
+	_bilder = h["bilder"]
+	offset = Vector2(-_zelle / 2.0, -_zelle)
+	position.y = h["y"]
+	_zeit = 0.0
 	_zeige(0)
 
 
@@ -61,4 +86,5 @@ func _process(delta: float) -> void:
 
 
 func _zeige(bild: int) -> void:
+	bild = mini(bild, int(_bilder[_reihe]) - 1)
 	region_rect = Rect2(bild * _zelle, _reihe * _zelle, _zelle, _zelle)

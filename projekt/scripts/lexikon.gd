@@ -1,49 +1,53 @@
 class_name Lexikon
 extends Control
-## Übersicht [I]: Karten für Gegner, eigene Truppen und Bauten – was sie tun und was dagegen hilft.
-## Aufbau nach dem Muster von Bloons TD: Kartenraster, Reiter unten, Einzelheiten zur gewählten Karte rechts.
-## Zahlen kommen aus werte.gd und stimmen deshalb immer; die Texte stehen hier unten in _baue_daten().
+## Übersicht [I] (16.11.2026, neuer Stil nach dem Vorbild von Bloons TD 6): Kartenraster links, Reiter unten
+## (Gegner, Truppen, Bauten, Regeln), rechts die Tafel zur gewählten Karte mit laufender Figur. Truppen, Türme und
+## Batterie haben einen anklickbaren Ausbaupfad: jede Stufe zeigt, wie die Einheit dann aussieht, was sie bewirkt,
+## was sie kostet, Stärken (grün) und Schwächen (rot). Zahlen kommen aus werte.gd und stimmen deshalb immer.
+## Gezeichnet im UI-Raster (640×360, zweifach skaliert) mit ui_stil.gd. Alte Fassung: _vor_uebersicht/lexikon.gd.
 
-const REITER := ["Gegner", "Truppen", "Bauten"]
-
-const DUNKEL := Color(0.04, 0.09, 0.16, 0.93)
-const KARTE_BLAU := Color("3d97dd")
-const KARTE_HELL := Color("58b2f2")
-const KARTE_KOPF := Color("2a78c2")
-const RAND := Color("17467e")
-const GOLD := Color("ffd34d")
-const UMRISS := Color("0f2e52")
-const TAFEL := Color("15395f")
-const TAFEL_RAND := Color("7cc8f5")
-const FELD := Color("0f2a47")
-const TEXT := Color("eef6ff")
-const TEXT_BLASS := Color("a9d4f7")
-const GUT := Color("b8ff7a")
-const SCHLECHT := Color("ffb09c")
-const TITEL := Color("ffe9a8")
-
-const RASTER := Vector2(40, 76)
-const KARTE := Vector2(140, 168)
-const SCHRITT := Vector2(150, 178)
+const Stil := preload("res://scripts/ui/ui_stil.gd")
+const REITER := ["Gegner", "Truppen", "Bauten", "Regeln"]
+const RAHMEN_R := Rect2(8, 8, 624, 344)
+const GITTER := Rect2(14, 36, 312, 282)
 const SPALTEN := 4
-const TAFEL_RECHT := Rect2(652, 76, 588, 628)
-const ZURUECK := Rect2(40, 14, 46, 46)
+const TAFEL_R := Rect2(332, 36, 294, 310)
+const SCHLIESSEN := Rect2(604, 13, 20, 17)
+const KNOTEN := 34.0          # Kantenlänge eines Knotens im Ausbaupfad
+const KNOTEN_SCHRITT := 44.0
+const GUT := Color("8dff8a")
+const SCHLECHT := Color("ff8a7a")
 
 var _reiter := 0
-var _wahl: Array[int] = [0, 0, 0]
+var _wahl: Array[int] = [0, 0, 0, 0]
+var _knoten := {}             # Name des Eintrags -> gewählter Knoten im Ausbaupfad
 var _maus := Vector2(-100, -100)
 var _zeit := 0.0
-var _daten: Array = []            # je Reiter eine Liste von Einträgen
-var _blaetter := {}
-var _schrift: Font
-var _y := 0.0                     # Schreibmarke in der Tafel
+var _daten: Array = []        # je Reiter eine Liste von Einträgen
+var _bilder := {}
+var _textfeld: Textfeld
+var _scroll := 0.0
+var _text_hoehe := 0.0
+
+
+## Textbereich der Tafel: schneidet ab, das Mausrad scrollt.
+class Textfeld extends Control:
+	var malen: Callable
+	func _draw() -> void:
+		if malen.is_valid():
+			malen.call(self)
 
 
 func _ready() -> void:
-	size = Vector2(1280, 720)
+	size = Vector2(640, 360)
+	scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
 	mouse_filter = Control.MOUSE_FILTER_STOP   # solange die Übersicht offen ist, wird nicht versehentlich gebaut
 	visible = false
-	_schrift = ThemeDB.fallback_font
+	_textfeld = Textfeld.new()
+	_textfeld.clip_contents = true
+	_textfeld.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_textfeld.malen = _male_text
+	add_child(_textfeld)
 	_baue_daten()
 
 
@@ -55,308 +59,355 @@ func umschalten() -> void:
 func _process(delta: float) -> void:
 	if visible:
 		_zeit += delta
+		var r := _text_recht()
+		_textfeld.position = r.position
+		_textfeld.size = r.size
 		queue_redraw()
+		_textfeld.queue_redraw()
 
+
+# ------------------------------------------------------------------ Eingabe
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_maus = event.position
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	elif event is InputEventMouseButton and event.pressed:
 		var p: Vector2 = event.position
-		if ZURUECK.has_point(p):
+		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN or event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			if TAFEL_R.has_point(p):
+				_scroll += 14.0 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -14.0
+			return
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			visible = false
+			return
+		if event.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if SCHLIESSEN.has_point(p):
 			visible = false
 			return
 		for i in REITER.size():
 			if _reiter_recht(i).has_point(p):
 				_reiter = i
+				_scroll = 0.0
 				return
-		for i in (_daten[_reiter] as Array).size():
+		var liste: Array = _daten[_reiter]
+		for i in liste.size():
 			if _karten_recht(i).has_point(p):
 				_wahl[_reiter] = i
+				_scroll = 0.0
+				return
+		var e: Dictionary = liste[_wahl[_reiter]]
+		var rechtecke := _knoten_rechtecke(e)
+		for i in rechtecke.size():
+			if (rechtecke[i] as Rect2).grow(2.0).has_point(p):
+				_knoten[e["name"]] = i
+				_scroll = 0.0
 				return
 
 
-## Kartenraster: Bei mehr als drei Reihen werden die Karten niedriger, damit alles über die Reiter passt.
+# ------------------------------------------------------------------ Lage
+
 func _karten_recht(i: int) -> Rect2:
-	var reihen := maxi(3, ceili((_daten[_reiter] as Array).size() / float(SPALTEN)))
-	var schritt_y := minf(SCHRITT.y, 524.0 / reihen)
-	return Rect2(RASTER + Vector2((i % SPALTEN) * SCHRITT.x, int(i / float(SPALTEN)) * schritt_y), Vector2(KARTE.x, schritt_y - 10.0))
+	var n := (_daten[_reiter] as Array).size()
+	var reihen := maxi(4, ceili(n / float(SPALTEN)))
+	var w := (GITTER.size.x - 4.0 * (SPALTEN - 1)) / SPALTEN
+	var h := floorf((GITTER.size.y - 4.0 * (reihen - 1)) / reihen)
+	return Rect2(GITTER.position + Vector2((i % SPALTEN) * (w + 4.0), int(i / float(SPALTEN)) * (h + 4.0)), Vector2(w, h))
 
 
 func _reiter_recht(i: int) -> Rect2:
-	return Rect2(335 - REITER.size() * 80 + i * 160 + 10, 610, 140, 104)
+	return Rect2(14.0 + i * 79.0, 324.0, 75.0, 22.0)
+
+
+## Knoten des Ausbaupfads: erst die Stufen in einer Reihe, dann die Wahl auf Stufe 3 nebeneinander.
+func _knoten_rechtecke(e: Dictionary) -> Array:
+	var pfad: Array = e.get("pfad", [])
+	var liste: Array = []
+	var x := TAFEL_R.position.x + 10.0
+	var y := TAFEL_R.position.y + 104.0
+	var war_zweig := false
+	for k: Dictionary in pfad:
+		if k.get("zweig", false) and not war_zweig:
+			x += 8.0   # Abstand vor der Gabelung
+			war_zweig = true
+		liste.append(Rect2(Vector2(x, y), Vector2(KNOTEN, KNOTEN)))
+		x += KNOTEN_SCHRITT
+	return liste
+
+
+func _text_recht() -> Rect2:
+	if _daten.is_empty():
+		return Rect2()
+	var e: Dictionary = _daten[_reiter][_wahl[_reiter]]
+	var oben := TAFEL_R.position.y + (156.0 if e.has("pfad") else 96.0)
+	return Rect2(TAFEL_R.position.x + 8.0, oben, TAFEL_R.size.x - 14.0, TAFEL_R.end.y - oben - 6.0)
 
 
 # ------------------------------------------------------------------ Zeichnen
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), DUNKEL)
-	# Zurück-Knopf
-	_kasten(ZURUECK, KARTE_HELL if ZURUECK.has_point(_maus) else KARTE_BLAU, RAND, 10, 3)
-	var m := ZURUECK.get_center()
-	draw_colored_polygon(PackedVector2Array([m + Vector2(-13, 0), m + Vector2(1, -12), m + Vector2(1, -5), m + Vector2(13, -5),
-		m + Vector2(13, 5), m + Vector2(1, 5), m + Vector2(1, 12)]), Color.WHITE)
-	_schreibe(Vector2(104, 48), "Übersicht", 28, TITEL, 6)
-	draw_string(_schrift, Vector2(270, 45), "Karte anklicken für Einzelheiten.   [I] oder Pfeil schließt", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, TEXT_BLASS)
-
+	draw_rect(Rect2(Vector2(-8, -8), size + Vector2(16, 16)), Color(0.02, 0.03, 0.05, 0.72))
+	Stil.platte(self, RAHMEN_R, 4.0, Stil.METALL_TIEF, Stil.RAHMEN)
+	# Kopf
+	Stil.symbol(self, "buch", Vector2(23, 21), 1.5, Stil.LEUCHT)
+	Stil.schreibe(self, Vector2(34, 21), "Übersicht", Stil.GROSS, Stil.TEXT)
+	var tipp := "Karte und Stufen anklicken · Mausrad scrollt · [I] schließt"
+	Stil.schreibe(self, Vector2(SCHLIESSEN.position.x - 8.0 - Stil.breite(tipp, Stil.KLEIN), 21), tipp, Stil.KLEIN, Stil.TEXT_BLASS)
+	var zu_an := SCHLIESSEN.has_point(_maus)
+	Stil.platte(self, SCHLIESSEN, 2.0, Stil.METALL_DUNKEL, Stil.LEUCHT if zu_an else Stil.RAHMEN)
+	var m := SCHLIESSEN.get_center().floor()
+	for i in range(-3, 4):
+		for d: Vector2 in [Vector2(1, 1), Vector2(1, -1)]:
+			draw_rect(Rect2(m + d * float(i) - Vector2(1, 1), Vector2(2, 2)), Stil.LEUCHT if zu_an else Stil.TEXT)
+	# Karten, Reiter, Tafel
 	var liste: Array = _daten[_reiter]
 	for i in liste.size():
 		_zeichne_karte(_karten_recht(i), liste[i], i == _wahl[_reiter])
-	_zeichne_tafel(liste[_wahl[_reiter]])
 	for i in REITER.size():
 		_zeichne_reiter(i)
+	_zeichne_tafel(liste[_wahl[_reiter]])
 
 
 func _zeichne_karte(r: Rect2, e: Dictionary, gewaehlt: bool) -> void:
 	var drueber := r.has_point(_maus)
-	if gewaehlt:
-		_kasten(r.grow(4), GOLD, GOLD, 13, 0)
-	_kasten(r, KARTE_HELL if drueber or gewaehlt else KARTE_BLAU, RAND, 10, 3)
-	_kasten(Rect2(r.position + Vector2(3, 3), Vector2(r.size.x - 6, 30)), KARTE_KOPF, KARTE_KOPF, 7, 0)
-	_schreibe_mittig(r.position + Vector2(0, 24), r.size.x, e["name"], 15, Color.WHITE, 5)
-	var m := r.size.y / KARTE.y   # niedrigere Karten: Bild etwas kleiner
-	_zeichne_bild(e, Vector2(r.get_center().x, r.position.y + r.size.y - 32.0 * m), (2.0 if e.get("gross", false) else 1.5) * m, 2.0 * m, false)
-	_schreibe_mittig(r.position + Vector2(0, r.size.y - 9), r.size.x, e["marke"], 13, GUT, 4)
+	Stil.platte(self, r, 3.0, Stil.METALL if gewaehlt else Stil.METALL_DUNKEL, Stil.LEUCHT if gewaehlt else (Stil.RAHMEN_HELL if drueber else Stil.RAHMEN))
+	var bildbox := Vector2(r.size.x - 10.0, r.size.y - 18.0)
+	_male_bild(self, e["bild"], Vector2(r.get_center().x, r.position.y + 4.0 + bildbox.y), bildbox, drueber, true)
+	Stil.schreibe_mittig(self, Vector2(r.get_center().x, r.end.y - 7.0), e["name"], Stil.KLEIN, Stil.TEXT if gewaehlt or drueber else Stil.TEXT_BLASS)
 
 
 func _zeichne_reiter(i: int) -> void:
 	var r := _reiter_recht(i)
-	var mitte := Vector2(r.get_center().x, r.position.y + 40)
 	var an := i == _reiter
-	if an:
-		draw_circle(mitte, 39, GOLD)
-	draw_circle(mitte, 35, RAND)
-	draw_circle(mitte, 32, KARTE_HELL if an or r.has_point(_maus) else KARTE_BLAU)
-	var e: Dictionary = _daten[i][0]
-	_zeichne_bild(e, mitte + Vector2(0, 28), 1.25, 1.0, false)
-	_schreibe_mittig(Vector2(r.position.x, r.position.y + 100), r.size.x, REITER[i], 17, Color.WHITE if an else TEXT_BLASS, 5)
+	var drueber := r.has_point(_maus)
+	Stil.platte(self, r, 3.0, Stil.METALL if an else Stil.METALL_DUNKEL, Stil.LEUCHT if an else (Stil.RAHMEN_HELL if drueber else Stil.RAHMEN))
+	Stil.schreibe_mittig(self, r.get_center(), REITER[i], Stil.NORMAL, Stil.LEUCHT if an else (Stil.TEXT if drueber else Stil.TEXT_BLASS))
+
+
+func _gewaehlter_knoten(e: Dictionary) -> int:
+	return clampi(int(_knoten.get(e["name"], 0)), 0, maxi(0, (e.get("pfad", []) as Array).size() - 1))
 
 
 func _zeichne_tafel(e: Dictionary) -> void:
-	var r := TAFEL_RECHT
-	_kasten(r, TAFEL, TAFEL_RAND, 12, 3)
-	# Bild auf einem Sockel
-	var fuss := r.position + Vector2(92, 150)
-	_ellipse(fuss + Vector2(0, -2), Vector2(70, 18), Color(0, 0, 0, 0.35))
-	_ellipse(fuss + Vector2(0, -6), Vector2(66, 16), Color("4f7d45"))
-	_zeichne_bild(e, fuss + Vector2(0, -8), 2.5, 2.5, true)
-	_schreibe(r.position + Vector2(190, 40), e["name"], 26, TITEL, 6)
-	draw_string(_schrift, r.position + Vector2(190, 62), e["unter"], HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 200, 15, TEXT_BLASS)
-	# Werte als kleine Felder
-	var werte: Array = e["werte"]
-	for i in werte.size():
-		var feld := Rect2(r.position + Vector2(190 + (i % 4) * 98, 74 + int(i / 4.0) * 46), Vector2(92, 40))
-		_kasten(feld, FELD, FELD, 6, 0)
-		draw_string(_schrift, feld.position + Vector2(8, 14), werte[i][0], HORIZONTAL_ALIGNMENT_LEFT, 80, 11, TEXT_BLASS)
-		draw_string(_schrift, feld.position + Vector2(8, 33), werte[i][1], HORIZONTAL_ALIGNMENT_LEFT, 80, 16, Color.WHITE)
-	# Abschnitte
-	_y = r.position.y + 178
-	for a: Array in e["abschnitte"]:
-		draw_string(_schrift, Vector2(r.position.x + 20, _y + 15), a[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, a[1])
-		_y += 22
+	Stil.platte(self, TAFEL_R, 4.0, Stil.METALL_DUNKEL, Stil.RAHMEN)
+	var o := TAFEL_R.position
+	var pfad: Array = e.get("pfad", [])
+	var k := _gewaehlter_knoten(e)
+	var bild: Dictionary = (pfad[k] as Dictionary)["bild"] if not pfad.is_empty() else e["bild"]
+	# Sockel mit der laufenden Figur
+	var sockel := Rect2(o + Vector2(6, 6), Vector2(84, 84))
+	Stil.platte(self, sockel, 3.0, Stil.METALL_TIEF, Stil.RAHMEN)
+	var boden := Vector2(sockel.get_center().x, sockel.end.y - 12.0)
+	_ellipse(boden + Vector2(0, 1), Vector2(28, 6), Color(0, 0, 0, 0.45))
+	_ellipse(boden, Vector2(26, 5), Color(Stil.LEUCHT, 0.18))
+	_male_bild(self, bild, boden + Vector2(0, 2), Vector2(76, 74), true, false)
+	# Name, Untertitel, Marke
+	var x := o.x + 98.0
+	Stil.schreibe(self, Vector2(x, o.y + 13.0), e["name"], Stil.GROSS, Stil.TEXT)
+	var marke: String = e.get("marke", "")
+	if marke != "":
+		Stil.schreibe(self, Vector2(TAFEL_R.end.x - 8.0 - Stil.breite(marke, Stil.KLEIN), o.y + 29.0), marke, Stil.KLEIN, e.get("marke_farbe", Stil.GOLD))
+	Stil.schreibe(self, Vector2(x, o.y + 29.0), e["unter"], Stil.KLEIN, Stil.TEXT_BLASS)
+	# Werte als kleine Felder (bei einer Stufe mit eigenen Werten diese; Geändertes leuchtet grün)
+	var werte: Array = e.get("werte", [])
+	var vorher: Array = werte
+	if not pfad.is_empty() and (pfad[k] as Dictionary).has("werte"):
+		werte = (pfad[k] as Dictionary)["werte"]
+	for i in mini(werte.size(), 6):
+		var anders := i < vorher.size() and str(vorher[i][1]) != str(werte[i][1])
+		var feld := Rect2(Vector2(x + (i % 3) * 64.0, o.y + 40.0 + int(i / 3.0) * 25.0), Vector2(61, 22))
+		Stil.platte(self, feld, 2.0, Stil.METALL_TIEF, Stil.RAHMEN)
+		Stil.schreibe(self, feld.position + Vector2(4, 6), str(werte[i][0]), Stil.KLEIN, Stil.TEXT_BLASS)
+		Stil.schreibe(self, feld.position + Vector2(4, 15), str(werte[i][1]), Stil.NORMAL, GUT if anders else Stil.TEXT)
+	if not pfad.is_empty():
+		_zeichne_pfad(e, pfad, k)
+
+
+func _zeichne_pfad(e: Dictionary, pfad: Array, gewaehlt: int) -> void:
+	var rechtecke := _knoten_rechtecke(e)
+	Stil.schreibe(self, Vector2(TAFEL_R.position.x + 10.0, TAFEL_R.position.y + 96.0), "Ausbau – Stufe anklicken", Stil.KLEIN, Stil.TEXT_BLASS)
+	var letzter_gerader := 0
+	for i in pfad.size():
+		if not (pfad[i] as Dictionary).get("zweig", false):
+			letzter_gerader = i
+	var linie := Stil.RAHMEN_HELL
+	for i in range(1, pfad.size()):
+		var a: Rect2 = rechtecke[i - 1]
+		var b: Rect2 = rechtecke[i]
+		if (pfad[i] as Dictionary).get("zweig", false):
+			# Gabelung: von der letzten Stufe eine Leiste unter allen Fähigkeiten entlang
+			var q: Rect2 = rechtecke[letzter_gerader]
+			var gy := q.end.y + 3.0
+			draw_rect(Rect2(Vector2(q.end.x, q.get_center().y - 1.0), Vector2(5.0, 2.0)), linie)
+			draw_rect(Rect2(Vector2(q.end.x + 4.0, q.get_center().y - 1.0), Vector2(2.0, gy - q.get_center().y + 1.0)), linie)
+			draw_rect(Rect2(Vector2(q.end.x + 4.0, gy), Vector2(b.get_center().x - q.end.x - 4.0, 2.0)), linie)
+			draw_rect(Rect2(Vector2(b.get_center().x - 1.0, b.end.y), Vector2(2.0, gy - b.end.y)), linie)
+		else:
+			draw_rect(Rect2(Vector2(a.end.x, a.get_center().y - 1.0), Vector2(b.position.x - a.end.x, 2.0)), linie)
+	for i in pfad.size():
+		var k: Dictionary = pfad[i]
+		var r: Rect2 = rechtecke[i]
+		var an := i == gewaehlt
+		var drueber := r.grow(2.0).has_point(_maus)
+		Stil.platte(self, r, 3.0, Stil.METALL if an else Stil.METALL_TIEF, Stil.LEUCHT if an else (Stil.RAHMEN_HELL if drueber else Stil.RAHMEN))
+		_male_bild(self, k["bild"], Vector2(r.get_center().x, r.end.y - 2.0), r.size - Vector2(4, 4), false, true)
+		Stil.schreibe_mittig(self, Vector2(r.get_center().x, r.end.y + 10.0), k["kurz"], Stil.KLEIN, Stil.LEUCHT if an else Stil.TEXT_BLASS)
+
+
+## Text der Tafel: bei einem Ausbaupfad der Text der gewählten Stufe, sonst die Abschnitte des Eintrags.
+func _male_text(ci: Control) -> void:
+	if _daten.is_empty():
+		return
+	var e: Dictionary = _daten[_reiter][_wahl[_reiter]]
+	var abschnitte: Array = e.get("abschnitte", [])
+	var pfad: Array = e.get("pfad", [])
+	if not pfad.is_empty():
+		abschnitte = (pfad[_gewaehlter_knoten(e)] as Dictionary)["abschnitte"]
+	var w := ci.size.x - 6.0
+	# erst messen, dann mit Scroll zeichnen
+	var hoehe := 0.0
+	for a: Array in abschnitte:
+		hoehe += 12.0
 		for zeile: String in a[2]:
-			var farbe := TEXT
-			var marke := "•"
+			hoehe += Stil.absatz_groesse(_ohne_marke(zeile), w - 9.0, Stil.KLEIN).y + 1.0
+		hoehe += 4.0
+	_text_hoehe = hoehe
+	_scroll = clampf(_scroll, 0.0, maxf(0.0, hoehe - ci.size.y))
+	var y := -_scroll
+	for a: Array in abschnitte:
+		Stil.schreibe(ci, Vector2(0, y + 5.0), a[0], Stil.NORMAL, a[1])
+		y += 12.0
+		for zeile: String in a[2]:
+			var farbe := Stil.TEXT
+			var marke := "·"
 			if zeile.begins_with("+ "):
 				farbe = GUT
 				marke = "+"
-				zeile = zeile.substr(2)
 			elif zeile.begins_with("– "):
 				farbe = SCHLECHT
 				marke = "–"
-				zeile = zeile.substr(2)
-			draw_string(_schrift, Vector2(r.position.x + 24, _y + 13), marke, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, farbe)
-			var breite := r.size.x - 60
-			draw_multiline_string(_schrift, Vector2(r.position.x + 38, _y + 13), zeile, HORIZONTAL_ALIGNMENT_LEFT, breite, 13, -1, farbe)
-			_y += _schrift.get_multiline_string_size(zeile, HORIZONTAL_ALIGNMENT_LEFT, breite, 13).y + 2
-		_y += 7
+			var text := _ohne_marke(zeile)
+			var zh := Stil.absatz_groesse("A", 100.0, Stil.KLEIN).y
+			if marke == "·":
+				ci.draw_rect(Rect2(Vector2(2, y + zh * 0.5 - 1.0), Vector2(2, 2)), Stil.TEXT_BLASS)
+			else:
+				Stil.schreibe(ci, Vector2(1, y + zh * 0.5), marke, Stil.KLEIN, farbe)
+			Stil.absatz(ci, Vector2(9, y), text, w - 9.0, Stil.KLEIN, farbe)
+			y += Stil.absatz_groesse(text, w - 9.0, Stil.KLEIN).y + 1.0
+		y += 4.0
+	# Laufleiste, wenn der Text nicht ganz passt
+	if hoehe > ci.size.y:
+		var lang := maxf(10.0, ci.size.y * ci.size.y / hoehe)
+		var pos := (ci.size.y - lang) * (_scroll / (hoehe - ci.size.y))
+		ci.draw_rect(Rect2(Vector2(ci.size.x - 2.0, 0), Vector2(2, ci.size.y)), Stil.METALL)
+		ci.draw_rect(Rect2(Vector2(ci.size.x - 2.0, pos), Vector2(2, lang)), Stil.LEUCHT)
 
 
-## Bild eines Eintrags mit den Füßen auf `fuss`: Figur aus einem Animationsblatt oder eine gezeichnete Skizze.
-func _zeichne_bild(e: Dictionary, fuss: Vector2, f48: float, f_skizze: float, bewegt: bool) -> void:
-	if e.has("skizze"):
-		var s := 0.5 * f_skizze
-		_skizze(e["skizze"], fuss - Vector2(32, 64) * s, s)
+static func _ohne_marke(zeile: String) -> String:
+	if zeile.begins_with("+ ") or zeile.begins_with("– "):
+		return zeile.substr(2)
+	return zeile
+
+
+## Bild mit den Füßen auf `fuss`, eingepasst in `box`, pixelgenau (ganze Bildschirmpixel je Bildpunkt).
+## bild: {"tex", "zelle", "reihe", "n", "ursprung", "spiegeln", "farbe", "karte_reihe"} oder {"symbol", "farbe"}.
+## Karten zeigen das Standbild (Zeile karte_reihe), unter der Maus und auf der Tafel läuft die Animation.
+func _male_bild(ci: CanvasItem, b: Dictionary, fuss: Vector2, box: Vector2, bewegt: bool, karte: bool) -> void:
+	if b.has("symbol"):
+		var px := clampf(floorf(minf(box.x, box.y) * 0.5 / 7.0), 1.0, 3.0)
+		Stil.symbol(ci, b["symbol"], fuss - Vector2(0, box.y / 2.0), px, b.get("farbe", Stil.GOLD))
 		return
-	var b: Dictionary = e["bild"]
-	var kante: int = b["zelle"]
-	var faktor := f48 * (0.75 if kante == 64 else 1.0) * float(b.get("faktor", 1.0))
-	var reihe: int = b.get("reihe", 1) if bewegt else 0
-	var n: int = (b["bilder"] as Array)[reihe]
-	var bild := int(_zeit / (0.8 if reihe == 1 else 1.0) * n) % n if bewegt else 0
-	var g := Vector2(kante, kante) * faktor
-	if not _blaetter.has(b["blatt"]):
-		_blaetter[b["blatt"]] = load(b["blatt"])
-	if e.has("kreis"):
-		_ellipse(fuss + Vector2(0, -4 * faktor), Vector2(kante * 0.42, kante * 0.14) * faktor, Color(e["kreis"], 0.55))
-	draw_texture_rect_region(_blaetter[b["blatt"]], Rect2(fuss - Vector2(g.x / 2.0, g.y), g), Rect2(bild * kante, reihe * kante, kante, kante), e.get("farbe", Color.WHITE))
-
-
-## Kleine Skizzen der Bauten im 64er-Raster (Farben wie auf der Karte), `o` = linke obere Ecke, `s` = Maßstab.
-func _skizze(art: String, o: Vector2, s: float) -> void:
-	var erde := Color("a87b4a")
-	var front := Color("7a5433")
-	var krone := Color("6c9a4f")
-	var tech := Color("4b3a66")
-	var tech_hell := Color("6a5391")
-	var tech_dunkel := Color("2a2038")
-	var licht := Color("7fe0ff")
-	var stein := Color("8d8a96")
-	var stein_hell := Color("b4b1bd")
-	var stein_dunkel := Color("5c5966")
-	if art.begins_with("form:"):
-		_skizze_form(art.trim_prefix("form:"), o, s)
+	var tex: Texture2D = b.get("tex")
+	if tex == null:
 		return
-	if art in ["wall", "stellung", "turm", "tor", "panzer", "spiegel", "magnet"]:
-		_q(o, s, 0, 0, 64, 64, erde)
-		_q(o, s, 0, 0, 64, 4, Color("c49b63"))
-		_q(o, s, 8, 8, 48, 32, krone)
-		_q(o, s, 0, 46, 64, 18, front)
-		_q(o, s, 0, 60, 64, 4, Color("553822"))
-	match art:
-		"stellung":
-			_q(o, s, 6, 4, 52, 38, stein_dunkel)
-			_q(o, s, 8, 6, 48, 34, stein)
-			_q(o, s, 14, 12, 36, 22, stein_hell)
-			for x: int in [8, 26, 44]:
-				_q(o, s, x, 6, 12, 6, stein_dunkel)
-		"turm":
-			_q(o, s, 12, 2, 40, 42, tech_dunkel)
-			_q(o, s, 14, 4, 36, 38, tech)
-			_q(o, s, 18, 8, 28, 20, tech_hell)
-			_q(o, s, 26, 12, 12, 12, licht)
-			_q(o, s, 2, 14, 12, 8, tech_dunkel)
-			_q(o, s, 50, 14, 12, 8, tech_dunkel)
-		"tor":
-			_q(o, s, 6, 2, 52, 60, stein_dunkel)
-			_q(o, s, 16, 12, 32, 50, Color("1b1722"))
-			_q(o, s, 6, 2, 52, 10, stein)
-			_q(o, s, 6, 12, 10, 50, stein)
-			_q(o, s, 48, 12, 10, 50, stein)
-			_q(o, s, 26, 4, 12, 6, licht)
-		"fabrik":
-			_q(o, s, 4, 12, 56, 48, tech_dunkel)
-			_q(o, s, 6, 14, 52, 26, tech_hell)
-			_q(o, s, 6, 40, 52, 18, tech)
-			_q(o, s, 44, 2, 10, 14, tech_dunkel)
-			_q(o, s, 46, 4, 6, 10, tech)
-			_q(o, s, 24, 44, 16, 16, tech_dunkel)
-			_q(o, s, 12, 22, 8, 8, licht)
-			_q(o, s, 26, 22, 8, 8, licht)
-		"batterie":
-			_q(o, s, 4, 34, 56, 26, tech_dunkel)
-			_q(o, s, 6, 36, 52, 22, tech)
-			var blatt: String = Werte.BATTERIE["blatt"]
-			if not _blaetter.has(blatt):
-				_blaetter[blatt] = load(blatt)
-			var kante: int = Werte.BATTERIE["zelle"]
-			draw_texture_rect_region(_blaetter[blatt], Rect2(o + Vector2(-8, -24) * s, Vector2(80, 80) * s), Rect2(0, 0, kante, kante))
-			for i in 3:
-				_q(o, s, 8 + i * 18, 50, 14, 8, tech_dunkel)
-				_q(o, s, 10 + i * 18, 52, 10, 4, licht)
-		"spiegel":
-			_q(o, s, 10, 26, 44, 18, stein_dunkel)
-			draw_colored_polygon(PackedVector2Array([o + Vector2(14, 30) * s, o + Vector2(26, 4) * s, o + Vector2(50, 4) * s, o + Vector2(38, 30) * s]), Color("cfe8f5"))
-			draw_line(o + Vector2(24, 24) * s, o + Vector2(34, 8) * s, Color.WHITE, maxf(1.0, 3.0 * s))
-		"magnet":
-			_q(o, s, 14, 8, 36, 34, tech_dunkel)
-			draw_arc(o + Vector2(28, 26) * s, 13.0 * s, PI / 2.0, PI * 1.5, 16, Color("8c96a8"), maxf(2.0, 7.0 * s))
-			_q(o, s, 24, 10, 14, 7, Color("e0453a"))
-			_q(o, s, 24, 35, 14, 7, Color("3a7be0"))
-		"generator":
-			# Ring aus Erdwällen mit Generator und Kuppel
-			for p: Vector2i in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(0, 1), Vector2i(3, 1), Vector2i(0, 2), Vector2i(3, 2), Vector2i(0, 3), Vector2i(1, 3), Vector2i(2, 3), Vector2i(3, 3)]:
-				_q(o, s, p.x * 16 + 1, p.y * 16 + 1, 14, 14, Color("a87b4a"))
-			_q(o, s, 18, 20, 28, 22, tech_dunkel)
-			draw_circle(o + Vector2(32, 31) * s, 9.0 * s, Color(0.42, 0.72, 1.0))
-			draw_arc(o + Vector2(32, 32) * s, 40.0 * s, 0.0, TAU, 32, Color(0.55, 0.82, 1.0, 0.8), maxf(1.5, 2.0 * s))
-		"panzer":
-			var stahl := Color("8c96a8")
-			_q(o, s, 0, 0, 64, 6, stahl)
-			_q(o, s, 0, 0, 6, 46, stahl)
-			_q(o, s, 58, 0, 6, 46, stahl)
-			_q(o, s, 0, 40, 64, 6, Color("4a5160"))
-			for x: int in [2, 30, 58]:
-				_q(o, s, x, 1, 4, 4, Color("d8dee9"))
-		"checkpoint":
-			_q(o, s, 10, 52, 44, 8, Color(0, 0, 0, 0.3))
-			_q(o, s, 28, 6, 5, 52, stein_hell)
-			_q(o, s, 33, 8, 24, 18, Color("ff5ad0"))
-			_q(o, s, 33, 22, 16, 4, Color("c93fa3"))
-		"zone":
-			_q(o, s, 0, 0, 64, 64, Color("6b6258"))
-			_q(o, s, 14, 20, 36, 36, tech_dunkel)
-			_q(o, s, 18, 24, 28, 28, Color("7a2f3f"))
-			_q(o, s, 26, 32, 12, 12, Color("ff5a4d"))
-			draw_arc(o + Vector2(32, 38) * s, 30 * s, PI, TAU, 24, Color(licht, 0.9), maxf(2.0, 3 * s))
-		"geld":
-			draw_circle(o + Vector2(32, 36) * s, 24 * s, Color("b3811f"))
-			draw_circle(o + Vector2(32, 34) * s, 24 * s, GOLD)
-			draw_circle(o + Vector2(32, 34) * s, 17 * s, Color("f0b92e"))
-			_q(o, s, 29, 22, 6, 24, Color("fff2b8"))
-
-
-## Formturm als 3×3-Skizze: in der Mitte der Turm in seiner Farbe, drumherum die Erdwälle, die seine Form ergeben.
-## je Form: [Stützen (in Turmfarbe), weitere Erdwälle, die die Form braucht (nur Erde)]
-const FORMEN := {
-	"geschuetz": [[Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)], []],
-	"frost": [[Vector2i(1, 0), Vector2i(0, 1), Vector2i(2, 0), Vector2i(0, 2)], []],
-	"heil": [[Vector2i(-1, -1), Vector2i(1, 1)], []],
-	"lanze": [[Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, -1), Vector2i(-1, 1)], []],
-	"funk": [[Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)], []],
-}
-
-func _skizze_form(art: String, o: Vector2, s: float) -> void:
-	var k := 64.0 / 5.0
-	var farbe := Color(Werte.TURMARTEN[art]["farbe"])
-	_q(o, s, 0, 0, 64, 64, Color(0.31, 0.49, 0.27, 0.5))
-	for n: Vector2i in FORMEN[art][1]:
-		_q(o, s, (n.x + 2) * k + 1, (n.y + 2) * k + 1, k - 2, k - 2, Color("a87b4a"))
-	for n: Vector2i in FORMEN[art][0]:
-		var x := (n.x + 2) * k
-		var y := (n.y + 2) * k
-		_q(o, s, x + 1, y + 1, k - 2, k - 2, Color("a87b4a"))
-		_q(o, s, x + 3, y + 3, k - 6, k - 6, farbe.darkened(0.45))
-	_q(o, s, 2 * k + 1, 2 * k + 1, k - 2, k - 2, Color("2a2038"))
-	_q(o, s, 2 * k + 3, 2 * k + 3, k - 6, k - 6, farbe)
-
-
-func _q(o: Vector2, s: float, x: float, y: float, w: float, h: float, farbe: Color) -> void:
-	draw_rect(Rect2(o + Vector2(x, y) * s, Vector2(w, h) * s), farbe)
+	var zelle: Vector2 = b["zelle"]
+	var sk := Stil.skala()
+	var rand: float = b.get("rand", 1.0)   # Figurenblätter haben viel leeren Rand: so viel der Zelle ist Figur
+	var bp := maxf(1.0, floorf(minf(box.x / (zelle.x * rand), box.y / (zelle.y * rand)) * sk))
+	bp = minf(bp, float(b.get("max_bp", 3 if karte else 5)))   # nicht zu grob: Karten höchstens 3, Tafel 5 Bildschirmpixel je Bildpunkt
+	while bp > 1.0 and (zelle.y * bp / sk > box.y * 1.1 or zelle.x * bp / sk > box.x * 1.25):
+		bp -= 1.0   # große Figuren (Brakk, Belagerungsturm) nicht über den Rand ragen lassen
+	var g := zelle * bp / sk
+	var reihe: int = int(b.get("karte_reihe", 0)) if karte and not bewegt else int(b["reihe"])
+	var n := int(b.get("n", 1)) if bewegt or not b.has("karte_reihe") else 1
+	if not bewegt:
+		n = 1
+	var bild := int(_zeit * 8.0) % n if n > 1 else 0
+	var ursprung: Vector2 = b.get("ursprung", Vector2.ZERO)
+	var quelle := Rect2(ursprung + Vector2(bild * zelle.x, reihe * zelle.y), zelle)
+	var o := ((fuss - Vector2(g.x / 2.0, g.y)) * sk).round() / sk
+	var ziel := Rect2(o, g)
+	if b.get("spiegeln", false):
+		ziel = Rect2(o, Vector2(-g.x, g.y))   # Godot spiegelt negative Breiten an Ort und Stelle
+	ci.draw_texture_rect_region(tex, ziel, quelle, b.get("farbe", Color.WHITE))
 
 
 func _ellipse(mitte: Vector2, halb: Vector2, farbe: Color) -> void:
 	var punkte := PackedVector2Array()
-	for i in 28:
-		var w := TAU * i / 28.0
+	for i in 20:
+		var w := TAU * i / 20.0
 		punkte.append(mitte + Vector2(cos(w), sin(w)) * halb)
 	draw_colored_polygon(punkte, farbe)
 
 
-var _kaesten := {}
+# ------------------------------------------------------------------ Bilder
 
-func _kasten(r: Rect2, farbe: Color, rand: Color, ecke: int, breite: int) -> void:
-	var schluessel := [farbe, rand, ecke, breite]
-	if not _kaesten.has(schluessel):
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = farbe
-		sb.border_color = rand
-		sb.set_border_width_all(breite)
-		sb.set_corner_radius_all(ecke)
-		sb.anti_aliasing = true
-		_kaesten[schluessel] = sb
-	draw_style_box(_kaesten[schluessel], r)
+func _lade(pfad: String) -> Texture2D:
+	if not _bilder.has(pfad):
+		_bilder[pfad] = load(pfad) if ResourceLoader.exists(pfad) else null
+	return _bilder[pfad]
 
 
-## Schrift mit dunklem Umriss, wie auf den Karten von Bloons TD.
-func _schreibe(pos: Vector2, text: String, groesse: int, farbe: Color, umriss: int) -> void:
-	draw_string_outline(_schrift, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, groesse, umriss, UMRISS)
-	draw_string(_schrift, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, groesse, farbe)
+## Figur aus einem Animationsblatt (Zeilen Stehen / Laufen / Angriff), in der neuen Grafik deren Blatt.
+func _figur(d: Dictionary, reihe: int = 1, spiegeln: bool = false) -> Dictionary:
+	var g := Werte.grafik_daten(d)
+	var z := float(g["zelle"])
+	return {"tex": _lade(str(g["blatt"])), "zelle": Vector2(z, z), "reihe": reihe, "n": int((g["bilder"] as Array)[reihe]), "spiegeln": spiegeln, "rand": 0.75}
 
 
-func _schreibe_mittig(pos: Vector2, breite: float, text: String, groesse: int, farbe: Color, umriss: int) -> void:
-	draw_string_outline(_schrift, pos, text, HORIZONTAL_ALIGNMENT_CENTER, breite, groesse, umriss, UMRISS)
-	draw_string(_schrift, pos, text, HORIZONTAL_ALIGNMENT_CENTER, breite, groesse, farbe)
+## Einzelbild (oder ein Feld aus einem Blatt ohne Animation).
+func _einzel(pfad: String, zelle: Vector2, ursprung: Vector2 = Vector2.ZERO) -> Dictionary:
+	return {"tex": _lade(pfad), "zelle": zelle, "reihe": 0, "n": 1, "ursprung": ursprung}
+
+
+## Truppe auf einer Stufe (ab Stufe 2 mit eigenem Blatt in der neuen Grafik).
+func _truppen_bild(id: String, stufe: int, faehigkeit: String = "") -> Dictionary:
+	var d: Dictionary = (Werte.EINHEITEN[id] as Dictionary).duplicate()
+	if faehigkeit != "":
+		d["faehigkeit"] = faehigkeit
+	var g := Werte.grafik_einheit(d, id, stufe)
+	if str(g["blatt"]) == str(d["blatt"]):
+		return _figur(Werte.EINHEITEN[id])
+	var z := float(g["zelle"])
+	return {"tex": _lade(str(g["blatt"])), "zelle": Vector2(z, z), "reihe": 1, "n": int((g["bilder"] as Array)[1]), "rand": 0.75}
+
+
+func _turm_bild(art: String, stufe: int, faehigkeit: String = "") -> Dictionary:
+	var n := Werte.NEU + "tuerme/"
+	match art:
+		"geschuetz":
+			if stufe <= 1:
+				return {"tex": _lade(n + "gef_frames.png"), "zelle": Vector2(68, 68), "reihe": 0, "n": 9, "karte_reihe": 0}
+			var r := 0 if stufe == 2 else (1 if faehigkeit == "doppelschuss" else 2)
+			return _einzel(n + "gef_stufen.png", Vector2(68, 68), Vector2(0, r * 68))
+		"lanze":
+			var name := "lanze"
+			if stufe == 2:
+				name = "lan_s2"
+			elif stufe >= 3:
+				name = "lan_doppel" if faehigkeit == "doppelstrahl" else "lan_durchschlag"
+			return _einzel(n + name + ".png", Vector2(64, 64))
+	return _einzel(n + art + ".png", Vector2(64, 64))
+
+
+func _batterie_bild(stufe: int) -> Dictionary:
+	return {"tex": _lade(Werte.NEU + "batterie/bat_%d.png" % stufe), "zelle": Vector2(48, 48), "reihe": 1, "n": 9, "karte_reihe": 0, "rand": 0.8}
+
+
+func _wurf_bild() -> Dictionary:
+	var b := _figur(Werte.SCHLEUDER, 0)
+	b["farbe"] = Werte.WURF_FARBE
+	return b
 
 
 # ------------------------------------------------------------------ Inhalt
@@ -365,10 +416,6 @@ static func _z(v: float) -> String:
 	if is_equal_approx(v, roundf(v)):
 		return str(int(roundf(v)))
 	return ("%.1f" % v).replace(".", ",")
-
-
-func _bild(d: Dictionary, reihe: int = 1, faktor: float = 1.0) -> Dictionary:
-	return {"blatt": d["blatt"], "zelle": d["zelle"], "bilder": d["bilder"], "reihe": reihe, "faktor": faktor}
 
 
 func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
@@ -381,29 +428,57 @@ func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 	if d["schaden"] > 0.0 or id == "rauch":
 		w.append(["Wurf alle" if id == "rauch" else "Angriff alle", _z(d["abklingzeit"]) + " s"])
 	w.append(["Prämie", str(d["praemie"])])
-	return {"name": d["name"], "unter": d["art"], "marke": ab, "bild": _bild(d),
-		"werte": w, "abschnitte": [["Was er macht", TITEL, tut], ["Dagegen hilft", GUT, hilft]]}
+	# Myr-Drohne: Beine laufen in Zeile 0. Sprenger und Drohne schauen im Blatt nach links – gespiegelt wie die anderen.
+	return {"name": d["name"], "unter": d["art"], "marke": ab, "marke_farbe": Stil.KUPFER,
+		"bild": _figur(d, 0 if id == "enterer" else 1, id in ["sprenger", "enterer"]),
+		"werte": w, "abschnitte": [["Was er macht", Stil.KUPFER, tut], ["Dagegen hilft", GUT, hilft]]}
 
 
-func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictionary:
-	var d: Dictionary = Werte.EINHEITEN[id]
+## Werte einer Truppe als Felder; `d` kann schon mit Stufe 2 verrechnet sein.
+func _truppen_werte(d: Dictionary) -> Array:
 	var w: Array = [["Leben", _z(d["leben"])], ["Tempo", _z(d["tempo"])], ["Reichweite", _z(d["reichweite"])],
 		["Schaden", ("%d × " % (d["schuss_bilder"] as Array).size() if (d.get("schuss_bilder", []) as Array).size() > 1 else "") + _z(d["schaden"])], ["Angriff alle", _z(d["abklingzeit"]) + " s"]]
 	if d.has("flaeche"):
 		w.append(["Fläche", _z(d["flaeche"])])
-	var abschnitte: Array = [["Was sie macht", TITEL, tut], ["In der Stellung", TEXT_BLASS, stellung]]
-	if Werte.STUFE_2.has(id):
-		abschnitte.append(["Stufe 2 (%d)" % Werte.KOSTEN_STUFE[1], TITEL, [Werte.STUFE_2[id]["text"]]])
-		var wahl: Array = []
-		for f: Dictionary in (Werte.STUFE_3[id] as Dictionary).values():
-			wahl.append("%s: %s" % [f["name"], f["text"]])
-			wahl.append("+ " + f["stark"])
-			wahl.append("– " + f["schwach"])
-		abschnitte.append(["Stufe 3 (%d) – eine von drei" % Werte.KOSTEN_STUFE[2], TITEL, wahl])
-	return {"name": d["name"], "unter": unter, "marke": "Fabrik", "bild": _bild(d), "gross": true, "werte": w, "abschnitte": abschnitte}
+	return w
 
 
-## Karte eines Formturms: Form als Skizze, Werte aus Werte.TURMARTEN, gemeinsame Regeln für alle Türme.
+## Stufe 2 auf die Grundwerte anwenden (plus / mal aus Werte.STUFE_2).
+static func _mit_stufe_2(d: Dictionary, s2: Dictionary) -> Dictionary:
+	var n := d.duplicate()
+	for k: String in (s2.get("plus", {}) as Dictionary):
+		n[k] = float(n.get(k, 0.0)) + float(s2["plus"][k])
+	for k: String in (s2.get("mal", {}) as Dictionary):
+		n[k] = float(n.get(k, 0.0)) * float(s2["mal"][k])
+	return n
+
+
+## Truppe mit Ausbaupfad: Grund › Stufe 1 (Fabrik legt sich fest) › Stufe 2 › eine von drei Fähigkeiten.
+func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictionary:
+	var W := Werte
+	var d: Dictionary = W.EINHEITEN[id]
+	var w := _truppen_werte(d)
+	var grund := _truppen_bild(id, 1)
+	var pfad: Array = [
+		{"kurz": "Grund", "bild": grund, "abschnitte": [["Was sie macht", Stil.LEUCHT, tut], ["In der Stellung", Stil.TEXT_BLASS, stellung]]},
+		{"kurz": "St. 1", "bild": grund, "abschnitte": [["Stufe 1 · %d Budget" % W.KOSTEN_STUFE[0], Stil.GOLD, [
+			"Die Fabrik legt sich auf diese Truppe fest und hält dafür eine mehr am Leben (%d statt %d)." % [W.MAX_JE_FABRIK + 1, W.MAX_JE_FABRIK],
+			"Danach lässt sich die Truppe dieser Fabrik nicht mehr wechseln."]]]},
+	]
+	if W.STUFE_2.has(id):
+		var s2: Dictionary = W.STUFE_2[id]
+		var w2 := _truppen_werte(_mit_stufe_2(d, s2))
+		pfad.append({"kurz": "St. 2", "bild": _truppen_bild(id, 2), "werte": w2, "abschnitte": [["Stufe 2 · %d Budget" % W.KOSTEN_STUFE[1], Stil.GOLD, [str(s2["text"]) + "."]]]})
+		for f: String in (W.STUFE_3[id] as Dictionary):
+			var s3: Dictionary = W.STUFE_3[id][f]
+			pfad.append({"kurz": str(s3["name"]).split(" ")[0], "zweig": true, "bild": _truppen_bild(id, 3, f), "werte": w2, "abschnitte": [
+				["Stufe 3 · %s · %d Budget" % [s3["name"], W.KOSTEN_STUFE[2]], Stil.GOLD, [s3["text"]]],
+				["Stärken und Schwächen", Stil.TEXT_BLASS, ["+ " + str(s3["stark"]), "– " + str(s3["schwach"])]],
+				["Hinweis", Stil.TEXT_BLASS, ["Eine Fabrik wählt genau eine der drei Fähigkeiten."]]]})
+	return {"name": d["name"], "unter": unter, "marke": "aus der Fabrik", "marke_farbe": Stil.LEUCHT, "bild": grund, "werte": w, "pfad": pfad}
+
+
+## Formturm mit Ausbaupfad: Grund › Stufe 2 › eine von zwei Fähigkeiten.
 func _turmkarte(art: String, extra: Array) -> Dictionary:
 	var W := Werte
 	var d: Dictionary = W.TURMARTEN[art]
@@ -413,22 +488,49 @@ func _turmkarte(art: String, extra: Array) -> Dictionary:
 		w.append(["Angriff alle", _z(d["abklingzeit"]) + " s"])
 	var regeln: Array = [d["text"]]
 	regeln.append_array(extra)
-	var stufen: Array = ["Stufe 2 (%d): %s" % [W.KOSTEN_TURM_STUFE[0], W.TURM_STUFE_2[art]["text"]], "Stufe 3 (%d), eine Fähigkeit wählen:" % W.KOSTEN_TURM_STUFE[1]]
-	for f: Dictionary in (W.TURM_STUFE_3[art] as Dictionary).values():
-		stufen.append("%s – %s (+ %s, – %s)" % [f["name"], f["text"], f["stark"], f["schwach"]])
-	return {"name": d["name"], "unter": "Turm auf " + {"Ecke": "einer Ecke", "Kreuzung": "einer Kreuzung", "T-Stück": "einem T-Stück", "gerades Stück": "einem geraden Stück", "Bogen": "einem Bogen", "Linie mit Enden": "einer Linie mit Enden"}.get(d["form"], d["form"]),
-		"marke": "%d  [4]" % W.KOSTEN_TURM, "skizze": "form:" + art, "werte": w,
-		"abschnitte": [["Was er macht", TITEL, regeln], ["Ausbau (Turm anklicken)", TITEL, stufen], ["Für alle Türme", TEXT_BLASS, [
-			"Welcher Turm entsteht, entscheidet die Form der Erdwälle drumherum: T-Stück = Geschütz, Kreuzung = Funk, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilung. Ein schlichtes gerades Stück oder eine kurze Ecke trägt keinen Turm. Die Vorschau nennt den Turm.",
-			"Stützregel: Diese Erdwälle dürfen keinen anderen Turm stützen. Stellungen darauf sind erlaubt.",
-			"Schießt ohne Truppe und auch im Rauch. Sicht wie aus einer Stellung. Sein Erdwall hält Sprengern stand.",
-			"Myr-Drohnen können ihn lahmlegen – dann schweigt er bis zum Rundenende."]]]}
+	var unter: String = "Turm auf " + {"Ecke": "einer Ecke", "Kreuzung": "einer Kreuzung", "T-Stück": "einem T-Stück", "Lange Ecke": "einer langen Ecke", "Klammer": "einer Klammer", "Treppe": "einer Treppe"}.get(d["form"], d["form"])
+	var pfad: Array = [
+		{"kurz": "Grund", "bild": _turm_bild(art, 1), "abschnitte": [["Was er macht", Stil.LEUCHT, regeln], ["Für alle Türme", Stil.TEXT_BLASS, [
+			"Welcher Turm entsteht, entscheidet die Form der Erdwälle drumherum: T-Stück = Geschütz, Kreuzung = Funk, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilung. Die Bauvorschau nennt den Turm.",
+			"Seine Stützen dürfen keinen anderen Turm stützen; Stellungen darauf sind erlaubt.",
+			"Schießt ohne Truppe und auch im Rauch, Sicht wie aus einer Stellung. Sein Erdwall hält Sprengern stand.",
+			"Myr-Drohnen können ihn bis zum Rundenende lahmlegen."]]]},
+		{"kurz": "St. 2", "bild": _turm_bild(art, 2), "abschnitte": [["Stufe 2 · %d Budget" % W.KOSTEN_TURM_STUFE[0], Stil.GOLD, [W.TURM_STUFE_2[art]["text"]]]]},
+	]
+	for f: String in (W.TURM_STUFE_3[art] as Dictionary):
+		var s3: Dictionary = W.TURM_STUFE_3[art][f]
+		pfad.append({"kurz": str(s3["name"]).split(" ")[0], "zweig": true, "bild": _turm_bild(art, 3, f), "abschnitte": [
+			["Stufe 3 · %s · %d Budget" % [s3["name"], W.KOSTEN_TURM_STUFE[1]], Stil.GOLD, [s3["text"]]],
+			["Stärken und Schwächen", Stil.TEXT_BLASS, ["+ " + str(s3["stark"]), "– " + str(s3["schwach"])]]]})
+	return {"name": d["name"], "unter": unter, "marke": "%d · [4]" % W.KOSTEN_TURM, "bild": _turm_bild(art, 1), "werte": w, "pfad": pfad}
+
+
+func _batteriekarte() -> Dictionary:
+	var W := Werte
+	var b: Dictionary = W.BATTERIE
+	var w: Array = [["Preis", str(W.KOSTEN_BATTERIE)], ["Reichweite", _z(b["reichweite"])], ["Schaden", _z(b["schaden"])],
+		["Angriff alle", _z(b["abklingzeit"]) + " s"], ["Fläche", _z(b["flaeche"])], ["Plätze", "%d Piloten" % b["plaetze"]]]
+	var pfad: Array = [{"kurz": "Grund", "bild": _batterie_bild(0), "abschnitte": [["Was sie macht", Stil.LEUCHT, [
+		"Zwei Felder: Batterie und angebaute Pilotenfabrik ([T] dreht sie beim Bauen).",
+		"Feuert nur, solange alle %d Plätze mit Piloten besetzt sind – weit, über Erdwälle hinweg und mit Flächenschaden." % b["plaetze"],
+		"Ausgebaut wird über die Pilotenfabrik."]]]}]
+	for i in W.BATTERIE_STUFEN.size():
+		var s: Dictionary = W.BATTERIE_STUFEN[i]
+		var zeilen: Array = [s["text"]]
+		if i == 2:
+			zeilen.append("So viel hält er aus: 1 Feld %d, 2 Felder %d, 3 Felder %d, 5 Felder %d." % [
+				roundi(W.schild_leben(1)), roundi(W.schild_leben(2)), roundi(W.schild_leben(3)), roundi(W.schild_leben(5))])
+			zeilen.append("+ Engstellen dicht machen, Zeit für Stellungen und Türme gewinnen")
+			zeilen.append("– Weite Schilde brechen schnell; fällt einer der Erdwälle, ist der Schild weg")
+		pfad.append({"kurz": "St. %d" % (i + 1), "bild": _batterie_bild(i + 1), "abschnitte": [["Stufe %d · %s · %d Budget" % [i + 1, s["name"], W.KOSTEN_BATTERIE_STUFE[i]], Stil.GOLD, zeilen]]})
+	return {"name": "Batterie", "unter": "Railgun mit Pilotenfabrik", "marke": "%d · [5]" % W.KOSTEN_BATTERIE, "bild": _batterie_bild(0), "werte": w, "pfad": pfad}
 
 
 func _baue_daten() -> void:
 	var W := Werte
 	var schleuder: Dictionary = W.SCHLEUDER
 	var laser: Dictionary = W.LASER
+	var TITEL := Stil.KUPFER
 	var gegner: Array = [
 		_gegner("hund", "ab Runde 1", [
 			"Schneller Nahkämpfer, kommt im Rudel.",
@@ -493,7 +595,7 @@ func _baue_daten() -> void:
 			"Findet sie kein Ziel, springt sie ab und läuft zur Basis."], [
 			"Getrennte Wallstücke: Sie kommt nur über verbundene Erdwälle.",
 			"Der Reservepilot macht lahme Türme wieder flott."]),
-		{"name": "Stein-Schleuder", "unter": "steht in der Zone", "marke": "ab Runde 5", "bild": _bild(schleuder, 0), "kreis": Color("ff5ad0"),
+		{"name": "Stein-Schleuder", "unter": "steht in der Zone", "marke": "ab Runde 5", "marke_farbe": Stil.KUPFER, "bild": _figur(schleuder, 0),
 			"werte": [["Reichweite", _z(schleuder["reichweite"])], ["auf Truppe", _z(schleuder["schaden_einheit"])], ["auf Fabrik", _z(schleuder["schaden_fabrik"])], ["Wurf alle", _z(schleuder["abklingzeit"]) + " s"]],
 			"abschnitte": [["Was sie macht", TITEL, [
 				"Steht unter dem Schild der Zone und wirft Steine auf Truppen in Stellungen und auf Fabriken im pinken Kreis.",
@@ -501,7 +603,7 @@ func _baue_daten() -> void:
 				"Ab Runde %d gibt es eine zweite, und beide wechseln den Platz: vor jeder Runde und alle %s Sekunden." % [W.SPRENGER_AB_WELLE, _z(W.SCHLEUDER_UMZUG_SEK)],
 				"Zerschossene Fabriken und Batterien fallen bis zum Rundenende aus."]],
 				["Dagegen hilft", GUT, ["Wichtiges außerhalb des Kreises bauen.", "Truppen nicht auf einem Haufen stehen lassen."]]]},
-		{"name": "Wurf-Schleuder", "unter": "steht in der Zone", "marke": "ab Runde 10", "bild": _bild(schleuder, 0), "kreis": Color("ff9a3d"), "farbe": W.WURF_FARBE,
+		{"name": "Wurf-Schleuder", "unter": "steht in der Zone", "marke": "ab Runde 10", "marke_farbe": Stil.KUPFER, "bild": _wurf_bild(),
 			"werte": [["Wurfweite", _z(W.WURF["reichweite"])], ["je Wurf", "%d Gegner" % W.WURF["rudel"]], ["Wurf alle", _z(W.WURF["abklingzeit"]) + " s"]],
 			"abschnitte": [["Was sie macht", TITEL, [
 				"Wirft Trupps zu vier über die Erdwälle – je nach Runde Hunde, Fahnenträger, Sprenger oder Rauchwerfer.",
@@ -511,27 +613,12 @@ func _baue_daten() -> void:
 				"In einen rundum geschlossenen Kern wirft sie nicht.",
 				"Ab Runde 14 gibt es eine zweite."]],
 				["Dagegen hilft", GUT, ["Bodentruppen auch hinter der Mauer haben.", "Checkpoints hinter Erdwällen nicht ungeschützt lassen."]]]},
-		{"name": "Laser", "unter": "verteidigt die Zone", "marke": "Runde %d" % W.LETZTE_RUNDE, "bild": _bild(laser, 0),
+		{"name": "Laser", "unter": "verteidigt die Zone", "marke": "Runde %d" % W.LETZTE_RUNDE, "marke_farbe": Stil.KUPFER, "bild": _figur(laser, 0),
 			"werte": [["Leben", _z(laser["leben"])], ["Reichweite", _z(laser["reichweite"])], ["Schaden", _z(laser["schaden"])], ["Angriff alle", _z(laser["abklingzeit"]) + " s"]],
 			"abschnitte": [["Was er macht", TITEL, [
 				"Drei Laser verteidigen die Zone in der letzten Runde.",
 				"Sie schießen flach und nur auf Bodentruppen. Erdwälle geben Deckung."]],
 				["Dagegen hilft", GUT, ["Im Schutz der eigenen Erdwälle anmarschieren."]]]},
-		{"name": "Checkpoints", "unter": "zwei Fahnen auf dem Gegnerweg", "marke": "ab Runde %d" % W.CHECKPOINTS_AB_WELLE, "skizze": "checkpoint",
-			"werte": [["Einnahme", _z(W.EINNAHME_SEK) + " s"], ["Zurück", _z(W.RUECKEROBERUNG_SEK) + " s"], ["Bonus", str(W.BONUS_JE_CHECKPOINT)]],
-			"abschnitte": [["Regeln", TITEL, [
-				"Sie liegen in jeder Partie etwas anders – deine Basis auch. Der Gegnerweg führt schon ab Runde 1 der Reihe nach durch beide; einnehmen können die Gegner sie erst ab Runde %d." % W.CHECKPOINTS_AB_WELLE,
-				"Gegner bleiben darauf stehen, bis sie ihn eingenommen haben. Danach gehört er dem Gegner, und die nächste Welle startet dort.",
-				"Zurückholen: Je verlorenem Checkpoint geht eine Bodentruppe hin und hält ihn – nur solange die Welle läuft und kurz danach.",
-				"Jeder Checkpoint, der am Rundenende dir gehört, bringt Budget."]]]},
-		{"name": "Zone und HQ", "unter": "die drei linken Spalten", "marke": "Runde %d" % W.LETZTE_RUNDE, "skizze": "zone",
-			"werte": [["HQ-Leben", _z(W.HQ_LEBEN)], ["Abstand", "%d Felder" % W.ZONE_ABSTAND]],
-			"abschnitte": [["Regeln", TITEL, [
-				"In der Zone kann nicht gebaut werden. Ein Schild schützt alles darin bis zur letzten Runde.",
-				"Eigene Truppen halten Abstand zur Zone, damit die Gegner herauskommen.",
-				"Runde %d ist der Gegenangriff: Das HQ muss fallen. Gegner kommen ohne Ende, niemand geht mehr in Stellungen, und jede Fabrik hat bis zu %d aktive Truppen." % [W.LETZTE_RUNDE, W.MAX_JE_FABRIK_ENDKAMPF],
-				"Ausgefallene Gebäude laufen dort nach einiger Zeit wieder an.",
-				"Während des Gegenangriffs darfst du weiterbauen und ausbauen – nur keine neuen Erdwälle."]]]},
 	]
 
 	var truppen: Array = [
@@ -549,59 +636,48 @@ func _baue_daten() -> void:
 			["Kein Reichweitenbonus – von oben nur der Schuss über die eigenen Erdwälle."]),
 	]
 	var kd: Dictionary = W.KOMMANDANT
-	truppen.append({"name": "Kommandant Brakk", "unter": "Held, einmal pro Partie", "marke": "%d  [8]" % W.KOSTEN_KOMMANDANT, "bild": _bild(kd), "gross": true,
+	truppen.append({"name": "Kommandant Brakk", "unter": "Held, einmal pro Partie", "marke": "%d · [8]" % W.KOSTEN_KOMMANDANT, "bild": _figur(kd),
 		"werte": [["Leben", _z(kd["leben"])], ["Tempo", _z(kd["tempo"])], ["Reichweite", _z(kd["reichweite"])], ["Schaden", "2 × " + _z(kd["schaden"])], ["Angriff alle", _z(kd["abklingzeit"]) + " s"]],
-		"abschnitte": [["Steuerung", TITEL, [
-			"[8] und Klick auf ein freies Feld stellt ihn auf (zwischen den Wellen). Mit [W][A][S][D] läufst du mit ihm; er schießt von selbst auf den vordersten Gegner.",
+		"abschnitte": [["Steuerung", Stil.LEUCHT, [
+			"[8] und Klick auf ein freies Feld stellt ihn auf (zwischen den Wellen). Er handelt selbst; anklicken = mit [W][A][S][D] steuern. Er schießt von selbst auf den vordersten Gegner.",
 			"[Q] Sammeln: Bodentruppen im Umkreis von %s Feldern folgen ihm (Abklingzeit %s s). Nochmal [Q] = Losschlagen auf das Feld unter der Maus: %s s lang laufen sie schneller und feuern rascher (danach %s s Pause)." % [_z(kd["sammel_radius"]), _z(kd["sammel_abklingzeit"]), _z(kd["sturm_sek"]), _z(kd["sturm_abklingzeit"])],
-			"[E] Klettern: auf einen angrenzenden Erdwall und wieder herunter (%s s). Oben +%s Reichweite und Sicht über sein Wallstück, er läuft nur auf Erdwällen." % [_z(kd["kletter_abklingzeit"]), _z(kd["wall_bonus"])],
-			"[R] Klonmaschine auf das freie Feld unter der Maus, einmal pro Runde. Wer hindurchgeht, wird einmal geklont – mit seinem aktuellen Leben. Das gilt auch für Gegner! Klone geben keine Prämie und werden nicht nochmal geklont.",
+			"[E] Klettern: auf einen angrenzenden Erdwall und wieder herunter (%s s). Oben +%s Reichweite und Sicht über sein Wallstück." % [_z(kd["kletter_abklingzeit"]), _z(kd["wall_bonus"])],
+			"[R] Klonmaschine auf das freie Feld unter der Maus, einmal pro Runde: Wer hindurchgeht, wird einmal geklont – mit seinem aktuellen Leben. Das gilt auch für Gegner! Klone geben keine Prämie.",
 			"Auf einem verlorenen Checkpoint holt er ihn %s-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder da." % _z(kd["cp_faktor"])]]]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
-	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "bild": _bild(pilot), "gross": true,
+	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "marke_farbe": Stil.LEUCHT, "bild": _figur(pilot),
 		"werte": [["Leben", _z(pilot["leben"])], ["Tempo", _z(pilot["tempo"])]],
-		"abschnitte": [["Was er macht", TITEL, [
+		"abschnitte": [["Was er macht", Stil.LEUCHT, [
 			"Kämpft nicht. Kommt aus der Pilotenfabrik, die an jeder Batterie hängt.",
 			"Bemannt die nächste Batterie mit freiem Platz und wartet sonst an der Fabrik.",
 			"Reservepilot (Batterie Stufe 1): rückt nach, wenn einer fehlt, und repariert sonst ausgefallene Fabriken, Batterien und lahme Türme in %s Sekunden." % _z(W.REPARATUR_SEK)]]]})
-	truppen.append({"name": "Verhalten", "unter": "so entscheiden deine Truppen selbst", "marke": "Regeln", "bild": _bild(W.EINHEITEN["technogunner"]), "gross": true,
-		"werte": [["je Fabrik", "max. %d" % W.MAX_JE_FABRIK], ["Nachbau", _z(W.PRODUKTION_SEK) + " s"], ["Kosten", "keine"]],
-		"abschnitte": [["Regeln", TITEL, [
-			"Maximal %d aktive Truppen pro Fabrik (im Grundfall). Fällt eine, baut die Fabrik sie nach." % W.MAX_JE_FABRIK,
-			"Stellungen werden stets aufgefüllt. Das passiert nicht, wenn der Weg nicht frei ist.",
-			"Am Boden kämpfen sie gegen Gegner auf dem Boden.",
-			"Wer durchgebrochen ist, wird nicht verfolgt – um den kümmern sich deine Stellungen und Türme weiter hinten.",
-			"Ausnahme am Rundenende: Kommt nichts mehr nach, steigen Truppen ohne Ziel aus ihren Stellungen und gehen den letzten Gegnern hinterher.",
-			"Geschossen wird nur aus der Stellung oder am Boden auf Gegner, die sie sehen – immer nur in Reichweite.",
-			"Je verlorenem Checkpoint geht eine Truppe ihn zurückholen.",
-			"Klick auf eine Truppe zeigt ihre Reichweite und was sie darin nicht treffen kann."]]]})
 
+	var ui := Werte.NEU + "ui/"
 	var bauten: Array = [
-		{"name": "Fabrik", "unter": "baut Truppen", "marke": "%d  [1]" % W.KOSTEN_FABRIK, "skizze": "fabrik",
+		{"name": "Fabrik", "unter": "baut Truppen", "marke": "%d · [1]" % W.KOSTEN_FABRIK, "bild": _einzel(Werte.NEU + "gebaeude/fabrik_grund.png", Vector2(64, 64)),
 			"werte": [["Preis", str(W.KOSTEN_FABRIK)], ["jede weitere", "+%s %%" % _z(W.KOSTEN_FABRIK_PROZENT)], ["Truppen", str(W.MAX_JE_FABRIK)], ["Leben", _z(W.LEBEN_FABRIK)]],
-			"abschnitte": [["Was sie macht", TITEL, [
-				"Maximal %d aktive Truppen (im Grundfall). Welche Truppe, wählst du im Fabrikmenü; ein Wechsel gilt für die nächste Truppe." % W.MAX_JE_FABRIK,
+			"abschnitte": [["Was sie macht", Stil.LEUCHT, [
+				"Hält bis zu %d Truppen am Leben. Welche Truppe, wählst du im Fenster der Fabrik; ein Wechsel gilt für die nächste Truppe." % W.MAX_JE_FABRIK,
 				"Steht am Boden und versperrt den Weg wie ein Erdwall, aber nicht die Sicht.",
 				"Truppen brauchen einen Ausgang: ein freies Feld oder ein Tor direkt an der Fabrik. Ohne Ausgang (rotes Kreuz) besetzen sie nur Stellungen, die direkt anliegen – nicht über Eck.",
 				"Sphären, Schleudern und Sprenger können sie ausfallen lassen. Nahkämpfer greifen sie nicht an."]],
-				["Ausbau", TITEL, [
-				"Stufe 1 (%d): legt sich auf ihre Truppe fest und bekommt dafür eine Truppe mehr." % W.KOSTEN_STUFE[0],
-				"Stufe 2 (%d): bessere Werte für diese Truppe." % W.KOSTEN_STUFE[1],
-				"Stufe 3 (%d): eine von drei Fähigkeiten – siehe Reiter Truppen." % W.KOSTEN_STUFE[2]]]]},
-		{"name": "Erdwall", "unter": "lenkt den Gegnerweg", "marke": "%d  [2]" % W.KOSTEN_WALL, "skizze": "wall",
+				["Ausbau", Stil.GOLD, [
+				"Stufe 1 (%d): legt sich auf ihre Truppe fest, dafür eine Truppe mehr." % W.KOSTEN_STUFE[0],
+				"Stufe 2 (%d) und Stufe 3 (%d): siehe Reiter Truppen – dort mit Bild je Stufe." % [W.KOSTEN_STUFE[1], W.KOSTEN_STUFE[2]]]]]},
+		{"name": "Erdwall", "unter": "lenkt den Gegnerweg", "marke": "%d · [2]" % W.KOSTEN_WALL, "bild": _einzel(ui + "bau_wall.png", Vector2(32, 32)),
 			"werte": [["Preis", str(W.KOSTEN_WALL)], ["Leben", _z(W.LEBEN_WALL)], ["ab Runde", str(W.WAELLE_AB_WELLE)]],
-			"abschnitte": [["Was er macht", TITEL, [
+			"abschnitte": [["Was er macht", Stil.LEUCHT, [
 				"Gegner nehmen den kürzesten freien Weg zur Basis – Erdwälle machen ihn länger.",
 				"Nur wenn gar kein Weg mehr frei ist, reißen sie Erdwälle ein.",
-				"Während der Welle kann kein Erdwall nachgebaut werden.",
-				"Grundlage für Stellung, Turm und Tor."]]]},
-		{"name": "Stellung", "unter": "Ausbau eines Erdwalls", "marke": "%d  [3]" % W.KOSTEN_STELLUNG, "skizze": "stellung",
+				"Maustaste halten zieht eine ganze Reihe. Während der Welle kann kein Erdwall nachgebaut werden.",
+				"Grundlage für Stellung, Turm, Tor und Wallpanzer – und Halt für den Energieschild der Batterie."]]]},
+		{"name": "Stellung", "unter": "Ausbau eines Erdwalls", "marke": "%d · [3]" % W.KOSTEN_STELLUNG, "bild": _einzel(ui + "bau_stellung.png", Vector2(32, 32)),
 			"werte": [["Preis", str(W.KOSTEN_STELLUNG)], ["Platz", "1 Truppe"]],
-			"abschnitte": [["Was sie macht", TITEL, [
+			"abschnitte": [["Was sie macht", Stil.LEUCHT, [
 				"Eine Truppe steht oben und schießt über die Erdwälle ihres Wallstücks. Fremde Wallstücke versperren die Sicht.",
 				"Mehr Reichweite von oben: Technogunner +%s, Scharfschütze +%s, Plasmawerfer +%s." % [_z(W.stellung_bonus(W.EINHEITEN["technogunner"])), _z(W.stellung_bonus(W.EINHEITEN["scharfschuetze"])), _z(W.stellung_bonus(W.EINHEITEN["plasmawerfer"]))],
 				"Kein Schuss durch die Lücke zwischen Erdwällen, die sich nur an den Ecken berühren.",
-				"Wachposten: Auf einem einzelnen Erdwall ohne Nachbarwälle reicht jede Truppe noch +%s Felder weiter." % _z(W.WACHPOSTEN_BONUS),
+				"Wachposten: Auf einem einzelnen Erdwall ohne Nachbarwälle reicht jede Truppe +%s Felder weiter." % _z(W.WACHPOSTEN_BONUS),
 				"Nahkämpfer am Boden kommen nicht heran. Gefährlich sind Sphären, Schleudern, Rauch und Myr-Drohnen.",
 				"Darf auch in der Welle gebaut werden, solange kein Gegner in der Nähe ist."]]]},
 		_turmkarte("geschuetz", ["Das ist der bisherige Turm."]),
@@ -610,46 +686,75 @@ func _baue_daten() -> void:
 		_turmkarte("funk", ["Zählt alle Stellungen im Umkreis, nicht nur eine – je mehr Stellungen drumherum, desto mehr lohnt er."]),
 		_turmkarte("lanze", ["Braucht eine Klammer: drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer zur selben Seite ab (⊐). Der Turm steht in der Mitte.",
 			"Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
-		{"name": "Schildgenerator", "unter": "Großbau in einem Hof", "marke": "%d  [4]" % W.KOSTEN_GENERATOR, "skizze": "generator",
-			"werte": [["Preis", str(W.KOSTEN_GENERATOR)], ["Felder", "1"], ["Hof", "%d–%d Felder" % [W.HOF_MIN, W.HOF_MAX]], ["Schutz", "%d %%" % roundi(W.KUPPEL_SCHUTZ * 100)]],
-			"abschnitte": [["Was er macht", TITEL, [
-				"Ein Hof sind freie Felder, die rundum von Erdwällen eingeschlossen sind (ein Tor zählt mit). Mit [4] auf ein freies Hof-Feld gesetzt entsteht der Generator.",
-				"Seine Kuppel deckt den ganzen Ring und ein Feld darüber hinaus. Truppen darunter – in Stellungen und am Boden – nehmen %d %% weniger Schaden." % roundi(W.KUPPEL_SCHUTZ * 100),
-				"Steine der Schleuder prallen an der Kuppel ab; Schleudern und Rauchwerfer suchen sich Ziele außerhalb.",
-				"Bricht der Ring auf (Sprenger), erlischt die Kuppel, bis er wieder geschlossen ist. Pro Hof ein Generator."]],
-				["Dagegen spricht", SCHLECHT, ["Teuer, und der Hof bindet Platz und Erdwälle, die sonst den Weg verlängern."]]]},
 		_turmkarte("heil", ["Braucht eine Treppe: drei Erdwälle schräg hintereinander, der Turm in der Mitte. Andere Erdwälle daneben stören nicht, solange keine andere Turmform passt.",
 			"Truppen sind knapp: Wer überlebt, muss nicht nachgebaut werden."]),
-		{"name": "Panzerung", "unter": "Ausbau eines Erdwalls", "marke": "%d  [7]" % W.KOSTEN_PANZER, "skizze": "panzer",
+		{"name": "Schildgenerator", "unter": "Großbau in einem Hof", "marke": "%d · [4]" % W.KOSTEN_GENERATOR, "bild": _einzel(Werte.NEU + "tuerme/schild.png", Vector2(64, 64)),
+			"werte": [["Preis", str(W.KOSTEN_GENERATOR)], ["Felder", "1"], ["Hof", "%d–%d Felder" % [W.HOF_MIN, W.HOF_MAX]], ["Schutz", "%d %%" % roundi(W.KUPPEL_SCHUTZ * 100)]],
+			"abschnitte": [["Was er macht", Stil.LEUCHT, [
+				"Ein Hof sind freie Felder, die rundum von Erdwällen eingeschlossen sind (ein Tor zählt mit). Mit [4] auf ein freies Hof-Feld gesetzt entsteht der Generator.",
+				"Seine Kuppel deckt den ganzen Ring und ein Feld darüber hinaus. Truppen darunter nehmen %d %% weniger Schaden." % roundi(W.KUPPEL_SCHUTZ * 100),
+				"Steine der Schleuder prallen an der Kuppel ab; Schleudern und Rauchwerfer suchen sich Ziele außerhalb.",
+				"Bricht der Ring auf (Sprenger), erlischt die Kuppel, bis er wieder geschlossen ist. Pro Hof ein Generator."]],
+				["Dagegen spricht", SCHLECHT, ["– Teuer, und der Hof bindet Platz und Erdwälle, die sonst den Weg verlängern."]]]},
+		{"name": "Wallpanzer", "unter": "Ausbau eines Erdwalls", "marke": "%d · [7]" % W.KOSTEN_PANZER, "bild": _einzel(ui + "bau_panzer.png", Vector2(32, 32)),
 			"werte": [["Preis", str(W.KOSTEN_PANZER)]],
-			"abschnitte": [["Was sie macht", TITEL, [
-				"Die erste Sprengung reißt nur die Panzerung weg, erst ein zweiter Sprenger bringt den Erdwall zu Fall.",
+			"abschnitte": [["Was er macht", Stil.LEUCHT, [
+				"Stahlplatten auf dem Erdwall: Die erste Sprengung reißt nur den Wallpanzer weg, erst ein zweiter Sprenger bringt den Erdwall zu Fall.",
 				"Eine Sprengung in die Tiefe hört an einem gepanzerten Erdwall auf.",
 				"Lässt sich mit Stellung, Turm und Tor kombinieren."]]]},
-		{"name": "Tor", "unter": "Ausbau eines Erdwalls", "marke": "%d  [6]" % W.KOSTEN_TOR, "skizze": "tor",
+		{"name": "Tor", "unter": "Ausbau eines Erdwalls", "marke": "%d · [6]" % W.KOSTEN_TOR, "bild": _einzel(ui + "bau_tor.png", Vector2(32, 32)),
 			"werte": [["Preis", str(W.KOSTEN_TOR)]],
-			"abschnitte": [["Was es macht", TITEL, [
+			"abschnitte": [["Was es macht", Stil.LEUCHT, [
 				"Durchgang nur für eigene Truppen. Für Gegner bleibt es ein Erdwall.",
 				"Direkt an einer Fabrik ist es ihr Ausgang.",
 				"Deine Truppen kommen so schneller zum Abfangen und zu den Checkpoints.",
 				"Zusammen mit Erdwällen lassen sich Fabriken einschließen (Zitadelle)."]]]},
-		{"name": "Batterie", "unter": "Railgun mit Pilotenfabrik", "marke": "%d  [5]" % W.KOSTEN_BATTERIE, "skizze": "batterie",
-			"werte": [["Preis", str(W.KOSTEN_BATTERIE)], ["Reichweite", _z(W.BATTERIE["reichweite"])], ["Schaden", _z(W.BATTERIE["schaden"])], ["Angriff alle", _z(W.BATTERIE["abklingzeit"]) + " s"],
-				["Fläche", _z(W.BATTERIE["flaeche"])], ["Plätze", "%d Piloten" % W.BATTERIE["plaetze"]]],
-			"abschnitte": [["Was sie macht", TITEL, [
-				"Zwei Felder: Batterie und angebaute Pilotenfabrik ([T] dreht sie beim Bauen).",
-				"Feuert nur, solange alle Plätze mit Piloten besetzt sind – weit, über Erdwälle hinweg und mit Flächenschaden."]],
-				["Ausbau", TITEL, [
-				"Stufe 1 (%d) %s: %s" % [W.KOSTEN_BATTERIE_STUFE[0], W.BATTERIE_STUFEN[0]["name"], "Ein vierter Pilot rückt nach und repariert Ausgefallenes."],
-				"Stufe 2 (%d) %s: %s" % [W.KOSTEN_BATTERIE_STUFE[1], W.BATTERIE_STUFEN[1]["name"], W.BATTERIE_STUFEN[1]["text"]],
-				"Stufe 3 (%d) %s: %s" % [W.KOSTEN_BATTERIE_STUFE[2], W.BATTERIE_STUFEN[2]["name"], "Schild auf einem Wegfeld in Reichweite. Gegner müssen ihn erst zerschlagen, eigene Truppen gehen hindurch."]]]]},
+		_batteriekarte(),
 	]
-	truppen.append({"name": "Budget", "unter": "woher das Geld kommt", "marke": "Regeln", "skizze": "geld",
-			"werte": [["Start", str(W.START_BUDGET)], ["Leben", str(W.START_LEBEN)], ["Abriss", "%d %% zurück" % int(W.ERSTATTUNG * 100)]],
-			"abschnitte": [["Einkommen", TITEL, [
-				"Nach jeder Runde: %d + %d je Rundennummer." % [W.BONUS_JE_WELLE, W.BONUS_ZUWACHS],
-				"Je Checkpoint, der am Rundenende dir gehört: %d." % W.BONUS_JE_CHECKPOINT,
-				"Zinsen: für je %d Budget, das am Rundenende übrig ist, %d dazu – höchstens %d." % [W.ZINS_SCHRITT, W.ZINS_JE_SCHRITT, W.ZINS_STUFEN * W.ZINS_JE_SCHRITT],
-				"Dazu eine kleine Prämie je besiegtem Gegner.",
-				"Runde 1: nur Fabriken. Erdwälle gibt es ab Runde %d – die ersten %d davon gratis." % [W.WAELLE_AB_WELLE, W.STARTPAKET_WAELLE]]]]})
-	_daten = [gegner, truppen, bauten]
+
+	var regeln: Array = [
+		{"name": "Budget", "unter": "woher das Geld kommt", "marke": "Regeln", "marke_farbe": Stil.TEXT_BLASS, "bild": {"symbol": "muenze", "farbe": Stil.GOLD},
+			"werte": [["Start", str(W.START_BUDGET)], ["Leben", str(W.START_LEBEN)], ["Abriss", "%d %% zurück" % int(W.ERSTATTUNG * 100)], ["Zinsen max.", "+%d" % (W.ZINS_STUFEN * W.ZINS_JE_SCHRITT)]],
+			"abschnitte": [
+				["Nach jeder Runde", Stil.GOLD, [
+					"Rundenbonus: %d + %d × Rundennummer (nach Runde 5 also %d)." % [W.BONUS_JE_WELLE, W.BONUS_ZUWACHS, W.wellen_bonus(5)],
+					"Checkpoints: +%d je Checkpoint, der dir am Rundenende gehört." % W.BONUS_JE_CHECKPOINT,
+					"Zinsen: je volle %d übriges Budget +%d, höchstens +%d (ab %d Budget)." % [W.ZINS_SCHRITT, W.ZINS_JE_SCHRITT, W.ZINS_STUFEN * W.ZINS_JE_SCHRITT, W.ZINS_STUFEN * W.ZINS_SCHRITT]]],
+				["Während der Runde", Stil.GOLD, [
+					"Jeder besiegte Gegner bringt sofort seine Prämie (steht auf seiner Karte). Klone geben nichts."]],
+				["Ausgaben", Stil.LEUCHT, [
+					"Jede weitere Fabrik kostet %s %% mehr als die vorige." % _z(W.KOSTEN_FABRIK_PROZENT),
+					"Abriss (Rechtsklick): Was du in dieser Bauphase gebaut hast, gibt es voll zurück, Älteres zu %d %%." % int(W.ERSTATTUNG * 100),
+					"Runde 1: nur Fabriken. Erdwälle gibt es ab Runde %d – die ersten %d davon gratis." % [W.WAELLE_AB_WELLE, W.STARTPAKET_WAELLE]]],
+				["Tipp", Stil.TEXT_BLASS, ["+ Bis %d Budget lohnt Sparen – darüber wachsen die Zinsen nicht mehr." % (W.ZINS_STUFEN * W.ZINS_SCHRITT)]]]},
+		{"name": "Verhalten", "unter": "so entscheiden deine Truppen selbst", "marke": "Regeln", "marke_farbe": Stil.TEXT_BLASS, "bild": _figur(W.EINHEITEN["technogunner"]),
+			"werte": [["je Fabrik", "%d (St. 1: %d)" % [W.MAX_JE_FABRIK, W.MAX_JE_FABRIK + 1]], ["Nachbau", _z(W.PRODUKTION_SEK) + " s"], ["Endkampf", "%d je Fabrik" % W.MAX_JE_FABRIK_ENDKAMPF]],
+			"abschnitte": [
+				["Nachschub", Stil.LEUCHT, [
+					"Jede Fabrik hält ihre Truppen am Leben: Fällt eine, baut sie nach %s Sekunden eine neue – kostenlos." % _z(W.PRODUKTION_SEK),
+					"Freie Stellungen werden immer aufgefüllt, solange der Weg dorthin frei ist.",
+					"Welche Stellungen eine Fabrik besetzt, legst du mit dem Zuweisungspfeil fest: Fabrik anklicken, Maustaste halten und auf eine Stellung ziehen."]],
+				["Im Kampf", Stil.LEUCHT, [
+					"In der Stellung schießen sie über die Erdwälle ihres Wallstücks, am Boden fangen sie Gegner am Boden ab.",
+					"Geschossen wird nur auf Gegner in Reichweite und Sicht. Wen sie zuerst nehmen, stellst du im Fenster der Fabrik ein (Zielwahl).",
+					"Durchgebrochene Gegner werden nicht verfolgt – um die kümmern sich Stellungen und Türme weiter hinten.",
+					"Rundenende: Kommt nichts mehr nach, verlassen Truppen ohne Ziel ihre Stellung und jagen die letzten Gegner."]],
+				["Checkpoints", Stil.LEUCHT, ["Je verlorenem Checkpoint geht eine Bodentruppe hin und holt ihn zurück."]],
+				["Tipp", Stil.TEXT_BLASS, ["Klick auf eine Truppe zeigt ihre Reichweite und was sie darin nicht treffen kann."]]]},
+		{"name": "Checkpoints", "unter": "zwei Fahnen auf dem Gegnerweg", "marke": "ab Runde %d" % W.CHECKPOINTS_AB_WELLE, "marke_farbe": Stil.KUPFER, "bild": _einzel(Werte.NEU + "gebaeude/checkpoint.png", Vector2(48, 48)),
+			"werte": [["Einnahme", _z(W.EINNAHME_SEK) + " s"], ["Zurück", _z(W.RUECKEROBERUNG_SEK) + " s"], ["Bonus", "+%d" % W.BONUS_JE_CHECKPOINT]],
+			"abschnitte": [["Regeln", Stil.LEUCHT, [
+				"Sie liegen in jeder Partie etwas anders – deine Basis auch. Der Gegnerweg führt schon ab Runde 1 der Reihe nach durch beide; einnehmen können die Gegner sie erst ab Runde %d." % W.CHECKPOINTS_AB_WELLE,
+				"Gegner bleiben darauf stehen, bis sie ihn eingenommen haben. Danach gehört er dem Gegner, und die nächste Welle startet dort.",
+				"Zurückholen: Je verlorenem Checkpoint geht eine Bodentruppe hin und hält ihn – nur solange die Welle läuft und kurz danach.",
+				"Jeder Checkpoint, der am Rundenende dir gehört, bringt +%d Budget." % W.BONUS_JE_CHECKPOINT]]]},
+		{"name": "Zone und HQ", "unter": "die drei linken Spalten", "marke": "Runde %d" % W.LETZTE_RUNDE, "marke_farbe": Stil.KUPFER, "bild": _einzel(Werte.NEU + "gebaeude/myr_hq_gross.png", Vector2(128, 128)),
+			"werte": [["HQ-Leben", _z(W.HQ_LEBEN)], ["Abstand", "%d Felder" % W.ZONE_ABSTAND]],
+			"abschnitte": [["Regeln", Stil.LEUCHT, [
+				"In der Zone kann nicht gebaut werden. Ein Schild schützt alles darin bis zur letzten Runde.",
+				"Eigene Truppen halten Abstand zur Zone, damit die Gegner herauskommen.",
+				"Runde %d ist der Gegenangriff: Das HQ muss fallen. Gegner kommen ohne Ende, niemand geht mehr in Stellungen, und jede Fabrik hat bis zu %d aktive Truppen." % [W.LETZTE_RUNDE, W.MAX_JE_FABRIK_ENDKAMPF],
+				"Ausgefallene Gebäude laufen dort nach einiger Zeit wieder an.",
+				"Während des Gegenangriffs darfst du weiterbauen und ausbauen – nur keine neuen Erdwälle."]]]},
+	]
+	_daten = [gegner, truppen, bauten, regeln]

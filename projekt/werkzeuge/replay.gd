@@ -87,7 +87,7 @@ func _process(delta: float) -> bool:
 				"einheit":
 					spiel.stelle_um(z, a["typ"])
 				"schild":
-					if spiel.setze_schild(Vector2i(int(a["bx"]), int(a["by"])), z) != "":
+					if not a.has("x2") or spiel.setze_schild(Vector2i(int(a["bx"]), int(a["by"])), z, Vector2i(int(a["x2"]), int(a["y2"]))) != "":
 						gescheitert += 1
 				"upgrade":
 					if not spiel.werte_auf(z, str(a.get("faehigkeit", ""))):

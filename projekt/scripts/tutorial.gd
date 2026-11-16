@@ -267,10 +267,10 @@ func _process(delta: float) -> void:
 func _lege_box() -> void:
 	_box.reset_size()
 	var groesse := _box.size
-	var y := 720.0 - 40.0 - groesse.y - 34.0   # über der Hinweiszeile unten
+	var y := 620.0 - groesse.y - 10.0   # über der Konsole (neue Oberfläche, 16.11.)
 	var ziel := _ziel_rect()
 	if ziel.size != Vector2.ZERO and ziel.end.y > y - 30.0:
-		y = 52.0
+		y = 92.0   # unter den Inseln oben
 	_box.position = Vector2((1280.0 - groesse.x) / 2.0, y)
 	_hinweis.position = _box.position + (Vector2(12, groesse.y + 4) if y < 100.0 else Vector2(12, -22))
 	_hinweis.visible = _hinweis.text != ""
@@ -316,7 +316,7 @@ func _zeichne_lichter() -> void:
 # ------------------------------------------------------------------ Hilfen für die Schritte
 
 func _feld(z: Vector2i, r: float = 0.5) -> Rect2:
-	var m: Vector2 = spiel.karte.mitte(z)
+	var m: Vector2 = spiel.welt_zu_bild(spiel.karte.mitte(z))   # HD-2D: über die 3D-Kamera
 	var h := r * Werte.ZELLE
 	return Rect2(m - Vector2(h, h), Vector2(h, h) * 2.0)
 

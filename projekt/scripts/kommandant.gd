@@ -1,6 +1,8 @@
 class_name Kommandant
 extends Einheit
-## Kommandant Brakk: einmal pro Partie, mit WASD gesteuert. Schießt von selbst auf den vordersten Gegner.
+## Kommandant Brakk: einmal pro Partie. Angeklickt mit WASD gesteuert, sonst handelt er selbst (16.11.):
+##   im Kampf geht er auf Gegner nahe seinem Posten los, ohne Gegner kehrt er zum Posten zurück (wo man ihn zuletzt hingestellt hat).
+## Schießt von selbst auf den vordersten Gegner.
 ##   [Q] Sammeln: Bodentruppen im Umkreis folgen ihm. Nochmal [Q]: Losschlagen auf das Feld unter der Maus (Werteschub).
 ##   [E] Klettern: auf einen angrenzenden Erdwall und wieder herunter. Oben schießt er weiter und sieht über sein Wallstück.
 ##   [R] Klonmaschine: einmal pro Runde auf ein freies Feld setzen. Wer hindurchgeht, wird einmal geklont – auch Gegner.
@@ -16,6 +18,8 @@ var klon_genutzt := false
 var _angriff_t := -1.0             # läuft die Angriffsanimation: Sekunden seit Beginn (-1 = keine)
 var _angriff_ziel: Node2D = null
 var _schuesse := 0
+var anker := Vector2.INF           # sein Posten: dorthin kehrt er zurück, wenn er selbst handelt
+const JAGD_FELDER := 3.5           # so weit (Felder) vom Posten geht er selbst auf Gegner los
 
 
 func einrichten_kommandant(p_spiel: Node, p_karte: Karte, zelle: Vector2i) -> void:
@@ -54,6 +58,11 @@ func _process(delta: float) -> void:
 			r.y -= 1.0
 		if Input.is_physical_key_pressed(KEY_S):
 			r.y += 1.0
+	if anker == Vector2.INF:
+		anker = position
+	var gesteuert := r != Vector2.ZERO
+	if not gesteuert and not spiel.kommandant_gewaehlt() and am_boden() and _angriff_t < 0.0:
+		r = _selbst()
 	_sprite.bewegt(r != Vector2.ZERO)
 	if r != Vector2.ZERO:
 		var schritt := r.normalized() * float(daten["tempo"]) * Werte.ZELLE * delta
@@ -61,10 +70,37 @@ func _process(delta: float) -> void:
 			_sprite.flip_h = r.x < 0.0
 		_versuche(Vector2(schritt.x, 0.0))
 		_versuche(Vector2(0.0, schritt.y))
+		if gesteuert:
+			anker = position   # gesteuert: der Posten wandert mit
 	# Schießen: im Kampf auf den vordersten Gegner in Reichweite
 	if spiel.im_kampf():
 		_angriff(delta)
 	queue_redraw()
+
+
+## Selbst handeln: Richtung, in die er gehen will (oder Null). Gegner nahe dem Posten außerhalb der Schussweite → hin,
+## sonst zurück zum Posten. Gegangen wird über den Wegesucher der Truppen (um Wälle herum).
+func _selbst() -> Vector2:
+	var ziel := Vector2.INF
+	if spiel.im_kampf():
+		var g: Node2D = spiel.gegner_in_reichweite(anker, JAGD_FELDER * Werte.ZELLE, false, Karte.KEINE, "erste", false)
+		if g != null:
+			if position.distance_to(g.position) <= reichweite_jetzt() * Werte.ZELLE * 0.8:
+				return Vector2.ZERO
+			ziel = g.position
+	if ziel == Vector2.INF:
+		if position.distance_to(anker) <= 6.0:
+			return Vector2.ZERO
+		ziel = anker
+	var hier := karte.zelle_bei(position)
+	var dort := karte.zelle_bei(ziel)
+	if hier != dort:
+		var weg := karte.einheiten_weg(hier, dort)
+		if weg.size() >= 2:
+			ziel = karte.mitte(weg[1])
+		elif weg.is_empty():
+			return Vector2.ZERO   # kein Weg (z. B. Gegner hinter Wällen): stehen bleiben
+	return (ziel - position).normalized() if position.distance_to(ziel) > 2.0 else Vector2.ZERO
 
 
 ## Angriff im Takt der Animation: Sie läuft einmal durch, und in den Bildern mit dem Laserblitz fällt je ein Schuss.
@@ -96,6 +132,7 @@ func _angriff(delta: float) -> void:
 				m.x = -m.x
 			spiel.schadensquelle = "fabrik:-1,-1"
 			spiel.schuss_herkunft = position
+			Ton.am_ort(spiel, "tc-pistol", position)
 			spiel.strahl(position + m, _angriff_ziel.position, Color(daten["schussfarbe"]), 3.0)
 			_angriff_ziel.nimm_schaden(float(daten["schaden"]))
 	if _angriff_t >= dauer:

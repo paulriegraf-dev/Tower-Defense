@@ -17,6 +17,11 @@ var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
 var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN (aus der Form der Nachbarwälle)
 var turm_stufe: Dictionary = {}    # Turm-Zelle -> Stufe 2 oder 3 (fehlt = Stufe 1)
 var turm_faehigkeit: Dictionary = {}   # Turm-Zelle -> gewählte Stufe-3-Fähigkeit (Schlüssel in Werte.TURM_STUFE_3)
+# Neue Grafik (16.11.): Stufe, letzter Schuss und Blickrichtung je Batterie (vom Spiel gesetzt)
+var batterie_stufe_neu: Dictionary = {}
+var batterie_schuss: Dictionary = {}   # Batterie-Zelle -> Sekunden seit dem Schuss (fehlt = Ruhe)
+var batterie_blick: Dictionary = {}    # Batterie-Zelle -> true = nach links
+var _neu_bilder: Dictionary = {}
 var generator_paar: Dictionary = {}   # Schildgenerator: Feld -> sein zweites Feld (beide Richtungen)
 var kuppeln: Array = []              # aktive Schildkuppeln: [Mitte, Radius in Pixeln, Generatorfeld]
 var _hoefe: Array = []               # Höfe: je eine Liste der Felder (frei oder mit Gebäude), rundum von Erdwällen eingeschlossen
@@ -99,6 +104,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_zeit += delta
+	for b: Vector2i in batterie_schuss.keys():
+		batterie_schuss[b] = float(batterie_schuss[b]) + delta
+		if float(batterie_schuss[b]) > 0.8:
+			batterie_schuss.erase(b)
 	if _sicht_an:
 		_sicht_in -= delta
 		if _sicht_in <= 0.0:
@@ -152,7 +161,21 @@ func ist_frei(z: Vector2i) -> bool:
 
 
 func ist_bebaubar(z: Vector2i) -> bool:
-	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and z != basis and not checkpoints.has(z)
+	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and not ist_basis(z) and not checkpoints.has(z)
+
+
+## Die eigene Basis belegt 3×2 Felder (16.11.): `basis` ist das untere mittlere Feld (Ziel der Gegner), dazu je eins links
+## und rechts sowie die drei Felder dahinter. Begehbar bleiben sie (die Gegner laufen hinein), bebaubar sind sie nicht.
+func ist_basis(z: Vector2i) -> bool:
+	return absi(z.x - basis.x) <= 1 and z.y <= basis.y and z.y >= basis.y - 1
+
+
+static func basis_felder(b: Vector2i) -> Array[Vector2i]:
+	var liste: Array[Vector2i] = []
+	for dy in [-1, 0]:
+		for dx in [-1, 0, 1]:
+			liste.append(b + Vector2i(dx, dy))
+	return liste
 
 
 ## Mittelpunkt einer Zelle in Weltkoordinaten.
@@ -1142,7 +1165,7 @@ func wurf_landefeld(von: Vector2i, meiden: Vector2 = Vector2.INF, meiden_r: floa
 		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
 			var z := Vector2i(x, y)
 			var luft := Vector2(z - von).length()
-			if not ist_frei(z) or z == basis or luft > Werte.WURF["tasche_weit"]:
+			if not ist_frei(z) or ist_basis(z) or luft > Werte.WURF["tasche_weit"]:
 				continue
 			# Rundum eingeschlossen (von hier kommt niemand zu Fuß zur Basis, ohne etwas einzureißen)? Kein Landeziel:
 			# Geworfen wird hinter eine Mauer, nicht in einen geschlossenen Kern.
@@ -1215,7 +1238,7 @@ func freies_feld_nahe(punkt: Vector2) -> Vector2i:
 	for y in Werte.ZEILEN:
 		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
 			var z := Vector2i(x, y)
-			if not ist_frei(z) or z == basis:
+			if not ist_frei(z) or ist_basis(z):
 				continue
 			var d := mitte(z).distance_to(punkt)
 			if d < beste:
@@ -1275,7 +1298,9 @@ func _r(z: Vector2i, x: float, y: float, w: float, h: float, farbe: Color) -> vo
 func _draw() -> void:
 	var zg := float(Werte.ZELLE)
 	# Boden
-	for y in Werte.ZEILEN:
+	if Werte.grafik_neu:
+		_zeichne_boden_neu()
+	for y in (Werte.ZEILEN if not Werte.grafik_neu else 0):
 		for x in Werte.SPALTEN:
 			var z := Vector2i(x, y)
 			_r(z, 0, 0, zg, zg, GRAS_A if (x + y) % 2 == 0 else GRAS_B)
@@ -1307,7 +1332,7 @@ func _draw() -> void:
 				_zeichne_panzer(z, 1.0)
 			if stuetze_von.has(z):
 				_zeichne_stuetze(z, Color(Werte.TURMARTEN[turm_art.get(stuetze_von[z], "geschuetz")]["farbe"]).darkened(0.25), 0.5)
-			if ausbau.has(z):
+			if ausbau.has(z) and not (Werte.grafik_neu and ausbau[z] == TURM):   # neue Grafik: Türme zeichnet TurmBild
 				_zeichne_ausbau(z, ausbau[z], 1.0)
 				if ausbau[z] == TURM and not turm_aktiv(z):
 					_zeichne_turm_aus(z)
@@ -1419,7 +1444,8 @@ func _draw() -> void:
 			draw_arc((Vector2(vorschau_zelle) + Vector2(0.5, 0.5)) * zg, radius * zg, 0.0, TAU, 64, Color(TECH_LICHT, 0.6), 2.0)
 		else:
 			if vorschau_typ == WALL:
-				_zeichne_wall(vorschau_zelle, 0.6)
+				if not Werte.grafik_hd:   # HD-2D: durchsichtiger Mauerblock (hd_ansicht._bauvorschau)
+					_zeichne_wall(vorschau_zelle, 0.6)
 			elif vorschau_typ == BATTERIE:
 				_zeichne_batterie(vorschau_zelle, 0.6)
 				if vorschau_partner != KEINE:
@@ -1456,6 +1482,17 @@ func _zeichne_turm_aus(z: Vector2i) -> void:
 ## Stellung = Steinplattform mit Brüstung, Turm = Geschütz des Technoclans.
 func _zeichne_ausbau(z: Vector2i, typ: int, alpha: float) -> void:
 	var a := Color(1, 1, 1, alpha)
+	if Werte.grafik_neu and typ == STELLUNG:
+		# Plattform mit Brüstung; die Truppe darin zeichnet die Brüstung noch einmal vor sich
+		var o := Vector2(z) * Werte.ZELLE
+		draw_texture_rect(neu_bild("wand/stellung.png"), Rect2(o + Vector2(2, -2), Vector2(60, 48)), false, a)
+		draw_texture(neu_bild("wand/bruestung.png"), o + Vector2(6, 26), a)
+		return
+	if Werte.grafik_neu and typ == TURM:
+		if Werte.grafik_hd:
+			return   # HD-2D: Turm der Bauvorschau steht als Sprite3D auf dem Wall
+		TurmBild.zeichne(self, self, z, (Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE + Vector2(0, 24), 0, -1.0, alpha)
+		return
 	if typ == STELLUNG:
 		_r(z, 6, 4, 52, 38, STEIN_DUNKEL * a)
 		_r(z, 8, 6, 48, 34, STEIN * a)
@@ -1593,7 +1630,7 @@ func _finde_hoefe() -> void:
 						flaeche.append(d)
 			var beruehrt := false
 			for c in flaeche:
-				if c.x < Werte.ZONE_SPALTEN or c.x == 0 or c.y == 0 or c.x == Werte.SPALTEN - 1 or c.y == Werte.ZEILEN - 1 or c == basis or checkpoints.has(c):
+				if c.x < Werte.ZONE_SPALTEN or c.x == 0 or c.y == 0 or c.x == Werte.SPALTEN - 1 or c.y == Werte.ZEILEN - 1 or ist_basis(c) or checkpoints.has(c):
 					beruehrt = true
 					break
 			if not beruehrt and flaeche.size() >= Werte.HOF_MIN and flaeche.size() <= Werte.HOF_MAX:
@@ -1638,6 +1675,12 @@ func in_kuppel(punkt: Vector2) -> bool:
 ## Schildgenerator: Sockel mit leuchtendem Kern; die Kuppel selbst zeichnet _zeichne_kuppeln.
 func _zeichne_generator(z: Vector2i, alpha: float) -> void:
 	var a := Color(1, 1, 1, alpha)
+	if Werte.grafik_neu:
+		if Werte.grafik_hd and alpha >= 1.0:
+			return   # HD-2D: Sprite3D (hd_ansicht.gd)
+		var og := Vector2(z) * Werte.ZELLE
+		draw_texture_rect(neu_bild("tuerme/schild.png"), Rect2(og + Vector2(32 - 62, 58 - 122), Vector2(128, 128)), false, a)
+		return
 	_r(z, 6, 20, 52, 38, TECH_DUNKEL * a)
 	_r(z, 10, 24, 44, 30, TECH * a)
 	var m := (Vector2(z) + Vector2(0.5, 0.45)) * Werte.ZELLE
@@ -1652,8 +1695,8 @@ var zuweis_zug := Vector2.INF   # Mausposition, solange ein Pfeil gezogen wird
 var zuweis_einrast := KEINE     # Stellung, über der die Maus beim Ziehen gerade steht: der Pfeil rastet dort ein
 
 func _zeichne_zuweisung() -> void:
-	if zuweis_fabrik == KEINE:
-		return
+	if zuweis_fabrik == KEINE or Werte.grafik_hd:
+		return   # HD-2D: zeichnet die Oberfläche (hud.gd), oben auf den Mauern statt am Boden
 	var zg := float(Werte.ZELLE)
 	var von := (Vector2(zuweis_fabrik) + Vector2(0.5, 0.5)) * zg
 	for w in zuweis_ziele:
@@ -1693,6 +1736,24 @@ func _zeichne_kuppeln() -> void:
 
 
 ## Gepanzerter Erdwall: Stahlbeschlag an den Kanten mit Nieten.
+## Wallpanzer: Stahlrahmen mit Nieten und in der Mitte das Schild aus der Bauleiste (16.11. deutlicher).
+## In HD-2D liegt das auf der Mauerkrone, dazu Stahlplatten an den Seiten (hd_ansicht._wallpanzer).
+const PANZER_SCHILD := [
+	".AAAAAAAAA.",
+	"ALLLLLLLLLA",
+	"ALcBBBBBcBA",
+	"ABBBBBBBBBA",
+	"ABDDDDDDDBA",
+	"ABBBBBBBBBA",
+	"ABcBBBBBcBA",
+	".ABBBBBBBA.",
+	".ABBBBBBBA.",
+	"..ABBBBBA..",
+	"...ABBBA...",
+	"....ABA....",
+	".....A.....",
+]
+
 func _zeichne_panzer(z: Vector2i, alpha: float) -> void:
 	var a := Color(1, 1, 1, alpha)
 	var stahl := Color("8c96a8")
@@ -1703,9 +1764,232 @@ func _zeichne_panzer(z: Vector2i, alpha: float) -> void:
 	_r(z, 0, 40, 64, 6, dunkel * a)
 	for x: int in [2, 30, 58]:
 		_r(z, x, 1, 4, 4, Color("d8dee9") * a)
+	var farben := {"A": Color("10141a"), "B": Color("7e8a98"), "L": Color("c9d2de"), "D": Color("545e6b"), "c": Color("7fe0ff")}
+	var o := Vector2(32 - 11, 21 - 13)   # Schild mittig, 2 Pixel je Bildpunkt
+	for y in PANZER_SCHILD.size():
+		var zeile: String = PANZER_SCHILD[y]
+		for x in zeile.length():
+			if zeile[x] != ".":
+				_r(z, o.x + x * 2, o.y + y * 2, 2, 2, Color(farben[zeile[x]]) * a)
+
+
+## Neue Grafik: Bild aus assets/neu (zwischengespeichert).
+func neu_bild(pfad: String) -> Texture2D:
+	if not _neu_bilder.has(pfad):
+		_neu_bilder[pfad] = load(Werte.NEU + pfad)
+	return _neu_bilder[pfad]
+
+
+## Neue Grafik: Tech-Mauer im Stil der TC-Erdwälle – Metallplatte mit Fugen, helle Kante an offenen Seiten,
+## sichtbare Vorderseite mit cyanem Lichtband, wenn darunter kein Wall anschließt.
+func _zeichne_wall_neu(z: Vector2i, alpha: float) -> void:
+	var a := Color(1, 1, 1, alpha)
+	var o := Vector2(z) * Werte.ZELLE
+	var unten := inhalt(z + Vector2i.DOWN) == WALL
+	var v := 0 if (z.x * 7 + z.y * 3) % 5 != 0 else 1 + (z.x + z.y) % 4
+	if Werte.grafik_hd:
+		unten = true   # HD-2D: die Seiten macht der 3D-Mauerblock, hier nur die Oberseite
+	var hoehe := 64.0 if unten else 46.0
+	draw_texture_rect_region(neu_bild("wand/top_%d.png" % v), Rect2(o, Vector2(64, hoehe)), Rect2(0, 0, 64, hoehe), a)
+	if inhalt(z + Vector2i.UP) != WALL:
+		draw_rect(Rect2(o, Vector2(64, 3)), Color("b8c2cc") * a)
+	if inhalt(z + Vector2i.LEFT) != WALL:
+		draw_rect(Rect2(o, Vector2(3, hoehe)), Color("a9b3bd") * a)
+	if inhalt(z + Vector2i.RIGHT) != WALL:
+		draw_rect(Rect2(o + Vector2(61, 0), Vector2(3, hoehe)), Color("5b636c") * a)
+	if not unten:
+		draw_texture(neu_bild("wand/front.png"), o + Vector2(0, 46), a)
+		draw_rect(Rect2(o + Vector2(0, 64), Vector2(64, 4)), Color(0, 0, 0, 0.28 * alpha))
+
+
+## Neue Grafik: Boden wie in Terrain-Conquester und der Stilprobe – Grasfliesen aus dem TC-Blatt (zufällig gedreht),
+## in der Zone dunkler Fels, dazu Bewuchs (Grasbüschel, Blumen, Steine) auf freien Feldern. Das Raster zeigt sich nur beim Bauen.
+const BODEN_GRAS := [0, 0, 0, 1]   # nahtlose Grasfliesen, ungedreht (gedreht zeigten sie Kanten an jedem Feld)   # ähnliche Grüntöne, damit der Boden nicht wie ein Schachbrett wirkt
+const BODEN_DEKO := [0, 0, 0, 0, 1, 1, 1, 6, 6, 2, 3, 35, 61, 4, 20]
+
+func _zeichne_boden_neu() -> void:
+	var zg := float(Werte.ZELLE)
+	var blatt := neu_bild("terrain/SHEET2.png")
+	var fels := neu_bild("terrain/SHEET3.png")
+	for y in Werte.ZEILEN:
+		for x in Werte.SPALTEN:
+			var z := Vector2i(x, y)
+			var h := hash(z * 7 + Vector2i(3, 11))
+			var mitte := (Vector2(z) + Vector2(0.5, 0.5)) * zg
+			if x < Werte.ZONE_SPALTEN:
+				draw_set_transform(mitte, (h % 4) * PI / 2.0, Vector2.ONE)
+				draw_texture_rect_region(fels, Rect2(-zg / 2, -zg / 2, zg, zg), Rect2(MYR_KACHELN[(h >> 3) % 2] * 32, 0, 32, 32))
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				draw_texture_rect_region(blatt, Rect2(Vector2(z) * zg, Vector2(zg, zg)), Rect2(BODEN_GRAS[(h >> 3) % BODEN_GRAS.size()] * 32, 0, 32, 32))
+	# große, weiche Flecken (helleres und dunkleres Gras über mehrere Felder) – so liest sich der Boden als Fläche, nicht als Kacheln
+	var links := float(Werte.ZONE_SPALTEN) * zg
+	var f := _flecken()
+	draw_texture_rect_region(f, Rect2(links, 0, Werte.SPALTEN * zg - links, Werte.ZEILEN * zg),
+		Rect2(Werte.ZONE_SPALTEN * 16, 0, (Werte.SPALTEN - Werte.ZONE_SPALTEN) * 16, Werte.ZEILEN * 16))
+	# Brut-Boden um Checkpoints, die zu Rundenbeginn dem Gegner gehören
+	for c: Vector2i in brut_cps:
+		var bb := _brut_bild(c)
+		draw_texture_rect(bb, Rect2((Vector2(c) + Vector2(0.5, 0.5)) * zg - bb.get_size(), bb.get_size() * 2.0), false)
+	# Bewuchs: höchstens einer je freiem Feld, nicht auf dem Gegnerweg
+	var auf_weg := {}
+	for p: Vector2i in pfad:
+		auf_weg[p] = true
+	for y in Werte.ZEILEN:
+		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
+			var z := Vector2i(x, y)
+			var h := hash(z * 13 + Vector2i(5, 1))
+			if h % 10 == 0 or auf_weg.has(z) or feld.has(z) or ist_basis(z) or checkpoints.has(z):
+				continue
+			var i: int = BODEN_DEKO[(h >> 4) % BODEN_DEKO.size()]
+			var q := Rect2((i % 32) * 32, 96 + (i / 32) * 32, 32, 32)
+			var o := Vector2(z) * zg + Vector2(6 + (h >> 8) % 20, 4 + (h >> 13) % 22)
+			draw_texture_rect_region(blatt, Rect2(o, Vector2(32, 32)), q)
+	if vorschau_typ != FREI:
+		var linie := Color(0.04, 0.1, 0.04, 0.28)
+		for x in Werte.SPALTEN + 1:
+			draw_line(Vector2(x * zg, 0), Vector2(x * zg, Werte.ZEILEN * zg), linie, 1.0)
+		for y in Werte.ZEILEN + 1:
+			draw_line(Vector2(0, y * zg), Vector2(Werte.SPALTEN * zg, y * zg), linie, 1.0)
+
+
+var _flecken_bild: ImageTexture
+
+## Brut-Boden (16.11.): Um Checkpoints, die zu Beginn der Runde (Wellenstart oder Bauphase) dem Gegner gehören, breitet sich
+## Myr-Boden aus – so sieht man das Gebiet des Gegners. Während der Welle ändert er sich nicht.
+var brut_cps: Array[Vector2i] = []
+## Myr-Boden der neuen Grafik (16.11.): rissige Erde und Fels aus SHEET3, kupfern überzogen – die Myriaden sind kupfern,
+## Lila gehört dem Technoclan (Farben nicht vermischen).
+const MYR_KACHELN := [6, 7]
+const MYR_SCHLEIER := Color(0.5, 0.24, 0.06, 0.3)
+
+## Farbe des Gegners für Markierungen: neue Grafik kupfern, klassisch pink.
+static func feind_farbe() -> Color:
+	return Color("e8893a") if Werte.grafik_neu else Color("ff5ad0")
+var _brut_bilder := {}   # Checkpoint-Feld -> ImageTexture (128 Bildpunkte = 4 Felder, gezeigt mit Maßstab 2)
+
+func brut_aktualisieren() -> void:
+	var neu: Array[Vector2i] = []
+	if cp_aktiv:
+		for i in checkpoints.size():
+			if cp_feind[i]:
+				neu.append(checkpoints[i])
+	if neu != brut_cps:
+		brut_cps = neu
+		queue_redraw()
+
+
+func _brut_bild(c: Vector2i) -> ImageTexture:
+	if _brut_bilder.has(c):
+		return _brut_bilder[c]
+	var fels: Image = neu_bild("terrain/SHEET3.png").get_image()
+	fels.convert(Image.FORMAT_RGBA8)
+	var grund := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	for i in 16:
+		var h := hash(c * 31 + Vector2i(i, 7))
+		grund.blit_rect(fels, Rect2i(MYR_KACHELN[h % 2] * 32, 0, 32, 32), Vector2i((i % 4) * 32, (i / 4) * 32))
+	var maske := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	var r := FastNoiseLite.new()
+	r.seed = hash(c)
+	r.frequency = 0.18
+	for y in 32:
+		for x in 32:
+			var d := Vector2(x + 0.5 - 16.0, y + 0.5 - 16.0).length() / 8.0   # in Feldern
+			var t: float = (int(BAYER[(y % 4) * 4 + x % 4]) / 16.0 - 0.47) * 0.25
+			if d + r.get_noise_2d(x, y) * 0.45 + t < 1.55:
+				maske.set_pixel(x, y, Color(1, 1, 1, 1))
+	maske.resize(128, 128, Image.INTERPOLATE_NEAREST)
+	var bild := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	bild.blit_rect_mask(grund, maske, Rect2i(0, 0, 128, 128), Vector2i.ZERO)
+	var schleier := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	schleier.fill(MYR_SCHLEIER)
+	bild.blend_rect_mask(schleier, maske, Rect2i(0, 0, 128, 128), Vector2i.ZERO)
+	var t := ImageTexture.create_from_image(bild)
+	_brut_bilder[c] = t
+	return t
+var _rauschen: FastNoiseLite
+var _feucht: FastNoiseLite
+const BAYER := [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+const FLECK_HELL := Color(0.93, 0.9, 0.45, 0.16)
+const FLECK_HELL2 := Color(0.96, 0.92, 0.5, 0.26)
+const FLECK_DUNKEL := Color(0.02, 0.1, 0.03, 0.2)
+const FLECK_DUNKEL2 := Color(0.02, 0.08, 0.03, 0.32)
+
+## Farbe des Fleckenbilds an (x, y) in Fleckenpunkten (16 je Feld, auch außerhalb der Karte – für das HD-Umland).
+func flecken_farbe(x: int, y: int) -> Color:
+	if _rauschen == null:
+		_rauschen = FastNoiseLite.new()
+		_rauschen.seed = 4711
+		_rauschen.frequency = 0.022
+		_rauschen.fractal_octaves = 3
+		_feucht = FastNoiseLite.new()
+		_feucht.seed = 815
+		_feucht.frequency = 0.05
+	var t: float = (int(BAYER[posmod(y, 4) * 4 + posmod(x, 4)]) / 16.0 - 0.47) * 0.16
+	var v: float = _rauschen.get_noise_2d(x, y) + _feucht.get_noise_2d(x, y) * 0.25 + t
+	if v > 0.36:
+		return FLECK_HELL2
+	if v > 0.18:
+		return FLECK_HELL
+	if v < -0.36:
+		return FLECK_DUNKEL2
+	if v < -0.18:
+		return FLECK_DUNKEL
+	return Color(0, 0, 0, 0)
+
+## Fleckenbild der ganzen Karte: 1 Bildpunkt = 4 Kartenpixel (2 Pixel der Grasfliese), geordnet gerastert wie Pixelkunst.
+func _flecken() -> ImageTexture:
+	if _flecken_bild != null:
+		return _flecken_bild
+	var w := Werte.SPALTEN * 16
+	var h := Werte.ZEILEN * 16
+	var bild := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			bild.set_pixel(x, y, flecken_farbe(x, y))
+	_flecken_bild = ImageTexture.create_from_image(bild)
+	return _flecken_bild
+
+
+## Neue Grafik: der Gegnerweg als ausgetretener Pfad (dunkles Band) mit orangen Pfeilen Richtung Basis wie in der Stilprobe.
+func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void:
+	var staerke := farbe.a
+	var band := Color(0.1, 0.06, 0.02, 0.42 * staerke)
+	var pfeil := Color(Color("ffb340"), staerke)
+	var punkte: PackedVector2Array = []
+	for z in weg:
+		punkte.append((Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE)
+	draw_polyline(punkte, band, 27.0)
+	for p in punkte:
+		draw_circle(p, 13.5, band)
+	var abstand := 32.0
+	var rest := fmod(_zeit * 20.0, abstand) if laufend else 0.0
+	for i in punkte.size() - 1:
+		var a := punkte[i]
+		var b := punkte[i + 1]
+		var laenge := a.distance_to(b)
+		var richtung := (b - a) / laenge
+		var d := rest
+		while d < laenge:
+			_chevron(a + richtung * d, richtung.angle(), pfeil)
+			d += abstand
+		rest = d - laenge
+
+
+func _chevron(p: Vector2, winkel: float, farbe: Color) -> void:
+	# das 16er-Pfeilmuster der Stilprobe, je Pixel 1,5 Bildpunkte
+	draw_set_transform(p.round(), winkel, Vector2(1.5, 1.5))
+	for i in 5:
+		draw_rect(Rect2(-4 + i, -5 + i, 3, 1), farbe)
+		draw_rect(Rect2(-4 + i, 4 - i, 3, 1), farbe)
+	draw_rect(Rect2(1, -1, 3, 2), farbe)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _zeichne_wall(z: Vector2i, alpha: float) -> void:
+	if Werte.grafik_neu:
+		_zeichne_wall_neu(z, alpha)
+		return
 	var unten_wall := inhalt(z + Vector2i.DOWN) == WALL
 	var a := Color(1, 1, 1, alpha)
 	_r(z, 0, 0, 64, 64, ERDE_OBEN * a)
@@ -1723,6 +2007,24 @@ func _zeichne_wall(z: Vector2i, alpha: float) -> void:
 ## Railgun-Batterie: Sockel, Geschütz aus dem Terrain-Conquester-Blatt und ein Zähler der Besatzung.
 func _zeichne_batterie(z: Vector2i, alpha: float) -> void:
 	var a := Color(1, 1, 1, alpha)
+	if Werte.grafik_neu:
+		# Batterie im Stil der Truppen (Pixel ×2): Bild je Ausbaustufe, beim Schuss die Schuss-Animation
+		var bild := neu_bild("batterie/bat_%d.png" % clampi(int(batterie_stufe_neu.get(z, 0)), 0, 3))
+		var t: float = batterie_schuss.get(z, -1.0)
+		var quelle := Rect2(0, 0, 48, 48) if t < 0.0 else Rect2(mini(8, int(t / 0.7 * 9.0)) * 48, 48, 48, 48)
+		var links: bool = batterie_blick.get(z, false)
+		var o := Vector2(z) * Werte.ZELLE
+		draw_rect(Rect2(o + Vector2(6, 44), Vector2(52, 14)), Color(0, 0, 0, 0.25 * alpha))
+		if not Werte.grafik_hd:   # HD-2D: das Geschütz steht als Sprite3D (hd_ansicht.gd)
+			draw_set_transform(o + Vector2(32, 0), 0.0, Vector2(-1.0 if links else 1.0, 1.0))
+			draw_texture_rect_region(bild, Rect2(-48, -32, 96, 96), quelle, a)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var plaetze_n: int = Werte.BATTERIE["plaetze"]
+		var drin_n := besatzung_drin(z)
+		for i in plaetze_n:
+			_r(z, 8 + i * 18, 56, 14, 6, TECH_DUNKEL * a)
+			_r(z, 10 + i * 18, 58, 10, 2, (TECH_LICHT if i < drin_n else STEIN_DUNKEL) * a)
+		return
 	_r(z, 4, 34, 56, 26, TECH_DUNKEL * a)
 	_r(z, 6, 36, 52, 22, TECH * a)
 	if not _blaetter.has("batterie"):
@@ -1737,8 +2039,29 @@ func _zeichne_batterie(z: Vector2i, alpha: float) -> void:
 		_r(z, 10 + i * 18, 52, 10, 4, (TECH_LICHT if i < drin else STEIN_DUNKEL) * a)
 
 
+## Neue Grafik: Bild der Fabrik. Grundfabrik (Stufe 0) = Grundbau; spezialisiert = Grundbau mit Flügeln ihrer Truppe;
+## Pilotenfabrik = eigener Kasernenbau. Die Bilder sind 64 px und füllen ihr Feld (Fußpunkt unten Mitte, Zeile 56).
+const FABRIK_BILDER := {"technogunner": "gun", "scharfschuetze": "sni", "plasmawerfer": "pla"}
+
+func fabrik_bild(z: Vector2i) -> String:
+	var typ: String = fabrik_typ.get(z, "")
+	if paar.has(z) or typ == "pilot":
+		return "gebaeude/fabrik_pilot.png"
+	if int(fabrik_stufe.get(z, 0)) >= 1 and FABRIK_BILDER.has(typ):
+		return "gebaeude/fabrik_%s.png" % FABRIK_BILDER[typ]
+	return "gebaeude/fabrik_grund.png"
+
+
 func _zeichne_fabrik(z: Vector2i, alpha: float) -> void:
 	var a := Color(1, 1, 1, alpha)
+	if Werte.grafik_neu:
+		# Bild statt Truppensymbol; in HD-2D steht es als Sprite3D (hd_ansicht.gd), die Karte zeigt nur die Vorschau
+		if not Werte.grafik_hd:   # HD-2D: Bild und Bauvorschau stehen als Sprite3D (hd_ansicht.gd)
+			var ecke := Vector2(z) * Werte.ZELLE + Vector2(0, Werte.ZELLE - 59)
+			draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(6, 54), Vector2(52, 8)), Color(0, 0, 0, 0.25 * alpha))
+			draw_texture_rect(neu_bild(fabrik_bild(z)), Rect2(ecke, Vector2(64, 64)), false, a)
+		_fabrik_beiwerk(z, alpha)
+		return
 	_r(z, 4, 12, 56, 48, TECH_DUNKEL * a)
 	_r(z, 6, 14, 52, 26, TECH_HELL * a)
 	_r(z, 6, 40, 52, 18, TECH * a)
@@ -1754,10 +2077,18 @@ func _zeichne_fabrik(z: Vector2i, alpha: float) -> void:
 			_blaetter[typ] = load(Werte.EINHEITEN[typ]["blatt"])
 		var kante: int = Werte.EINHEITEN[typ]["zelle"]
 		draw_texture_rect_region(_blaetter[typ], Rect2(Vector2(z) * Werte.ZELLE + Vector2(8, 10), Vector2(48, 48)), Rect2(0, 0, kante, kante))
-	# Ausbaustufe: ein Punkt je Stufe oben links; eine spezialisierte Fabrik trägt einen hellen Rahmen
 	var stufe: int = fabrik_stufe.get(z, 0)
 	if stufe > 0:
 		draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(3, 11), Vector2(58, 50)), Color(TECH_LICHT, 0.9 * alpha), false, 2.0)
+	_fabrik_beiwerk(z, alpha)
+
+
+## Stufenpunkte, fehlender Ausgang, Klammer zur Batterie und Baufortschritt (beide Grafiken)
+func _fabrik_beiwerk(z: Vector2i, alpha: float) -> void:
+	var a := Color(1, 1, 1, alpha)
+	# Ausbaustufe: ein Punkt je Stufe oben links
+	var stufe: int = fabrik_stufe.get(z, 0)
+	if stufe > 0:
 		for i in stufe:
 			_r(z, 6 + i * 9, 3, 7, 7, TECH_DUNKEL * a)
 			_r(z, 7 + i * 9, 4, 5, 5, Color("ffe9a8") * a)
@@ -1781,36 +2112,43 @@ func _zeichne_fabrik(z: Vector2i, alpha: float) -> void:
 func _zeichne_start() -> void:
 	var breite := float(Werte.ZONE_SPALTEN * Werte.ZELLE)
 	var hoehe := float(Werte.ZEILEN * Werte.ZELLE)
-	draw_rect(Rect2(0, 0, breite, hoehe), Color(0.25, 0.05, 0.2, 0.35))
+	draw_rect(Rect2(0, 0, breite, hoehe), MYR_SCHLEIER if Werte.grafik_neu else Color(0.25, 0.05, 0.2, 0.35))
 	if schild:
 		# Schutzschild: durchgehende, pulsierende Wand
 		var puls := 0.5 + 0.5 * sin(_zeit * 2.0)
-		draw_rect(Rect2(0, 0, breite, hoehe), Color(1.0, 0.35, 0.82, 0.05 + 0.05 * puls))
-		draw_rect(Rect2(breite - 6, 0, 6, hoehe), Color(1.0, 0.35, 0.82, 0.55 + 0.35 * puls))
+		var sf := Color(1.0, 0.55, 0.2) if Werte.grafik_neu else Color(1.0, 0.35, 0.82)
+		draw_rect(Rect2(0, 0, breite, hoehe), Color(sf, 0.05 + 0.05 * puls))
+		draw_rect(Rect2(breite - 6, 0, 6, hoehe), Color(sf, 0.55 + 0.35 * puls))
 		return
 	var y := 0.0
 	while y < hoehe:
-		draw_rect(Rect2(breite - 4, y, 4, 16), Color("ff5ad0", 0.7))
+		draw_rect(Rect2(breite - 4, y, 4, 16), Color(feind_farbe(), 0.7))
 		y += 32.0
 
 
 ## Steinplatte mit Fahne: blau = deiner, pink = vom Gegner eingenommen (dort startet die nächste Welle).
 func _zeichne_checkpoint(i: int) -> void:
 	var z := checkpoints[i]
-	var farbe := Color("ff5ad0") if cp_feind[i] else TECH_LICHT
+	var farbe := feind_farbe() if cp_feind[i] else TECH_LICHT
 	if not cp_aktiv:
 		# noch nicht im Spiel: nur der freigehaltene Platz
 		draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(10, 10), Vector2(44, 44)), Color(STEIN_HELL, 0.45), false, 4.0)
 		_cp_nummer(i, farbe)
 		return
-	_r(z, 8, 8, 48, 48, STEIN_DUNKEL)
-	_r(z, 12, 12, 40, 40, STEIN)
-	_r(z, 20, 20, 24, 24, STEIN_HELL)
-	_r(z, 30, 4, 4, 36, TECH_DUNKEL)          # Mast
-	_r(z, 34, 4, 18, 12, farbe)               # Fahne
+	if Werte.grafik_neu:
+		# Neue Grafik: schlichte Fahne, cyan = deiner, pink = vom Gegner (in HD-2D als Sprite3D)
+		if not Werte.grafik_hd:
+			var fuss := (Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE + Vector2(0, 22)
+			draw_texture_rect(neu_bild("gebaeude/checkpoint_feind.png" if cp_feind[i] else "gebaeude/checkpoint.png"), Rect2(fuss - Vector2(25, 44) * 2.0, Vector2(96, 96)), false)
+	else:
+		_r(z, 8, 8, 48, 48, STEIN_DUNKEL)
+		_r(z, 12, 12, 40, 40, STEIN)
+		_r(z, 20, 20, 24, 24, STEIN_HELL)
+		_r(z, 30, 4, 4, 36, TECH_DUNKEL)          # Mast
+		_r(z, 34, 4, 18, 12, farbe)               # Fahne
 	if not cp_feind[i] and cp_einnahme[i] > 0.0:
 		_r(z, 8, 54, 48, 6, Color(0, 0, 0, 0.7))
-		_r(z, 10, 56, 44.0 * clampf(cp_einnahme[i] / Werte.EINNAHME_SEK, 0.0, 1.0), 2, Color("ff5ad0"))
+		_r(z, 10, 56, 44.0 * clampf(cp_einnahme[i] / Werte.EINNAHME_SEK, 0.0, 1.0), 2, feind_farbe())
 	if cp_feind[i]:
 		if i == start_index():
 			var puls := 0.5 + 0.5 * sin(_zeit * 4.0)
@@ -1831,6 +2169,12 @@ func _cp_nummer(i: int, farbe: Color) -> void:
 
 func _zeichne_basis() -> void:
 	var z := basis
+	if Werte.grafik_neu:
+		# Neue Grafik: Technoclan-Hauptquartier (in HD-2D als Sprite3D, siehe hd_ansicht.gd)
+		if not Werte.grafik_hd:
+			var fuss := (Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE + Vector2(0, 26)
+			draw_texture_rect(neu_bild("gebaeude/basis_gross.png"), Rect2(fuss - Vector2(57, 110), Vector2(128, 128)), false)
+		return
 	_r(z, 2, 6, 60, 56, TECH_DUNKEL)
 	_r(z, 6, 10, 52, 48, TECH)
 	_r(z, 14, 18, 36, 32, TECH_HELL)
@@ -1851,6 +2195,9 @@ func _zeichne_leben(z: Vector2i) -> void:
 ## Gepunktete Linie durch die Feldmitten; `laufend` lässt die Punkte Richtung Basis wandern.
 func _zeichne_weg(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void:
 	if weg.size() < 2:
+		return
+	if Werte.grafik_neu:
+		_zeichne_weg_neu(weg, farbe, laufend)
 		return
 	var abstand := 16.0
 	var versatz := fmod(_zeit * 24.0, abstand) if laufend else 0.0

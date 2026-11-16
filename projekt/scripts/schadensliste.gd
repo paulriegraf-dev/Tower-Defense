@@ -1,8 +1,9 @@
 extends Control
-## Schadensliste: solange [Tab] gedrückt ist, zeigt sie, wer in dieser Runde wie viel Schaden gemacht hat –
+## Schadensliste: [Tab] (oder der Knopf oben rechts) schaltet sie an und aus. Sie zeigt, wer in dieser Runde wie viel Schaden gemacht hat –
 ## je Fabrik (alle ihre Truppen zusammen), je Turmart und je Batterie. Balken im Verhältnis zum Spitzenreiter.
 
 var spiel: Node
+var per_knopf := false   # Liste an/aus ([Tab] oder Knopf oben rechts)
 var _blaetter := {}
 var _schrift: Font
 
@@ -23,8 +24,15 @@ func _ready() -> void:
 	_schrift = ThemeDB.fallback_font
 
 
+var _tab_vorher := false
+
 func _process(_delta: float) -> void:
-	var an: bool = Input.is_physical_key_pressed(KEY_TAB) and spiel._menue == null
+	# [Tab] schaltet um (16.11.): einmal drücken = an, nochmal = aus – wie der Knopf oben rechts
+	var tab := Input.is_physical_key_pressed(KEY_TAB)
+	if tab and not _tab_vorher:
+		per_knopf = not per_knopf
+	_tab_vorher = tab
+	var an: bool = per_knopf and spiel._menue == null
 	if an != visible:
 		visible = an
 	if visible:

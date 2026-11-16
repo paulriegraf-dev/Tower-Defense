@@ -5,17 +5,22 @@ extends RefCounted
 
 # --- Karte -------------------------------------------------------------
 const ZELLE: int = 64              # Kantenlänge eines Felds in Pixeln
-const SPALTEN: int = 20
-const ZEILEN: int = 10
+# Kartengröße (16.11.): "Normal" 20×10 wie bisher oder "Groß" 28×14 (Startmenü, gespeichert in user://einstellungen.cfg).
+# Alle Felder unten, die von der Größe abhängen, sind deshalb static var und werden in setze_karte() umgerechnet.
+# Auf der großen Karte schwenkt die Kamera auch in der 2D-Ansicht (kamera_2d.gd). Balance ist auf "Normal" abgestimmt.
+static var karte_gross := true   # 16.11.: nur noch die große Karte
+static var KARTE_FAKTOR := 1.0         # Verhältnis Breite groß/normal (für Abstände)
+static var SPALTEN: int = 20
+static var ZEILEN: int = 10
 const KARTE_OBEN: int = 40         # Platz für die Leiste oben
-const START_ZELLE := Vector2i(0, 4)    # HQ des Gegners; Mitte seiner Zone
+static var START_ZELLE := Vector2i(0, 4)    # HQ des Gegners; Mitte seiner Zone
 
 # --- Zone des Gegners und letzte Runde -------------------------------------
 # Die linken Spalten gehören dem Gegner: dort kann nicht gebaut werden, Gegner kommen verteilt über die ganze Höhe heraus.
 # Bis zur letzten Runde liegt ein Schutzschild darüber: Was in der Zone steht, kann nicht beschossen werden.
 const ZONE_SPALTEN: int = 3
 const HQ_LEBEN: float = 1500.0   # 15.11.: vorher 2200 (Runde 20 war kaum zu gewinnen)
-const ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
+static var ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
 const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
 const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
 const ENDKAMPF_PAUSE: float = 6.0     # 15.11.: vorher 3 – Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
@@ -26,7 +31,7 @@ const GRUND_LEBEN_AB_RUNDE: int = 6
 # Schleudern stehen in der Zone und werfen auf Truppen in Stellungen und auf Fabriken in Reichweite.
 # art: "schleuder" wirft Steine auf Stellungen und Fabriken, "wurf" wirft Hunde über die ersten Wälle,
 #      "laser" schießt flach auf Bodentruppen (Wälle geben Deckung).
-const ZONENBAUTEN: Array = [
+static var ZONENBAUTEN: Array = [
 	{"art": "schleuder", "zelle": Vector2i(1, 2), "ab_welle": 5},
 	{"art": "schleuder", "zelle": Vector2i(1, 7), "ab_welle": 8},
 	{"art": "wurf", "zelle": Vector2i(0, 7), "ab_welle": 10},
@@ -36,7 +41,7 @@ const ZONENBAUTEN: Array = [
 	{"art": "laser", "zelle": Vector2i(2, 7), "ab_welle": 20},
 ]
 # Stein-Schleudern wechseln ihren Platz: vor jeder Runde (sichtbar in der Bauphase) und alle paar Sekunden während der Runde.
-const SCHLEUDER_PLAETZE: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 6), Vector2i(1, 7), Vector2i(1, 8), Vector2i(1, 9)]
+static var SCHLEUDER_PLAETZE: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 6), Vector2i(1, 7), Vector2i(1, 8), Vector2i(1, 9)]
 const SCHLEUDER_UMZUG_SEK: float = 20.0
 const SCHLEUDER_TEMPO: float = 0.8     # Felder pro Sekunde beim Umziehen (dabei wirft sie nicht)
 const WURF := {
@@ -49,6 +54,7 @@ const WURF := {
 	"weit": 10.0,               # so weit (Felder) darf ein Angreifer im Phantom-Modus sein Wurfziel wählen
 	"tasche_weit": 8.0,         # ohne echte Mauer wirft sie von selbst höchstens so weit – in Taschen zwischen Erdwällen
 }
+const SCHLEUDER_ABWURF: float = 0.45   # Optik: so lange holt der Arm aus, bevor der Stein fliegt (Landezeit bleibt gleich)
 const WURF_FARBE := Color(0.6, 0.85, 1.25)   # Wurf-Schleuder: kühl eingefärbt, damit sie sich von der Stein-Schleuder abhebt
 const WURF_MAUER_MIN: float = 8.0      # ab so viel Umweg (Schritte) hinter einer Wallgruppe gilt sie als Mauer, die überworfen wird
 const WURF_MAUER_EXTRA: float = 15.0   # ab so viel Umweg wirft die Schleuder zusätzlich ein Rudel Hunde je Welle
@@ -118,8 +124,8 @@ const SCHLEUDER := {
 	"schaden_haufen": 22.0,     # Flächentreffer auf einen Haufen Bodentruppen (jede Truppe im Umkreis)
 	"schaden_fabrik": 60.0,
 }
-const AUSGAENGE := {"": Vector2i(0, 4), "oben": Vector2i(1, 1), "unten": Vector2i(1, 8)}   # Phantom-Modus: hier kommt ein Trupp geschlossen aus der Zone
-const BASIS_ZELLE := Vector2i(19, 5)   # hier wollen sie hin (fester Platz: Tests, alte Partien, Sandbox „fest“)
+static var AUSGAENGE := {"": Vector2i(0, 4), "oben": Vector2i(1, 1), "unten": Vector2i(1, 8)}   # Phantom-Modus: hier kommt ein Trupp geschlossen aus der Zone
+static var BASIS_ZELLE := Vector2i(18, 5)   # hier wollen sie hin (fester Platz: Tests, alte Partien, Sandbox „fest“)
 const BASIS_ZUFALL: bool = true        # normales Spiel: Die Basis steht jede Partie woanders (mindestens 8 Felder vom HQ, 3 von den Checkpoints)
 const CP_ROUTE_AB_START: bool = true   # der Gegnerweg führt schon ab Runde 1 durch die Checkpoints (eingenommen werden sie erst ab CHECKPOINTS_AB_WELLE)
 const STARTPAKET_WAELLE: int = 8       # so viele Erdwälle gibt es gratis, sobald sie freigeschaltet werden (Runde 2)
@@ -130,9 +136,9 @@ const STARTPAKET_WAELLE: int = 8       # so viele Erdwälle gibt es gratis, soba
 # das geht nur, solange die Welle läuft.
 # Halb zufällig: Jeder Checkpoint liegt in jeder Partie auf einem zufälligen Feld seines Bereichs
 # (Rect2i = linke obere Ecke x, y und Breite, Höhe in Feldern). Die Felder stehen ab Runde 1 fest und sind sichtbar.
-const CHECKPOINT_BEREICHE: Array[Rect2i] = [Rect2i(5, 1, 4, 8), Rect2i(11, 1, 5, 8)]
+static var CHECKPOINT_BEREICHE: Array[Rect2i] = [Rect2i(5, 1, 4, 8), Rect2i(11, 1, 5, 8)]
 const CHECKPOINTS_ZUFAELLIG: bool = true   # false = immer die festen Felder der nächsten Zeile
-const CHECKPOINTS: Array[Vector2i] = [Vector2i(6, 4), Vector2i(13, 5)]
+static var CHECKPOINTS: Array[Vector2i] = [Vector2i(6, 4), Vector2i(13, 5)]
 const CHECKPOINTS_AB_WELLE: int = 5    # vorher sind die Felder nur freigehalten (nicht bebaubar)
 const EINNAHME_SEK: float = 3.0        # so lange muss der Gegner einen Checkpoint halten
 const CHECKPOINT_RUHE: float = 1.5     # die zugeteilte Truppe geht einen Checkpoint zurückholen, solange in diesem Umkreis (Felder) kein Gegner ist
@@ -287,13 +293,19 @@ static func einheit_daten(typ: String, stufe: int, faehigkeit: String = "") -> D
 const BATTERIE_STUFEN := [
 	{"name": "Reservepilot", "text": "Die Pilotenfabrik hält einen vierten Piloten in Reserve. Er rückt nach, wenn einer fehlt – und läuft sonst zu ausgefallenen Fabriken, Batterien und lahmgelegten Türmen und repariert sie (5 Sekunden)."},
 	{"name": "Schwere Ladung", "text": "Mehr Schaden und Reichweite. Die Druckwelle bläst außerdem Rauchwolken in Reichweite weg."},
-	{"name": "Energieschild", "text": "Die bemannte Batterie spannt auf einem Wegfeld in Reichweite einen Schild auf. Gegner müssen ihn erst zerschlagen, eigene Truppen gehen hindurch. Er lädt sich zwischen den Runden wieder auf."},
+	{"name": "Energieschild", "text": "Die bemannte Batterie spannt einen Energiestrahl gerade von einem Erdwall zum nächsten. Gegner müssen ihn erst zerschlagen, eigene Truppen gehen hindurch. Je länger der Strahl, desto weniger hält er aus. Er lädt sich zwischen den Runden wieder auf."},
 ]
 const BATTERIE_ST2_SCHADEN: float = 1.3      # Schaden mal ... ab Stufe 2
 const BATTERIE_RAND_FAKTOR: float = 0.5      # Batterie-Einschlag: in der Mitte voller Schaden, zum Rand hin abfallend bis auf diesen Anteil (15.11.)
 const BATTERIE_ST2_REICHWEITE: float = 1.5   # Felder mehr Reichweite ab Stufe 2
 const BATTERIE_RAUCH_SEK: float = 2.5        # alle so viele Sekunden bläst eine Stufe-2-Batterie eine Rauchwolke weg
-const SCHILD_LEBEN: float = 450.0            # so viel hält der Energieschild aus
+const SCHILD_LEBEN: float = 450.0            # so viel hält ein Energieschild über ein Feld aus (Engstelle)
+const SCHILD_LAENGE_ABZUG: float = 0.25      # jedes weitere Feld: Schild hält insgesamt weniger aus (450 / (1 + 0,25 · (Felder − 1)))
+
+
+## Energieschild von Erdwall zu Erdwall (16.11.): je länger, desto weniger hält er insgesamt aus.
+static func schild_leben(felder: int) -> float:
+	return SCHILD_LEBEN / (1.0 + SCHILD_LAENGE_ABZUG * float(maxi(felder, 1) - 1))
 const SCHILD_MIN_SCHADEN: float = 6.0        # auch Gegner ohne Angriff (Fahnenträger ...) drücken mit so viel je Schlag dagegen
 const SCHILD_SCHLAG_SEK: float = 1.0         # Schlagtakt gegen den Schild, falls der Gegner keinen eigenen hat
 
@@ -312,6 +324,18 @@ const BATTERIE := {
 }
 
 # --- Weg zur Stellung ------------------------------------------------------
+## Drang in die Stellung je Truppe (16.11., Paul): Technogunner kämpft bei Gegnern in der Nähe lieber am Boden,
+## der Scharfschütze will fast immer hinauf (außer ein Gegner steht direkt vor ihm), der Plasmawerfer liegt dazwischen.
+##   nahwehr  = auf dem Weg zur Stellung nur auf Gegner so nah (Felder) stehen bleiben und schießen
+##   gefahr   = Felder so nah an Gegnern meidet die Truppe auf dem Weg (0 = geht trotzdem); sonst wartet sie am Boden
+const STELLUNG_DRANG := {
+	"technogunner": {"nahwehr": 99.0, "gefahr": 2.0},
+	"plasmawerfer": {"nahwehr": 2.0, "gefahr": 1.0},
+	"scharfschuetze": {"nahwehr": 1.2, "gefahr": 0.0},
+}
+const STELLUNG_NAHWEHR_FELDER: float = 2.5   # Rückfall für Truppen ohne Eintrag in STELLUNG_DRANG
+const STELLUNG_TROTZDEM_FELDER: int = 4      # so nah an der Stellung wird auch durch die Gefahr hindurch gegangen
+const STELLUNG_DURCHGEHEN_FELDER: int = 3     # so viele Felder vor der Stellung wird gar nicht mehr angehalten
 const GEFAHR_RADIUS: float = 2.0   # Felder: Truppen auf dem Weg zu Stellung/Batterie meiden Felder so nah an Gegnern
 
 # --- Stellungen und Türme ------------------------------------------------
@@ -402,6 +426,162 @@ const TURM := {
 	"schaden": 16.0,
 	"abklingzeit": 0.9,
 }
+
+# --- Grafik: Klassisch, Neu (2D) oder HD-2D (Startmenü, 16.11.) -------------------------------
+# Neu = Stil der HD-2D-Stilprobe in der 2D-Ansicht: neue Türme mit Upgrade-Stufen, Tech-Mauer, Stellungs-Haltungen,
+# Upgrade-Figuren mit Schuss-Animation, Gegner auf Truppen-Pixelgröße umgerechnet, PixelFX-Effekte und Todeseffekte.
+# HD-2D = dieselben Bilder in einer 3D-Ansicht wie die Stilprobe (geneigte Kamera, Zoom, Mauerblöcke), siehe hd_ansicht.gd.
+# Spielwerte und Regeln bleiben gleich. Die Wahl wird in user://einstellungen.cfg gespeichert.
+static var grafik := "hd"   # "klassisch", "neu" (Vogelperspektive) oder "hd" (HD-2D, Standard seit 16.11.)
+static var grafik_neu := false     # neue Bilder (bei "neu" und "hd")
+static var grafik_hd := false      # 3D-Ansicht
+static var vollbild := true        # Vollbild ([F11] oder Startmenü), gespeichert
+static var toene := 80              # Kampfgeräusche in Prozent (0 = aus), gespeichert
+static var musik := 40              # Musik in Prozent (0 = aus); 16.11.: Grundlautstärke 60 % leiser, gespeichert
+static var wand_stil := "tech"     # HD-2D-Mauern: "tech" (Stilprobe), "block" (schlicht) oder "energie" – Taste [M] im Spiel
+const EINSTELLUNGEN := "user://einstellungen.cfg"
+const NEU := "res://assets/neu/"
+
+
+static func lade_einstellungen() -> void:
+	var c := ConfigFile.new()
+	if c.load(EINSTELLUNGEN) == OK:
+		grafik = str(c.get_value("grafik", "modus", "hd"))
+		wand_stil = str(c.get_value("grafik", "wand", "tech"))
+		karte_gross = bool(c.get_value("karte", "gross", true))
+		vollbild = bool(c.get_value("grafik", "vollbild", true))
+		musik = clampi(int(c.get_value("ton", "musik_prozent", 40)), 0, 100)
+		toene = clampi(int(c.get_value("ton", "effekte_prozent", 80)), 0, 100)
+	if OS.get_environment("TD_KARTE") != "":
+		karte_gross = OS.get_environment("TD_KARTE") == "gross"   # für Testläufe: normal oder gross
+	setze_karte(karte_gross)
+	if OS.get_environment("TD_GRAFIK") != "":
+		grafik = OS.get_environment("TD_GRAFIK")   # für Testläufe: klassisch, neu oder hd
+	setze_grafik(grafik)
+
+
+## Vollbild an/aus. Das Bild skaliert mit (stretch canvas_items, Seitenverhältnis bleibt 16:9).
+static func setze_vollbild(an: bool) -> void:
+	vollbild = an
+	if DisplayServer.get_name() == "headless":
+		return
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if an else DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+static func setze_grafik(modus: String) -> void:
+	grafik = modus if modus in ["klassisch", "neu", "hd"] else "klassisch"
+	grafik_neu = grafik != "klassisch"
+	grafik_hd = grafik == "hd"
+
+
+static func speichere_einstellungen() -> void:
+	var c := ConfigFile.new()
+	c.load(EINSTELLUNGEN)
+	c.set_value("grafik", "modus", grafik)
+	c.set_value("grafik", "wand", wand_stil)
+	c.set_value("karte", "gross", karte_gross)
+	c.set_value("grafik", "vollbild", vollbild)
+	c.set_value("ton", "musik_prozent", musik)
+	c.set_value("ton", "effekte_prozent", toene)
+	c.save(EINSTELLUNGEN)
+
+
+## Stellt alle größenabhängigen Felder auf die normale (20×10) oder große (28×14) Karte.
+## Groß: dieselbe Anordnung, Zeilen ×13/9 gestreckt (HQ in der Mitte der Zone), Bereiche und Basis nach rechts mitgewachsen.
+static func setze_karte(gross: bool) -> void:
+	karte_gross = gross
+	if not gross:
+		SPALTEN = 20
+		ZEILEN = 10
+		KARTE_FAKTOR = 1.0
+		START_ZELLE = Vector2i(0, 4)
+		ANGRIFFS_ZELLE = Vector2i(1, 4)
+		ZONENBAUTEN = _zonenbauten([2, 7, 7, 2, 2, 5, 7])
+		SCHLEUDER_PLAETZE = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 6), Vector2i(1, 7), Vector2i(1, 8), Vector2i(1, 9)]
+		AUSGAENGE = {"": Vector2i(0, 4), "oben": Vector2i(1, 1), "unten": Vector2i(1, 8)}
+		BASIS_ZELLE = Vector2i(18, 5)   # 16.11.: Basis 3×2 Felder, darum eine Spalte nach innen (vorher 19)
+		CHECKPOINT_BEREICHE = [Rect2i(5, 1, 4, 8), Rect2i(11, 1, 5, 8)]
+		CHECKPOINTS = [Vector2i(6, 4), Vector2i(13, 5)]
+		return
+	SPALTEN = 28
+	ZEILEN = 14
+	KARTE_FAKTOR = 27.0 / 19.0
+	START_ZELLE = Vector2i(0, 6)
+	ANGRIFFS_ZELLE = Vector2i(1, 6)
+	ZONENBAUTEN = _zonenbauten([3, 10, 10, 3, 3, 7, 10])
+	SCHLEUDER_PLAETZE = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 4),
+		Vector2i(1, 9), Vector2i(1, 10), Vector2i(1, 11), Vector2i(1, 12), Vector2i(1, 13)]
+	AUSGAENGE = {"": Vector2i(0, 6), "oben": Vector2i(1, 1), "unten": Vector2i(1, 12)}
+	BASIS_ZELLE = Vector2i(26, 7)
+	CHECKPOINT_BEREICHE = [Rect2i(7, 1, 6, 12), Rect2i(16, 1, 7, 12)]
+	CHECKPOINTS = [Vector2i(8, 6), Vector2i(18, 7)]
+
+
+## Zonenbauten mit den Zeilen `zeilen` (Reihenfolge wie in der Liste oben, Spalten und Wellen bleiben).
+static func _zonenbauten(zeilen: Array) -> Array:
+	var vorlage := [["schleuder", 1, 5], ["schleuder", 1, 8], ["wurf", 0, 10], ["wurf", 0, 14], ["laser", 2, 20], ["laser", 2, 20], ["laser", 2, 20]]
+	var liste: Array = []
+	for i in vorlage.size():
+		liste.append({"art": vorlage[i][0], "zelle": Vector2i(vorlage[i][1], zeilen[i]), "ab_welle": vorlage[i][2]})
+	return liste
+
+
+## Gegner-Blätter der neuen Grafik: auf die Pixelgröße der Truppen umgerechnet, gezeigt mit Maßstab 2 wie die Truppen.
+const NEU_BLAETTER := {
+	"res://assets/sprites/hund.webp": {"blatt": "res://assets/neu/gegner/hund.png", "zelle": 36},
+	"res://assets/sprites/sphaere.webp": {"blatt": "res://assets/neu/gegner/sphaere.png", "zelle": 40},
+	"res://assets/sprites/fahnentraeger.webp": {"blatt": "res://assets/neu/gegner/fahne.png", "zelle": 40},
+	"res://assets/sprites/sprenger.webp": {"blatt": "res://assets/neu/gegner/sprenger.png", "zelle": 36},
+	"res://assets/sprites/rauchwerfer_neu.png": {"blatt": "res://assets/neu/gegner/rauch.png", "zelle": 36},
+	"res://assets/sprites/belagerungsturm.webp": {"blatt": "res://assets/neu/gegner/belagerung.png", "zelle": 48},
+	"res://assets/sprites/enterer.webp": {"blatt": "res://assets/neu/gegner/enterer.png", "zelle": 30},
+	"res://assets/sprites/drohne.webp": {"blatt": "res://assets/neu/gegner/enterer.png", "zelle": 30},
+	"res://assets/sprites/schildtraeger.png": {"blatt": "res://assets/neu/gegner/schild.png", "zelle": 36},
+	"res://assets/sprites/sanitaeter.png": {"blatt": "res://assets/neu/gegner/sani.png", "zelle": 36},
+	"res://assets/sprites/schwarmgeist.webp": {"blatt": "res://assets/neu/gegner/schwarm.png", "zelle": 40},
+	"res://assets/sprites/schleuder.webp": {"blatt": "res://assets/neu/gegner/schleuder.png", "zelle": 40},
+}
+const NEU_TRUPPEN := {"technogunner": "gun", "scharfschuetze": "sni", "plasmawerfer": "pla"}
+const NEU_STUFE_3 := {"bollwerk": "gun_bollwerk", "feuerteam": "gun_feuerteam", "minigun": "gun_minigun",
+	"durchschuss": "sni_durchschuss", "laser": "sni_laser", "markierung": "sni_markierung",
+	"abpraller": "pla_abpraller", "brandfeld": "pla_brandfeld", "plasmagel": "pla_gel"}
+const NEU_SCHUSS_BILDER := {"gun": [3, 6], "sni": [3], "pla": [2, 5]}   # Bilder der neuen Angriffsanimation (9 Bilder), in denen ein Treffer fällt
+## je Variante aus den hellsten Bildern (Mündungsblitz) der Animation gemessen; Anzahl wie bei Stufe 1 (Gunner/Plasma 2, Scharfschütze 1)
+const NEU_SCHUSS_VARIANTE := {"gun_s2": [4, 6], "gun_bollwerk": [2, 6], "gun_feuerteam": [2, 4], "gun_minigun": [2, 6],
+	"sni_s2": [3], "sni_durchschuss": [1], "sni_laser": [2], "sni_markierung": [3],
+	"pla_s2": [3, 5], "pla_abpraller": [1, 4], "pla_brandfeld": [1, 3], "pla_gel": [4, 6]}
+## Stellungs-Haltung (kniend bzw. liegend): Blatt mit Zeile 0/1 Warten und Zeile 2 Schuss; y = Fußpunkt der Figur
+const NEU_HALTUNG := {
+	"technogunner": {"blatt": "res://assets/neu/truppen/technogunner_stellung.png", "y": 34.0},
+	"plasmawerfer": {"blatt": "res://assets/neu/truppen/plasmawerfer_stellung.png", "y": 32.0},
+	"scharfschuetze": {"blatt": "res://assets/neu/truppen/scharfschuetze_stellung.png", "y": 32.0},
+}
+
+
+## Blattdaten je nach gewählter Grafik (für Gegner und Zonenbauten; die Truppen siehe grafik_einheit).
+static func grafik_daten(d: Dictionary) -> Dictionary:
+	if not grafik_neu or not NEU_BLAETTER.has(str(d.get("blatt", ""))):
+		return d
+	var n := d.duplicate()
+	n.merge(NEU_BLAETTER[str(d["blatt"])], true)
+	n["massstab"] = 2.0
+	return n
+
+
+## Truppen ab Stufe 2 in der neuen Grafik: eigenes Blatt je Stufe bzw. Fähigkeit
+## (Zeile 0 Stand = Upgrade-Bild, Zeile 1 Laufen wie Stufe 1, Zeile 2 die neue Schuss-Animation).
+static func grafik_einheit(d: Dictionary, typ: String, stufe: int) -> Dictionary:
+	if not grafik_neu or not NEU_TRUPPEN.has(typ) or stufe < 2:
+		return d
+	var kurz: String = NEU_TRUPPEN[typ]
+	var n := d.duplicate()
+	var variante := str(NEU_STUFE_3.get(str(d.get("faehigkeit", "")), kurz + "_s2"))
+	n["blatt"] = "res://assets/neu/truppen/%s.png" % variante
+	n["zelle"] = 48
+	n["bilder"] = [1, 8, 9]
+	n["schuss_bilder"] = NEU_SCHUSS_VARIANTE.get(variante, NEU_SCHUSS_BILDER[kurz])
+	return n
+
 
 # --- Einheiten (eigene) --------------------------------------------------
 # tempo = Felder pro Sekunde, reichweite = Felder
@@ -585,13 +765,15 @@ const KOMMANDANT := {
 }
 const FERNKAMPF_GEFECHT_TEMPO := 0.35   # Battlesphäre: solange sie schießt, läuft sie nur mit diesem Anteil ihres Tempos
 # Platz auf dem Feld (15.11.): Felder sind nur das Wegraster. Einheiten stehen frei darin und halten Abstand nach ihrem Radius
-# (Anteil einer Feldbreite): etwa 4 kleine, 2 mittlere oder 1 große je Feld. Bauwerke bleiben eins je Feld.
-const RADIUS_KLEIN := 0.2
-const GEGNER_RADIUS := {"schild": 0.28, "sphaere": 0.28, "belagerung": 0.42, "schwarm": 0.38}   # alle anderen: RADIUS_KLEIN
-const TRUPPE_RADIUS := 0.2               # eigene Bodentruppen
+# (Anteil einer Feldbreite). 16.11.: enger gepackt, damit in den schmalen Gängen viele Einheiten in ein Feld passen und sich
+# darin verteilen (vorher 0,2 / 0,28 / 0,42 / 0,38, Truppen 0,2, Versatz 0,24): etwa 8 kleine, 4 mittlere oder 2 große je Feld.
+const RADIUS_KLEIN := 0.13
+const GEGNER_RADIUS := {"schild": 0.2, "sphaere": 0.2, "belagerung": 0.32, "schwarm": 0.28}   # alle anderen: RADIUS_KLEIN
+const TRUPPE_RADIUS := 0.15              # eigene Bodentruppen
 const ABSTAND_HAERTE := 10.0             # wie schnell Überlappungen aufgelöst werden (je Sekunde)
 const ANKUNFT := 0.22                    # so nah (Felder) an einem Wegpunkt gilt ein Gegner als angekommen
-const VERSATZ := 0.24                    # Zielpunkte je Gegner bis zu so weit (Felder) neben der Feldmitte
+const VERSATZ := 0.33                    # Zielpunkte je Gegner bis zu so weit (Felder) neben der Feldmitte (vorher 0,24)
+const TRUPP_STAFFEL_SEK := 0.3        # ein Trupp aus der Zone geht als Kolonne los: alle so viele Sekunden einer (16.11.)
 const SCHILD_VORLAUF_SEK := 1.5         # gestaffelt: Schildträger gehen so viele Sekunden vor dem Rest ihres Trupps los
 const SCHILD_FRONT_FAKTOR := 0.25   # Schildträger: Schüsse von vorn (innerhalb SCHILD_FRONT_WINKEL zur Laufrichtung) machen nur so viel Schaden
 const SCHILD_FRONT_WINKEL := 60.0

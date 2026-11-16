@@ -1,27 +1,39 @@
 class_name Laufband
 extends Control
-## Taktikplaner des Angreifers im Phantom-Modus: die Welle einer Runde als maßstäbliches Band.
-## Unten die Trupps zu Fuß (Breite = Dauer, Lücke = Pause), darüber die Würfe auf ihrer Sekunde.
-## Bedienung mit der Maus: Einheit aus der Leiste aufs Band ziehen (auf ein Kärtchen = dazu, auf freie Fläche = neuer
-## Trupp), Kärtchen auf der Zeitachse verschieben, zwischen den Spuren ziehen = zu Fuß / Wurf.
-## Gespeichert wird der Plan im Format von Werte.WELLEN: {"weg", "typen", "pause", "wenn", "ziel", "zeit"} je Trupp.
+## Taktikplaner des Angreifers im Phantom-Modus (16.11.2026, neuer Stil, Kupfer = Seite der Myriaden):
+##   unten     Angriffskonsole: neun Einheiten als Sechseck-Kacheln (Preisschild, Taste 1–9), links ein Monitor mit
+##             dem Budget. Klick = in den gewählten Trupp, Ziehen aufs Band = neuer Trupp an dieser Stelle.
+##   darüber   das Band: die Welle maßstäblich, oben die Würfe auf ihrer Sekunde, unten die Trupps zu Fuß (Breite =
+##             Dauer, Lücke = Pause). Kärtchen zeigen die Einheiten als kleine Figuren und lassen sich verschieben;
+##             zwischen den Spuren ziehen = zu Fuß / Wurf.
+##   Fenster   über dem gewählten Kärtchen: Einheiten −/+, Start ±1 s, Ausgang bzw. Auslöser und Ziel, Löschen.
+## Gezeichnet im UI-Raster 640×360 (zweifach skaliert) mit ui_stil.gd. Gespeichert wird der Plan im Format von
+## Werte.WELLEN: {"weg", "typen", "pause", "wenn", "ziel", "zeit"} je Trupp. Alte Fassung: _vor_laufband/laufband.gd.
 
-const HOEHE := 216.0
-const BAND_X := 84.0
-const BAND_B := 1180.0
-const WURF_Y := 38.0
-const WURF_H := 30.0
-const FUSS_Y := 72.0
-const FUSS_H := 46.0
-const ACHSE_Y := 120.0
-const KURZ := {"hund": "H", "sphaere": "Sp", "fahne": "Fa", "sprenger": "Spr", "rauch": "R", "belagerung": "BT", "schild": "Sch", "sani": "San", "schwarm": "SG"}
-const AUSLOESER := {"": "auf Zeit", "dock": "wenn angedockt", "drohnen": "nach 2 Myr-Drohnen"}
-const AUSGANG := {"": "Mitte (Hauptlinie)", "oben": "oben", "unten": "unten"}
-const AUSGANG_ZEICHEN := {"": "", "oben": "↑ ", "unten": "↓ "}
+const Stil := preload("res://scripts/ui/ui_stil.gd")
+const HOEHE := 360.0
+const RAHMEN_R := Rect2(8, 226, 624, 80)       # das Band
+const BAND_X := 56.0
+const BAND_B := 566.0
+const WURF_Y := 241.0
+const WURF_H := 20.0
+const FUSS_Y := 263.0
+const FUSS_H := 26.0
+const ACHSE_Y := 291.0
+const KONSOLE_R := Rect2(138, 310, 364, 50)
+const SCHULTER := 44.0
+const KACHEL_B := 28.0
+const KACHEL_ABSTAND := 3.0
+const AUSLOESER := {"": "auf Zeit", "dock": "wenn angedockt", "drohnen": "nach 2 Drohnen"}
+const AUSLOESER_KURZ := {"": "", "dock": "Dock", "drohnen": "2 Dr."}
+const AUSGANG := {"oben": "oben", "": "Mitte", "unten": "unten"}
 const PAUSE_MIN := -2.4       # kürzer geht es nicht: zwei Trupps brauchen 0,6 s Abstand
 const PAUSE_MAX := 60.0
 const RASTER := 0.5           # Kärtchen rasten auf halbe Sekunden ein
 const ERSTER_START := 1.0     # der erste Trupp zu Fuß kommt immer nach einer Sekunde
+const FIGUR_H := 18.0          # Höhe der kleinen Figuren auf den Kärtchen
+const LICHT := Color("ffb070")   # Leuchtfarbe der Angreiferseite (helles Kupfer)
+const WURF_GRUND := Color("3a2618")
 
 var spiel: Node
 var plan: Array = []
@@ -29,69 +41,65 @@ var gewaehlt := -1
 var _rechtecke: Array = []      # je Trupp sein Kärtchen auf dem Band
 var _zeiten: Array = []         # je Trupp [Start, Dauer] in Sekunden
 var _spaet: Array = []          # je Trupp: Wurf kommt später als gewollt (Schleuder lädt noch)
-var _pps := 24.0                # Pixel je Sekunde
+var _pps := 12.0                # UI-Pixel je Sekunde
 var _pps_fest := 0.0            # beim Ziehen bleibt der Maßstab stehen
 # Ziehen eines Kärtchens
 var _zieht := -1                # Index des gezogenen Trupps
 var _zieh_dx := 0.0             # Abstand Maus – linke Kante beim Anfassen
 var _zieh_bewegt := false
 var _wunsch: Array = []         # gewünschte Startzeit je Trupp (zu Fuß), eingefroren beim Anfassen
-# Ziehen einer Einheit aus der Leiste
+# Ziehen einer Einheit aus der Konsole
 var _zieht_typ := ""
 var _maus := Vector2.ZERO
 var _typ_start := Vector2.ZERO
-var _kopf: Label
-var _zeile: HBoxContainer
-var _palette: HBoxContainer
-var _schrift: Font
+# Flächen (fangen die Maus nur dort, wo wirklich etwas ist – dazwischen bleibt die Karte bedienbar)
+var _band: Flaeche
+var _konsole: Flaeche
+var _fenster: Flaeche
+var _knoepfe: Array = []        # [Rechteck (Wurzel), Aktion, Text, an, aus] – Knöpfe im Fenster und im Kopf des Bands
+var _figuren := {}              # Gegnertyp -> {"tex", "zelle", "spiegeln"}
+
+
+## Fläche, die sich über einen Aufruf zeichnet und Klicks an die Wurzel weitergibt.
+class Flaeche extends Control:
+	var malen: Callable
+	var klick: Callable
+	func _draw() -> void:
+		if malen.is_valid():
+			malen.call(self)
+	func _gui_input(event: InputEvent) -> void:
+		if klick.is_valid():
+			klick.call(self, event)
 
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	size = Vector2(1280, HOEHE)
-	_schrift = ThemeDB.fallback_font
-	_kopf = Label.new()
-	_kopf.position = Vector2(12, 6)
-	_kopf.add_theme_font_size_override("font_size", 16)
-	_kopf.add_theme_color_override("font_color", Color("ffe9a8"))
-	add_child(_kopf)
-	for eintrag: Array in [["Wurf", WURF_Y + 5.0], ["zu Fuß", FUSS_Y + 12.0]]:
-		var l := Label.new()
-		l.text = eintrag[0]
-		l.position = Vector2(12, eintrag[1])
-		l.add_theme_font_size_override("font_size", 13)
-		l.add_theme_color_override("font_color", Color("a79fb3"))
-		add_child(l)
-	_zeile = HBoxContainer.new()
-	_zeile.position = Vector2(12, 142)
-	_zeile.add_theme_constant_override("separation", 6)
-	add_child(_zeile)
-	_palette = HBoxContainer.new()
-	_palette.position = Vector2(12, 178)
-	_palette.add_theme_constant_override("separation", 6)
-	add_child(_palette)
-	for typ: String in Phantom.TYPEN:
-		var b := _knopf(_palette, "%s  %d" % [Werte.GEGNER[typ]["kurz"], Phantom.preis(typ)], Callable())
-		b.button_down.connect(_greife_typ.bind(typ))
-		b.tooltip_text = "Aufs Band ziehen – oder klicken: kommt in den gewählten Trupp."
-	var luecke := Control.new()
-	luecke.custom_minimum_size = Vector2(40, 0)
-	_palette.add_child(luecke)
-	_knopf(_palette, "Vorlage: entworfene Welle", _vorlage)
-	_knopf(_palette, "Leeren", _leeren)
-	_knopf(_palette, "[L] Band ausblenden", func(): visible = false)
+	position = Vector2.ZERO
+	size = Vector2(640, HOEHE)
+	scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_band = _flaeche(RAHMEN_R, _male_band)
+	_konsole = _flaeche(KONSOLE_R, _male_konsole)
+	_fenster = _flaeche(Rect2(0, 0, 10, 10), _male_fenster)
+	_fenster.visible = false
 
 
-func _knopf(eltern: Control, text: String, aktion: Callable, aus: bool = false) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	b.disabled = aus
-	b.add_theme_font_size_override("font_size", 13)
-	if aktion.is_valid():
-		b.pressed.connect(aktion)
-	eltern.add_child(b)
-	return b
+func _flaeche(r: Rect2, malen: Callable) -> Flaeche:
+	var f := Flaeche.new()
+	f.position = r.position
+	f.size = r.size
+	f.mouse_filter = Control.MOUSE_FILTER_STOP
+	f.malen = malen
+	f.klick = _flaeche_klick
+	add_child(f)
+	return f
+
+
+func _process(_delta: float) -> void:
+	if visible:
+		_maus = get_local_mouse_position()
+		for f: Control in [_band, _konsole, _fenster]:
+			f.queue_redraw()
+		queue_redraw()
 
 
 ## Zeigt den Plan einer Runde (wird beim Bearbeiten direkt verändert).
@@ -378,23 +386,10 @@ func _ordne_nach(wunsch: Array, merke: int) -> int:
 	return plan.find(gemerkt) if not gemerkt.is_empty() else -1
 
 
+
 # ------------------------------------------------------------- Anzeige
 
-func _trupp_text(typen: Array, lang: bool) -> String:
-	var anzahl := {}
-	var folge: Array = []
-	for typ: String in typen:
-		if not anzahl.has(typ):
-			folge.append(typ)
-		anzahl[typ] = int(anzahl.get(typ, 0)) + 1
-	var teile: PackedStringArray = []
-	for typ: String in folge:
-		var name: String = Werte.GEGNER[typ]["kurz"] if lang else KURZ[typ]
-		teile.append(name if anzahl[typ] == 1 else ("%s ×%d" % [name, anzahl[typ]] if lang else "%s%d" % [name, anzahl[typ]]))
-	return (", " if lang else " ").join(teile)
-
-
-## Rechnet Zeiten und Kärtchen neu aus und baut die Zeile des gewählten Trupps.
+## Rechnet Zeiten und Kärtchen neu aus und baut das Fenster des gewählten Trupps.
 func _neu() -> void:
 	var start := _startzeiten()
 	_zeiten = []
@@ -427,116 +422,338 @@ func _neu() -> void:
 	_rechtecke = []
 	for i in plan.size():
 		var x := BAND_X + float(_zeiten[i][0]) * _pps
-		var b := maxf(float(_zeiten[i][1]) * _pps, 30.0)
+		var b := maxf(float(_zeiten[i][1]) * _pps, _karten_breite(plan[i]["typen"]))
 		if _ist_wurf(i):
-			_rechtecke.append(Rect2(x, WURF_Y + 3.0, b, WURF_H - 6.0))
+			_rechtecke.append(Rect2(x, WURF_Y + 2.0, b, WURF_H - 4.0))
 		else:
-			_rechtecke.append(Rect2(x, FUSS_Y + 4.0, b, FUSS_H - 8.0))
-	_kopf.text = "Taktikplaner · Runde %d    Budget %d / %d    Einheit aufs Band ziehen · Kärtchen verschieben · zwischen den Spuren ziehen = Wurf / zu Fuß" % [spiel.welle, verbraucht(), budget()]
-	for k in _zeile.get_children():
-		_zeile.remove_child(k)
-		k.queue_free()
-	var info := Label.new()
-	info.add_theme_font_size_override("font_size", 14)
-	_zeile.add_child(info)
-	if gewaehlt < 0 or gewaehlt >= plan.size():
+			_rechtecke.append(Rect2(x, FUSS_Y + 2.0, b, FUSS_H - 4.0))
+	if gewaehlt >= plan.size():
 		gewaehlt = -1
-		info.text = "Kein Trupp gewählt. Zieh eine Einheit von unten aufs Band."
-		info.add_theme_color_override("font_color", Color("a79fb3"))
-		queue_redraw()
-		return
-	var g: Dictionary = plan[gewaehlt]
-	var wurf: bool = g["weg"] == "w"
-	info.text = "%s · %d Budget   " % ["Wurf" if wurf else "Trupp", Phantom.trupp_preis(g)]
-	var gesehen := {}
-	for typ: String in g["typen"]:
-		if gesehen.has(typ):
-			continue
-		gesehen[typ] = true
-		_knopf(_zeile, "−", _nimm_weg.bind(typ))
-		var l := Label.new()
-		l.add_theme_font_size_override("font_size", 14)
-		l.text = "%s ×%d" % [Werte.GEGNER[typ]["kurz"], (g["typen"] as Array).count(typ)]
-		_zeile.add_child(l)
-		_knopf(_zeile, "+", _fuege_hinzu.bind(typ, gewaehlt))
-	var p := Label.new()
-	p.add_theme_font_size_override("font_size", 14)
-	p.text = "    Start bei %.1f s" % float(_zeiten[gewaehlt][0])
-	_zeile.add_child(p)
-	_knopf(_zeile, "− 1 s", _schritt.bind(-1.0))
-	_knopf(_zeile, "+ 1 s", _schritt.bind(1.0))
-	if not wurf:
-		_knopf(_zeile, "Ausgang: %s" % AUSGANG[str(g.get("ausgang", ""))], _wechsle_ausgang)
-	if wurf:
-		_knopf(_zeile, "Auslöser: %s" % AUSLOESER[str(g.get("wenn", ""))], _wechsle_ausloeser)
-		_knopf(_zeile, "Ziel: Feld %d/%d  ✕" % [int(g["ziel"][0]), int(g["ziel"][1])] if g.has("ziel") else "Ziel: automatisch → wählen", _wurfziel, str(g.get("wenn", "")) != "")
-	_knopf(_zeile, "Löschen", _loesche)
+	_baue_knoepfe()
 	queue_redraw()
 
 
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.07, 0.06, 0.09, 1.0))
-	draw_rect(Rect2(0, 0, size.x, 2), Color("ffe9a8"))
-	# Budget-Balken
-	var anteil := clampf(float(verbraucht()) / maxf(1.0, float(budget())), 0.0, 1.0)
-	draw_rect(Rect2(BAND_X, 30, BAND_B, 4), Color("3a3344"))
-	draw_rect(Rect2(BAND_X, 30, BAND_B * anteil, 4), Color("5dcaa5"))
+## Mindestbreite eines Kärtchens: jede Einheitenart als kleine Figur, dahinter die Anzahl.
+func _karten_breite(typen: Array) -> float:
+	var arten := _gruppiert(typen)
+	var w := 4.0
+	for a: Array in arten:
+		w += _figur_breite(a[0], FIGUR_H) + (Stil.breite("×%d" % a[1], Stil.KLEIN) + 1.0 if a[1] > 1 else 0.0)
+	return clampf(w + 2.0, 18.0, 150.0)
+
+
+static func _gruppiert(typen: Array) -> Array:
+	var anzahl := {}
+	var folge: Array = []
+	for typ: String in typen:
+		if not anzahl.has(typ):
+			folge.append(typ)
+		anzahl[typ] = int(anzahl.get(typ, 0)) + 1
+	var liste: Array = []
+	for typ: String in folge:
+		liste.append([typ, anzahl[typ]])
+	return liste
+
+
+## Knöpfe im Kopf des Bands und im Fenster des gewählten Trupps (Rechtecke in Koordinaten der Wurzel).
+func _baue_knoepfe() -> void:
+	_knoepfe = []
+	# Kopf des Bands: rechts Vorlage, Leeren, Ausblenden
+	var x := RAHMEN_R.end.x - 6.0
+	for k: Array in [["[L] ausblenden", func(): visible = false], ["Leeren", _leeren], ["Vorlage", _vorlage]]:
+		var w := Stil.breite(k[0], Stil.KLEIN) + 8.0
+		x -= w
+		_knoepfe.append([Rect2(x, RAHMEN_R.position.y + 3.0, w, 10.0), k[1], k[0], false, false])
+		x -= 3.0
+	_fenster.visible = gewaehlt >= 0
+	if gewaehlt < 0:
+		return
+	var g: Dictionary = plan[gewaehlt]
+	var wurf: bool = g["weg"] == "w"
+	var pad := 5.0
+	var zeile_h := 13.0
+	var inhalt: Array = []   # [x, y, Text, Aktion, an, aus, Breite] relativ zum Fenster
+	var y := pad + 12.0
+	var cx := pad
+	# Zeile 1: Einheiten mit − / +
+	for a: Array in _gruppiert(g["typen"]):
+		inhalt.append([cx, y, "−", _nimm_weg.bind(a[0]), false, false, 9.0])
+		cx += 10.0
+		inhalt.append([cx, y, "#" + str(a[0]), Callable(), false, false, 22.0])   # Figur mit Anzahl (nur Anzeige)
+		cx += 23.0
+		inhalt.append([cx, y, "+", _fuege_hinzu.bind(a[0], gewaehlt), false, false, 9.0])
+		cx += 13.0
+	var breite := cx
+	# Zeile 2: Start, Feinschritt, Ausgang bzw. Auslöser und Ziel
+	y += zeile_h
+	cx = pad
+	var start_text := "Start %s s" % ("%.1f" % float(_zeiten[gewaehlt][0])).replace(".", ",")
+	inhalt.append([cx, y, start_text, Callable(), false, false, Stil.breite(start_text, Stil.KLEIN) + 4.0])
+	cx += Stil.breite(start_text, Stil.KLEIN) + 6.0
+	for k: Array in [["−1 s", _schritt.bind(-1.0)], ["+1 s", _schritt.bind(1.0)]]:
+		var w := Stil.breite(k[0], Stil.KLEIN) + 6.0
+		inhalt.append([cx, y, k[0], k[1], false, false, w])
+		cx += w + 2.0
+	breite = maxf(breite, cx)
+	y += zeile_h
+	cx = pad
+	if not wurf:
+		inhalt.append([cx, y, "Ausgang", Callable(), false, false, Stil.breite("Ausgang", Stil.KLEIN) + 4.0])
+		cx += Stil.breite("Ausgang", Stil.KLEIN) + 6.0
+		for wahl: String in AUSGANG:
+			var w := Stil.breite(AUSGANG[wahl], Stil.KLEIN) + 14.0
+			inhalt.append([cx, y, "^" + wahl, _setze_ausgang.bind(wahl), str(g.get("ausgang", "")) == wahl, false, w])
+			cx += w + 2.0
+	else:
+		var a_text: String = "Auslöser: " + AUSLOESER[str(g.get("wenn", ""))]
+		var w := Stil.breite(a_text, Stil.KLEIN) + 6.0
+		inhalt.append([cx, y, a_text, _wechsle_ausloeser, false, false, w])
+		cx += w + 2.0
+		var z_text := "Ziel: Feld %d/%d ×" % [int(g["ziel"][0]), int(g["ziel"][1])] if g.has("ziel") else "Ziel wählen"
+		w = Stil.breite(z_text, Stil.KLEIN) + 6.0
+		inhalt.append([cx, y, z_text, _wurfziel, g.has("ziel"), str(g.get("wenn", "")) != "", w])
+		cx += w + 2.0
+	breite = maxf(breite, cx)
+	var titel := "%s · %d Budget" % ["Wurf W%d" % int(wurf_nummern(plan).get(gewaehlt, 0)) if wurf else "Trupp zu Fuß", Phantom.trupp_preis(g)]
+	breite = maxf(breite + pad - 2.0, Stil.breite(titel, Stil.NORMAL) + 40.0)
+	var hoehe := y + zeile_h - 2.0 + pad - 6.0
+	# Fenster über dem Kärtchen, im Bild gehalten
+	var karte: Rect2 = _rechtecke[gewaehlt]
+	var fx := clampf(roundf(karte.get_center().x - breite / 2.0), 8.0, 632.0 - breite)
+	var fy := RAHMEN_R.position.y - hoehe - 4.0
+	_fenster.position = Vector2(fx, fy)
+	_fenster.size = Vector2(ceilf(breite), ceilf(hoehe))
+	_fenster.set_meta("titel", titel)
+	_fenster.set_meta("anker", karte.get_center().x - fx)
+	var loeschen_w := Stil.breite("Löschen", Stil.KLEIN) + 6.0
+	_knoepfe.append([Rect2(fx + breite - loeschen_w - 4.0, fy + 3.0, loeschen_w, 10.0), _loesche, "Löschen", false, false])
+	for e: Array in inhalt:
+		_knoepfe.append([Rect2(fx + e[0], fy + e[1] - 5.0, e[6], 10.0), e[3], e[2], e[4], e[5]])
+
+
+func _setze_ausgang(wahl: String) -> void:
+	var t: Dictionary = plan[gewaehlt]
+	if wahl == "":
+		t.erase("ausgang")
+	else:
+		t["ausgang"] = wahl
+	_neu()
+
+
+func _male_band(ci: Control) -> void:
+	var o := RAHMEN_R.position
+	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0, Stil.METALL_DUNKEL, Stil.RAHMEN)
+	ci.draw_rect(Rect2(Vector2(6, 1), Vector2(ci.size.x - 12, 1)), LICHT.darkened(0.2))
+	# Kopf: Titel, Budget, Knöpfe
+	var x := 8.0
+	x += Stil.schreibe(ci, Vector2(x, 8), "Taktikplaner · Runde %d" % spiel.welle, Stil.NORMAL, LICHT) + 10.0
+	var rest := budget() - verbraucht()
+	Stil.symbol(ci, "muenze", Vector2(x + 4.0, 8), 1.0, Stil.GOLD)
+	x += 10.0
+	x += Stil.schreibe(ci, Vector2(x, 8), "%d / %d" % [verbraucht(), budget()], Stil.KLEIN, Stil.GOLD if rest >= 0 else Stil.WARN) + 6.0
+	var balken := Rect2(Vector2(x, 7), Vector2(60, 3))
+	ci.draw_rect(balken, Stil.METALL_TIEF)
+	ci.draw_rect(Rect2(balken.position, Vector2(balken.size.x * clampf(float(verbraucht()) / maxf(1.0, float(budget())), 0.0, 1.0), 3)), Stil.GOLD if rest >= 0 else Stil.WARN)
+	var hilfe := "Einheit aufs Band ziehen · Kärtchen verschieben · zwischen den Spuren = Wurf / zu Fuß"
+	var hx := balken.end.x + 10.0
+	var platz: float = _knoepfe[2][0].position.x - o.x - 8.0 - hx if _knoepfe.size() >= 3 else 0.0
+	if Stil.breite(hilfe, Stil.KLEIN) <= platz:
+		Stil.schreibe(ci, Vector2(hx, 8), hilfe, Stil.KLEIN, Stil.TEXT_BLASS)
+	for i in mini(3, _knoepfe.size()):
+		_male_knopf(ci, _knoepfe[i], -o)
 	# Spuren (beim Ziehen leuchtet die, auf der losgelassen würde)
 	var ueber := _spur_bei(_maus) if (_zieht >= 0 and _zieh_bewegt) or _zieht_typ != "" else ""
-	draw_rect(Rect2(BAND_X, WURF_Y, BAND_B, WURF_H), Color("2b2416") if ueber == "w" else Color("1b1722"))
-	draw_rect(Rect2(BAND_X, FUSS_Y, BAND_B, FUSS_H), Color("242033") if ueber == "l" else Color("1b1722"))
+	for spur: Array in [["w", WURF_Y, WURF_H, "Wurf"], ["l", FUSS_Y, FUSS_H, "zu Fuß"]]:
+		var r := Rect2(Vector2(BAND_X, spur[1]) - o, Vector2(BAND_B, spur[2]))
+		ci.draw_rect(r, Color(LICHT, 0.12) if ueber == spur[0] else Stil.METALL_TIEF)
+		Stil.schreibe(ci, Vector2(6, r.get_center().y), spur[3], Stil.KLEIN, LICHT if ueber == spur[0] else Stil.TEXT_BLASS)
 	# Sekunden-Achse
 	var sek := 0
 	while sek * _pps <= BAND_B:
-		var x := BAND_X + sek * _pps
-		draw_line(Vector2(x, ACHSE_Y), Vector2(x, ACHSE_Y + (6 if sek % 10 == 0 else 3)), Color("7d758a"))
+		var ax := BAND_X + sek * _pps - o.x
+		ci.draw_rect(Rect2(Vector2(ax, ACHSE_Y - o.y), Vector2(1, 3 if sek % 10 == 0 else 1)), Stil.RAHMEN_HELL)
 		if sek % 10 == 0:
-			draw_string(_schrift, Vector2(x + 3, ACHSE_Y + 16), "%d s" % sek, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("7d758a"))
+			Stil.schreibe(ci, Vector2(ax + 2.0, ACHSE_Y - o.y + 6.0), "%d s" % sek, Stil.KLEIN, Stil.TEXT_BLASS)
 		sek += 5
 	# Kärtchen
 	var voriges := -1
 	var nummern := wurf_nummern(plan)
 	for i in plan.size():
-		var r: Rect2 = _rechtecke[i]
+		var r: Rect2 = (_rechtecke[i] as Rect2)
+		r.position -= o
 		var wurf := _ist_wurf(i)
-		var mit_ausloeser := wurf and str(plan[i].get("wenn", "")) != ""
-		draw_rect(r, Color("5a3d12") if wurf else Color("332c40"))
-		draw_rect(r, Color("4aa3ff") if i == gewaehlt else (Color("ef9f27") if wurf else Color("8d84a0")), false, 2.0 if i == gewaehlt else 1.0)
-		var text := _trupp_text(plan[i]["typen"], false)
+		var an := i == gewaehlt
+		Stil.platte(ci, r, 2.0, WURF_GRUND if wurf else Stil.METALL, LICHT if an else (Stil.KUPFER if wurf else Stil.RAHMEN_HELL))
+		var cx := r.position.x + 3.0
+		var fuss := r.end.y - 2.0
+		for a: Array in _gruppiert(plan[i]["typen"]):
+			var fb := _figur_breite(a[0], FIGUR_H)
+			if cx + fb > r.end.x + 2.0:
+				break
+			_male_figur(ci, a[0], Vector2(cx + fb / 2.0, fuss), FIGUR_H)
+			cx += fb
+			if a[1] > 1:
+				cx += Stil.schreibe(ci, Vector2(cx, r.end.y - 5.0), "×%d" % a[1], Stil.KLEIN, Stil.TEXT) + 1.0
+		# Marken: Wurfnummer, Auslöser, Ausgang
 		if wurf:
-			if mit_ausloeser:
-				text = "⚑ " + text
-			elif plan[i].has("ziel"):
-				text = "W%d◎ %s" % [nummern[i], text]   # dieselbe Nummer wie das Fadenkreuz auf der Karte
+			var marke: String = AUSLOESER_KURZ[str(plan[i].get("wenn", ""))]
+			if marke == "" and plan[i].has("ziel"):
+				marke = "W%d" % int(nummern.get(i, 0))
+			if marke != "":
+				var mw := Stil.breite(marke, Stil.KLEIN) + 4.0
+				var mr := Rect2(Vector2(r.position.x, r.position.y - 8.0), Vector2(mw, 8.0))
+				ci.draw_rect(mr, Stil.KUPFER.darkened(0.3))
+				Stil.schreibe(ci, Vector2(mr.position.x + 2.0, mr.get_center().y), marke, Stil.KLEIN, Stil.TEXT)
+			if _spaet[i]:
+				ci.draw_rect(Rect2(r.position - Vector2(2, 0), Vector2(2, r.size.y)), Stil.ROT)   # die Schleuder lädt noch
 		else:
-			text = AUSGANG_ZEICHEN[str(plan[i].get("ausgang", ""))] + text
-		var breite := _schrift.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-		var farbe_text := Color("fac775") if wurf else Color("ece6f5")
-		var y := r.position.y + r.size.y * 0.5 + 4
-		if breite <= r.size.x - 6:
-			draw_string(_schrift, Vector2(r.position.x + 4, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, farbe_text)
-		else:
-			draw_string(_schrift, Vector2(r.position.x + 3, y), text, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 4, 11, farbe_text)
-		if wurf and _spaet[i]:
-			# die Schleuder lädt noch: dieser Wurf kommt später als gewollt
-			draw_line(Vector2(r.position.x, r.position.y), Vector2(r.position.x, r.end.y), Color("e24b4a"), 3.0)
-		if not wurf:
+			var ausgang := str(plan[i].get("ausgang", ""))
+			if ausgang != "":
+				_male_pfeil(ci, Vector2(r.end.x - 4.0, r.position.y + 4.0), ausgang == "oben", LICHT)
 			if voriges >= 0:
 				var von := float(_zeiten[voriges][0]) + float(_zeiten[voriges][1])
 				var luecke := float(_zeiten[i][0]) - von
-				var mitte := (BAND_X + von * _pps + r.position.x) * 0.5
-				draw_string(_schrift, Vector2(mitte - 14, FUSS_Y + FUSS_H * 0.5 + 4), "%.1f" % luecke, HORIZONTAL_ALIGNMENT_CENTER, 28, 11, Color("7d758a"))
+				var vx := BAND_X + von * _pps - o.x
+				var t := ("%.1f" % luecke).replace(".", ",")
+				if r.position.x - vx > Stil.breite(t, Stil.KLEIN) + 4.0:
+					Stil.schreibe_mittig(ci, Vector2((vx + r.position.x) * 0.5, r.get_center().y), t, Stil.KLEIN, Stil.TEXT_BLASS)
 			voriges = i
-	# Einheit aus der Leiste hängt an der Maus
+	if plan.is_empty():
+		Stil.schreibe(ci, Vector2(BAND_X - o.x + 8.0, FUSS_Y - o.y + FUSS_H / 2.0), "Noch leer: Einheit aus der Konsole hierher ziehen – oder „Vorlage“.", Stil.KLEIN, Stil.TEXT_BLASS)
+
+
+func _male_pfeil(ci: CanvasItem, m: Vector2, hoch: bool, farbe: Color) -> void:
+	var s := -1.0 if hoch else 1.0
+	ci.draw_colored_polygon(PackedVector2Array([m + Vector2(-2.5, -1.5 * s), m + Vector2(2.5, -1.5 * s), m + Vector2(0, 2.0 * s)]), farbe)
+
+
+func _male_knopf(ci: CanvasItem, k: Array, verschiebung: Vector2) -> void:
+	var r: Rect2 = (k[0] as Rect2)
+	r.position += verschiebung
+	var text: String = k[2]
+	var aktion: Callable = k[1]
+	var an: bool = k[3]
+	var aus: bool = k[4]
+	var drueber := (k[0] as Rect2).has_point(_maus) and aktion.is_valid() and not aus
+	if text.begins_with("#"):
+		# Figur mit Anzahl
+		var typ := text.substr(1)
+		var n := (plan[gewaehlt]["typen"] as Array).count(typ)
+		_male_figur(ci, typ, Vector2(r.position.x + 5.0, r.end.y + 1.0), 12.0)
+		Stil.schreibe(ci, Vector2(r.position.x + 11.0, r.get_center().y), "×%d" % n, Stil.KLEIN, Stil.TEXT)
+		return
+	if not aktion.is_valid():
+		Stil.schreibe(ci, Vector2(r.position.x, r.get_center().y), text, Stil.KLEIN, Stil.TEXT_BLASS)
+		return
+	var rand := LICHT if an or drueber else Stil.RAHMEN
+	Stil.platte(ci, r, 1.5, Color(LICHT, 0.18) if an else Stil.METALL_TIEF, rand)
+	var farbe := Stil.TEXT_BLASS.darkened(0.3) if aus else (LICHT if an else Stil.TEXT)
+	if text.begins_with("^"):
+		var wahl := text.substr(1)
+		if wahl != "":
+			_male_pfeil(ci, Vector2(r.position.x + 5.0, r.get_center().y), wahl == "oben", farbe)
+		else:
+			ci.draw_rect(Rect2(Vector2(r.position.x + 3.5, r.get_center().y - 0.5), Vector2(3, 1)), farbe)
+		Stil.schreibe(ci, Vector2(r.position.x + 10.0, r.get_center().y), AUSGANG[wahl], Stil.KLEIN, farbe)
+		return
+	Stil.schreibe_mittig(ci, r.get_center(), text, Stil.KLEIN, farbe)
+
+
+func _male_fenster(ci: Control) -> void:
+	if gewaehlt < 0 or ci.size.x < 20.0:
+		return
+	var r := Rect2(Vector2.ZERO, ci.size)
+	Stil.platte(ci, r, 3.0, Stil.METALL_DUNKEL, LICHT)
+	Stil.schreibe(ci, Vector2(5, 8), str(ci.get_meta("titel", "")), Stil.NORMAL, LICHT)
+	for i in range(3, _knoepfe.size()):
+		_male_knopf(ci, _knoepfe[i], -ci.position)
+	# Haltelinie zum Kärtchen
+	var ax: float = ci.get_meta("anker", ci.size.x / 2.0)
+	ci.draw_rect(Rect2(Vector2(clampf(ax, 4.0, ci.size.x - 4.0) - 1.0, ci.size.y), Vector2(2, 4)), LICHT)
+
+
+func _male_konsole(ci: Control) -> void:
+	var w := ci.size.x
+	var h := ci.size.y
+	var aussen := PackedVector2Array([Vector2(0, h), Vector2(14, 16), Vector2(36, 4), Vector2(w - 36, 4), Vector2(w - 14, 16), Vector2(w, h)])
+	var innen := PackedVector2Array([Vector2(3, h), Vector2(16, 17), Vector2(37, 6), Vector2(w - 37, 6), Vector2(w - 16, 17), Vector2(w - 3, h)])
+	ci.draw_colored_polygon(aussen, Stil.RAHMEN)
+	ci.draw_colored_polygon(innen, Stil.METALL_DUNKEL)
+	ci.draw_rect(Rect2(Vector2(40, 6), Vector2(w - 80, 1)), LICHT)
+	# Monitor links: Budget
+	var mon := Rect2(Vector2(13, 15), Vector2(28, 26))
+	ci.draw_rect(mon, Stil.RAHMEN)
+	var schirm := mon.grow(-2.0)
+	ci.draw_rect(schirm, Color("20140c"))
+	var rest := budget() - verbraucht()
+	Stil.symbol(ci, "muenze", schirm.get_center() + Vector2(0, -5), 1.0, Stil.GOLD)
+	Stil.schreibe_mittig(ci, schirm.get_center() + Vector2(0, 5), str(rest), Stil.KLEIN, Stil.GOLD if rest >= 0 else Stil.WARN)
+	var sy := schirm.position.y
+	while sy < schirm.end.y:
+		ci.draw_rect(Rect2(Vector2(schirm.position.x, sy), Vector2(schirm.size.x, 0.5)), Color(0, 0, 0, 0.35))
+		sy += 1.5
+	# Kacheln
+	for i in Phantom.TYPEN.size():
+		_male_kachel(ci, i)
+	# Einheit, die an der Maus hängt, zeichnet die Wurzel
+
+
+func _kachel_recht(i: int) -> Rect2:
+	return Rect2(KONSOLE_R.position + Vector2(SCHULTER + i * (KACHEL_B + KACHEL_ABSTAND), 8.0), Vector2(KACHEL_B, 40.0))
+
+
+func _male_kachel(ci: Control, i: int) -> void:
+	var typ: String = Phantom.TYPEN[i]
+	var r := _kachel_recht(i)
+	r.position -= KONSOLE_R.position
+	var drueber := (_kachel_recht(i) as Rect2).has_point(_maus) and _zieht_typ == ""
+	var greift := _zieht_typ == typ
+	var preis := Phantom.preis(typ)
+	var zahlbar := verbraucht() + preis <= budget()
+	var hoch := -3.0 if greift else (-1.0 if drueber else 0.0)
+	var m := Vector2(r.get_center().x, r.position.y + 16.0 + hoch)
+	ci.draw_colored_polygon(Stil.sechseck(m, 28.0, 32.0), LICHT if greift else (Stil.RAHMEN_HELL if drueber else Stil.RAHMEN))
+	ci.draw_colored_polygon(Stil.sechseck(m, 25.0, 29.0), Stil.METALL)
+	ci.draw_colored_polygon(Stil.sechseck(m, 23.0, 27.0), Stil.METALL_DUNKEL)
+	_male_figur(ci, typ, m + Vector2(0, 10), 20.0, Color.WHITE if zahlbar else Color(0.5, 0.5, 0.55))
+	Stil.schreibe(ci, Vector2(r.position.x + 1.0, r.position.y + 3.0 + hoch), str(i + 1), Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.preisschild(ci, Vector2(m.x, r.position.y + 36.0), str(preis), Stil.GOLD if zahlbar else Stil.WARN)
+
+
+## Breite, die eine Figur von `hoehe` auf dem Kärtchen braucht (dieselbe Rechnung wie _male_figur).
+func _figur_breite(typ: String, hoehe: float) -> float:
+	var z := float(Werte.grafik_daten(Werte.GEGNER[typ])["zelle"])
+	var sk := Stil.skala()
+	var bp := maxf(1.0, roundf(hoehe * sk / 30.0))   # gleicher Maßstab für alle Gegner (sonst wirkt der Hund riesig)
+	return roundf(z * bp / sk * 0.62)
+
+
+## Kleine Figur eines Gegnertyps (Standbild), Füße auf `fuss`, etwa `hoehe` UI-Pixel hoch – pixelgenau.
+func _male_figur(ci: CanvasItem, typ: String, fuss: Vector2, hoehe: float, farbe: Color = Color.WHITE) -> void:
+	if not _figuren.has(typ):
+		var g := Werte.grafik_daten(Werte.GEGNER[typ])
+		_figuren[typ] = {"tex": load(str(g["blatt"])), "zelle": float(g["zelle"]), "spiegeln": typ in ["sprenger", "enterer"]}
+	var f: Dictionary = _figuren[typ]
+	var z: float = f["zelle"]
+	var sk := Stil.skala()
+	var bp := maxf(1.0, roundf(hoehe * sk / 30.0))   # gleicher Maßstab für alle Gegner (sonst wirkt der Hund riesig)
+	var g := Vector2(z, z) * bp / sk
+	var o := ((fuss - Vector2(g.x / 2.0, g.y * 0.9)) * sk).round() / sk
+	var ziel := Rect2(o, g)
+	if f["spiegeln"]:
+		ziel = Rect2(o, Vector2(-g.x, g.y))
+	ci.draw_texture_rect_region(f["tex"], ziel, Rect2(0, 0, z, z), farbe)
+
+
+func _draw() -> void:
+	# Einheit aus der Konsole hängt an der Maus
 	if _zieht_typ != "":
-		var name := "%s  %d" % [Werte.GEGNER[_zieht_typ]["kurz"], Phantom.preis(_zieht_typ)]
-		var b := _schrift.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 16
-		draw_rect(Rect2(_maus.x - b * 0.5, _maus.y - 13, b, 26), Color("4a4160"))
-		draw_rect(Rect2(_maus.x - b * 0.5, _maus.y - 13, b, 26), Color("4aa3ff"), false, 2.0)
-		draw_string(_schrift, Vector2(_maus.x - b * 0.5 + 8, _maus.y + 5), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("ece6f5"))
+		var r := Rect2(_maus - Vector2(10, 12), Vector2(20, 22))
+		Stil.platte(self, r, 2.0, Stil.METALL_DUNKEL, LICHT)
+		_male_figur(self, _zieht_typ, Vector2(r.get_center().x, r.end.y - 2.0), 18.0)
 
 
-# -------------------------------------------------------------- Maus
+# -------------------------------------------------------------- Maus und Tasten
 
 func _sek_bei(x: float) -> float:
 	return (x - BAND_X) / _pps
@@ -544,23 +761,53 @@ func _sek_bei(x: float) -> float:
 
 ## "w" = Wurf-Spur, "l" = Spur zu Fuß, "" = daneben.
 func _spur_bei(p: Vector2) -> String:
-	if p.x < BAND_X - 20 or p.x > BAND_X + BAND_B + 20:
+	if p.x < BAND_X - 10 or p.x > BAND_X + BAND_B + 10:
 		return ""
-	if p.y >= WURF_Y - 6 and p.y < FUSS_Y - 2:
+	if p.y >= WURF_Y - 4 and p.y < FUSS_Y - 1:
 		return "w"
-	if p.y >= FUSS_Y - 2 and p.y <= ACHSE_Y + 14:
+	if p.y >= FUSS_Y - 1 and p.y <= ACHSE_Y + 6:
 		return "l"
 	return ""
 
 
 func _karte_bei(p: Vector2) -> int:
 	for i in range(plan.size() - 1, -1, -1):
-		if (_rechtecke[i] as Rect2).grow(2.0).has_point(p):
+		if (_rechtecke[i] as Rect2).grow(1.5).has_point(p):
 			return i
 	return -1
 
 
-## Eine Einheit in der Leiste wurde angefasst: Sie hängt an der Maus, bis die Taste losgelassen wird.
+## Klick in eine der Flächen (Band, Konsole, Fenster). Position in Koordinaten der Wurzel.
+func _flaeche_klick(f: Control, event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	var p: Vector2 = (event as InputEventMouseButton).position + f.position
+	_maus = p
+	f.accept_event()
+	for k: Array in _knoepfe:
+		if (k[0] as Rect2).has_point(p):
+			if (k[1] as Callable).is_valid() and not k[4]:
+				(k[1] as Callable).call()
+			return
+	if f == _konsole:
+		for i in Phantom.TYPEN.size():
+			if _kachel_recht(i).has_point(p):
+				_greife_typ(Phantom.TYPEN[i])
+		return
+	if f != _band:
+		return
+	var treffer := _karte_bei(p)
+	gewaehlt = treffer
+	_zieht = treffer
+	_zieh_bewegt = false
+	if treffer >= 0:
+		_zieh_dx = p.x - (_rechtecke[treffer] as Rect2).position.x
+		_wunsch = _startzeiten()
+		_pps_fest = _pps
+	_neu()
+
+
+## Eine Einheit in der Konsole wurde angefasst: Sie hängt an der Maus, bis die Taste losgelassen wird.
 func _greife_typ(typ: String) -> void:
 	_zieht_typ = typ
 	_maus = get_local_mouse_position()
@@ -579,7 +826,7 @@ func _lass_typ_fallen() -> void:
 		_fuege_hinzu(typ, karte)                       # auf ein Kärtchen: kommt in diesen Trupp
 	elif spur != "":
 		_neuer_trupp_bei(typ, _sek_bei(_maus.x), spur == "w")   # auf freie Fläche: neuer Trupp an dieser Stelle
-	elif _maus.distance_to(_typ_start) < 8.0:
+	elif _maus.distance_to(_typ_start) < 6.0:
 		_fuege_hinzu(typ)                              # nur geklickt: in den gewählten Trupp
 	else:
 		_neu()
@@ -587,6 +834,15 @@ func _lass_typ_fallen() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not is_visible_in_tree():
+		return
+	if event is InputEventKey and event.pressed and not event.echo and spiel.phase == 0 and spiel._wurfziel_fuer.is_empty():
+		var k: int = (event as InputEventKey).keycode
+		if k >= KEY_1 and k <= KEY_9 and k - KEY_1 < Phantom.TYPEN.size():
+			_fuege_hinzu(Phantom.TYPEN[k - KEY_1])     # Taste 1–9: Einheit in den gewählten Trupp
+			get_viewport().set_input_as_handled()
+		elif (k == KEY_DELETE or k == KEY_BACKSPACE) and gewaehlt >= 0:
+			_loesche()
+			get_viewport().set_input_as_handled()
 		return
 	if _zieht_typ != "":
 		# die Einheit hängt an der Maus, auch über den Knöpfen
@@ -605,28 +861,14 @@ func _input(event: InputEvent) -> void:
 			_lass_karte_los()
 
 
-func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		var treffer := _karte_bei(event.position)
-		if treffer < 0 and event.position.y > ACHSE_Y + 18:
-			return   # Klick in die Knopfzeilen: Auswahl bleibt
-		gewaehlt = treffer
-		_zieht = treffer
-		_zieh_bewegt = false
-		_maus = event.position
-		if treffer >= 0:
-			_zieh_dx = event.position.x - (_rechtecke[treffer] as Rect2).position.x
-			_wunsch = _startzeiten()
-			_pps_fest = _pps
-		_neu()
-
-
 ## Das angefasste Kärtchen folgt der Maus auf der Zeitachse. Zu Fuß: die anderen behalten ihre Zeit, soweit Platz ist;
 ## wer überholt wird, tauscht den Platz. Wurf: seine Sekunde.
 func _ziehe_karte() -> void:
 	if _zieht < 0 or _zieht >= plan.size():
 		return
 	var sek := _raste(_sek_bei(_maus.x - _zieh_dx))
+	if not _zieh_bewegt and absf(_maus.x - _zieh_dx - (_rechtecke[_zieht] as Rect2).position.x) < 2.0:
+		return   # nur geklickt
 	_zieh_bewegt = true
 	if _ist_wurf(_zieht):
 		plan[_zieht]["zeit"] = maxf(0.0, sek)
@@ -729,24 +971,74 @@ class Nebel extends Node2D:
 			if is_instance_valid(e):
 				e.visible = offen(spiel.karte.zelle_bei(e.position), false)
 		queue_redraw()
+	## Nebel (16.11. neu): echter Dunst statt Decke. Eine kleine Maske (ein Bildpunkt je Feld, weich gefiltert) sagt, wie
+	## dicht er ist – ungesehen dicht, aufgeklärt (und Checkpoints, Basis) halb, sichtbar frei; ein Shader lässt darüber
+	## Schwaden aus Rauschen treiben. Die Ränder laufen so von selbst weich aus.
+	var _maske: Image
+	var _maske_tex: ImageTexture
+	var _mat: ShaderMaterial
 
 	func _draw() -> void:
 		if not aktiv():
 			return
-		var zg := float(Werte.ZELLE)
-		var oben := Vector2(0, Werte.KARTE_OBEN)
+		if _mat == null:
+			_richte_ein()
 		var ziele: Array = (spiel.karte.checkpoints as Array).duplicate()
 		ziele.append(Werte.BASIS_ZELLE)
 		for y in Werte.ZEILEN:
-			for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
+			for x in Werte.SPALTEN:
 				var z := Vector2i(x, y)
-				if sichtbar.has(z):
-					continue
-				var r := Rect2(oben + Vector2(x, y) * zg, Vector2(zg, zg))
-				if gesehen.has(z) or ziele.has(z):
-					draw_rect(r, Color(0.04, 0.05, 0.08, 0.5))
-				else:
-					draw_rect(r, Color(0.05, 0.06, 0.09, 1.0))
-					# leichte Körnung, damit der Nebel nicht wie ein Loch aussieht
-					var h := hash(z)
-					draw_rect(Rect2(r.position + Vector2(10 + h % 30, 12 + (h >> 5) % 30), Vector2(4, 4)), Color(0.12, 0.13, 0.17, 0.9))
+				var dichte := 0.0
+				if x >= Werte.ZONE_SPALTEN and not sichtbar.has(z):
+					dichte = 0.5 if gesehen.has(z) or ziele.has(z) else 1.0
+				_maske.set_pixel(x + 1, y + 1, Color(dichte, 0, 0, 1))
+		_maske_tex.update(_maske)
+		# Die Maske hat einen Rand von einem Feld (wie das Nachbarfeld), damit der Nebel am Kartenrand nicht ausfranst
+		for x in Werte.SPALTEN + 2:
+			_maske.set_pixel(x, 0, _maske.get_pixel(clampi(x, 1, Werte.SPALTEN), 1))
+			_maske.set_pixel(x, Werte.ZEILEN + 1, _maske.get_pixel(clampi(x, 1, Werte.SPALTEN), Werte.ZEILEN))
+		for y in Werte.ZEILEN + 2:
+			_maske.set_pixel(Werte.SPALTEN + 1, y, _maske.get_pixel(Werte.SPALTEN, y))
+		_maske_tex.update(_maske)
+		var zg := float(Werte.ZELLE)
+		draw_texture_rect(_maske_tex, Rect2(Vector2(-zg, Werte.KARTE_OBEN - zg), Vector2(Werte.SPALTEN + 2, Werte.ZEILEN + 2) * zg), false)
+
+	func _richte_ein() -> void:
+		_maske = Image.create(Werte.SPALTEN + 2, Werte.ZEILEN + 2, false, Image.FORMAT_RGBA8)
+		_maske_tex = ImageTexture.create_from_image(_maske)
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		var sh := Shader.new()
+		sh.code = """
+shader_type canvas_item;
+// Wert-Rauschen mit mehreren Lagen (fbm): treibende Nebelschwaden
+float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float rauschen(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h(i), h(i + vec2(1.0, 0.0)), u.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) {
+	float s = 0.0;
+	float a = 0.5;
+	for (int i = 0; i < 4; i++) { s += a * rauschen(p); p *= 2.03; a *= 0.5; }
+	return s;
+}
+void fragment() {
+	float dichte = texture(TEXTURE, UV).r;
+	dichte = smoothstep(0.05, 0.95, dichte);
+	vec2 p = UV * vec2(22.0, 12.0);
+	float n = fbm(p + vec2(TIME * 0.05, TIME * 0.02));
+	float n2 = fbm(p * 1.7 - vec2(TIME * 0.03, -TIME * 0.04));
+	float schwaden = mix(n, n2, 0.5);
+	vec3 dunkel = vec3(0.13, 0.15, 0.20);
+	vec3 hell = vec3(0.55, 0.60, 0.68);
+	vec3 farbe = mix(dunkel, hell, smoothstep(0.25, 0.85, schwaden));
+	float a = dichte * (0.80 + 0.20 * schwaden);
+	if (dichte > 0.97) { a = max(a, 0.93); }   // tiefer Nebel verrät nichts
+	COLOR = vec4(farbe, clamp(a, 0.0, 0.97));
+}
+"""
+		_mat = ShaderMaterial.new()
+		_mat.shader = sh
+		material = _mat
