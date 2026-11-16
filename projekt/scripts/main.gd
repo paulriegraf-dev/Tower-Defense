@@ -1085,7 +1085,7 @@ var _jaeger: Array = []
 func darf_absteigen(e: Einheit) -> bool:
 	var ziele := 0
 	for g in gegner:
-		if not _geschuetzt(g) and g.rest_weg() < (1 << 20) and (g._stand >= Werte.AUFRAEUM_STEHT_SEK or g.ohne_treffer >= Werte.AUFRAEUM_OHNE_TREFFER_SEK):
+		if not _geschuetzt(g) and g.rest_weg() < (1 << 20) and g.draussen >= Werte.AUFRAEUM_DRAUSSEN_SEK and (g._stand >= Werte.AUFRAEUM_STEHT_SEK or g.ohne_treffer >= Werte.AUFRAEUM_OHNE_TREFFER_SEK):
 			ziele += 1
 	if ziele == 0:
 		return false
@@ -1158,6 +1158,8 @@ func raeumen() -> bool:
 func aufraeumen() -> bool:
 	if phase != Phase.KAMPF or endkampf or gegner.is_empty() or not _schlange.is_empty() or not _wurf_schlange.is_empty() or not _wurf_aktiv.is_empty() or _im_flug > 0:
 		return false
+	if gegner.size() > Werte.AUFRAEUM_HOECHSTENS_GEGNER:
+		return false   # noch ein ganzer Trupp unterwegs: die Stellungen bleiben besetzt
 	for g in gegner:
 		if g.rolle == "belagerung":
 			return false

@@ -25,7 +25,7 @@ const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner k
 const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
 const ENDKAMPF_PAUSE: float = 6.0     # 15.11.: vorher 3 – Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
 const ENDKAMPF_LEBEN: float = 2.6      # 15.11.: vorher 3,4 – Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
-const LEBEN_JE_RUNDE: float = 0.23     # so viel zäher werden die Gegner je Runde (Runde 19: ×5,1)
+const LEBEN_JE_RUNDE: float = 0.20     # so viel zäher werden die Gegner je Runde (Runde 19: ×4,6); Patch 16.11.: vorher 0,23 (×5,1)
 const GEGNER_GRUND_LEBEN: float = 10.0  # ab GRUND_LEBEN_AB_RUNDE bekommt jeder Gegner so viel Leben dazu, vor dem Rundenfaktor (gegen zu starken Flächenschaden; hilft vor allem den kleinen). 15.11.: 20 ab R1 war zu hart
 const GRUND_LEBEN_AB_RUNDE: int = 6
 # Schleudern stehen in der Zone und werfen auf Truppen in Stellungen und auf Fabriken in Reichweite.
@@ -81,8 +81,8 @@ const RAUCH_RADIUS: float = 2.0        # Felder
 const RAUCH_SEK: float = 5.0           # so lange können Truppen im Rauch nicht schießen (Türme schon)
 const ANDOCK_SEK: float = 3.0          # so lange braucht ein Belagerungsturm am Wall, bevor Truppen herausspringen
 const ANDOCK_NAH: int = 3            # Belagerungsturm dockt am liebsten dort an, wo eine Stellung/ein Turm höchstens so viele Wallschritte entfernt ist (außerhalb der Zone, am schnellsten erreichbar)
-const ENTERER_ABSTAND: float = 3.0     # Sekunden zwischen zwei Myr-Drohnen – sie kommen nach, solange der Turm steht
-const ENTERER_GLEICHZEITIG: int = 6    # mehr Myr-Drohnen eines Turms sind nie zugleich unterwegs
+const ENTERER_ABSTAND: float = 4.0     # Sekunden zwischen zwei Myr-Drohnen – sie kommen nach, solange der Turm steht
+const ENTERER_GLEICHZEITIG: int = 4    # mehr Myr-Drohnen eines Turms sind nie zugleich unterwegs
 const BELAGERUNG_SEK: float = 40.0     # so lange hält ein angedockter Belagerungsturm höchstens durch, dann zerfällt er
 const ENTERER_LEERLAUF_SEK: float = 3.0 # findet eine Myr-Drohne so lange kein Ziel auf dem Wall, springt sie ab
 const ENDKAMPF_ABSTAND: float = 1.5      # letzte Runde: erst wenn ein Gegner näher ist (Felder), bleiben vorrückende Truppen stehen
@@ -198,9 +198,14 @@ const KOSTEN_STUFE: Array[int] = [75, 175, 450]   # vorher 50/150/400 (14.11. er
 const KOSTEN_BATTERIE_STUFE: Array[int] = [125, 175, 450]   # vorher 100/150/400 (14.11. erhöht)   # dasselbe für die Batterie
 const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
 const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
+const STELLUNG_DECKUNG: float = 0.4          # Patch 16.11.: Truppen oben in einer Stellung nehmen so viel weniger Schaden
+# Patch 16.11. (Paul): Fahnenträger 190 → 160, Schildträger 150 → 135, Schwarmgeist 300 → 270 Leben (Werte unten bei den Gegnern)
 const AUFRAEUM_STEHT_SEK: float = 3.0         # Aufräumen am Rundenende: Truppen steigen nur für Gegner ab, die so lange feststehen ...
 const AUFRAEUM_OHNE_TREFFER_SEK: float = 8.0  # ... oder die so lange niemand mehr getroffen hat (außer Reichweite)
 const AUFRAEUM_JAEGER_JE_GEGNER: int = 2      # höchstens so viele Truppen steigen je solchem Gegner ab
+const AUFRAEUM_DRAUSSEN_SEK: float = 15.0     # ... und nur für Gegner, die schon so lange außerhalb der Zone unterwegs sind
+const AUFRAEUM_HOECHSTENS_GEGNER: int = 3     # 16.11. (Paul): aufgeräumt wird erst, wenn nur noch so wenige Gegner übrig sind –
+                                              # vorher verließen alle schlagartig die Stellungen, obwohl noch ein Trupp unterwegs war
 const ABFANG_JE_FELD: int = 2        # höchstens so viele Bodentruppen fangen auf demselben Feld ab
 const ABFANG_WEIT: int = 14          # so viele Felder voraus auf dem Gegnerweg wird ein Abfangfeld gesucht
 const STUFE_1_TRUPPEN: int = 1                  # so viele Truppen hält eine spezialisierte Fabrik zusätzlich
@@ -596,7 +601,7 @@ const EINHEITEN := {
 		"schuss_bilder": [1, 7],    # 15.11.: Feuerstoß mit zwei Mündungsblitzen – in diesen Bildern fällt je ein Treffer
 		"massstab": 2.0,
 		"schussfarbe": "7fe0ff",
-		"leben": 60.0,
+		"leben": 75.0,   # Patch 16.11.: vorher 60.0
 		"tempo": 1.6,
 		"reichweite": 3.0,
 		"schaden": 9.3,             # je Treffer; 15.11.: vorher 8 alle 0,6 s – jetzt 2 Treffer alle 1,4 s (gleicher Schaden je Sekunde)
@@ -611,7 +616,7 @@ const EINHEITEN := {
 		"schuss_bilder": [1, 6],    # 15.11.: zwei Plasmaschüsse je Angriff, wie in der Animation
 		"massstab": 2.0,
 		"schussfarbe": "ff8ad8",
-		"leben": 70.0,
+		"leben": 85.0,   # Patch 16.11.: vorher 70.0
 		"tempo": 1.4,
 		"reichweite": 2.6,
 		"stellung_bonus": 0.0,      # Plasma fliegt von oben nicht weiter: in der Stellung nur der Schuss über Wälle
@@ -644,7 +649,7 @@ const EINHEITEN := {
 		"schuss_bilder": [3],       # 15.11.: der Treffer fällt mit dem Strahl, nicht schon beim Anlegen
 		"massstab": 2.0,
 		"schussfarbe": "9dff8a",
-		"leben": 40.0,
+		"leben": 55.0,   # Patch 16.11.: vorher 40.0
 		"tempo": 1.3,
 		"reichweite": 5.0,
 		"stellung_bonus": 1.5,      # der Scharfschütze profitiert am meisten von der Höhe
@@ -689,11 +694,11 @@ const GEGNER := {
 		"bilder": [9, 13, 17],
 		"angriff_dauer": 2.4,
 		"massstab": 1.1,
-		"leben": 110.0,
+		"leben": 95.0,   # Patch 16.11.: vorher 110.0
 		"tempo": 1.0,
 		"reichweite": 3.5,
 		"schaden": 16.0,            # an Gebäuden; Ziele: erst Stellungen, dann Fabriken und Batterien, dann Bodentruppen
-		"schaden_einheit": 22.0,    # an Truppen
+		"schaden_einheit": 15.0,   # Patch 16.11.: vorher 22.0    # an Truppen
 		"abklingzeit": 1.2,
 		"wall_kosten": 1000.0,
 		"fabrik_kosten": 2000.0,
@@ -703,7 +708,7 @@ const GEGNER := {
 	"fahne": {
 		"name": "Fahnenträger", "kurz": "Fahne", "art": "führt den Trupp", "rolle": "fahne", "fernkampf": false,
 		"blatt": "res://assets/sprites/fahnentraeger.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 1.8, "massstab": 1.1,
-		"leben": 190.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
+		"leben": 160.0, "tempo": 2.3, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 8,
 	},
 	"sprenger": {
@@ -733,7 +738,7 @@ const GEGNER := {
 	"schild": {
 		"name": "Schildträger", "kurz": "Schild", "art": "Frontschild", "rolle": "schild", "fernkampf": false,
 		"blatt": "res://assets/sprites/schildtraeger.png", "zelle": 48, "bilder": [9, 13, 17], "angriff_dauer": 1.6, "massstab": 1.4,
-		"leben": 150.0, "tempo": 0.9, "reichweite": 1.1, "schaden": 12.0, "abklingzeit": 1.0,
+		"leben": 135.0, "tempo": 0.9, "reichweite": 1.1, "schaden": 12.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 10,
 	},
 	"sani": {
@@ -745,7 +750,7 @@ const GEGNER := {
 	"schwarm": {
 		"name": "Schwarmgeist", "kurz": "Schwarm", "art": "zerfällt in Drohnen", "rolle": "schwarm", "fernkampf": false,
 		"blatt": "res://assets/sprites/schwarmgeist.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.0, "massstab": 1.1,
-		"leben": 300.0, "tempo": 0.8, "reichweite": 1.1, "schaden": 14.0, "abklingzeit": 1.2, "zerfall": 3,   # vorher 200 (14.11.)
+		"leben": 270.0, "tempo": 0.8, "reichweite": 1.1, "schaden": 14.0, "abklingzeit": 1.2, "zerfall": 3,   # vorher 200 (14.11.)
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 12,
 	},
 }

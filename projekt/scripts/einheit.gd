@@ -699,6 +699,8 @@ func nimm_schaden(menge: float) -> void:
 	if f < 1.0:
 		spiel.kuppel_abgefangen(position, menge * (1.0 - f))
 	menge *= f
+	if zustand == Zustand.AUF_POSTEN:
+		menge *= 1.0 - Werte.STELLUNG_DECKUNG   # Patch 16.11.: Deckung in der Stellung
 	leben -= menge
 	_treffer = 0.08
 	queue_redraw()
