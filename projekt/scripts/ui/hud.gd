@@ -54,7 +54,18 @@ const TURM_FORMEN := [
 	["frost", ["T##", "#..", "#.."]],
 	["lanze", ["#T#", "#.#", "..."]],
 	["heil", ["#..", ".T.", "..#"]],
+	["schild", ["####", "#T.#", "####"]],   # Schildgenerator: in einem Hof (2–12 freie Felder, rundum Erdwälle oder Tor)
 ]
+const SCHILD_FARBE := Color("b48cff")
+
+
+## Name, Formname und Farbe eines Kärtchens.
+static func _form_info(art: String) -> Array:
+	if art == "schild":
+		return ["Schild", "Hof", SCHILD_FARBE, "Schildgenerator"]
+	var d: Dictionary = Werte.TURMARTEN[art]
+	var kurz: String = {"geschuetz": "Geschütz", "funk": "Funk", "frost": "Frost", "lanze": "Lanze", "heil": "Heil"}.get(art, art)
+	return [kurz, str(d["form"]), Color(str(d["farbe"])), str(d["name"])]
 var _tipp_oben: Malflaeche
 var _neu: Emblem
 var _oben_rechts: Array[Emblem] = []
@@ -499,7 +510,7 @@ func _ordne_an() -> void:
 	# Turmformen über der Tafel, solange das Turm-Werkzeug gewählt ist
 	_formen.visible = _bauphase and _konsole.visible and not eingeklappt and spiel.werkzeug == Karte.TURM
 	if _formen.visible:
-		_formen.size = Vector2(5.0 * 56.0 + 4.0 * 3.0 + 10.0, 74.0)
+		_formen.size = Vector2(TURM_FORMEN.size() * 59.0 - 3.0 + 10.0, 74.0)
 		var oben := (_tipp.position.y if _tipp.visible else _konsole.position.y) - 3.0
 		_formen.position = Vector2(roundf((BREITE - _formen.size.x) / 2.0), oben - _formen.size.y)
 
@@ -521,7 +532,8 @@ func _male_formvorlage() -> void:
 	var z: Vector2i = k.zelle_bei(spiel.maus_welt())
 	if not k.in_karte(z):
 		return
-	var farbe := Color(str(Werte.TURMARTEN[formvorlage]["farbe"]))
+	var info := _form_info(formvorlage)
+	var farbe: Color = info[2]
 	var mitte: Vector2 = spiel.welt_zu_bild(k.mitte(z))
 	var nachbar: Vector2 = spiel.welt_zu_bild(k.mitte(z) + Vector2(Werte.ZELLE, 0))
 	var halb := maxf(8.0, absf(nachbar.x - mitte.x) * 0.42)
@@ -537,12 +549,12 @@ func _male_formvorlage() -> void:
 			_warnung.draw_rect(r, Color(farbe, 0.18))
 			_warnung.draw_rect(r, Color(0.05, 0.05, 0.08, 0.7), false, 5.0)
 			_warnung.draw_rect(r, farbe, false, 2.0)
-	if not (k.inhalt(z) == Karte.WALL):
-		fehlt += 1   # der Turm selbst steht auch auf einem Erdwall
+	if formvorlage != "schild" and not (k.inhalt(z) == Karte.WALL):
+		fehlt += 1   # der Turm selbst steht auch auf einem Erdwall (der Generator dagegen auf einem freien Feld)
 	var rt := Rect2(mitte - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4))
 	_warnung.draw_rect(rt, Color(farbe, 0.45))
 	_warnung.draw_rect(rt, Color.WHITE, false, 2.0)
-	var name := str(Werte.TURMARTEN[formvorlage]["name"])
+	var name: String = info[3]
 	var text := "%s: Form passt" % name if fehlt == 0 else "%s: noch %d Erdwall%s" % [name, fehlt, "" if fehlt == 1 else "e"]
 	Stil.schreibe_mittig(_warnung, mitte + Vector2(0, -halb - 14.0), text, Stil.NORMAL, Color.WHITE)
 
@@ -565,8 +577,8 @@ func formvorlage_felder(art: String, z: Vector2i) -> Array:
 			raster = f[1]
 	var turm := Vector2i.ZERO
 	var waelle: Array[Vector2i] = []
-	for y in 3:
-		for x in 3:
+	for y in raster.size():
+		for x in (raster[y] as String).length():
 			var c: String = (raster[y] as String)[x]
 			if c == "T":
 				turm = Vector2i(x, y)
@@ -598,24 +610,27 @@ func formvorlage_felder(art: String, z: Vector2i) -> Array:
 
 func _male_formen(ci: Control) -> void:
 	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
-	Stil.schreibe(ci, Vector2(6, 6), "Turmformen – die Erdwälle rund um den Turm bestimmen seine Art · Klick = Vorlage an der Maus", Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.schreibe(ci, Vector2(6, 6), "Türme und Schildgenerator – die Erdwälle drumherum bestimmen, was entsteht · Klick = Vorlage an der Maus", Stil.KLEIN, Stil.TEXT_BLASS)
 	var unter := ""
 	var k: Karte = spiel.karte
 	var mz: Vector2i = k.zelle_bei(spiel.maus_welt())
 	if k.in_karte(mz) and k.inhalt(mz) == Karte.WALL:
 		unter = k.turm_form(mz)
+	elif k.in_karte(mz) and k.ist_frei(mz) and not k.hof_von(mz).is_empty():
+		unter = "schild"
 	for i in TURM_FORMEN.size():
 		var art: String = TURM_FORMEN[i][0]
 		var raster: Array = TURM_FORMEN[i][1]
-		var daten: Dictionary = Werte.TURMARTEN[art]
-		var farbe := Color(str(daten["farbe"]))
+		var info := _form_info(art)
+		var farbe: Color = info[2]
 		var r := Rect2(Vector2(5.0 + i * 59.0, 13.0), Vector2(56, 57))
 		var an := art == unter or art == formvorlage
 		Stil.platte(ci, r, 3.0, Stil.METALL if an else Stil.METALL_TIEF, farbe if an else Stil.RAHMEN)
+		var spalten := (raster[0] as String).length()
 		var feld := 8.0
-		var ecke := Vector2(r.get_center().x - feld * 1.5, r.position.y + 4.0).round()
-		for y in 3:
-			for x in 3:
+		var ecke := Vector2(r.get_center().x - feld * spalten / 2.0, r.position.y + 4.0 + (3 - raster.size()) * feld / 2.0).round()
+		for y in raster.size():
+			for x in spalten:
 				var c: String = (raster[y] as String)[x]
 				var f := Rect2(ecke + Vector2(x, y) * feld, Vector2(feld - 1.0, feld - 1.0))
 				if c == "#":
@@ -626,9 +641,8 @@ func _male_formen(ci: Control) -> void:
 					ci.draw_rect(f.grow(-1.5), farbe)
 				else:
 					ci.draw_rect(f, Color(0, 0, 0, 0.25))
-		var name: String = {"geschuetz": "Geschütz", "funk": "Funk", "frost": "Frost", "lanze": "Lanze", "heil": "Heil"}.get(art, art)
-		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 16.0), name, Stil.KLEIN, farbe if an else Stil.TEXT)
-		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 7.0), str(daten["form"]), Stil.KLEIN, Stil.TEXT_BLASS)
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 16.0), info[0], Stil.KLEIN, farbe if an else Stil.TEXT)
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 7.0), info[1], Stil.KLEIN, Stil.TEXT_BLASS)
 
 
 func _male_status(ci: Control) -> void:
