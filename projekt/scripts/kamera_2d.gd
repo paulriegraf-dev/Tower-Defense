@@ -113,7 +113,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 			# zur Maus hin zoomen: der Weltpunkt unter der Maus bleibt stehen
-			var schritt := 0.25 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -0.25
+			var schritt := (0.12 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -0.12) * clampf(mb.factor if mb.factor > 0.0 else 1.0, 0.15, 1.0)   # 16.11.: weniger empfindlich
 			var vorher := get_global_mouse_position()
 			setze_zoom_anteil(clampf(zoom_anteil() + schritt, 0.0, 1.0))
 			if schritt > 0.0:
