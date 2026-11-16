@@ -45,6 +45,16 @@ var _status: Malflaeche
 var _welle: Malflaeche
 var _konsole: Malflaeche
 var _tipp: Malflaeche
+var _formen: Malflaeche          # Turm [4] gewählt: welche Wallform welchen Turm ergibt (16.11.)
+var formvorlage := ""            # angeklickte Turmart: ihre Wallform liegt als Vorlage an der Maus
+## Die fünf Turmformen als Raster 3×3 (Turm = T, Erdwall = #), Reihenfolge wie in der Übersicht.
+const TURM_FORMEN := [
+	["geschuetz", [".#.", "#T#", "..."]],
+	["funk", [".#.", "#T#", ".#."]],
+	["frost", ["T##", "#..", "#.."]],
+	["lanze", ["#T#", "#.#", "..."]],
+	["heil", ["#..", ".T.", "..#"]],
+]
 var _tipp_oben: Malflaeche
 var _neu: Emblem
 var _oben_rechts: Array[Emblem] = []
@@ -190,6 +200,9 @@ func _ready() -> void:
 	_tipp_oben = _flaeche(_male_tipp_oben)
 	_konsole = _flaeche(_male_konsole)
 	_tipp = _flaeche(_male_tipp)
+	_formen = _flaeche(_male_formen)
+	_formen.mouse_filter = Control.MOUSE_FILTER_STOP
+	_formen.gui_input.connect(_formen_klick)
 
 	for eintrag: Array in KACHELN:
 		var k := Kachel.new()
@@ -324,7 +337,7 @@ func aktualisiere(_delta: float) -> void:
 	_aktualisiere_oben_rechts()
 	_aktualisiere_tipps()
 	_ordne_an()
-	for f: Control in [_status, _welle, _konsole, _tipp, _tipp_oben, weg_grund, _zuweis, _warnung]:
+	for f: Control in [_status, _welle, _konsole, _tipp, _tipp_oben, weg_grund, _zuweis, _warnung, _formen]:
 		f.queue_redraw()
 	for b: Control in [start, tempo, menue, _neu]:
 		b.queue_redraw()
@@ -483,12 +496,140 @@ func _ordne_an() -> void:
 		_tipp.position = Vector2(roundf((BREITE - _tipp.size.x) / 2.0), unten - th)
 	_tipp.visible = _tipp_text != ""
 
+	# Turmformen über der Tafel, solange das Turm-Werkzeug gewählt ist
+	_formen.visible = _bauphase and _konsole.visible and not eingeklappt and spiel.werkzeug == Karte.TURM
+	if _formen.visible:
+		_formen.size = Vector2(5.0 * 56.0 + 4.0 * 3.0 + 10.0, 74.0)
+		var oben := (_tipp.position.y if _tipp.visible else _konsole.position.y) - 3.0
+		_formen.position = Vector2(roundf((BREITE - _formen.size.x) / 2.0), oben - _formen.size.y)
+
 	# Weganzeige rechts über Start
 	weg_grund.size = Vector2(ceilf(Stil.breite(weg_text.text, Stil.KLEIN)) + 10.0, 12.0)
 	weg_grund.position = Vector2(RAND, _status.position.y + _status.size.y + 3.0)   # unter Leben und Budget
 
 
 # ------------------------------------------------------------------ Zeichnen
+
+## Turmformen (16.11., Paul: „wieder anzeigen, wie man die überhaupt baut“): fünf Kärtchen mit der Wallform als
+## kleines Raster, Turmname und Formname. Passt die Form unter der Maus, leuchtet ihr Kärtchen auf.
+## Vorlage an der Maus: Turmfeld in der Turmfarbe, die nötigen Erdwälle als Rahmen – grün, wo schon einer steht,
+## in Turmfarbe gestrichelt, wo noch einer fehlt.
+func _male_formvorlage() -> void:
+	if formvorlage == "" or spiel.werkzeug != Karte.TURM or not _formen.visible:
+		return
+	var k: Karte = spiel.karte
+	var z: Vector2i = k.zelle_bei(spiel.maus_welt())
+	if not k.in_karte(z):
+		return
+	var farbe := Color(str(Werte.TURMARTEN[formvorlage]["farbe"]))
+	var mitte: Vector2 = spiel.welt_zu_bild(k.mitte(z))
+	var nachbar: Vector2 = spiel.welt_zu_bild(k.mitte(z) + Vector2(Werte.ZELLE, 0))
+	var halb := maxf(8.0, absf(nachbar.x - mitte.x) * 0.42)
+	var fehlt := 0
+	for e: Array in formvorlage_felder(formvorlage, z):
+		var p: Vector2 = spiel.welt_zu_bild(k.mitte(e[0]))
+		var r := Rect2(p - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4))
+		if e[1]:
+			_warnung.draw_rect(r, Color(0.55, 1.0, 0.55, 0.25))
+			_warnung.draw_rect(r, Color(0.55, 1.0, 0.55, 0.95), false, 3.0)
+		else:
+			fehlt += 1
+			_warnung.draw_rect(r, Color(farbe, 0.18))
+			_warnung.draw_rect(r, Color(0.05, 0.05, 0.08, 0.7), false, 5.0)
+			_warnung.draw_rect(r, farbe, false, 2.0)
+	if not (k.inhalt(z) == Karte.WALL):
+		fehlt += 1   # der Turm selbst steht auch auf einem Erdwall
+	var rt := Rect2(mitte - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4))
+	_warnung.draw_rect(rt, Color(farbe, 0.45))
+	_warnung.draw_rect(rt, Color.WHITE, false, 2.0)
+	var name := str(Werte.TURMARTEN[formvorlage]["name"])
+	var text := "%s: Form passt" % name if fehlt == 0 else "%s: noch %d Erdwall%s" % [name, fehlt, "" if fehlt == 1 else "e"]
+	Stil.schreibe_mittig(_warnung, mitte + Vector2(0, -halb - 14.0), text, Stil.NORMAL, Color.WHITE)
+
+
+func _formen_klick(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var i := int(floorf(((event as InputEventMouseButton).position.x - 5.0) / 59.0))
+		if i >= 0 and i < TURM_FORMEN.size():
+			var art: String = TURM_FORMEN[i][0]
+			formvorlage = "" if formvorlage == art else art
+		_formen.accept_event()
+
+
+## Die Felder der Wallform von `art`, wenn der Turm auf `z` stünde – in der Lage (gedreht/gespiegelt), in der schon die
+## meisten Erdwälle stehen. Ergebnis: Liste von [Feld, steht schon].
+func formvorlage_felder(art: String, z: Vector2i) -> Array:
+	var raster: Array = []
+	for f: Array in TURM_FORMEN:
+		if f[0] == art:
+			raster = f[1]
+	var turm := Vector2i.ZERO
+	var waelle: Array[Vector2i] = []
+	for y in 3:
+		for x in 3:
+			var c: String = (raster[y] as String)[x]
+			if c == "T":
+				turm = Vector2i(x, y)
+			elif c == "#":
+				waelle.append(Vector2i(x, y))
+	var k: Karte = spiel.karte
+	var beste: Array = []
+	var bestes := -1
+	for spiegel in [false, true]:
+		for dreh in 4:
+			var liste: Array = []
+			var stehen := 0
+			for w: Vector2i in waelle:
+				var d := w - turm
+				if spiegel:
+					d.x = -d.x
+				for _i in dreh:
+					d = Vector2i(-d.y, d.x)
+				var feld := z + d
+				var steht: bool = k.in_karte(feld) and k.inhalt(feld) == Karte.WALL
+				if steht:
+					stehen += 1
+				liste.append([feld, steht])
+			if stehen > bestes:
+				bestes = stehen
+				beste = liste
+	return beste
+
+
+func _male_formen(ci: Control) -> void:
+	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
+	Stil.schreibe(ci, Vector2(6, 6), "Turmformen – die Erdwälle rund um den Turm bestimmen seine Art · Klick = Vorlage an der Maus", Stil.KLEIN, Stil.TEXT_BLASS)
+	var unter := ""
+	var k: Karte = spiel.karte
+	var mz: Vector2i = k.zelle_bei(spiel.maus_welt())
+	if k.in_karte(mz) and k.inhalt(mz) == Karte.WALL:
+		unter = k.turm_form(mz)
+	for i in TURM_FORMEN.size():
+		var art: String = TURM_FORMEN[i][0]
+		var raster: Array = TURM_FORMEN[i][1]
+		var daten: Dictionary = Werte.TURMARTEN[art]
+		var farbe := Color(str(daten["farbe"]))
+		var r := Rect2(Vector2(5.0 + i * 59.0, 13.0), Vector2(56, 57))
+		var an := art == unter or art == formvorlage
+		Stil.platte(ci, r, 3.0, Stil.METALL if an else Stil.METALL_TIEF, farbe if an else Stil.RAHMEN)
+		var feld := 8.0
+		var ecke := Vector2(r.get_center().x - feld * 1.5, r.position.y + 4.0).round()
+		for y in 3:
+			for x in 3:
+				var c: String = (raster[y] as String)[x]
+				var f := Rect2(ecke + Vector2(x, y) * feld, Vector2(feld - 1.0, feld - 1.0))
+				if c == "#":
+					ci.draw_rect(f, Stil.RAHMEN_HELL)
+					ci.draw_rect(Rect2(f.position, Vector2(f.size.x, 1)), Stil.TEXT_BLASS)
+				elif c == "T":
+					ci.draw_rect(f, Stil.RAHMEN_HELL)
+					ci.draw_rect(f.grow(-1.5), farbe)
+				else:
+					ci.draw_rect(f, Color(0, 0, 0, 0.25))
+		var name: String = {"geschuetz": "Geschütz", "funk": "Funk", "frost": "Frost", "lanze": "Lanze", "heil": "Heil"}.get(art, art)
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 16.0), name, Stil.KLEIN, farbe if an else Stil.TEXT)
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 7.0), str(daten["form"]), Stil.KLEIN, Stil.TEXT_BLASS)
+
 
 func _male_status(ci: Control) -> void:
 	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
@@ -914,6 +1055,7 @@ var _warnung: Control
 func _male_schleuder_warnung() -> void:
 	if spiel == null or spiel.im_kampf():
 		return
+	_male_formvorlage()
 	var t := _jetzt()
 	for b: Zonenbau in spiel.zonenbauten:
 		if not is_instance_valid(b) or b.art != "schleuder" or (b.bedroht.is_empty() and not b.bedroht_vorschau):

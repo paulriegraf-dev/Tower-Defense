@@ -4118,7 +4118,7 @@ func _werkzeug_tipp(typ: int) -> String:
 		Karte.STELLUNG:
 			return "Ausbau eines Erdwalls. Eine Einheit steht oben, schießt weiter und über Wälle hinweg."
 		Karte.TURM:
-			return "Die Form der Nachbarwälle bestimmt den Typ (die Vorschau nennt ihn). [I] → Bauten zeigt alle Formen."
+			return "Auf einen Erdwall setzen – die Form der Nachbarwälle bestimmt den Turm. Klick auf eine Form oben legt sie als Vorlage an die Maus (grün = Erdwall steht schon)."
 		Karte.BATTERIE:
 			return "Mit Pilotenfabrik (zwei Felder, [T] dreht): feuert weit und flächig, sobald %d Piloten darin sitzen." % int(Werte.BATTERIE["plaetze"])
 		Karte.TOR:
