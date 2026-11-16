@@ -105,8 +105,8 @@ func _baue() -> void:
 			]
 		"phantom":
 			_eintraege = [
-				["Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · %d Phantome hinterlegt" % Phantom.liste("verteidigung", true).size(), KUPFER_HELL],
-				["Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · %d Angriffe hinterlegt" % Phantom.liste("angriff").size(), LICHT],
+				["Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · " + _anzahl(Phantom.liste("verteidigung", true).size(), "Phantom", "Phantome", "noch keine Phantome hinterlegt"), KUPFER_HELL],
+				["Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · " + _anzahl(Phantom.liste("angriff").size(), "Angriff", "Angriffe", "noch keine Angriffe hinterlegt"), LICHT],
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 		"einstellungen":
@@ -123,6 +123,12 @@ func _baue() -> void:
 			_eintraege.append(["Übersicht", func(): uebersicht_gewaehlt.emit(), "Gegner, Truppen, Bauten, Regeln", Stil.TEXT])
 			_eintraege.append(["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS])
 	_wahl = clampi(_wahl, 0, _eintraege.size() - 1)
+
+
+static func _anzahl(n: int, eins: String, mehr: String, keins: String) -> String:
+	if n <= 0:
+		return keins
+	return "%d %s hinterlegt" % [n, eins if n == 1 else mehr]
 
 
 func _los() -> void:
@@ -163,7 +169,7 @@ func _beenden() -> void:
 func _phantom(art: String) -> void:
 	var funde := Phantom.liste(art, true)
 	if funde.is_empty():
-		_meldung = "Noch kein Phantom im Ordner „Phantom Dateien“." if art == "verteidigung" else "Noch kein Angriff gespeichert. Spiele zuerst einmal als Angreifer."
+		_meldung = "Noch kein Phantom da: Gewinne eine Partie, dann wird dein Bau zum ersten Phantom." if art == "verteidigung" else "Noch kein Angriff da: Greife zuerst selbst einmal als Angreifer an."
 		return
 	var f: Dictionary = funde.pick_random()
 	if art == "verteidigung":

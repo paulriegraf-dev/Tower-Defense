@@ -8,6 +8,10 @@ extends RefCounted
 
 const WURZELN: Array[String] = ["res://Phantom Dateien", "user://Phantom Dateien"]
 const UNTERORDNER := {"verteidigung": "Verteidiger", "angriff": "Angreifer"}
+## Version der Phantom-Dateien (16.11.): Ändern sich die Regeln so, dass alte Aufzeichnungen nicht mehr passen, wird sie
+## hochgezählt – ältere Dateien werden dann weder gezählt noch gezogen, egal ob im Pool oder im Benutzerordner.
+## Dateien ohne Eintrag gelten als Version 1.
+const PHANTOM_VERSION: int = 2
 
 
 ## Die Ordner einer Art ("verteidigung" oder "angriff"): erst der Pool im Projekt, dann der Benutzerordner.
@@ -131,6 +135,8 @@ static func liste(art: String, alle_groessen: bool = false) -> Array:
 			var daten := lade(o + "/" + datei)
 			if daten.is_empty() or str(daten.get("art", "")) != art:
 				continue
+			if int(daten.get("phantom_version", 1)) < PHANTOM_VERSION:
+				continue   # veraltet
 			# Verteidigungs-Phantome sind ein Bau auf einer bestimmten Kartengröße: nur passende ziehen
 			var spalten := int((daten.get("karte", {}) as Dictionary).get("spalten", 20))
 			if art == "verteidigung" and spalten != Werte.SPALTEN and not alle_groessen:
@@ -158,6 +164,7 @@ static func lade(pfad: String) -> Dictionary:
 
 ## Speichert ein Phantom und gibt den Pfad zurück ("" = hat nicht geklappt).
 static func speichere(art: String, daten: Dictionary) -> String:
+	daten["phantom_version"] = PHANTOM_VERSION
 	var name := "%s-%s.json" % [art, Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "-")]
 	for o: String in ordner(art):
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(o))
@@ -196,7 +203,7 @@ static func aus_partie(partie: Dictionary, quelle: String = "") -> Dictionary:
 		return {}
 	var letzte: Dictionary = runden[runden.size() - 1]
 	return {
-		"format": 1, "art": "verteidigung", "quelle": quelle, "begonnen": str(partie.get("begonnen", "")), "spieler": "Paul",
+		"format": 1, "phantom_version": PHANTOM_VERSION, "art": "verteidigung", "quelle": quelle, "begonnen": str(partie.get("begonnen", "")), "spieler": "Paul",
 		"karte": {"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN, "checkpoints": partie.get("checkpoints", []), "basis": partie.get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])},
 		"ergebnis": {"ausgang": letzte["original"]["ausgang"], "runde": letzte["runde"], "leben": letzte["original"]["leben"]},
 		"runden": runden,
