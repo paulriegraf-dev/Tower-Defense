@@ -373,9 +373,9 @@ const TURMARTEN := {
 		"text": "Langsamer, schwerer Strahl in gerader Linie: trifft alles, was in der Linie steht – ideal für lange Gänge."},
 }
 # Turmupgrades (Klick auf den Turm), wie bei den Fabriken: Stufe 2 fest, auf Stufe 3 eine von zwei Fähigkeiten.
-const KOSTEN_TURM_STUFE: Array[int] = [175, 450]
+const KOSTEN_TURM_STUFE: Array[int] = [125, 300]   # Patch 17.11.: vorher 175/450 (Upgrades lohnten sich für den Schaden kaum)
 const TURM_STUFE_2 := {
-	"geschuetz": {"abklingzeit": 0.65, "text": "Feuert schneller: alle 0,65 statt 0,9 Sekunden."},
+	"geschuetz": {"abklingzeit": 0.65, "reichweite": 4.0, "text": "Feuert schneller (alle 0,65 statt 0,9 Sekunden) und reicht 4 statt 3,5 Felder."},   # 17.11.: +0,5 Reichweite
 	"frost": {"bremse_sek": 2.4, "text": "Bremst länger: 2,4 statt 1,6 Sekunden."},
 	"funk": {"reichweite": 3.5, "text": "Größerer Umkreis: 3,5 statt 2,5 Felder."},
 	"lanze": {"schaden": 65.0, "text": "Stärkerer Strahl: 65 statt 45 Schaden."},
