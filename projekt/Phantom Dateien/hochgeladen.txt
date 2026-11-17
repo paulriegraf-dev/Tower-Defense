@@ -16,3 +16,6 @@ verteidigung-20261117-123537.json
 angriff-20261117-135947.json
 angriff-20261117-140346.json
 verteidigung-20261117-142505.json
+# 17.11.2026, 16:10 (Hauptseite, nur Phantom-Pool ergänzt):
+angriff-20261117-153453.json
+verteidigung-20261117-160413.json
