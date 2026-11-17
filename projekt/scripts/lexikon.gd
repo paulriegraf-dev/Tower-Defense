@@ -818,7 +818,7 @@ func _baue_daten() -> void:
 			"abschnitte": [["Regeln", Stil.LEUCHT, [
 				"In der Zone kann nicht gebaut werden. Ein Schild schützt alles darin bis zur letzten Runde.",
 				"Eigene Truppen halten Abstand zur Zone, damit die Gegner herauskommen.",
-				"Runde %d ist der Gegenangriff: Das HQ muss fallen. Gegner kommen ohne Ende, niemand geht mehr in Stellungen, und jede Fabrik hat bis zu %d aktive Truppen." % [W.LETZTE_RUNDE, W.MAX_JE_FABRIK_ENDKAMPF],
+				"Runde %d hat zwei Teile: Erst wehrt ihr die Welle ganz normal ab. Dann fällt der Schild und es kommt der Gegenangriff: Das HQ muss fallen. Gegner kommen ohne Ende, je Fabrik bleibt nur eine Truppe in Stellung, und jede Fabrik hat bis zu %d aktive Truppen." % [W.LETZTE_RUNDE, W.MAX_JE_FABRIK_ENDKAMPF],
 				"Ausgefallene Gebäude laufen dort nach einiger Zeit wieder an.",
 				"Während des Gegenangriffs darfst du weiterbauen und ausbauen – nur keine neuen Erdwälle."]]]},
 	]

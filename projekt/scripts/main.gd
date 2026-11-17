@@ -1869,6 +1869,8 @@ func starte_welle() -> void:
 	_braende.clear()
 	karte.zeige_pfad_kraeftig = false
 	_welle = naechste_welle()
+	if endkampf:
+		_welle["leben_faktor"] = Werte.ENDKAMPF_LEBEN   # 18.11.: der Abwehrteil von Runde 20 hat normale Leben
 	_trupp = []
 	_im_flug = 0
 	_wurf_schlange = []
@@ -2070,7 +2072,7 @@ func sandbox_springe(nr: int) -> void:
 			if b.art == "schleuder":
 				schleuder_umzug(b, true)
 	karte.zeige_schwachstelle = welle >= Werte.SPRENGER_AB_WELLE
-	endkampf = welle == Werte.LETZTE_RUNDE
+	endkampf = welle == Werte.LETZTE_RUNDE and phantom_modus == "angriff"   # 18.11.: sonst erst nach der Abwehr (siehe _starte_gegenangriff)
 	karte.schild = not endkampf
 	karte.zeige_angriff = endkampf
 	karte.aktualisiere_pfad()
@@ -2085,6 +2087,9 @@ func _welle_geschafft() -> void:
 		_naechste_bauphase()
 		_lade_phantom_stand()
 		_zeige_laufband()
+		return
+	if welle == Werte.LETZTE_RUNDE and not endkampf:
+		_starte_gegenangriff()
 		return
 	var bonus := Werte.wellen_bonus(welle)
 	# Gehaltene Checkpoints zahlen sich aus
@@ -2107,6 +2112,36 @@ func _welle_geschafft() -> void:
 	_naechste_bauphase()
 
 
+## Runde 20, zweiter Teil (18.11.): Die erste Welle ist abgewehrt – Rundenbonus wie sonst, dann fällt der Schild,
+## die Truppen (bis auf eine je Fabrik) verlassen die Stellungen, und die Gegner kommen in Schleife (Leben wie früher im Endkampf).
+func _starte_gegenangriff() -> void:
+	var bonus := Werte.wellen_bonus(welle)
+	var zins := Werte.zinsen(budget)
+	budget += bonus + zins
+	endkampf = true
+	_welle["leben_faktor"] = Werte.ENDKAMPF_LEBEN
+	karte.schild = false
+	karte.zeige_angriff = true
+	karte.aktualisiere_pfad()
+	_nachspiel = 0.0
+	_spawn_in = Werte.ENDKAMPF_PAUSE
+	# je Fabrik bleibt eine Truppe in ihrer Stellung, die übrigen steigen ab und greifen an
+	var bleibt := {}
+	for e in einheiten:
+		if not is_instance_valid(e) or e.posten_zelle == Karte.KEINE or e.zustand != Einheit.Zustand.AUF_POSTEN:
+			continue
+		if e.ist_pilot or e.in_batterie() or e.daten.get("pilot", false):
+			continue
+		if not bleibt.has(e.fabrik_zelle):
+			bleibt[e.fabrik_zelle] = e
+			continue
+		if karte.posten.get(e.posten_zelle) == e:
+			karte.posten.erase(e.posten_zelle)
+		e.posten_verloren()
+	melde("Welle abgewehrt: +%d Budget. Der Schild ist gefallen – GEGENANGRIFF! Zerstört das HQ. Gebt euren Truppen einen Fußweg (blaue Linie)." % (bonus + zins), 12.0)
+	Ton.spiele(self, "alert")
+
+
 ## Runde hochzählen und alles für die nächste Bauphase herrichten.
 func _naechste_bauphase() -> void:
 	welle += 1
@@ -2125,14 +2160,16 @@ func _naechste_bauphase() -> void:
 				schleuder_umzug(b, true)
 	karte.zeige_schwachstelle = welle >= Werte.SPRENGER_AB_WELLE
 	if welle == Werte.LETZTE_RUNDE:
-		endkampf = true
-		karte.schild = false
-		karte.zeige_angriff = true
-		karte.aktualisiere_pfad()
 		if phantom_modus == "angriff":
+			endkampf = true
+			karte.schild = false
+			karte.zeige_angriff = true
+			karte.aktualisiere_pfad()
 			melde("Letzte Runde: Dein Schild ist gefallen, die Verteidiger greifen dein HQ an. Dein Plan läuft in Schleife – halte so lange wie möglich oder brich durch.", 12.0)
 		else:
-			melde("Letzte Runde: Der Schild ist gefallen! Sie reißen eure Verteidigung Stück für Stück ein – zerstört das HQ, bevor nichts mehr steht. Gebt euren Truppen einen Fußweg (blaue Linie).", 12.0)
+			# 18.11. (Paul): Runde 20 in zwei Teilen – erst die Welle ganz normal abwehren (alle in Stellung wie in
+			# Runde 19), danach fällt der Schild und es geht in den Gegenangriff.
+			melde("Letzte Runde: Wehrt zuerst die Welle ab wie gewohnt. Danach fällt der Schild und ihr geht in den Gegenangriff auf das HQ.", 12.0)
 	phase = Phase.BAU
 	karte.brut_aktualisieren()
 	karte.zeige_pfad_kraeftig = true

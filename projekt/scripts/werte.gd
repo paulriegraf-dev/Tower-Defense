@@ -1021,7 +1021,7 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 		"wurf": wurf,
 		"wurf_info": wurf_info,
 		"wurf_frei": bool(plan.get("wurf_frei", false)),   # Phantom-Modus: die Wurf-Schleuder wartet am Rundenanfang nicht
-		"leben_faktor": ENDKAMPF_LEBEN if nr >= LETZTE_RUNDE else snappedf(1.0 + LEBEN_JE_RUNDE * (nr - 1), 0.1),
+		"leben_faktor": snappedf(1.0 + LEBEN_JE_RUNDE * (mini(nr, LETZTE_RUNDE - 1) - 1), 0.1),   # 18.11.: Runde 20 erst wie 19; Endkampf setzt main.gd
 		"abstand": 0.7,            # Sekunden zwischen zwei Gegnern
 	}
 
