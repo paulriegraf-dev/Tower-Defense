@@ -36,6 +36,7 @@ func _ready() -> void:
 	layer = 120
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	spiel = get_parent()
+	_vollbild_hinweis.call_deferred()
 	_brakk = Control.new()
 	_brakk.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_brakk.size = Vector2(1280, 720)
@@ -218,3 +219,14 @@ func _male_hochkant() -> void:
 	var schrift := ThemeDB.fallback_font
 	_hochkant.draw_string(schrift, Vector2(0, m.y + 70), "Bitte das Gerät quer halten", HORIZONTAL_ALIGNMENT_CENTER, g.x, 64, Color("ffe9a8"))
 	_hochkant.draw_string(schrift, Vector2(0, m.y + 150), "Pauls TD Battler ist fürs Querformat gebaut.", HORIZONTAL_ALIGNMENT_CENTER, g.x, 40, Color("a79fb3"))
+
+
+## 17.11.: Vollbild. Android und iPad gehen beim ersten Tippen von selbst ins Vollbild (Skript in index.html).
+## Das iPhone erlaubt das Webseiten nicht – dort geht es nur als Web-App vom Home-Bildschirm; darauf einmal hinweisen.
+func _vollbild_hinweis() -> void:
+	if not OS.has_feature("web_ios") or spiel == null or not spiel.has_method("melde"):
+		return
+	var eigenstaendig = JavaScriptBridge.eval("window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches", true)
+	if eigenstaendig:
+		return
+	spiel.melde("Vollbild am iPhone: im Browser auf „Teilen“ → „Zum Home-Bildschirm“, dann von dort starten.", 9.0)
