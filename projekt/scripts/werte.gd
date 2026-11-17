@@ -77,7 +77,7 @@ const LASER := {
 }
 
 # --- Sonderregeln der Gegner ----------------------------------------------------
-const RAUCH_RADIUS: float = 2.0        # Felder
+const RAUCH_RADIUS: float = 3.0        # Felder (17.11. abends: 2 → 3, die Karte ist größer)
 const RAUCH_SEK: float = 5.0           # so lange können Truppen im Rauch nicht schießen (Türme schon)
 const ANDOCK_SEK: float = 3.0          # so lange braucht ein Belagerungsturm am Wall, bevor Truppen herausspringen
 const ANDOCK_NAH: int = 3            # Belagerungsturm dockt am liebsten dort an, wo eine Stellung/ein Turm höchstens so viele Wallschritte entfernt ist (außerhalb der Zone, am schnellsten erreichbar)

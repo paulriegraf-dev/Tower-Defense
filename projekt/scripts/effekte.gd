@@ -408,30 +408,140 @@ func strahl(von: Vector2, nach: Vector2, farbe: Color, breite: float) -> void:
 	_strahlen.append([von, nach, farbe, 0.09, breite])
 
 
-## 17.11.: Brandfeld neu – klar umrissene Glutfläche mit gestricheltem Rand, darauf Flammenzungen an festen Plätzen
-## (Pixelblöcke, die flackern), blendet zum Ende aus. Man sieht genau, wo es brennt.
+# ------------------------------------------------------------ Bodeneffekte (17.11. abends)
+## Brandfeld, Plasmagel und der Bodenrand der Rauchwolke liegen auf dem Boden: Sie werden in eine eigene Ebene gezeichnet,
+## die in HD-2D zur Karte gehört (also unter Mauern und Figuren liegt, statt in der Luft über allem). Felder mit Erdwall
+## oder Bau spart die Fläche aus – liegt eine Lache neben einer Mauer, sieht man sie nur auf den freien Feldern.
+class BodenEbene extends Node2D:
+	var malen: Callable
+	func _draw() -> void:
+		if malen.is_valid():
+			malen.call()
+
+var _boden: BodenEbene
+
+
+func _ready() -> void:
+	_boden = BodenEbene.new()
+	_boden.name = "Bodeneffekte"
+	_boden.malen = _male_boden
+	_haenge_boden.call_deferred()
+
+
+func _haenge_boden() -> void:
+	var spiel := get_parent()
+	if spiel == null or _boden.is_inside_tree():
+		return
+	spiel.add_child(_boden)
+	var k = spiel.get("karte")
+	if k != null and (k as Node).get_parent() == spiel:
+		spiel.move_child(_boden, (k as Node).get_index() + 1)   # gleich über der Karte, unter Figuren und Effekten
+
+
+func _boden_pflegen() -> void:
+	if _boden == null or not _boden.is_inside_tree():
+		return
+	var hd = get_parent().get("hd")
+	_boden.visibility_layer = HdAnsicht.SCHICHT_KARTE if hd != null else visibility_layer
+	_boden.queue_redraw()
+
+
+func _male_boden() -> void:
+	var jetzt := Time.get_ticks_msec() / 1000.0
+	for w in _wolken:
+		_zeichne_rauch_boden(w[0], w[1], w[2], w[3], jetzt)
+	for b in _braende:
+		_zeichne_brand(b[0], b[1], b[2], jetzt)
+	for b in _gele:
+		_zeichne_gel(b[0], b[1], b[2], jetzt)
+
+
+func _karte() -> Karte:
+	return get_parent().get("karte") as Karte if get_parent() != null else null
+
+
+## Liegt der Punkt auf einem Feld, das die Bodenfläche aussparen soll (Erdwall oder Bau)?
+func _verdeckt(p: Vector2) -> bool:
+	var k := _karte()
+	return k != null and k.feld.has(k.zelle_bei(p))
+
+
+## Fläche nur auf freien Feldern zeichnen: das Vieleck wird mit jedem freien Feld im Umkreis geschnitten.
+func _flaeche_frei(punkte: PackedVector2Array, farbe: Color) -> void:
+	var k := _karte()
+	if k == null:
+		_boden.draw_colored_polygon(punkte, farbe)
+		return
+	var box := Rect2(punkte[0], Vector2.ZERO)
+	for p in punkte:
+		box = box.expand(p)
+	var a := k.zelle_bei(box.position)
+	var b := k.zelle_bei(box.end)
+	var frei := true
+	for x in range(a.x, b.x + 1):
+		for y in range(a.y, b.y + 1):
+			if k.feld.has(Vector2i(x, y)):
+				frei = false
+	if frei:
+		_boden.draw_colored_polygon(punkte, farbe)
+		return
+	var z := float(Werte.ZELLE)
+	for x in range(a.x, b.x + 1):
+		for y in range(a.y, b.y + 1):
+			if k.feld.has(Vector2i(x, y)):
+				continue
+			var o := k.mitte(Vector2i(x, y)) - Vector2(z, z) * 0.5
+			var feld := PackedVector2Array([o, o + Vector2(z, 0), o + Vector2(z, z), o + Vector2(0, z)])
+			for teil in Geometry2D.intersect_polygons(punkte, feld):
+				if (teil as PackedVector2Array).size() >= 3 \
+						and not Geometry2D.triangulate_polygon(teil).is_empty():
+					_boden.draw_colored_polygon(teil, farbe)
+
+
+## Randlinie in Stücken, Stücke über Mauerfeldern fallen weg.
+func _rand_frei(punkte: PackedVector2Array, farbe: Color, breite: float) -> void:
+	for i in punkte.size():
+		var p := punkte[i]
+		var q := punkte[(i + 1) % punkte.size()]
+		if not _verdeckt((p + q) * 0.5):
+			_boden.draw_line(p, q, farbe, breite)
+
+
+func _kreis(m: Vector2, r: float, n: int = 28) -> PackedVector2Array:
+	var punkte := PackedVector2Array()
+	for i in n:
+		var w := TAU * float(i) / float(n)
+		punkte.append(m + Vector2(cos(w), sin(w)) * r)
+	return punkte
+
+
+## Brandfeld – klar umrissene Glutfläche mit gestricheltem Rand, darauf Flammenzungen an festen Plätzen.
 func _zeichne_brand(m: Vector2, r: float, rest: float, t: float) -> void:
 	var alter := Werte.BRANDFELD_SEK - rest
 	var a := clampf(alter / 0.15, 0.0, 1.0) * clampf(rest / 0.6, 0.0, 1.0)
-	draw_circle(m, r, Color(0.9, 0.25, 0.04, 0.32 * a))
-	draw_circle(m, r * 0.55, Color(1.0, 0.5, 0.1, 0.24 * a))
+	_flaeche_frei(_kreis(m, r), Color(0.9, 0.25, 0.04, 0.38 * a))
+	_flaeche_frei(_kreis(m, r * 0.55, 20), Color(1.0, 0.5, 0.1, 0.28 * a))
 	for i in 16:
 		var w0 := TAU * float(i) / 16.0 + t * 0.5
-		draw_arc(m, r, w0, w0 + TAU / 32.0, 3, Color(1.0, 0.55, 0.15, 0.9 * a), 5.0)
+		var mitte_w := w0 + TAU / 64.0
+		if _verdeckt(m + Vector2(cos(mitte_w), sin(mitte_w)) * r):
+			continue
+		_boden.draw_arc(m, r, w0, w0 + TAU / 32.0, 3, Color(1.0, 0.55, 0.15, 0.9 * a), 5.0)
 	for i in 7:
 		var z := fposmod(sin(float(i) * 12.9898 + m.x * 0.071 + m.y * 0.013) * 43758.5453, 1.0)
 		var w := TAU * (float(i) + z) / 7.0
 		var p := (m + Vector2(cos(w), sin(w) * 0.8) * r * (0.2 + 0.6 * z)).round()
+		if _verdeckt(p):
+			continue
 		var h := roundf((20.0 + 12.0 * z) * (0.7 + 0.3 * sin(t * 13.0 + float(i) * 1.7)) * a)
 		if h < 3.0:
 			continue
-		draw_rect(Rect2(p + Vector2(-8, -roundf(h * 0.45)), Vector2(16, roundf(h * 0.45))), Color(0.95, 0.3, 0.05, 0.9 * a))
-		draw_rect(Rect2(p + Vector2(-5, -roundf(h * 0.8)), Vector2(10, roundf(h * 0.4))), Color(1.0, 0.62, 0.12, 0.95 * a))
-		draw_rect(Rect2(p + Vector2(-2, -h), Vector2(4, roundf(h * 0.25))), Color(1.0, 0.92, 0.55, a))
+		_boden.draw_rect(Rect2(p + Vector2(-8, -roundf(h * 0.45)), Vector2(16, roundf(h * 0.45))), Color(0.95, 0.3, 0.05, 0.9 * a))
+		_boden.draw_rect(Rect2(p + Vector2(-5, -roundf(h * 0.8)), Vector2(10, roundf(h * 0.4))), Color(1.0, 0.62, 0.12, 0.95 * a))
+		_boden.draw_rect(Rect2(p + Vector2(-2, -h), Vector2(4, roundf(h * 0.25))), Color(1.0, 0.92, 0.55, a))
 
 
-## 17.11.: Plasmagel neu – grüne Lache mit weich wabernder Kante und deutlichem Rand, darin platzende Blasen.
-## Sie breitet sich beim Einschlag kurz aus und schrumpft am Ende weg.
+## Plasmagel – grüne Lache mit weich wabernder Kante und deutlichem Rand, darin platzende Blasen.
 func _zeichne_gel(m: Vector2, r: float, rest: float, t: float) -> void:
 	var alter := Werte.PLASMAGEL_SEK - rest
 	var aus := clampf(rest / 0.6, 0.0, 1.0)
@@ -442,18 +552,59 @@ func _zeichne_gel(m: Vector2, r: float, rest: float, t: float) -> void:
 		var w := TAU * float(i) / 24.0
 		var rr := r_jetzt * (0.93 + 0.07 * sin(w * 3.0 + saat + t * 2.2))
 		punkte.append(m + Vector2(cos(w), sin(w)) * rr)
-	draw_colored_polygon(punkte, Color(0.25, 0.9, 0.45, 0.4 * aus))
-	var rand := punkte.duplicate()
-	rand.append(punkte[0])
-	draw_polyline(rand, Color(0.05, 0.25, 0.1, 0.65 * aus), 8.0)
-	draw_polyline(rand, Color(0.55, 1.0, 0.65, 0.95 * aus), 4.0)
+	_flaeche_frei(punkte, Color(0.25, 0.9, 0.45, 0.42 * aus))
+	_rand_frei(punkte, Color(0.05, 0.25, 0.1, 0.65 * aus), 8.0)
+	_rand_frei(punkte, Color(0.55, 1.0, 0.65, 0.95 * aus), 4.0)
 	for i in 5:
 		var z := fposmod(sin(float(i) * 78.233 + saat * 10.0) * 43758.5453, 1.0)
 		var w := TAU * (float(i) + z) / 5.0
 		var p := (m + Vector2(cos(w), sin(w)) * r_jetzt * (0.2 + 0.55 * z)).round()
+		if _verdeckt(p):
+			continue
 		var phase := fposmod(t * 0.9 + z, 1.0)
 		var g := 4.0 + 7.0 * phase
-		draw_arc(p, g, 0.0, TAU, 12, Color(0.75, 1.0, 0.8, (1.0 - phase) * 0.95 * aus), 3.0)
+		_boden.draw_arc(p, g, 0.0, TAU, 12, Color(0.75, 1.0, 0.8, (1.0 - phase) * 0.95 * aus), 3.0)
+
+
+## Rauchwolke am Boden (17.11. abends): Wirkungsbereich als grau-violette Fläche mit gestricheltem Rand, dazu ein
+## Ring, der abläuft, solange der Rauch noch wirkt. Gilt auch auf Mauerfeldern (die Truppen dort sind ja betroffen),
+## deshalb wird hier nichts ausgespart.
+func _zeichne_rauch_boden(m: Vector2, r: float, rest: float, dauer: float, t: float) -> void:
+	var a := clampf((dauer - rest) / 0.25, 0.0, 1.0) * clampf(rest / 0.5, 0.0, 1.0)
+	_boden.draw_colored_polygon(_kreis(m, r, 36), Color(0.55, 0.52, 0.62, 0.3 * a))
+	for i in 20:
+		var w0 := TAU * float(i) / 20.0 - t * 0.35
+		_boden.draw_arc(m, r, w0, w0 + TAU / 40.0, 3, Color(0.85, 0.82, 0.95, 0.85 * a), 4.0)
+	# Restzeit als Ring nach innen versetzt
+	var anteil := clampf(rest / maxf(dauer, 0.01), 0.0, 1.0)
+	_boden.draw_arc(m, r - 10.0, -PI / 2.0, -PI / 2.0 + TAU * anteil, 48, Color(0.95, 0.92, 1.0, 0.6 * a), 3.0)
+	# in der Mitte: durchgestrichenes Fadenkreuz = hier kann keine Truppe schießen
+	var f := Color(1.0, 0.85, 0.9, 0.8 * a)
+	_boden.draw_circle(m, 22.0, Color(0.12, 0.08, 0.16, 0.55 * a))
+	_boden.draw_arc(m, 16.0, 0.0, TAU, 24, f, 3.0)
+	for d in [Vector2(1, 0), Vector2(0, 1)]:
+		_boden.draw_line(m + d * 9.0, m + d * 21.0, f, 3.0)
+		_boden.draw_line(m - d * 9.0, m - d * 21.0, f, 3.0)
+	_boden.draw_line(m + Vector2(-17, -17), m + Vector2(17, 17), Color(1.0, 0.35, 0.4, 0.95 * a), 4.0)
+
+
+## Rauch in der Luft (Deckschicht): dicke, langsam quellende Schwaden über dem ganzen Bereich – durchscheinend genug,
+## dass man die Truppen darunter noch erkennt.
+func _zeichne_rauch_schwaden(m: Vector2, r: float, rest: float, dauer: float, t: float) -> void:
+	var a := clampf((dauer - rest) / 0.35, 0.0, 1.0) * clampf(rest / 0.8, 0.0, 1.0)
+	var alter := dauer - rest
+	var auf := lerpf(0.55, 1.0, clampf(alter / 0.5, 0.0, 1.0))
+	var saat := m.x * 0.041 + m.y * 0.067
+	for i in 14:
+		var z := fposmod(sin(float(i) * 45.164 + saat) * 43758.5453, 1.0)
+		var z2 := fposmod(sin(float(i) * 91.711 + saat * 3.0) * 24634.6345, 1.0)
+		var w := TAU * (float(i) + z) / 14.0 + t * (0.08 + 0.05 * z)
+		var abst := r * auf * (0.15 + 0.62 * z2)
+		var p := m + Vector2(cos(w), sin(w) * 0.85) * abst + Vector2(0, -6.0 * sin(t * 0.9 + z * 6.0))
+		var g := r * (0.26 + 0.12 * z) * auf * (1.0 + 0.06 * sin(t * 1.3 + float(i)))
+		var hell := 0.62 + 0.18 * z2
+		draw_circle(p, g, Color(hell, hell * 0.97, hell + 0.06, 0.2 * a))
+		draw_circle(p + Vector2(-g * 0.2, -g * 0.25), g * 0.62, Color(hell + 0.12, hell + 0.1, hell + 0.16, 0.16 * a))
 
 
 func brand(mitte: Vector2, radius: float, dauer: float) -> void:
@@ -486,10 +637,10 @@ func _draw() -> void:
 		draw_line(m + Vector2(-8, -8), m + Vector2(8, 8), Color(1.0, 0.3, 0.3, 0.9), 3.0)
 		draw_line(m + Vector2(8, -8), m + Vector2(-8, 8), Color(1.0, 0.3, 0.3, 0.9), 3.0)
 	var jetzt := Time.get_ticks_msec() / 1000.0
-	for b in _braende:
-		_zeichne_brand(b[0], b[1], b[2], jetzt)
-	for b in _gele:
-		_zeichne_gel(b[0], b[1], b[2], jetzt)
+	_boden_pflegen()   # Brandfeld, Plasmagel, Rauch-Bodenrand: eigene Bodenebene (siehe oben)
+	if Werte.grafik_neu:
+		for w in _wolken:
+			_zeichne_rauch_schwaden(w[0], w[1], w[2], w[3], jetzt)
 	for s in _strahlen:
 		draw_line(s[0], s[1], Color(s[2], 0.35), s[4] + 4.0)
 		draw_line(s[0], s[1], s[2], s[4])
