@@ -3267,13 +3267,12 @@ func _normale_fabriken() -> int:
 
 
 ## So viele Truppen hält diese Fabrik am Leben.
-## Letzte Runde (17.11., Paul): Die normale Besatzung einer Fabrik (so viele wie außerhalb von Runde 20) darf weiter in
-## Stellungen; nur die zusätzlichen Truppen der letzten Runde greifen das HQ an.
+## Letzte Runde (17.11., Paul): Je Fabrik bezieht eine Truppe eine Stellung (die nächste freie), alle anderen greifen das HQ an.
 func endkampf_stellung_frei(e: Einheit) -> bool:
 	var z: Vector2i = e.fabrik_zelle
 	if not fabriken.has(z):
 		return false
-	var normal := maxi(Werte.MAX_JE_FABRIK + sandbox_truppen, 1) + (Werte.STUFE_1_TRUPPEN if int(fabriken[z].get("stufe", 0)) >= 1 else 0)
+	var normal := 1   # 17.11. (Paul): eine Truppe je Fabrik bleibt in einer Stellung, der Rest greift an
 	var besetzt := 0
 	for u in einheiten:
 		if u != e and is_instance_valid(u) and u.fabrik_zelle == z and u.posten_zelle != Karte.KEINE:
