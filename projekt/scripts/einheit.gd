@@ -29,6 +29,7 @@ var _treffer := 0.0
 var faehigkeit := ""               # Stufe-3-Fähigkeit aus der Fabrik
 var letztes_ziel: Node2D = null    # Feuerteam: worauf zuletzt geschossen wurde ...
 var letzter_schuss := -100.0       # ... und wann (Spielzeit in Sekunden)
+var letzte_zielzelle := Vector2i(-99, -99)   # 17.11.: ... und auf welcher Kachel das Ziel stand (Feuerteam zählt je Kachel)
 var _ausstehend: Array = []        # 15.11.: Treffer, die erst im Bild mit dem Mündungsblitz fallen ({"t", "ziel", "pos", "muendung", "erster", "minigun"})
 var _laser_ziel: Node2D = null
 var _laser_zeit := 0.0
@@ -515,7 +516,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 		return
 	var pause: float = daten["abklingzeit"]
 	if faehigkeit == "feuerteam":
-		# je mehr Feuerteam-Schützen gerade dasselbe Ziel beschießen, desto kürzer die Pause
+		# je mehr Feuerteam-Schützen gerade Gegner auf derselben Kachel beschießen, desto kürzer die Pause
 		pause *= maxf(Werte.FEUERTEAM_HOECHST, 1.0 - Werte.FEUERTEAM_JE_MITSCHUETZE * spiel.mitschuetzen(self, ziel))
 	elif faehigkeit == "minigun" and oben:
 		pause = Werte.MINIGUN_ABKLING * lerpf(1.0, Werte.MINIGUN_SCHNELLSTE, _anlauf)
@@ -529,6 +530,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 	_abkling = pause
 	letztes_ziel = ziel
 	letzter_schuss = spiel.spielzeit()
+	letzte_zielzelle = spiel.karte.zelle_bei(ziel.position)
 	Ton.am_ort(spiel, Ton.fuer_truppe(daten), position)
 	_sprite.angriff(pause)
 

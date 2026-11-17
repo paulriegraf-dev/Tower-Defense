@@ -1694,11 +1694,13 @@ func staerkster_gegner() -> Gegner:
 	return bester
 
 
-## Feuerteam: Wie viele andere Feuerteam-Schützen haben in der letzten Sekunde auf dasselbe Ziel geschossen?
+## Feuerteam (17.11.): Wie viele andere Feuerteam-Schützen haben in der letzten Sekunde auf ein Ziel
+## auf derselben Kachel geschossen? So zählt Beschuss auf einen Pulk mit, nicht nur auf genau einen Gegner.
 func mitschuetzen(wer: Einheit, ziel: Node2D) -> int:
 	var n := 0
+	var kachel := karte.zelle_bei(ziel.position)
 	for e in einheiten:
-		if e != wer and e.faehigkeit == "feuerteam" and e.letztes_ziel == ziel and _spielzeit - e.letzter_schuss <= 1.0:
+		if e != wer and e.faehigkeit == "feuerteam" and e.letzte_zielzelle == kachel and _spielzeit - e.letzter_schuss <= 1.0:
 			n += 1
 	return n
 
