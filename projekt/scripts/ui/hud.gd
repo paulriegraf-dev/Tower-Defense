@@ -370,6 +370,8 @@ func _aktualisiere_kacheln() -> void:
 		if typ == Karte.WALL and s.freie_waelle > 0:
 			k.preis = "×%d" % s.freie_waelle
 			k.preis_farbe = Stil.LEUCHT
+		if typ == Karte.TURM:
+			k.preis = ""   # 17.11.: Türme und Generator kosten verschieden – kein Preis an der Kachel
 		if typ == Karte.KOMMANDANT and s.kommandant != null:
 			k.preis = "im Feld"
 			k.preis_farbe = Stil.TEXT_BLASS
@@ -509,6 +511,8 @@ func _ordne_an() -> void:
 
 	# Turmformen über der Tafel, solange das Turm-Werkzeug gewählt ist
 	_formen.visible = _bauphase and _konsole.visible and not eingeklappt and spiel.werkzeug == Karte.TURM
+	if spiel.werkzeug != Karte.TURM:
+		formvorlage = ""   # 17.11.: Vorlage nur, solange man gerade einen Turm ausgesucht hat
 	if _formen.visible:
 		_formen.size = Vector2(TURM_FORMEN.size() * 59.0 - 3.0 + 10.0, 74.0)
 		var oben := (_tipp.position.y if _tipp.visible else _konsole.position.y) - 3.0

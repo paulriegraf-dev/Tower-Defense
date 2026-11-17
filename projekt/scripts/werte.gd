@@ -170,6 +170,7 @@ const KOSTEN_STELLUNG: int = 25    # Ausbau eines Erdwalls: Platz für eine Einh
 const KOSTEN_TURM: int = 75        # Ausbau eines Erdwalls an einer Kreuzung
 const KOSTEN_TOR: int = 40         # Ausbau eines Erdwalls: Durchgang nur für eigene Truppen
 const KOSTEN_BATTERIE: int = 290   # Railgun-Batterie samt angehängter Pilotenfabrik (zwei Felder); feuert erst, wenn sie voll bemannt ist
+const KOSTEN_BATTERIE_PROZENT: float = 20.0  # 17.11.: jede weitere Batterie kostet so viel Prozent mehr als die vorige (290, 350, 420, 500 …)
 const WAELLE_AB_WELLE: int = 2     # Runde 1: nur Fabriken, danach Erdwälle
 # Einkommen nach dem Muster von Bloons TD 6: Der feste Bonus am Rundenende ist der größere, planbare Teil,
 # Prämien für besiegte Gegner kommen obendrauf.
