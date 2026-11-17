@@ -59,6 +59,7 @@ var _panzer_blitz := 0.0   # Panzerung: Aufblitzen nach einem Treffer
 var wartet := false                 # gebündelt: wartet in der Zone, bis sein Trupp vollständig ist
 var warte_noch := 0.0               # gestaffelt: so viele Sekunden nach dem Losgehen der Schildträger
 var _im_gefecht := 0.0              # Fernkämpfer: schießt gerade -> läuft langsamer
+var _letzte_frei := Karte.KEINE    # 17.11.: letztes freie Feld, auf dem er stand (Rettung, falls er doch in eine Mauer gerät)
 var ohne_treffer := 0.0           # Sekunden seit dem letzten Treffer (Aufräumen: niemand erreicht ihn mehr)
 var draussen := 0.0               # Sekunden außerhalb der Zone (16.11.: frisch Gestartete zählen beim Aufräumen nicht)
 var blick := Vector2.RIGHT          # Laufrichtung (Schildträger: dorthin zeigt sein Schild)
@@ -185,6 +186,14 @@ func _process(delta: float) -> void:
 	else:
 		ohne_treffer += delta
 		draussen += delta
+	# Sicherung (17.11.): Ein Gegner am Boden darf nie in einer Mauer oder einem Gebäude stehen – dort sähe und träfe ihn niemand.
+	if not _auf_wall:
+		var hier := karte.zelle_bei(position)
+		if karte.ist_frei(hier) or not karte.in_karte(hier):
+			_letzte_frei = hier
+		elif _letzte_frei != Karte.KEINE and karte.ist_frei(_letzte_frei):
+			position = karte.mitte(_letzte_frei) + _versatz
+			plane_neu()
 	if wartet:
 		_sprite.bewegt(false)
 		return
@@ -327,7 +336,21 @@ func _laufe_zu(punkt: Vector2, delta: float) -> void:
 		_sprite.flip_h = (punkt.x < position.x) != _blickt_links
 	if position.distance_to(punkt) > 0.5:
 		blick = (punkt - position).normalized()
-	position = position.move_toward(punkt, tempo() * Werte.ZELLE * delta)
+	var neu := position.move_toward(punkt, tempo() * Werte.ZELLE * delta)
+	# 17.11.: Am Boden nie quer durch eine Mauer schneiden (Innenecken): sonst an der Kante entlanggleiten.
+	if not _auf_wall:
+		var hier := karte.zelle_bei(position)
+		var dort := karte.zelle_bei(neu)
+		if dort != hier and karte.in_karte(dort) and not karte.ist_frei(dort):
+			var nx := Vector2(neu.x, position.y)
+			var ny := Vector2(position.x, neu.y)
+			if karte.zelle_bei(nx) == hier or karte.ist_frei(karte.zelle_bei(nx)):
+				neu = nx
+			elif karte.zelle_bei(ny) == hier or karte.ist_frei(karte.zelle_bei(ny)):
+				neu = ny
+			else:
+				neu = position
+	position = neu
 
 
 ## Sanitäter: alle paar Sekunden die Gegner im Umkreis heilen (sich selbst nicht).

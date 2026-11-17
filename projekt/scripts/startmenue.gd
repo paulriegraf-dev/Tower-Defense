@@ -143,7 +143,7 @@ func _starte(gross: bool, art: String) -> void:
 		Werte.setze_karte(gross)
 		Werte.speichere_einstellungen()
 		spiel.naechster_start = art
-		_welt.get_tree().reload_current_scene()
+		Ladebild.lade(_welt.get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 		return
 	if art == "normal":
 		gewaehlt.emit(false)

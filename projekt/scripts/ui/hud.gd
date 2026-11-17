@@ -510,7 +510,8 @@ func _ordne_an() -> void:
 	_tipp.visible = _tipp_text != ""
 
 	# Turmformen über der Tafel, solange das Turm-Werkzeug gewählt ist
-	_formen.visible = _bauphase and _konsole.visible and not eingeklappt and spiel.werkzeug == Karte.TURM
+	# 17.11. (Paul): Ist eine Turmart gewählt, verschwinden die Kärtchen, damit man das Feld sieht. Nochmal [4] = neu wählen.
+	_formen.visible = _bauphase and _konsole.visible and not eingeklappt and spiel.werkzeug == Karte.TURM and formvorlage == ""
 	if spiel.werkzeug != Karte.TURM:
 		formvorlage = ""   # 17.11.: Vorlage nur, solange man gerade einen Turm ausgesucht hat
 	if _formen.visible:
@@ -530,7 +531,7 @@ func _ordne_an() -> void:
 ## Vorlage an der Maus: Turmfeld in der Turmfarbe, die nötigen Erdwälle als Rahmen – grün, wo schon einer steht,
 ## in Turmfarbe gestrichelt, wo noch einer fehlt.
 func _male_formvorlage() -> void:
-	if formvorlage == "" or spiel.werkzeug != Karte.TURM or not _formen.visible:
+	if formvorlage == "" or spiel.werkzeug != Karte.TURM or not _bauphase or eingeklappt:
 		return
 	var k: Karte = spiel.karte
 	var z: Vector2i = k.zelle_bei(spiel.maus_welt())

@@ -123,6 +123,7 @@ var _ende_text: Label
 
 
 func _ready() -> void:
+	Ladebild.fertig.call_deferred()   # 17.11.: läuft gerade ein Ladebild, darf es jetzt voll laufen und ausblenden
 	Werte.lade_einstellungen()
 	# Vollbild wie eingestellt (Standard an; das Projekt startet schon im Vollbild)
 	var ist_voll := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
@@ -577,7 +578,7 @@ func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Butt
 ## Neustart ohne Umweg über das Menü. Die Partie ist da schon gespeichert (partien/, nach einem Sieg auch als Phantom).
 func _neustart() -> void:
 	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else "normal"
-	get_tree().reload_current_scene()
+	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
 
 ## Knopf oben rechts: Partie abbrechen. Der erste Klick fragt nach, der zweite (innerhalb weniger Sekunden) geht ins Hauptmenü.
@@ -593,7 +594,7 @@ func _abbruch_klick() -> void:
 
 func _zum_menue() -> void:
 	naechster_start = ""
-	get_tree().reload_current_scene()
+	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
 
 ## Bestätigung vor dem Seitenwechsel: kurz sagen, was der Angriffsmodus ist und was jetzt passiert.
@@ -603,7 +604,7 @@ func _frage_angriff() -> void:
 
 func _angriff_bestaetigt() -> void:
 	naechster_start = "liste"
-	get_tree().reload_current_scene()
+	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
 
 # -------------------------------------------------------------- Bauprotokoll
@@ -2868,6 +2869,9 @@ func zerfall(g: Gegner) -> void:
 		d._auf_wall = false   # Myr-Drohnen aus dem Schwarmgeist kämpfen am Boden
 		d._wall_zelle = Karte.KEINE
 		d.position = g.position + Vector2(randf_range(-14, 14), randf_range(-10, 10))
+		if karte.zelle_bei(d.position) != zelle:
+			d.position = g.position   # 17.11.: nicht in eine Mauer daneben streuen
+		d._letzte_frei = zelle
 		d.trupp = rudel
 		rudel.append(d)
 		d.plane_neu()

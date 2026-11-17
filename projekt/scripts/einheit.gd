@@ -731,12 +731,9 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, r, Color(0.5, 0.88, 1.0, 0.08))
 		draw_arc(Vector2.ZERO, r, 0.0, TAU, 96, Color(0.5, 0.88, 1.0, 0.8), 2.0)
 	if ausbaustufe > 0 and zustand != Zustand.IN_BATTERIE:
-		# Abzeichen über dem Kopf: ein Punkt je Stufe; ab Stufe 3 in der Farbe der Fähigkeit, dazu ein Ring am Boden
+		# Abzeichen: ab Stufe 3 ein Ring am Boden in der Farbe der Fähigkeit. Die Punkte über dem Kopf sind weg
+		# (17.11., Paul): die Ausbaustufe zeigt jetzt das Aussehen der Truppe.
 		var farbe: Color = ABZEICHEN.get(faehigkeit, Color("ffe9a8"))
-		var links := -5.0 * ausbaustufe + 1.0
-		for i in ausbaustufe:
-			draw_rect(Rect2(links + i * 10.0 - 1.0, -57, 8, 8), Color(0.08, 0.06, 0.12, 0.9))
-			draw_rect(Rect2(links + i * 10.0, -56, 6, 6), farbe)
 		if faehigkeit != "":
 			draw_arc(Vector2(0, 14), 13.0 if Werte.grafik_neu else 15.0, 0.0, TAU, 20, Color(farbe, 0.5 if Werte.grafik_neu else 0.85), 2.0)
 	if _rep_zeit > 0.0:
