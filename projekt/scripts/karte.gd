@@ -99,12 +99,9 @@ func _ready() -> void:
 	for z in basis_felder(basis):
 		if in_karte(z):
 			_gewichte_fuer(z)
+	var lagen := _zufalls_checkpoints() if Werte.CHECKPOINTS_ZUFAELLIG else Werte.CHECKPOINTS.duplicate()
 	for i in Werte.CHECKPOINTS.size():
-		var z := Werte.CHECKPOINTS[i]
-		if Werte.CHECKPOINTS_ZUFAELLIG and i < Werte.CHECKPOINT_BEREICHE.size():
-			var b := Werte.CHECKPOINT_BEREICHE[i]
-			z = b.position + Vector2i(randi() % b.size.x, randi() % b.size.y)
-		checkpoints.append(z)
+		checkpoints.append(lagen[i])
 		cp_feind.append(false)
 		cp_fortschritt.append(0.0)
 		cp_einnahme.append(0.0)
@@ -597,6 +594,29 @@ func _strahl_frei(von: Vector2, nach: Vector2) -> bool:
 
 
 # ------------------------------------------------------------ Wegsuche
+
+## 17.11.: Checkpoints zufällig in überlappenden Bereichen, mit Regeln:
+## CP1 liegt näher am Gegner (und weiter links) als CP2, beide mit Mindestabstand zueinander und zum Gegner-Spawn.
+func _zufalls_checkpoints() -> Array[Vector2i]:
+	var b := Werte.CHECKPOINT_BEREICHE
+	var spawn := Vector2(Werte.START_ZELLE)
+	for versuch in 200:
+		var lagen: Array[Vector2i] = []
+		for r in b:
+			lagen.append(r.position + Vector2i(randi() % r.size.x, randi() % r.size.y))
+		if lagen.size() < 2:
+			return lagen
+		var a := lagen[0]
+		var c := lagen[1]
+		if a.x >= c.x or spawn.distance_to(Vector2(a)) >= spawn.distance_to(Vector2(c)):
+			continue
+		if Vector2(a - c).length() < Werte.CP_ABSTAND_ZUEINANDER:
+			continue
+		if spawn.distance_to(Vector2(a)) < Werte.CP_ABSTAND_SPAWN:
+			continue
+		return lagen
+	return Werte.CHECKPOINTS.duplicate()
+
 
 func _neues_astar() -> AStarGrid2D:
 	var a := AStarGrid2D.new()

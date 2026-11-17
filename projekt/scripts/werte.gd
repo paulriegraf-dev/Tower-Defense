@@ -137,6 +137,8 @@ const STARTPAKET_WAELLE: int = 8       # so viele Erdwälle gibt es gratis, soba
 # Halb zufällig: Jeder Checkpoint liegt in jeder Partie auf einem zufälligen Feld seines Bereichs
 # (Rect2i = linke obere Ecke x, y und Breite, Höhe in Feldern). Die Felder stehen ab Runde 1 fest und sind sichtbar.
 static var CHECKPOINT_BEREICHE: Array[Rect2i] = [Rect2i(5, 1, 4, 8), Rect2i(11, 1, 5, 8)]
+const CP_ABSTAND_ZUEINANDER: float = 3.0   # Felder zwischen den beiden Checkpoints (mindestens)
+const CP_ABSTAND_SPAWN: float = 5.0        # Felder vom Gegner-Spawn (mindestens)
 const CHECKPOINTS_ZUFAELLIG: bool = true   # false = immer die festen Felder der nächsten Zeile
 static var CHECKPOINTS: Array[Vector2i] = [Vector2i(6, 4), Vector2i(13, 5)]
 const CHECKPOINTS_AB_WELLE: int = 5    # vorher sind die Felder nur freigehalten (nicht bebaubar)
@@ -506,7 +508,7 @@ static func setze_karte(gross: bool) -> void:
 		SCHLEUDER_PLAETZE = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 3), Vector2i(1, 6), Vector2i(1, 7), Vector2i(1, 8), Vector2i(1, 9)]
 		AUSGAENGE = {"": Vector2i(0, 4), "oben": Vector2i(1, 1), "unten": Vector2i(1, 8)}
 		BASIS_ZELLE = Vector2i(18, 5)   # 16.11.: Basis 3×2 Felder, darum eine Spalte nach innen (vorher 19)
-		CHECKPOINT_BEREICHE = [Rect2i(5, 1, 4, 8), Rect2i(11, 1, 5, 8)]
+		CHECKPOINT_BEREICHE = [Rect2i(4, 1, 7, 8), Rect2i(8, 1, 8, 8)]
 		CHECKPOINTS = [Vector2i(6, 4), Vector2i(13, 5)]
 		return
 	SPALTEN = 28
@@ -519,7 +521,7 @@ static func setze_karte(gross: bool) -> void:
 		Vector2i(1, 9), Vector2i(1, 10), Vector2i(1, 11), Vector2i(1, 12), Vector2i(1, 13)]
 	AUSGAENGE = {"": Vector2i(0, 6), "oben": Vector2i(1, 1), "unten": Vector2i(1, 12)}
 	BASIS_ZELLE = Vector2i(26, 7)
-	CHECKPOINT_BEREICHE = [Rect2i(7, 1, 6, 12), Rect2i(16, 1, 7, 12)]
+	CHECKPOINT_BEREICHE = [Rect2i(6, 1, 9, 12), Rect2i(12, 1, 11, 12)]   # 17.11.: größer und überlappend
 	CHECKPOINTS = [Vector2i(8, 6), Vector2i(18, 7)]
 
 
