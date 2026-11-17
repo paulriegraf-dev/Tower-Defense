@@ -652,11 +652,11 @@ const EINHEITEN := {
 		"schuss_bilder": [3],       # 15.11.: der Treffer fällt mit dem Strahl, nicht schon beim Anlegen
 		"massstab": 2.0,
 		"schussfarbe": "9dff8a",
-		"leben": 55.0,   # Patch 16.11.: vorher 40.0
+		"leben": 65.0,   # Patch 17.11.: vorher 55 (16.11.: 40)
 		"tempo": 1.3,
 		"reichweite": 5.0,
 		"stellung_bonus": 1.5,      # der Scharfschütze profitiert am meisten von der Höhe
-		"schaden": 30.0,
+		"schaden": 38.0,            # Patch 17.11.: vorher 30
 		"abklingzeit": 2.2,
 	},
 }
