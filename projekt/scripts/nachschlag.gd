@@ -198,6 +198,9 @@ var _maus := Vector2(-100, -100)
 var _zeit := 0.0
 var _namen: Array = []
 var _wege := {}                # Plan -> Weg der Gegner (einmal berechnet)
+var _angepasst := {}           # 17.11.: Plan -> an die laufende Partie angepasster Plan (Checkpoints und Basis von dort)
+var _basis := BASIS
+var _aktiv := false            # passen die Pläne gerade zur Karte der laufenden Partie?
 
 
 func _ready() -> void:
@@ -210,7 +213,81 @@ func _ready() -> void:
 
 func umschalten() -> void:
 	visible = not visible
+	if visible:
+		_passe_an()
 	queue_redraw()
+
+
+## 17.11. (Paul): Die Vorschläge zeigen die Karte der laufenden Partie – mit ihren Checkpoints und ihrer Basis.
+## Jeder Plan wird so gelegt (normal oder oben/unten gespiegelt), dass seine Checkpoints möglichst nah an den echten
+## liegen; dann stehen Checkpoints und Basis genau dort, wo sie im Spiel sind, und Weg und Zahlen werden neu berechnet.
+func _passe_an() -> void:
+	_angepasst.clear()
+	_wege.clear()
+	_basis = BASIS
+	_aktiv = false
+	var welt := get_tree().current_scene
+	if welt == null or welt.get("karte") == null:
+		return
+	var karte = welt.karte
+	if Werte.SPALTEN != SP or Werte.ZEILEN != ZE or karte.checkpoints.size() < 2:
+		return   # andere Kartengröße: die festen Beispiele bleiben
+	_aktiv = true
+	_basis = karte.basis
+	var cps: Array = [karte.checkpoints[0], karte.checkpoints[1]]
+	for name: String in PLAENE_GROSS:
+		var beste: Array = []
+		var beste_wert := 1 << 30
+		for gespiegelt in [false, true]:
+			var plan: Array = (PLAENE_GROSS[name] as Array).duplicate()
+			if gespiegelt:
+				plan.reverse()
+			var wert := 0
+			for i in 2:
+				for y in plan.size():
+					var x := (plan[y] as String).find(str(i + 1))
+					if x >= 0:
+						wert += absi(x - cps[i].x) + absi(y - cps[i].y)
+			if wert < beste_wert:
+				beste_wert = wert
+				beste = plan
+		var zeilen: Array = []
+		for y in ZE:
+			zeilen.append((beste[y] as String).replace("1", ".").replace("2", "."))
+		# Basis (3×2) und Checkpoints freiräumen, dann die echten Checkpoints setzen
+		for y in range(_basis.y - 1, _basis.y + 1):
+			for x in range(_basis.x - 1, _basis.x + 2):
+				_setze(zeilen, x, y, ".")
+		for i in 2:
+			_setze(zeilen, cps[i].x, cps[i].y, str(i + 1))
+		_angepasst[name] = zeilen
+		# Sperren die Mauern die echten Checkpoints ein, wird dort ein Durchgang geöffnet (kürzester Weg durch die Mauern)
+		if _weg(name).is_empty():
+			var von: Vector2i = START
+			for ziel: Vector2i in [cps[0], cps[1], _basis]:
+				for z: Vector2i in _bfs(_alle_frei(), von, ziel):
+					if str(zeilen[z.y][z.x]) in ["#", "S", "T", "O", "F"]:
+						_setze(zeilen, z.x, z.y, ".")
+				von = ziel
+			_wege.erase(name)
+
+
+func _alle_frei() -> Array:
+	var leer: Array = []
+	for y in ZE:
+		leer.append(".".repeat(SP))
+	return leer
+
+
+func _setze(zeilen: Array, x: int, y: int, c: String) -> void:
+	if y < 0 or y >= zeilen.size() or x < 0 or x >= (zeilen[y] as String).length():
+		return
+	var z: String = zeilen[y]
+	zeilen[y] = z.substr(0, x) + c + z.substr(x + 1)
+
+
+func _plan(name: String) -> Array:
+	return _angepasst.get(name, PLAENE_GROSS[name])
 
 
 func _process(delta: float) -> void:
@@ -248,7 +325,7 @@ func _draw() -> void:
 	Stil.platte(self, RAHMEN_R, 4.0, Stil.METALL_TIEF, Stil.RAHMEN)
 	Stil.symbol(self, "raster", Vector2(23, 21), 1.5, Stil.LEUCHT)
 	Stil.schreibe(self, Vector2(34, 21), "Formationen", Stil.GROSS, Stil.TEXT)
-	var tipp := "Ideen zum Nachbauen, keine Vorschrift · Kärtchen anklicken · [H] schließt"
+	var tipp := ("Auf deine Karte gelegt: deine Checkpoints und deine Basis · " if _aktiv else "") + "Ideen, keine Vorschrift · [H] schließt"
 	Stil.schreibe(self, Vector2(SCHLIESSEN.position.x - 8.0 - Stil.breite(tipp, Stil.KLEIN), 21), tipp, Stil.KLEIN, Stil.TEXT_BLASS)
 	var zu_an := SCHLIESSEN.has_point(_maus)
 	Stil.platte(self, SCHLIESSEN, 2.0, Stil.METALL_DUNKEL, Stil.LEUCHT if zu_an else Stil.RAHMEN)
@@ -314,7 +391,7 @@ func _zeichne_tafel(plan_name: String) -> void:
 ## Skizze eines Plans auf der großen Karte: k UI-Pixel je Feld. Mauern mit heller Krone und dunkler Flanke (wie die
 ## Tech-Mauer), Zone der Myriaden links in Kupfer, Basis rechts, darüber der Weg der Gegner als wandernde Punkte.
 func _skizze(plan_name: String, ecke: Vector2, k: float, lebendig: bool) -> void:
-	var plan: Array = PLAENE_GROSS[plan_name]
+	var plan: Array = _plan(plan_name)
 	draw_rect(Rect2(ecke, Vector2(SP, ZE) * k), BODEN)
 	if k >= 6.0:
 		for x in range(1, SP):
@@ -324,7 +401,7 @@ func _skizze(plan_name: String, ecke: Vector2, k: float, lebendig: bool) -> void
 	draw_rect(Rect2(ecke, Vector2(3 * k, ZE * k)), ZONE)
 	draw_rect(Rect2(ecke + Vector2(3 * k - 1.0, 0), Vector2(1, ZE * k)), Color(Stil.KUPFER, 0.5))
 	# Basis 3×2
-	var basis := Rect2(ecke + Vector2(BASIS.x - 1, BASIS.y - 1) * k, Vector2(3, 2) * k).grow(-maxf(0.5, k / 8.0))
+	var basis := Rect2(ecke + Vector2(_basis.x - 1, _basis.y - 1) * k, Vector2(3, 2) * k).grow(-maxf(0.5, k / 8.0))
 	draw_rect(basis, Color(BASIS_FARBE, 0.22))
 	draw_rect(basis, BASIS_FARBE, false, 1.0)
 	# Weg der Gegner
@@ -398,14 +475,14 @@ func _mauer(feld: Rect2, k: float, plan: Array = [], x: int = -1, y: int = -1) -
 func _weg(plan_name: String) -> Array:
 	if _wege.has(plan_name):
 		return _wege[plan_name]
-	var plan: Array = PLAENE_GROSS[plan_name]
+	var plan: Array = _plan(plan_name)
 	var ziele: Array = []
 	for c in ["1", "2"]:
 		for y in plan.size():
 			var x := (plan[y] as String).find(c)
 			if x >= 0:
 				ziele.append(Vector2i(x, y))
-	ziele.append(BASIS)
+	ziele.append(_basis)
 	var weg: Array = [START]
 	var von := START
 	for ziel: Vector2i in ziele:
@@ -443,7 +520,7 @@ func _bfs(plan: Array, a: Vector2i, b: Vector2i) -> Array:
 ## Wie viel steckt in einem Plan? Wallfelder zählen alles, was auf einem Wall steht (Stellung, Turm, Tor).
 func _zaehle(plan_name: String) -> Dictionary:
 	var z := {"wall": 0, "stellung": 0, "turm": 0, "fabrik": 0, "weg": maxi(0, _weg(plan_name).size() - 1)}
-	for zeile: String in PLAENE_GROSS[plan_name]:
+	for zeile: String in _plan(plan_name):
 		for c in zeile:
 			if c in ["#", "S", "T", "O"]:
 				z["wall"] += 1
