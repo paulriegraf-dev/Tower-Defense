@@ -9,7 +9,17 @@ extends CanvasLayer
 
 const LANG_SEK := 0.5
 const ZITTERN := 14.0          # so weit darf der Finger beim langen Drücken wandern (Bildpunkte)
-const PINCH_SCHRITT := 1.07    # so viel Abstandsänderung ergibt einen Zoomschritt
+const PINCH_SCHRITT := 1.07    # so viel Abstandsänderung ergibt einen Zoomschritt (2D-Ansicht)
+const PINCH_STAERKE := 0.3     # HD-Ansicht: Zoomänderung je Verdopplung des Fingerabstands (× ln 2)
+const WISCH := 14.0            # ab so viel Bewegung (Bildpunkte) ist ein Tippen ein Wischen
+var _zwei_finger := false      # während zwei Finger liegen: nichts bauen, nichts wählen
+# Bauen am Handy (17.11.): Mit Werkzeug baut ein Tipp nicht sofort, sondern merkt das Feld vor (Rahmen);
+# ein zweiter Tipp auf dasselbe Feld baut. Wischen schwenkt die Karte und baut nie.
+var _druck := Vector2.INF
+var _gewischt := false
+var _vormerk := Vector2i(-999, -999)
+var _vormerk_werkzeug := -1
+var _durchlassen := false
 
 var _finger := {}              # Index -> Position
 var _lang_zeit := -1.0
@@ -94,12 +104,17 @@ func _input(event: InputEvent) -> void:
 	elif _stick_finger >= 0:
 		_stick_finger = -1
 		_setze_stick(STICK)
+	if _zwei_finger and (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device == InputEvent.DEVICE_ID_EMULATION:
+		get_viewport().set_input_as_handled()   # beim Zoomen mit zwei Fingern nicht zugleich schwenken oder klicken
+		return
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
 			_finger[t.index] = t.position
 		else:
 			_finger.erase(t.index)
+			if _finger.is_empty():
+				_zwei_finger = false
 		if _finger.size() == 1 and t.pressed:
 			_lang_zeit = 0.0
 			_lang_pos = t.position
@@ -108,6 +123,8 @@ func _input(event: InputEvent) -> void:
 		if _finger.size() == 2:
 			var p: Array = _finger.values()
 			_pinch_abstand = (p[0] as Vector2).distance_to(p[1])
+			_zwei_finger = true
+			_druck = Vector2.INF   # der erste Finger war kein Tipp
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
 		_finger[d.index] = d.position
@@ -116,13 +133,20 @@ func _input(event: InputEvent) -> void:
 		if _finger.size() == 2 and _pinch_abstand > 1.0:
 			var p: Array = _finger.values()
 			var jetzt := (p[0] as Vector2).distance_to(p[1])
-			var mitte := ((p[0] as Vector2) + (p[1] as Vector2)) / 2.0
-			while jetzt > _pinch_abstand * PINCH_SCHRITT:
-				_rad(MOUSE_BUTTON_WHEEL_UP, mitte)
-				_pinch_abstand *= PINCH_SCHRITT
-			while jetzt < _pinch_abstand / PINCH_SCHRITT:
-				_rad(MOUSE_BUTTON_WHEEL_DOWN, mitte)
-				_pinch_abstand /= PINCH_SCHRITT
+			var hd = spiel.get("hd") if spiel != null else null
+			if hd != null:
+				# 17.11.: zoomt mittig (die Kamera bleibt, wo sie ist) und gleichmäßig mit dem Fingerabstand
+				hd._tz = clampf(hd._tz + log(jetzt / _pinch_abstand) * PINCH_STAERKE, hd._z_min, 1.0)
+				_pinch_abstand = jetzt
+			else:
+				var mitte := get_viewport().get_visible_rect().size / 2.0
+				while jetzt > _pinch_abstand * PINCH_SCHRITT:
+					_rad(MOUSE_BUTTON_WHEEL_UP, mitte)
+					_pinch_abstand *= PINCH_SCHRITT
+				while jetzt < _pinch_abstand / PINCH_SCHRITT:
+					_rad(MOUSE_BUTTON_WHEEL_DOWN, mitte)
+					_pinch_abstand /= PINCH_SCHRITT
+			_zwei_finger = true
 
 
 func _process(delta: float) -> void:
@@ -139,6 +163,71 @@ func _process(delta: float) -> void:
 	_hochkant.size = g
 	if _hochkant.visible:
 		_hochkant.queue_redraw()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if spiel == null or not (event is InputEventMouseButton or event is InputEventMouseMotion):
+		return
+	if event.device != InputEvent.DEVICE_ID_EMULATION:
+		return   # echte Maus oder unser eigener Klick (siehe unten): normal weiter
+	if _zwei_finger:
+		get_viewport().set_input_as_handled()
+		return
+	var werkzeug: int = spiel.werkzeug
+	if werkzeug == Karte.FREI or spiel.phase == 2:
+		_vormerk = Vector2i(-999, -999)
+		return
+	if werkzeug != _vormerk_werkzeug:
+		_vormerk_werkzeug = werkzeug
+		_vormerk = Vector2i(-999, -999)
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		get_viewport().set_input_as_handled()
+		if mb.pressed:
+			_druck = mb.position
+			_gewischt = false
+			return
+		if _druck == Vector2.INF:
+			return
+		_druck = Vector2.INF
+		if _gewischt:
+			return
+		var z: Vector2i = spiel.karte.zelle_bei(spiel.maus_welt())
+		if z == _vormerk:
+			_vormerk = Vector2i(-999, -999)
+			for gedrueckt in [true, false]:   # zweiter Tipp: jetzt wirklich bauen
+				var e := InputEventMouseButton.new()
+				e.button_index = MOUSE_BUTTON_LEFT
+				e.pressed = gedrueckt
+				e.position = mb.position
+				e.global_position = mb.position
+				e.device = 0
+				Input.parse_input_event(e)
+		else:
+			_vormerk = z
+	elif event is InputEventMouseMotion:
+		get_viewport().set_input_as_handled()   # mit Werkzeug wird am Handy nie über Felder gemalt
+		var mm := event as InputEventMouseMotion
+		if _druck != Vector2.INF and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			if not _gewischt and mm.position.distance_to(_druck) > WISCH:
+				_gewischt = true
+			if _gewischt and spiel.get("hd") != null:
+				spiel.hd._schwenke(mm.relative)
+
+
+func _male_vormerk() -> void:
+	if spiel == null or _vormerk.x < -100 or spiel.werkzeug == Karte.FREI:
+		return
+	var k = spiel.karte
+	var m: Vector2 = spiel.welt_zu_bild(k.mitte(_vormerk))
+	var n: Vector2 = spiel.welt_zu_bild(k.mitte(_vormerk) + Vector2(Werte.ZELLE, 0))
+	var h := maxf(10.0, absf(n.x - m.x) * 0.5)
+	var puls := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
+	_brakk.draw_rect(Rect2(m - Vector2(h, h * 0.7), Vector2(h * 2.0, h * 1.4)), Color(1.0, 0.9, 0.4, 0.25 * puls))
+	_brakk.draw_rect(Rect2(m - Vector2(h, h * 0.7), Vector2(h * 2.0, h * 1.4)), Color(1.0, 0.9, 0.4, puls), false, 3.0)
+	_brakk.draw_string(ThemeDB.fallback_font, m + Vector2(-120, -h - 10), "Nochmal tippen = bauen", HORIZONTAL_ALIGNMENT_CENTER, 240, 20, Color.WHITE)
 
 
 func _setze_stick(p: Vector2) -> void:
@@ -168,6 +257,7 @@ func _druecke(i: int) -> void:
 
 
 func _male_brakk() -> void:
+	_male_vormerk()
 	if not _brakk_an():
 		return
 	var c := _brakk
