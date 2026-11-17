@@ -236,8 +236,8 @@ const STUFE_3 := {
 	"technogunner": {
 		"bollwerk": {"name": "Bollwerk", "text": "Nahkämpfer mit sehr viel Leben, der Gegner im Gang festhält. Nimmt keine Stellung mehr.",
 			"stark": "Engstellen, Checkpoints", "schwach": "Fernkämpfer, Schleuder"},
-		"feuerteam": {"name": "Feuerteam", "text": "Feuert schneller, je mehr Feuerteam-Schützen Gegner auf derselben Kachel beschießen – bis dreimal so schnell.",
-			"stark": "dicht stehende Truppen, zähe Ziele", "schwach": "Rauch, verteilte Stellungen"},
+		"feuerteam": {"name": "Feuerteam", "text": "Feuert schneller, je mehr Feuerteam-Schützen Gegner auf derselben Kachel beschießen – bis dreimal so schnell. Der Bonus baut sich über einige Sekunden Dauerfeuer auf.",
+			"stark": "dicht stehende Truppen, Pulks auf einer Kachel", "schwach": "Rauch, verteilte Stellungen, kurze Gefechte"},
 		"minigun": {"name": "Minigun", "text": "Nur in der Stellung: feuert immer schneller, solange sie ununterbrochen Ziele hat. Treffer und Rauch unterbrechen sie.",
 			"stark": "durchlaufende Rudel", "schwach": "alles, was Stellungen stört"},
 	},
@@ -262,6 +262,8 @@ const BOLLWERK_SCHADEN: float = 1.5
 const BOLLWERK_REICHWEITE: float = 0.95      # Felder: Nahkampf
 const FEUERTEAM_JE_MITSCHUETZE: float = 0.2  # 15.11.: vorher 0,12 – so viel kürzer wird die Pause je Mitschütze am selben Ziel
 const FEUERTEAM_HOECHST: float = 1.0 / 3.0   # 17.11.: höchstens ein Drittel der Pause = dreifaches Tempo (vorher halbe Pause); zählt Mitschützen je Kachel
+const FEUERTEAM_ANLAUF_JE_SCHUSS: float = 0.2   # 17.11.: Anlauf je Schuss mit Mitschützen (voll nach 5 Schüssen, etwa 4–5 Sekunden)
+const FEUERTEAM_PAUSE_VERFALL: float = 2.5      # so lange ohne Schuss, dann ist der Anlauf weg
 const MINIGUN_JE_SCHUSS: float = 0.2         # Anlauf je Schuss (0..1); 15.11.: vorher 0,1 (voller Anlauf nach 5 statt 10 Schüssen)
 const MINIGUN_TREFFER_VERLUST: float = 0.5   # ein Treffer kostet nur diesen Anteil des Anlaufs (vorher alles); Rauch stoppt ihn weiter ganz
 const MINIGUN_SCHNELLSTE: float = 0.3        # bei vollem Anlauf nur noch dieser Anteil der Pause

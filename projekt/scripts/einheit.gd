@@ -29,6 +29,7 @@ var _treffer := 0.0
 var faehigkeit := ""               # Stufe-3-Fähigkeit aus der Fabrik
 var letztes_ziel: Node2D = null    # Feuerteam: worauf zuletzt geschossen wurde ...
 var letzter_schuss := -100.0       # ... und wann (Spielzeit in Sekunden)
+var _ft_anlauf := 0.0   # Feuerteam: Anlauf 0..1
 var letzte_zielzelle := Vector2i(-99, -99)   # 17.11.: ... und auf welcher Kachel das Ziel stand (Feuerteam zählt je Kachel)
 var _ausstehend: Array = []        # 15.11.: Treffer, die erst im Bild mit dem Mündungsblitz fallen ({"t", "ziel", "pos", "muendung", "erster", "minigun"})
 var _laser_ziel: Node2D = null
@@ -516,8 +517,17 @@ func _feuere_auf(ziel: Node2D) -> void:
 		return
 	var pause: float = daten["abklingzeit"]
 	if faehigkeit == "feuerteam":
-		# je mehr Feuerteam-Schützen gerade Gegner auf derselben Kachel beschießen, desto kürzer die Pause
-		pause *= maxf(Werte.FEUERTEAM_HOECHST, 1.0 - Werte.FEUERTEAM_JE_MITSCHUETZE * spiel.mitschuetzen(self, ziel))
+		# je mehr Feuerteam-Schützen gerade Gegner auf derselben Kachel beschießen, desto kürzer die Pause –
+		# 17.11.: der Bonus baut sich über einige Schüsse auf (Anlauf) und verfällt bei einer Feuerpause
+		var mit: int = spiel.mitschuetzen(self, ziel)
+		if spiel.spielzeit() - letzter_schuss > Werte.FEUERTEAM_PAUSE_VERFALL:
+			_ft_anlauf = 0.0
+		if mit > 0:
+			_ft_anlauf = minf(1.0, _ft_anlauf + Werte.FEUERTEAM_ANLAUF_JE_SCHUSS)
+		else:
+			_ft_anlauf = maxf(0.0, _ft_anlauf - Werte.FEUERTEAM_ANLAUF_JE_SCHUSS)
+		var voll := maxf(Werte.FEUERTEAM_HOECHST, 1.0 - Werte.FEUERTEAM_JE_MITSCHUETZE * mit)
+		pause *= lerpf(1.0, voll, _ft_anlauf)
 	elif faehigkeit == "minigun" and oben:
 		pause = Werte.MINIGUN_ABKLING * lerpf(1.0, Werte.MINIGUN_SCHNELLSTE, _anlauf)
 		_anlauf = minf(1.0, _anlauf + Werte.MINIGUN_JE_SCHUSS)
