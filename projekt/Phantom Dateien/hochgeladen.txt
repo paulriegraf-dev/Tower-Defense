@@ -10,3 +10,5 @@ verteidigung-20261114-154828.json
 # 14.11.2026 mit der Entwicklungsversion (main 0a62f14, Zweig entwicklung 82ae7ea):
 verteidigung-20261114-174341.json
 verteidigung-20261114-211329.json
+# 17.11.2026 mit dem Spiel (Hauptseite, nur Phantom-Pool ergänzt):
+verteidigung-20261117-123537.json
