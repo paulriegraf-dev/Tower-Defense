@@ -59,6 +59,7 @@ var _panzer_blitz := 0.0   # Panzerung: Aufblitzen nach einem Treffer
 var wartet := false                 # gebündelt: wartet in der Zone, bis sein Trupp vollständig ist
 var warte_noch := 0.0               # gestaffelt: so viele Sekunden nach dem Losgehen der Schildträger
 var _im_gefecht := 0.0              # Fernkämpfer: schießt gerade -> läuft langsamer
+var _eingekeilt := 0.0             # 17.11.: so lange kommt er gerade an keiner Mauerkante vorbei
 var _letzte_frei := Karte.KEINE    # 17.11.: letztes freie Feld, auf dem er stand (Rettung, falls er doch in eine Mauer gerät)
 var ohne_treffer := 0.0           # Sekunden seit dem letzten Treffer (Aufräumen: niemand erreicht ihn mehr)
 var draussen := 0.0               # Sekunden außerhalb der Zone (16.11.: frisch Gestartete zählen beim Aufräumen nicht)
@@ -350,6 +351,12 @@ func _laufe_zu(punkt: Vector2, delta: float) -> void:
 				neu = ny
 			else:
 				neu = position
+				# 17.11.: ganz eingekeilt (vom Abstandhalten auf ein Nebenfeld geschoben, Ziel schräg hinter Mauern):
+				# kurz warten, dann den Weg vom eigenen Feld aus neu berechnen
+				_eingekeilt += delta
+				if _eingekeilt > 0.3:
+					_eingekeilt = 0.0
+					plane_neu()
 	position = neu
 
 
