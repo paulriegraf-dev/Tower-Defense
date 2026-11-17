@@ -1,0 +1,270 @@
+{
+	"art": "angriff",
+	"begonnen": "2026-11-17T14:03:46",
+	"ergebnis": {
+		"ausgang": "durchbruch",
+		"durchgaenge_runde_20": 0,
+		"geknackt": 1,
+		"leben_genommen": 15,
+		"punkte": 1365,
+		"runde": 7,
+		"wertung": 3172
+	},
+	"format": 1,
+	"gegen": "partie-20261117-120054.json",
+	"phantom_version": 2,
+	"runden": [
+		{
+			"budget": 60,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 60,
+			"runde": 1,
+			"sekunden": 18.8,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 80,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 80,
+			"runde": 2,
+			"sekunden": 21.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 135,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 6,
+			"punkte": 130,
+			"runde": 3,
+			"sekunden": 34.2,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 190,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 190,
+			"runde": 4,
+			"sekunden": 27.5,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 210,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 210,
+			"runde": 5,
+			"sekunden": 48.9,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.0,
+					"typen": [
+						"schild",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"fahne"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 290,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 290,
+			"runde": 6,
+			"sekunden": 51.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"rauch",
+						"schild",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 405,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": true,
+			"leben_genommen": 7,
+			"punkte": 405,
+			"runde": 7,
+			"sekunden": 39.5,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.5,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.5,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 3.0,
+					"ziel": [
+						10,
+						10
+					]
+				}
+			]
+		}
+	],
+	"spieler": "Paul"
+}
