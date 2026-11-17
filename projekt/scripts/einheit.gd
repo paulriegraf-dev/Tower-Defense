@@ -510,7 +510,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 		var faktor := minf(Werte.LASER_HOECHST, 1.0 + Werte.LASER_ANSTIEG * _laser_zeit)
 		spiel.strahl(muendung, ziel.position + Vector2(0, 2), Color(1.0, 0.35, 0.3), 2.0 + faktor)
 		_sprite.angriff(0.3)
-		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) / float(daten["abklingzeit"]) * faktor * dt)
+		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) / float(daten["abklingzeit"]) * faktor * dt, true)
 		return
 
 	if _abkling > 0.0:
