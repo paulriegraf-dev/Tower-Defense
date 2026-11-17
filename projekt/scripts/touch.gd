@@ -201,8 +201,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				var e := InputEventMouseButton.new()
 				e.button_index = MOUSE_BUTTON_LEFT
 				e.pressed = gedrueckt
-				e.position = mb.position
-				e.global_position = mb.position
+				e.position = _ins_fenster(mb.position)
+				e.global_position = e.position
 				e.device = 0
 				Input.parse_input_event(e)
 		else:
@@ -274,13 +274,20 @@ func _male_brakk() -> void:
 		c.draw_string(schrift, m + Vector2(-KNOPF_R - 30, KNOPF_R + 18), k[1], HORIZONTAL_ALIGNMENT_CENTER, KNOPF_R * 2.0 + 60, 16, Color("d8cfe6"))
 
 
+## Nachgemachte Klicks gehen über Input.parse_input_event und damit durchs Fenster: Ihre Position muss in
+## Fensterpunkten stehen, nicht in Spielpunkten (1280×720). Am Handy ist das Fenster viel größer (echte Bildpunkte),
+## sonst landet der Klick weit links oben (Fehler 17.11. abends: Fabrik baute an falscher Stelle).
+func _ins_fenster(p: Vector2) -> Vector2:
+	return get_viewport().get_final_transform() * p
+
+
 func _rad(knopf: MouseButton, pos: Vector2) -> void:
 	for gedrueckt in [true, false]:
 		var e := InputEventMouseButton.new()
 		e.button_index = knopf
 		e.pressed = gedrueckt
-		e.position = pos
-		e.global_position = pos
+		e.position = _ins_fenster(pos)
+		e.global_position = e.position
 		e.factor = 1.0
 		Input.parse_input_event(e)
 
@@ -290,8 +297,8 @@ func _klick(knopf: MouseButton, pos: Vector2) -> void:
 		var e := InputEventMouseButton.new()
 		e.button_index = knopf
 		e.pressed = gedrueckt
-		e.position = pos
-		e.global_position = pos
+		e.position = _ins_fenster(pos)
+		e.global_position = e.position
 		Input.parse_input_event(e)
 
 
