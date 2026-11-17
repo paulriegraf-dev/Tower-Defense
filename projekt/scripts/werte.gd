@@ -198,6 +198,7 @@ const KOSTEN_STUFE: Array[int] = [75, 175, 450]   # vorher 50/150/400 (14.11. er
 const KOSTEN_BATTERIE_STUFE: Array[int] = [125, 175, 450]   # vorher 100/150/400 (14.11. erhöht)   # dasselbe für die Batterie
 const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
 const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
+const HQ_WEGKOSTEN: float = 60.0              # 17.11.: so teuer ist ein HQ-Feld im Weg – niemand läuft mehr hindurch
 const STELLUNG_DECKUNG: float = 0.4          # Patch 16.11.: Truppen oben in einer Stellung nehmen so viel weniger Schaden
 # Patch 16.11. (Paul): Fahnenträger 190 → 160, Schildträger 150 → 135, Schwarmgeist 300 → 270 Leben (Werte unten bei den Gegnern)
 const AUFRAEUM_STEHT_SEK: float = 3.0         # Aufräumen am Rundenende: Truppen steigen nur für Gegner ab, die so lange feststehen ...

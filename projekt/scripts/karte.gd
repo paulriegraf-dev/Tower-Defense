@@ -41,7 +41,14 @@ var vorschau_partner := KEINE      # Bauvorschau der Batterie: das Feld ihrer Pi
 var fortschritt: Dictionary = {}   # Fabrik-Zelle -> 0..1 (Produktionsbalken)
 
 var checkpoints: Array[Vector2i] = []
-var basis := Werte.BASIS_ZELLE      # eigene Basis: dorthin wollen die Gegner (Sandbox: frei wählbar)
+var basis := Werte.BASIS_ZELLE:     # eigene Basis: dorthin wollen die Gegner (Sandbox: frei wählbar)
+	set(neu):
+		var alt := basis
+		basis = neu
+		if _astar_einheiten != null:
+			for z in basis_felder(alt) + basis_felder(neu):
+				if in_karte(z):
+					_gewichte_fuer(z)
 var cp_route := Werte.CP_ROUTE_AB_START   # Der Gegnerweg führt schon vor CHECKPOINTS_AB_WELLE durch die Checkpoints (ohne Einnahme)
 var cp_aktiv := false              # Checkpoints sind erst ab Werte.CHECKPOINTS_AB_WELLE im Spiel
 var cp_feind: Array[bool] = []     # je Checkpoint: vom Gegner eingenommen?
@@ -89,6 +96,9 @@ func _ready() -> void:
 	_astar_einheiten = _neues_astar()
 	for typ: String in Werte.GEGNER:
 		_astar_gegner[typ] = _neues_astar()
+	for z in basis_felder(basis):
+		if in_karte(z):
+			_gewichte_fuer(z)
 	for i in Werte.CHECKPOINTS.size():
 		var z := Werte.CHECKPOINTS[i]
 		if Werte.CHECKPOINTS_ZUFAELLIG and i < Werte.CHECKPOINT_BEREICHE.size():
@@ -612,8 +622,12 @@ func _gewichte_fuer(z: Vector2i) -> void:
 	var was := inhalt(z)
 	# Ein Tor ist für den Gegner ein Erdwall, eigene Truppen gehen hindurch
 	_astar_einheiten.set_point_solid(z, was != FREI and not ist_tor(z))
+	# 17.11. (Paul): durch das HQ läuft niemand hindurch. Die Felder bleiben erreichbar (die Gegner wollen ja hinein,
+	# Brakk steht dort wieder auf), kosten aber so viel, dass jeder Weg außen herum führt.
+	var hq := ist_basis(z) and was == FREI
+	_astar_einheiten.set_point_weight_scale(z, Werte.HQ_WEGKOSTEN if hq else 1.0)
 	for typ: String in _astar_gegner:
-		(_astar_gegner[typ] as AStarGrid2D).set_point_weight_scale(z, _gewicht(typ, was))
+		(_astar_gegner[typ] as AStarGrid2D).set_point_weight_scale(z, Werte.HQ_WEGKOSTEN if hq else _gewicht(typ, was))
 
 
 ## Weg eines Gegners: der billigste – Wälle sind teuer, aber nicht verboten.
