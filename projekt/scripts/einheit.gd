@@ -87,8 +87,8 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 func _suche_posten() -> void:
 	var hier := karte.zelle_bei(position)
 	var fund := karte.finde_posten(hier, self)
-	if spiel.im_endkampf() and not ist_pilot:
-		fund = {}   # letzte Runde: niemand geht mehr in eine Stellung, alle greifen an
+	if spiel.im_endkampf() and not ist_pilot and not spiel.endkampf_stellung_frei(self):
+		fund = {}   # letzte Runde: nur die zusätzlichen Truppen greifen an, die normale Besatzung bleibt in den Stellungen (17.11.)
 	_punkte.clear()
 	if fund.is_empty():
 		zustand = Zustand.BODEN
@@ -336,7 +336,7 @@ func _process(delta: float) -> void:
 			_posten_check -= delta
 			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self) and (ist_pilot or not spiel.aufraeumen()):   # Checkpoint zurückholen und Aufräumen gehen vor
 				_posten_check = 1.0
-				if (ist_pilot or not spiel.im_endkampf()) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
+				if (ist_pilot or not spiel.im_endkampf() or spiel.endkampf_stellung_frei(self)) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
 					_marschziel = Karte.KEINE
 					_suche_posten()
 					return

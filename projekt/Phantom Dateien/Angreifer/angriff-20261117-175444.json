@@ -1,0 +1,1359 @@
+{
+	"art": "angriff",
+	"begonnen": "2026-11-17T17:54:44",
+	"ergebnis": {
+		"ausgang": "durchbruch",
+		"durchgaenge_runde_20": 4,
+		"geknackt": 3,
+		"leben_genommen": 45,
+		"punkte": 13955,
+		"runde": 20,
+		"wertung": 9091
+	},
+	"format": 1,
+	"gegen": "partie-20261117-120054.json",
+	"phantom_version": 2,
+	"runden": [
+		{
+			"budget": 60,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 60,
+			"runde": 1,
+			"sekunden": 15.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 80,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 80,
+			"runde": 2,
+			"sekunden": 11.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 135,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 130,
+			"runde": 3,
+			"sekunden": 16.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 190,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 185,
+			"runde": 4,
+			"sekunden": 18.7,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.3,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"fahne"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 210,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 205,
+			"runde": 5,
+			"sekunden": 32.6,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.8,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 290,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 290,
+			"runde": 6,
+			"sekunden": 29.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.5,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 405,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 400,
+			"runde": 7,
+			"sekunden": 26.9,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.5,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 12.0,
+					"ziel": [
+						9,
+						11
+					]
+				}
+			]
+		},
+		{
+			"budget": 425,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 7,
+			"punkte": 425,
+			"runde": 8,
+			"sekunden": 35.2,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.2,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"schild",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 5.5,
+					"ziel": [
+						7,
+						11
+					]
+				}
+			]
+		},
+		{
+			"budget": 600,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 4,
+			"punkte": 600,
+			"runde": 9,
+			"sekunden": 51.7,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.8,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.3,
+					"typen": [
+						"fahne",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.6,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 8.0,
+					"ziel": [
+						7,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schwarm",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 21.0,
+					"ziel": [
+						7,
+						4
+					]
+				}
+			]
+		},
+		{
+			"budget": 705,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": true,
+			"leben_genommen": 4,
+			"punkte": 700,
+			"runde": 10,
+			"sekunden": 35.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.3,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.6,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 8.0,
+					"ziel": [
+						7,
+						6
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schwarm",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 20.0,
+					"ziel": [
+						8,
+						4
+					]
+				}
+			]
+		},
+		{
+			"budget": 760,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 760,
+			"runde": 11,
+			"sekunden": 83.7,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.3,
+					"typen": [
+						"belagerung",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 4.9,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.9,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 11.0,
+					"ziel": [
+						9,
+						8
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schwarm",
+						"fahne",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 18.5,
+					"ziel": [
+						10,
+						10
+					]
+				}
+			]
+		},
+		{
+			"budget": 785,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 785,
+			"runde": 12,
+			"sekunden": 64.7,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 7.3,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"fahne",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.2,
+					"typen": [
+						"sani",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"schild",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "w",
+					"zeit": 11.5,
+					"ziel": [
+						9,
+						12
+					]
+				}
+			]
+		},
+		{
+			"budget": 865,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 2,
+			"punkte": 865,
+			"runde": 13,
+			"sekunden": 50.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.8,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.3,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.0,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"fahne",
+						"fahne",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 13.0,
+					"ziel": [
+						9,
+						6
+					]
+				}
+			]
+		},
+		{
+			"budget": 930,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 11,
+			"punkte": 925,
+			"runde": 14,
+			"sekunden": 41.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.4,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.5,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 6.5,
+					"ziel": [
+						9,
+						9
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 13.5,
+					"ziel": [
+						9,
+						2
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 19.0,
+					"ziel": [
+						9,
+						12
+					]
+				}
+			]
+		},
+		{
+			"budget": 950,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": true,
+			"leben_genommen": 2,
+			"punkte": 950,
+			"runde": 15,
+			"sekunden": 25.9,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 5.8,
+					"typen": [
+						"schild",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 7.0,
+					"ziel": [
+						9,
+						9
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 14.5,
+					"ziel": [
+						9,
+						2
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 20.5,
+					"ziel": [
+						9,
+						12
+					]
+				}
+			]
+		},
+		{
+			"budget": 1035,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 3,
+			"punkte": 1030,
+			"runde": 16,
+			"sekunden": 54.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 5.3,
+					"typen": [
+						"schild",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.6,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 9.5,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 16.0,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 22.0,
+					"ziel": [
+						10,
+						3
+					]
+				}
+			]
+		},
+		{
+			"budget": 1165,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1160,
+			"runde": 17,
+			"sekunden": 82.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.5,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.4,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.7,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"sani",
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.9,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"fahne",
+						"sprenger"
+					],
+					"weg": "w",
+					"zeit": 13.0,
+					"ziel": [
+						9,
+						11
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 4.5,
+					"ziel": [
+						8,
+						4
+					]
+				}
+			]
+		},
+		{
+			"budget": 1330,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 8,
+			"punkte": 1330,
+			"runde": 18,
+			"sekunden": 78.8,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.4,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.5,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.5,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild",
+						"schild",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 0.0,
+					"ziel": [
+						9,
+						11
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 10.5,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 18.0,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"schwarm",
+						"schwarm"
+					],
+					"weg": "w",
+					"zeit": 19.5,
+					"ziel": [
+						10,
+						10
+					]
+				}
+			]
+		},
+		{
+			"budget": 1790,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"geknackt": false,
+			"leben_genommen": 3,
+			"punkte": 1790,
+			"runde": 19,
+			"sekunden": 81.4,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.5,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"rauch",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.5,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.5,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 0.0,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 10.5,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 20.0,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 25.0,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 15.0,
+					"ziel": [
+						10,
+						10
+					]
+				}
+			]
+		},
+		{
+			"budget": 1285,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 4,
+			"geknackt": true,
+			"leben_genommen": 1,
+			"punkte": 1285,
+			"runde": 20,
+			"sekunden": 83.1,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.5,
+					"typen": [
+						"schild",
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.3,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sani",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.4,
+					"typen": [
+						"schild",
+						"schild",
+						"schild",
+						"schwarm",
+						"schwarm",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 4.0,
+					"ziel": [
+						9,
+						12
+					]
+				}
+			]
+		}
+	],
+	"spieler": "Paul"
+}

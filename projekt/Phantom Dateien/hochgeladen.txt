@@ -19,3 +19,6 @@ verteidigung-20261117-142505.json
 # 17.11.2026, 16:10 (Hauptseite, main d990dba, nur Phantom-Pool ergänzt):
 angriff-20261117-153453.json
 verteidigung-20261117-160413.json
+# 17.11.2026, 18:00 (Hauptseite, mit Spiel-Update):
+angriff-20261117-175444.json
+verteidigung-20261117-173053.json
