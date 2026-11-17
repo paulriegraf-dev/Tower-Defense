@@ -433,8 +433,15 @@ func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 	if d["schaden"] > 0.0 or id == "rauch":
 		w.append(["Wurf alle" if id == "rauch" else "Angriff alle", _z(d["abklingzeit"]) + " s"])
 	if float(d.get("panzerung", 0.0)) > 0.0:
-		w.append(["Panzerung", "−" + _z(d["panzerung"]) + " je Treffer"])
+		w.append(["Panzerung", "−" + _z(d["panzerung"]) + "/Treffer"])
 	w.append(["Prämie", str(d["praemie"])])
+	if w.size() > 6:
+		# höchstens 6 Felder: Schaden und Takt zusammen
+		for i in w.size() - 1:
+			if w[i][0] == "Schaden" and w[i + 1][0] == "Angriff alle":
+				w[i] = ["Schaden/Takt", "%s/%s" % [w[i][1], w[i + 1][1]]]
+				w.remove_at(i + 1)
+				break
 	# Myr-Drohne: Beine laufen in Zeile 0. Sprenger und Drohne schauen im Blatt nach links – gespiegelt wie die anderen.
 	return {"name": d["name"], "unter": d["art"], "marke": ab, "marke_farbe": Stil.KUPFER,
 		"bild": _figur(d, 0 if id == "enterer" else 1, id in ["sprenger", "enterer"]),
@@ -563,7 +570,7 @@ func _turmkarte(art: String, extra: Array) -> Dictionary:
 func _batteriekarte() -> Dictionary:
 	var W := Werte
 	var b: Dictionary = W.BATTERIE
-	var w: Array = [["Preis", str(W.KOSTEN_BATTERIE)], ["Reichweite", _z(b["reichweite"])], ["Schaden", _z(b["schaden"])],
+	var w: Array = [["Preis", "%d, +%s %%" % [W.KOSTEN_BATTERIE, _z(W.KOSTEN_BATTERIE_PROZENT)]], ["Reichweite", _z(b["reichweite"])], ["Schaden", _z(b["schaden"])],
 		["Angriff alle", _z(b["abklingzeit"]) + " s"], ["Fläche", _z(b["flaeche"])], ["Plätze", "%d Piloten" % b["plaetze"]]]
 	var pfad: Array = [{"kurz": "Grund", "bild": _batterie_bild(0), "abschnitte": [["Was sie macht", Stil.LEUCHT, [
 		"Zwei Felder: Batterie und angebaute Pilotenfabrik ([T] dreht sie beim Bauen).",

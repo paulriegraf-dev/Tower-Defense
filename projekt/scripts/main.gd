@@ -3235,9 +3235,23 @@ func kosten(typ: int) -> int:
 		Karte.GENERATOR:
 			return Werte.KOSTEN_GENERATOR
 		Karte.BATTERIE:
-			return Werte.KOSTEN_BATTERIE
+			return batterie_preis(_batterien())
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
 	return int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + Werte.KOSTEN_FABRIK_PROZENT / 100.0, _normale_fabriken()) / 5.0)) * 5
+
+
+## 17.11.: Jede weitere Batterie kostet KOSTEN_BATTERIE_PROZENT mehr (gegen Batterie-Spam), auf 5 gerundet.
+static func batterie_preis(schon: int) -> int:
+	return int(roundf(Werte.KOSTEN_BATTERIE * pow(1.0 + Werte.KOSTEN_BATTERIE_PROZENT / 100.0, schon) / 5.0)) * 5
+
+
+## So viele Batterien stehen (gezählt über ihre Pilotenfabriken).
+func _batterien() -> int:
+	var n := 0
+	for z: Vector2i in fabriken:
+		if karte.paar.has(z):
+			n += 1
+	return n
 
 
 func _normale_fabriken() -> int:
@@ -3366,6 +3380,8 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if typ == Karte.GENERATOR:
 		karte.generator_paar[z] = z   # ein Feld: Partner ist er selbst
 		karte.setze(z, Karte.GENERATOR)
+		if _hud:
+			_hud.formvorlage = ""   # 17.11.: gebaut – die Vorlage verschwindet wieder
 		if not still:
 			melde("Schildgenerator: Die Kuppel deckt den ganzen Ring. Truppen darunter nehmen 40 % weniger Schaden, Steine und Rauch prallen ab.", 6.0)
 		return true
@@ -3376,6 +3392,8 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		karte.magnet_richtung[z] = r
 	if _ist_ausbau(typ):
 		karte.baue_aus(z, typ)
+		if typ == Karte.TURM and _hud:
+			_hud.formvorlage = ""   # 17.11.: gebaut – die Vorlage verschwindet wieder
 		if typ == Karte.TURM and not still:
 			var art: Dictionary = Werte.TURMARTEN[karte.turm_art[z]]
 			melde("%s (%s): %s" % [art["name"], art["form"], art["text"]], 5.0)
@@ -3424,7 +3442,7 @@ func erstattung(z: Vector2i) -> int:
 	var alt := 0
 	if not frisch_bau.has("bau"):
 		if paar:
-			alt += Werte.KOSTEN_BATTERIE
+			alt += batterie_preis(maxi(0, _batterien() - 1))   # der Preis der zuletzt gebauten Batterie
 		elif war == Karte.WALL and _gratis.has(z):
 			pass   # aus dem Startpaket: gratis gebaut, gibt nichts zurück
 		elif war == Karte.FABRIK:

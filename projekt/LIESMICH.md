@@ -81,7 +81,7 @@ Startest du im Menü ein **normales Spiel**, fragt Sonde 7 (Funkfenster im Holog
   sonst an ihrer Fabrik. Kampftruppen gehen nicht in Batterien, Piloten nicht in Stellungen.
 - **Tor** (Taste 6, 40 Budget): Ausbau eines Erdwalls. Für den Gegner bleibt es ein Erdwall (Weg, Sicht, Sprenger),
   eigene Truppen gehen hindurch. So kommen Truppen aus einem eingemauerten Kern heraus. Im Tor bleiben sie nicht stehen: Sie laufen erst ganz hindurch und entscheiden dann neu.
-- **Railgun-Batterie** (Taste 5, 290): wird zusammen mit ihrer Pilotenfabrik gebaut (zwei Felder), versperrt den Weg wie eine Fabrik. Einschlag mit Radius 1,2 Feldern: in der Mitte voller Schaden, zum Rand nur noch die Hälfte. Feuert alle 4,1 Sekunden (65 Schaden).
+- **Railgun-Batterie** (Taste 5, 290, jede weitere 20 % mehr: 290, 350, 420, 500 …): wird zusammen mit ihrer Pilotenfabrik gebaut (zwei Felder), versperrt den Weg wie eine Fabrik. Einschlag mit Radius 1,2 Feldern: in der Mitte voller Schaden, zum Rand nur noch die Hälfte. Feuert alle 4,1 Sekunden (65 Schaden).
   Die Kästchen zeigen die Besatzung. Sie feuert nur mit drei Piloten, dann weit, über Wälle hinweg und flächig.
   Wer darin sitzt, kann nicht getroffen werden; Schleuder und Battlesphären können aber das Gebäude für die Runde ausschalten.
 
@@ -146,7 +146,7 @@ Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×
 | 15 | Letzte Runde | Gegenangriff auf das HQ. Drei Laser verteidigen die Zone (flach, nur gegen Bodentruppen, Wälle geben Deckung), Gegner kommen in dichter Folge. |
 
 ## Preise
-Erdwall 10, Stellung 25, Turm 75 (jede Form), Tor 40, Panzerung 30, Batterie mit Pilotenfabrik 290. Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 75, Stufe 2 175, Stufe 3 450; Batterie 125 / 175 / 450; Turm Stufe 2 125, Stufe 3 300.
+Erdwall 10, Stellung 25, Turm 75 (jede Form), Tor 40, Panzerung 30, Batterie mit Pilotenfabrik 290 (jede weitere 20 % mehr). Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 75, Stufe 2 175, Stufe 3 450; Batterie 125 / 175 / 450; Turm Stufe 2 125, Stufe 3 300.
 
 **Übersicht [I]:** Karten für alle Gegner, eigenen Truppen und Bauten mit Werten, Verhalten und Gegenmitteln (Reiter unten, Karte anklicken). Die Texte stehen in `scripts/lexikon.gd`, die Zahlen kommen aus `werte.gd`.
 Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennummer) und Prämien je besiegtem Gegner.
