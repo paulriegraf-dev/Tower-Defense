@@ -327,7 +327,10 @@ func radius() -> float:
 
 ## Nah genug am Wegpunkt? Andere Gegner schieben ihn ein wenig – genau treffen muss er ihn nicht.
 func _angekommen(punkt: Vector2) -> bool:
-	return position.distance_to(punkt) <= Werte.ANKUNFT * Werte.ZELLE
+	var d := position.distance_to(punkt)
+	# 17.11.: Drängeln mehrere um denselben Punkt, schieben sie sich gegenseitig weg und kämen nie an. Wer nahe dran
+	# feststeckt, gilt nach einer halben Sekunde als angekommen.
+	return d <= Werte.ANKUNFT * Werte.ZELLE or (d <= 0.6 * Werte.ZELLE and _stand > 0.5)
 
 
 ## Geht einen Schritt auf `punkt` zu und richtet die Figur aus.
