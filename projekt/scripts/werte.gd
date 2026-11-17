@@ -22,9 +22,9 @@ const ZONE_SPALTEN: int = 3
 const HQ_LEBEN: float = 1500.0   # 15.11.: vorher 2200 (Runde 20 war kaum zu gewinnen)
 static var ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
 const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
-const ENDKAMPF_TRUPP_PAUSE: float = 1.0    # Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
+const ENDKAMPF_TRUPP_PAUSE: float = 2.0    # 18.11.: vorher 1,0 – weniger gebündelt; Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
 const ENDKAMPF_PAUSE: float = 6.0     # 15.11.: vorher 3 – Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
-const ENDKAMPF_LEBEN: float = 2.6      # 15.11.: vorher 3,4 – Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
+const ENDKAMPF_LEBEN: float = 2.2      # 18.11.: vorher 2,6 (15.11.: 3,4) – Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
 const LEBEN_JE_RUNDE: float = 0.20     # so viel zäher werden die Gegner je Runde (Runde 19: ×4,6); Patch 16.11.: vorher 0,23 (×5,1)
 const GEGNER_GRUND_LEBEN: float = 10.0  # ab GRUND_LEBEN_AB_RUNDE bekommt jeder Gegner so viel Leben dazu, vor dem Rundenfaktor (gegen zu starken Flächenschaden; hilft vor allem den kleinen). 15.11.: 20 ab R1 war zu hart
 const GRUND_LEBEN_AB_RUNDE: int = 6
