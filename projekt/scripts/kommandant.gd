@@ -1,5 +1,6 @@
 class_name Kommandant
 extends Einheit
+var touch_richtung := Vector2.ZERO   # 17.11.: Joystick am Handy, -1..1
 ## Kommandant Brakk: einmal pro Partie. Angeklickt mit WASD gesteuert, sonst handelt er selbst (16.11.):
 ##   im Kampf geht er auf Gegner nahe seinem Posten los, ohne Gegner kehrt er zum Posten zurück (wo man ihn zuletzt hingestellt hat).
 ## Schießt von selbst auf den vordersten Gegner.
@@ -58,6 +59,7 @@ func _process(delta: float) -> void:
 			r.y -= 1.0
 		if Input.is_physical_key_pressed(KEY_S):
 			r.y += 1.0
+		r += touch_richtung   # 17.11.: Joystick am Handy (touch.gd)
 	if anker == Vector2.INF:
 		anker = position
 	var gesteuert := r != Vector2.ZERO

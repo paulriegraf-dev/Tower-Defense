@@ -123,6 +123,8 @@ var _ende_text: Label
 
 
 func _ready() -> void:
+	if Touch.noetig():
+		add_child(Touch.new())   # 17.11.: Handy/Tablet – lange drücken = Rechtsklick, zwei Finger = Zoom, Hinweis bei Hochkant
 	Ladebild.fertig.call_deferred()   # 17.11.: läuft gerade ein Ladebild, darf es jetzt voll laufen und ausblenden
 	Werte.lade_einstellungen()
 	# Vollbild wie eingestellt (Standard an; das Projekt startet schon im Vollbild)
