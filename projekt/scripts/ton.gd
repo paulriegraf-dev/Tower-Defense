@@ -15,7 +15,7 @@ const STIMMEN := 8
 const PEGEL := {
 	"tc-rail": -12.0, "tc-plasma": -4.0, "tc-blaster": -6.0, "tc-grenade": -6.0, "tc-pistol": -4.0, "tc-heavy": -10.0,
 	"tc-arc": -8.0, "myr-launch": -6.0, "hit-boom": -9.0, "hit-pboom": -6.0, "hit-thud": -4.0, "death-myr": -6.0,
-	"death-tc": -3.0, "tf-earth": -8.0, "tf-stone": -6.0, "alert": -4.0,
+	"death-tc": -3.0, "tf-earth": -8.0, "tf-stone": -6.0, "alert": -4.0, "ui-klick": -6.0,
 }
 
 static var _laeuft := {}        # Klang -> Array der Endzeiten

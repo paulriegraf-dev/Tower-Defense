@@ -251,6 +251,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if _titel:
 		if not event.echo:
+			_klick()
 			_titel_weiter()
 		get_viewport().set_input_as_handled()
 		return
@@ -266,6 +267,7 @@ func _input(event: InputEvent) -> void:
 				(e[4] as Callable).call(-10 if k in [KEY_LEFT, KEY_A] else 10, false)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if not event.echo:
+				_klick()
 				(_eintraege[_wahl][1] as Callable).call()
 		KEY_ESCAPE, KEY_BACKSPACE:
 			if _seite != "haupt" and not event.echo:
@@ -275,9 +277,15 @@ func _input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
+## Klickgeräusch im Startmenü (17.11., Paul: mehr Rückmeldung beim Klicken).
+func _klick() -> void:
+	Ton.spiele(self, "ui-klick", 0.0)
+
+
 func _maus_eingabe(event: InputEvent) -> void:
 	if _titel:
 		if event is InputEventMouseButton and event.pressed:
+			_klick()
 			_titel_weiter()
 		return
 	if event is InputEventMouseMotion:
@@ -285,6 +293,8 @@ func _maus_eingabe(event: InputEvent) -> void:
 			if _zeile(i).has_point(_maus):
 				_wahl = i
 	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			_klick()
 		if event.button_index == MOUSE_BUTTON_RIGHT and _seite != "haupt":
 			for i in _eintraege.size():
 				var e: Array = _eintraege[i]
