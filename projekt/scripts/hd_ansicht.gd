@@ -139,6 +139,7 @@ func einrichten(p_spiel: Node) -> void:
 	_z = passend
 	_tz = passend
 	_kamera_setzen()
+	_vorwaermen.call_deferred()
 
 
 func _exit_tree() -> void:
@@ -696,6 +697,83 @@ func _wand_materialien() -> void:
 	feld.texture_repeat = true
 	feld.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_mats["feld"] = feld
+
+
+## 17.11. (Paul: das erste Platzieren hing 4–5 s): Der Kompatibilitäts-Renderer übersetzt Shader erst, wenn etwas
+## zum ersten Mal gezeichnet wird – bei der ersten Mauer, Fabrik oder Vorschau. Deshalb wird gleich beim Start einmal
+## alles gezeichnet, was später auftaucht (Mauerteile in allen Stilen, Fabrikblock, Vorschau, Gebäudebilder,
+## Leuchtgeschosse), ein paar Bilder lang mitten auf der Karte, und danach wieder entfernt. Im Startmenü liegt das
+## Menü darüber, sonst blitzt es kurz auf.
+var _warm: Array = []
+var _warm_bilder := 0
+
+func _vorwaermen() -> void:
+	if _mats.is_empty():
+		_wand_materialien()
+	var z := Vector2i(Werte.SPALTEN / 2, Werte.ZEILEN / 2)
+	var alt := _flaechen.duplicate()
+	_flaechen.clear()
+	_mauer(z, false)
+	_mauer(z + Vector2i(1, 0), true)
+	_bruestung(z)
+	_wallpanzer(z)
+	_energiewand(z + Vector2i(-1, 0))
+	_tor(z + Vector2i(0, 1))
+	_fabrik_block(z + Vector2i(1, 1))
+	var mesh := ArrayMesh.new()
+	var i := 0
+	for name: String in _flaechen:
+		var st: SurfaceTool = _flaechen[name]
+		st.generate_normals()
+		st.commit(mesh)
+		mesh.surface_set_material(i, _mats[name])
+		i += 1
+	_flaechen = alt
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	add_child(mi)
+	_warm.append(mi)
+	# Vorschau-Geist und Gebäudebilder
+	_bauvorschau()
+	_geist_block.position = _welt_3d(karte.mitte(z), 0.0) + Vector3(0, H / 2.0, 0)
+	_geist_block.visible = true
+	var pfade := ["gebaeude/fabrik_grund.png", "gebaeude/fabrik_pilot.png", "gebaeude/basis_gross.png", "gebaeude/checkpoint.png",
+		"gebaeude/checkpoint_feind.png", "tuerme/schild.png", "batterie/bat_0.png"]
+	for typ: String in karte.FABRIK_BILDER:
+		pfade.append("gebaeude/fabrik_%s.png" % karte.FABRIK_BILDER[typ])
+	var n := 0
+	for pfad: String in pfade:
+		if not ResourceLoader.exists("res://assets/neu/" + pfad):
+			continue
+		var b := _neues_bild()
+		b.texture = karte.neu_bild(pfad)
+		b.region_rect = Rect2(Vector2.ZERO, b.texture.get_size())
+		b.position = _welt_3d(karte.mitte(z + Vector2i(n % 3 - 1, n / 3 - 1)), 0.0)
+		_warm.append(b)
+		n += 1
+	for g: Sprite3D in _geister:
+		g.texture = karte.neu_bild("gebaeude/fabrik_grund.png")
+		g.region_rect = Rect2(Vector2.ZERO, g.texture.get_size())
+		g.position = _welt_3d(karte.mitte(z), 0.0)
+		g.visible = true
+	# ein Leuchtgeschoss (eigenes Material mit additiver Mischung)
+	spiel.effekte.leuchtschuss(karte.mitte(z), 40.0, karte.mitte(z + Vector2i(2, 0)), 10.0, Color("7fe0ff"), 0.3, 12.0)
+	_warm_bilder = 4
+	set_process_internal(true)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_INTERNAL_PROCESS and _warm_bilder > 0:
+		_warm_bilder -= 1
+		if _warm_bilder == 0:
+			for n: Node in _warm:
+				if is_instance_valid(n):
+					n.queue_free()
+			_warm.clear()
+			_geist_block.visible = false
+			for g: Sprite3D in _geister:
+				g.visible = false
+			set_process_internal(false)
 
 
 func _st(name: String) -> SurfaceTool:
