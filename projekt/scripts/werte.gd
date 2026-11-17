@@ -330,7 +330,7 @@ const BATTERIE := {
 	"reichweite": 8.0,          # weit, über Wälle hinweg
 	"flaeche": 1.2,             # Radius des Einschlags in Feldern (15.11.: vorher 1,5)
 	"schaden": 65.0,            # vorher 45 (14.11.: Batterie für ihren Preis gestärkt)
-	"abklingzeit": 3.5,         # vorher 4
+	"abklingzeit": 4.1,         # Patch 17.11.: 15 % seltener (vorher 3,5; davor 4)
 }
 
 # --- Weg zur Stellung ------------------------------------------------------
@@ -731,7 +731,7 @@ const GEGNER := {
 	"belagerung": {
 		"name": "Belagerungsturm", "kurz": "Bel.-Turm", "art": "entert Wälle", "rolle": "belagerung", "fernkampf": false,
 		"blatt": "res://assets/sprites/belagerungsturm.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.6, "massstab": 1.4,
-		"leben": 450.0, "tempo": 0.6, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
+		"panzerung": 4.0, "leben": 450.0, "tempo": 0.6, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 15,
 	},
 	"enterer": {
@@ -743,7 +743,7 @@ const GEGNER := {
 	"schild": {
 		"name": "Schildträger", "kurz": "Schild", "art": "Frontschild", "rolle": "schild", "fernkampf": false,
 		"blatt": "res://assets/sprites/schildtraeger.png", "zelle": 48, "bilder": [9, 13, 17], "angriff_dauer": 1.6, "massstab": 1.4,
-		"leben": 135.0, "tempo": 0.9, "reichweite": 1.1, "schaden": 12.0, "abklingzeit": 1.0,
+		"panzerung": 3.0, "leben": 135.0, "tempo": 0.9, "reichweite": 1.1, "schaden": 12.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 10,
 	},
 	"sani": {
@@ -755,7 +755,7 @@ const GEGNER := {
 	"schwarm": {
 		"name": "Schwarmgeist", "kurz": "Schwarm", "art": "zerfällt in Drohnen", "rolle": "schwarm", "fernkampf": false,
 		"blatt": "res://assets/sprites/schwarmgeist.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.0, "massstab": 1.1,
-		"leben": 270.0, "tempo": 0.8, "reichweite": 1.1, "schaden": 14.0, "abklingzeit": 1.2, "zerfall": 3,   # vorher 200 (14.11.)
+		"panzerung": 3.0, "leben": 270.0, "tempo": 0.8, "reichweite": 1.1, "schaden": 14.0, "abklingzeit": 1.2, "zerfall": 3,   # vorher 200 (14.11.)
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 12,
 	},
 }
@@ -784,6 +784,11 @@ const ABSTAND_HAERTE := 10.0             # wie schnell Überlappungen aufgelöst
 const ANKUNFT := 0.22                    # so nah (Felder) an einem Wegpunkt gilt ein Gegner als angekommen
 const VERSATZ := 0.33                    # Zielpunkte je Gegner bis zu so weit (Felder) neben der Feldmitte (vorher 0,24)
 const TRUPP_STAFFEL_SEK := 0.3        # ein Trupp aus der Zone geht als Kolonne los: alle so viele Sekunden einer (16.11.)
+const LOCKER_STAFFEL_SEK := 0.9       # 17.11.: lockere Formation ("locker": true im Trupp) – mit so viel Abstand gehen sie los (gegen Flächenschaden)
+# Panzerung (17.11.): "panzerung" bei einem Gegner = so viel weniger Schaden je Treffer, aber höchstens die Hälfte weg.
+# Gilt nicht für Dauerschaden (Laser, Brandfeld). Große Treffer (Scharfschütze, Lanze, Batterie) merken sie kaum.
+const PANZERUNG_MIN_ANTEIL := 0.5
+const LOCKER_RADIUS := 0.6            # lockere Formation: Abstandsradius in Feldern (zwei Lockere halten gut 1 Feld Abstand)
 const SCHILD_VORLAUF_SEK := 1.5         # gestaffelt: Schildträger gehen so viele Sekunden vor dem Rest ihres Trupps los
 const SCHILD_FRONT_FAKTOR := 0.25   # Schildträger: Schüsse von vorn (innerhalb SCHILD_FRONT_WINKEL zur Laufrichtung) machen nur so viel Schaden
 const SCHILD_FRONT_WINKEL := 60.0
@@ -861,9 +866,9 @@ const WELLEN := {
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
 	]},
 	11: {"name": "Dunst", "stufe": "Einführung", "trupps": [
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"], "locker": true},
 		{"weg": "l", "typen": ["rauch", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"]},
@@ -871,7 +876,7 @@ const WELLEN := {
 	]},
 	12: {"name": "Nebelwand", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["rauch", "rauch", "rauch"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "l", "typen": ["schwarm", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["schild", "schild", "schild", "hund", "hund"]},
@@ -880,7 +885,7 @@ const WELLEN := {
 	13: {"name": "Der Turm", "stufe": "Einführung", "trupps": [
 		{"weg": "l", "typen": ["schwarm", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["schild", "sphaere", "sphaere"]},
@@ -900,25 +905,25 @@ const WELLEN := {
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"], "pause": -2.0},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["schild", "schild", "sani", "schwarm"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund", "hund"]},
 	]},
 	16: {"name": "Zange", "stufe": "Kombination", "trupps": [
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"], "locker": true},
 		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"], "wenn": "dock"},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"], "wenn": "drohnen"},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"]},
 		{"weg": "l", "typen": ["schwarm", "schwarm"]},
 	]},
 	17: {"name": "Köder und Abriss", "stufe": "Prüfung", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"], "locker": true},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger", "sprenger"], "pause": 17.0},
 		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["schild", "schild", "schild", "sani"]},
@@ -928,20 +933,20 @@ const WELLEN := {
 		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"], "wenn": "drohnen"},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger"]},
 		{"weg": "l", "typen": ["schwarm", "schwarm", "sani"]},
 	]},
 	19: {"name": "Generalprobe", "stufe": "Prüfung", "trupps": [
-		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"], "locker": true},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"], "pause": -2.0},
 		{"weg": "w", "typen": ["rauch", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["belagerung", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"], "wenn": "dock"},
-		{"weg": "l", "typen": ["rauch", "rauch", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["rauch", "rauch", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
 		{"weg": "l", "typen": ["belagerung"]},
@@ -975,6 +980,7 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 	var ausgaenge: Array = []  # Phantom-Modus: wo der Trupp aus der Zone kommt
 	var jeder: Array = []      # nur in jedem n-ten Durchgang (letzte Runde)
 	var wurf: Array = []       # geworfen: je Trupp die Typen
+	var locker: Array = []     # 17.11.: lockere Formation je Trupp
 	var wurf_info: Array = []  # dazu: nach wie vielen Lauf-Trupps frühestens, und der Auslöser
 	var ohne_wurf := OS.get_environment("TD_OHNE_WURF") != ""   # nur für Testläufe
 	for t: Dictionary in plan["trupps"]:
@@ -998,6 +1004,7 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 			pausen.append(float(t.get("pause", 0.0)))
 			ausgaenge.append(str(t.get("ausgang", "")))
 			jeder.append(int(t.get("jeder", 1)))
+			locker.append(bool(t.get("locker", false)))
 	var gruppen: Array = []
 	for typ: String in ["hund", "sphaere", "fahne", "sprenger", "rauch", "belagerung", "schild", "sani", "schwarm"]:
 		if anzahl.has(typ):
@@ -1009,6 +1016,7 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 		"pausen": pausen,
 		"ausgaenge": ausgaenge,   # Phantom-Modus: Ausgang je Trupp ("" = Hauptlinie, "oben", "unten")
 		"jeder": jeder,
+		"locker": locker,
 		"wurf": wurf,
 		"wurf_info": wurf_info,
 		"wurf_frei": bool(plan.get("wurf_frei", false)),   # Phantom-Modus: die Wurf-Schleuder wartet am Rundenanfang nicht

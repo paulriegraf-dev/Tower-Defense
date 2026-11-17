@@ -25,6 +25,7 @@ var max_leben := 1.0
 var leben_faktor := 1.0
 
 var trupp: Array = []               # alle Mitglieder des eigenen Trupps (gemeinsame Liste)
+var locker := false                 # 17.11.: lockere Formation – hält mehr Abstand zu anderen Gegnern
 
 var _ziel := 0                      # nächstes Ziel auf der Route: Checkpoint Nummer _ziel, danach die Basis
 var _weg: Array[Vector2i] = []
@@ -54,6 +55,7 @@ var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schw�
 var eingefroren := 0.0              # Sekunden: Schockfrost – steht ganz still
 var sproede := 0.0                  # Sekunden: Sprödes Eis – nimmt mehr Schaden
 var klon := false                   # aus der Klonmaschine: keine Prämie, wird nicht noch einmal geklont
+var _panzer_blitz := 0.0   # Panzerung: Aufblitzen nach einem Treffer
 var wartet := false                 # gebündelt: wartet in der Zone, bis sein Trupp vollständig ist
 var warte_noch := 0.0               # gestaffelt: so viele Sekunden nach dem Losgehen der Schildträger
 var _im_gefecht := 0.0              # Fernkämpfer: schießt gerade -> läuft langsamer
@@ -174,6 +176,10 @@ func _process(delta: float) -> void:
 		return
 	_abkling -= delta
 	_treffer -= delta
+	if _panzer_blitz > 0.0:
+		_panzer_blitz -= delta
+		if _panzer_blitz <= 0.0:
+			queue_redraw()
 	if wartet or warte_noch > 0.0 or karte.zelle_bei(position).x < Werte.ZONE_SPALTEN:
 		ohne_treffer = 0.0   # in der Zone oder noch wartend: niemand konnte ihn treffen, das zählt nicht
 	else:
@@ -505,9 +511,14 @@ func aufrappeln() -> void:
 	tw.tween_property(_sprite, "scale", grund, 0.16)
 
 
-func nimm_schaden(menge: float) -> void:
+func nimm_schaden(menge: float, dauer: bool = false) -> void:
 	if _tot:
 		return
+	# Panzerung (17.11.): je Treffer weniger Schaden, höchstens die Hälfte – nicht bei Dauerschaden
+	var panzer := float(daten.get("panzerung", 0.0))
+	if panzer > 0.0 and not dauer:
+		menge = maxf(menge - panzer, menge * Werte.PANZERUNG_MIN_ANTEIL)
+		_panzer_blitz = 0.12
 	if markiert > 0.0:
 		menge *= Werte.MARKIERUNG_FAKTOR
 	if sproede > 0.0:
@@ -537,6 +548,14 @@ func sprengt() -> Vector2i:
 
 
 func _draw() -> void:
+	if float(daten.get("panzerung", 0.0)) > 0.0:
+		# Panzerung: kleine Stahlplakette am Fuß, blitzt bei jedem Treffer auf
+		var pm := Vector2(15, 10) if Werte.grafik_neu else Vector2(15, 4)
+		var hell := _panzer_blitz > 0.0
+		var form := PackedVector2Array([pm + Vector2(-5, -5), pm + Vector2(5, -5), pm + Vector2(5, 1), pm + Vector2(0, 6), pm + Vector2(-5, 1)])
+		draw_colored_polygon(form, Color("e8f0ff") if hell else Color("8a95a8"))
+		form.append(form[0])
+		draw_polyline(form, Color("1a1f2a"), 1.5)
 	if markiert > 0.0:
 		# Zielmarkierung: Fadenkreuz
 		# neue Grafik: kleiner und leiser (Lesbarkeit), am Fuß der Figur

@@ -68,6 +68,7 @@ var _lbl_zins_titel: Label
 var _wurf_schlange: Array = []      # Würfe dieser Welle: {"typen", "nach", "wenn"}
 var _pausen: Array = []             # zu _schlange: Sekunden mehr/weniger Pause vor dem Trupp
 var _ausgaenge: Array = []          # zu _schlange: Ausgang je Trupp (nur Phantom-Modus)
+var _locker: Array = []             # zu _schlange: lockere Formation je Trupp (17.11.)
 var _trupp_nr := 0                  # so viele Lauf-Trupps dieses Durchgangs sind schon unterwegs
 var _durchgang := 0                 # letzte Runde: der wievielte Durchgang der Welle
 var _wurf_nahe := Vector2.INF       # der nächste Wurf landet hier in der Nähe (Zange am Belagerungsturm)
@@ -445,6 +446,7 @@ func _ersatz_uebernimmt(neu: Dictionary) -> void:
 	_schlange = []
 	_pausen = []
 	_ausgaenge = []
+	_locker = []
 	_wurf_schlange = []
 	_wurf_aktiv = []
 	_im_flug = 0
@@ -977,13 +979,19 @@ func _process(delta: float) -> void:
 					if is_instance_valid(m) and m.rolle == "schild":
 						mit_schild = true
 				# 16.11.: große Trupps gehen gestaffelt los (Kolonne statt Klumpen), Schildträger zuerst
+				# 17.11.: lockere Formation mit deutlich mehr Abstand (gegen Flächenschaden)
+				var ist_locker := not _locker.is_empty() and bool(_locker[0])
+				var staffel := Werte.LOCKER_STAFFEL_SEK if ist_locker else Werte.TRUPP_STAFFEL_SEK
+				for m in _trupp:
+					if is_instance_valid(m):
+						m.locker = ist_locker
 				var k := 0
 				for m in _trupp:
 					if is_instance_valid(m):
 						if mit_schild and m.rolle != "schild" and _trupp_zelle.x < Werte.ZONE_SPALTEN:
 							m.warte_noch = Werte.SCHILD_VORLAUF_SEK
 						if _trupp_zelle.x < Werte.ZONE_SPALTEN and m.rolle != "schild":
-							m.warte_noch += k * Werte.TRUPP_STAFFEL_SEK
+							m.warte_noch += k * staffel
 							k += 1
 						m.wartet = false
 				# Trupp vollständig: nach einer Pause kommt der nächste (der Plan kann sie verlängern oder kürzen)
@@ -991,6 +999,8 @@ func _process(delta: float) -> void:
 				_pausen.pop_front()
 				if not _ausgaenge.is_empty():
 					_ausgaenge.pop_front()
+				if not _locker.is_empty():
+					_locker.pop_front()
 				_trupp = []
 				_trupp_nr += 1
 				_spawn_in += Werte.ENDKAMPF_TRUPP_PAUSE if endkampf else Werte.TRUPP_PAUSE
@@ -1103,7 +1113,7 @@ func _abstand_halten(delta: float) -> void:
 	var gs: Array = []
 	for g in gegner:
 		if is_instance_valid(g) and not g._tot and not g._auf_wall:
-			gs.append([g, g.radius()])
+			gs.append([g, maxf(g.radius(), Werte.LOCKER_RADIUS * Werte.ZELLE) if g.locker else g.radius()])
 	_schiebe(gs, haerte, false)
 	var es: Array = []
 	var r := Werte.TRUPPE_RADIUS * Werte.ZELLE
@@ -1761,7 +1771,7 @@ func _braende_wirken(delta: float) -> void:
 		schadensquelle = str(b[4]) if b.size() > 4 else ""
 		for g in gegner.duplicate():
 			if not _geschuetzt(g) and (b[0] as Vector2).distance_to(g.position) <= float(b[1]):
-				g.nimm_schaden(float(b[3]) * delta)
+				g.nimm_schaden(float(b[3]) * delta, true)
 	_braende = _braende.filter(func(b): return b[2] > 0.0)
 
 
@@ -1953,6 +1963,8 @@ func _lade_durchgang() -> void:
 	_pausen = []
 	_trupp_nr = 0
 	_ausgaenge = []
+	_locker = []
+	var locker: Array = _welle.get("locker", [])
 	var ausgaenge: Array = _welle.get("ausgaenge", [])
 	var trupps: Array = _welle["trupps"]
 	var jeder: Array = _welle.get("jeder", [])
@@ -1963,6 +1975,7 @@ func _lade_durchgang() -> void:
 		_schlange.append((trupps[i] as Array).duplicate())
 		_pausen.append(float(pausen[i]) if i < pausen.size() else 0.0)
 		_ausgaenge.append(str(ausgaenge[i]) if i < ausgaenge.size() else "")
+		_locker.append(bool(locker[i]) if i < locker.size() else false)
 	var info: Array = _welle.get("wurf_info", [])
 	var wuerfe: Array = _welle["wurf"]
 	for i in wuerfe.size():

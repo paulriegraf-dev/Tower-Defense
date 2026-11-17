@@ -418,6 +418,11 @@ static func _z(v: float) -> String:
 	return ("%.1f" % v).replace(".", ",")
 
 
+## Panzerung (17.11.) in Worten.
+func _panzer_text(id: String) -> String:
+	return "Gepanzert (Plakette am Fuß): Jeder Treffer macht %s weniger Schaden, höchstens die Hälfte geht verloren. Schwere Treffer (Scharfschütze, Lanze, Batterie) merken das kaum, Laser und Brandfeld gar nicht." % _z(Werte.GEGNER[id]["panzerung"])
+
+
 func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 	var d: Dictionary = Werte.GEGNER[id]
 	var w: Array = [["Leben", _z(d["leben"])], ["Tempo", _z(d["tempo"])]]
@@ -427,6 +432,8 @@ func _gegner(id: String, ab: String, tut: Array, hilft: Array) -> Dictionary:
 		w.append(["Schaden", _z(d["schaden"])])
 	if d["schaden"] > 0.0 or id == "rauch":
 		w.append(["Wurf alle" if id == "rauch" else "Angriff alle", _z(d["abklingzeit"]) + " s"])
+	if float(d.get("panzerung", 0.0)) > 0.0:
+		w.append(["Panzerung", "−" + _z(d["panzerung"]) + " je Treffer"])
 	w.append(["Prämie", str(d["praemie"])])
 	# Myr-Drohne: Beine laufen in Zeile 0. Sprenger und Drohne schauen im Blatt nach links – gespiegelt wie die anderen.
 	return {"name": d["name"], "unter": d["art"], "marke": ab, "marke_farbe": Stil.KUPFER,
@@ -441,6 +448,52 @@ func _truppen_werte(d: Dictionary) -> Array:
 	if d.has("flaeche"):
 		w.append(["Fläche", _z(d["flaeche"])])
 	return w
+
+
+## Werte einer Truppe mit Stufe-3-Fähigkeit (17.11.): echte Zahlen statt der Stufe-2-Werte.
+## Höchstens 6 Felder – bei Bedarf ersetzt ein Fähigkeitswert das Tempo.
+func _faehigkeit_werte(id: String, f: String) -> Array:
+	var W := Werte
+	var d: Dictionary = W.einheit_daten(id, 3, f)
+	var w := _truppen_werte(d)
+	var abk := float(d["abklingzeit"])
+	var dmg := float(d["schaden"])
+	var mehr := (d.get("schuss_bilder", []) as Array).size()
+	var vor := "%d × " % mehr if mehr > 1 else ""
+	match f:
+		"feuerteam":
+			w[4] = ["Angriff alle", "%s–%s s" % [_z2(abk), _z2(abk * W.FEUERTEAM_HOECHST)]]
+		"minigun":
+			w[3] = ["Schaden", _z(dmg * W.MINIGUN_SCHADEN_FAKTOR)]
+			w[4] = ["Angriff alle", "%s–%s s" % [_z2(W.MINIGUN_ABKLING), _z2(W.MINIGUN_ABKLING * W.MINIGUN_SCHNELLSTE)]]
+		"bollwerk":
+			w.append(["Stellung", "keine"])
+		"laser":
+			var dps := dmg / abk
+			w[3] = ["Schaden/s", "%s–%s" % [_z(dps), _z(dps * W.LASER_HOECHST)]]
+			w[4] = ["Angriff", "Dauerstrahl"]
+		"durchschuss":
+			w.append(["Trifft", "ganze Linie"])
+		"markierung":
+			w[2] = ["Reichweite", "ganze Karte"]
+			w[3] = ["Schaden", vor + _z(dmg * W.MARKIERUNG_EIGENER_SCHADEN)]
+			w[4] = ["Angriff alle", _z2(abk * W.MARKIERUNG_ABKLING) + " s"]
+			w.append(["Markiert", "+%d %% · %s s" % [roundi((W.MARKIERUNG_FAKTOR - 1.0) * 100.0), _z(W.MARKIERUNG_SEK)]])
+		"abpraller":
+			w[1] = ["Sprünge", "%d × %d %%" % [W.ABPRALLER_SPRUENGE, roundi(W.ABPRALLER_SCHADEN * 100.0)]]
+		"brandfeld":
+			w[1] = ["Nachbrand", "%s s · %d %%/s" % [_z(W.BRANDFELD_SEK), roundi(W.BRANDFELD_SCHADEN * 100.0)]]
+		"plasmagel":
+			w[3] = ["Schaden", vor + _z(dmg * W.PLASMAGEL_SCHADEN)]
+			w[1] = ["Bremst", "%d %% · %s s" % [roundi(W.PLASMAGEL_TEMPO * 100.0), _z(W.PLASMAGEL_SEK)]]
+	return w
+
+
+static func _z2(v: float) -> String:
+	if is_equal_approx(v, roundf(v * 10.0) / 10.0):
+		return _z(v)
+	return ("%.2f" % v).replace(".", ",")
+
 
 
 ## Stufe 2 auf die Grundwerte anwenden (plus / mal aus Werte.STUFE_2).
@@ -459,19 +512,21 @@ func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictiona
 	var d: Dictionary = W.EINHEITEN[id]
 	var w := _truppen_werte(d)
 	var grund := _truppen_bild(id, 1)
+	var oben := stellung.duplicate()
+	oben.append("Oben in der Stellung nimmt sie %d %% weniger Schaden (Deckung)." % roundi(W.STELLUNG_DECKUNG * 100.0))
 	var pfad: Array = [
-		{"kurz": "Grund", "bild": grund, "abschnitte": [["Was sie macht", Stil.LEUCHT, tut], ["In der Stellung", Stil.TEXT_BLASS, stellung]]},
+		{"kurz": "Grund", "bild": grund, "abschnitte": [["Was sie macht", Stil.LEUCHT, tut], ["In der Stellung", Stil.TEXT_BLASS, oben]]},
 		{"kurz": "St. 1", "bild": grund, "abschnitte": [["Stufe 1 · %d Budget" % W.KOSTEN_STUFE[0], Stil.GOLD, [
 			"Die Fabrik legt sich auf diese Truppe fest und hält dafür eine mehr am Leben (%d statt %d)." % [W.MAX_JE_FABRIK + 1, W.MAX_JE_FABRIK],
 			"Danach lässt sich die Truppe dieser Fabrik nicht mehr wechseln."]]]},
 	]
 	if W.STUFE_2.has(id):
 		var s2: Dictionary = W.STUFE_2[id]
-		var w2 := _truppen_werte(_mit_stufe_2(d, s2))
+		var w2 := _truppen_werte(Werte.einheit_daten(id, 2))
 		pfad.append({"kurz": "St. 2", "bild": _truppen_bild(id, 2), "werte": w2, "abschnitte": [["Stufe 2 · %d Budget" % W.KOSTEN_STUFE[1], Stil.GOLD, [str(s2["text"]) + "."]]]})
 		for f: String in (W.STUFE_3[id] as Dictionary):
 			var s3: Dictionary = W.STUFE_3[id][f]
-			pfad.append({"kurz": str(s3["name"]).split(" ")[0], "zweig": true, "bild": _truppen_bild(id, 3, f), "werte": w2, "abschnitte": [
+			pfad.append({"kurz": str(s3["name"]).split(" ")[0], "zweig": true, "bild": _truppen_bild(id, 3, f), "werte": _faehigkeit_werte(id, f), "abschnitte": [
 				["Stufe 3 · %s · %d Budget" % [s3["name"], W.KOSTEN_STUFE[2]], Stil.GOLD, [s3["text"]]],
 				["Stärken und Schwächen", Stil.TEXT_BLASS, ["+ " + str(s3["stark"]), "– " + str(s3["schwach"])]],
 				["Hinweis", Stil.TEXT_BLASS, ["Eine Fabrik wählt genau eine der drei Fähigkeiten."]]]})
@@ -568,12 +623,14 @@ func _baue_daten() -> void:
 			"Scharfschützen ab Stufe 2 (Klarsicht) schießen auch im Rauch; ein markiertes Ziel treffen alle.",
 			"Batterie mit Schwerer Ladung bläst den Rauch weg."]),
 		_gegner("belagerung", "ab Runde 13", [
+			_panzer_text("belagerung"),
 			"Dockt am ersten erreichbaren Erdwall nach der Zone an, an dem Stellungen oder Türme in der Nähe sind (höchstens %d Wallschritte)." % W.ANDOCK_NAH,
 			"Dann springt alle %s Sekunden eine Myr-Drohne auf den Wall – bis zu %d zugleich, höchstens %s Sekunden lang." % [_z(W.ENTERER_ABSTAND), W.ENTERER_GLEICHZEITIG, _z(W.BELAGERUNG_SEK)],
 			"Dockt er an, wirft die Wurf-Schleuder sofort auf die andere Seite."], [
 			"Unterwegs zerstören: langsam, aber sehr zäh.",
 			"Laserstrahl und Zielmarkierung gegen zähe Einzelziele."]),
 		_gegner("schild", "ab Runde 9", [
+			_panzer_text("schild"),
 			"Trägt einen großen Schild nach vorn: Alles von vorn macht nur %d %% Schaden – auch Batterie, Plasma und Lanze." % roundi(W.SCHILD_FRONT_FAKTOR * 100),
 			"Fläche und Strahlen von vorn fängt er auch für die ab, die direkt hinter ihm gehen.",
 			"Er zieht das Feuer auf sich: Truppen, Türme und Batterien nehmen ihn zuerst ins Visier, egal welche Zielwahl.",
@@ -586,6 +643,7 @@ func _baue_daten() -> void:
 			"Zielwahl „Stärkste“ hilft nicht – er hat wenig Leben. Lieber gezielt: Scharfschützen mit Zielmarkierung, Schwere Munition.",
 			"Flächenschaden auf den ganzen Trupp."]),
 		_gegner("schwarm", "ab Runde 12", [
+			_panzer_text("schwarm"),
 			"Langsam und zäh. Fällt er, zerfällt er in %d Myr-Drohnen, die am Boden weiterkämpfen." % int(W.GEGNER["schwarm"]["zerfall"])], [
 			"Flächenschaden, Doppelschuss, Frost – alles, was viele kleine Ziele trifft.",
 			"Nicht erst kurz vor dem Ziel fallen lassen: die Drohnen sind schnell."]),
