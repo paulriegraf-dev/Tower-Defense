@@ -535,7 +535,7 @@ func _ordne_an() -> void:
 	_klapp.size = Vector2(roundf(klapp_w), 9)
 	_klapp.position = Vector2(roundf(kx + (kw - klapp_w) / 2.0), _konsole.position.y - 6.0)
 	_klapp.visible = _konsole.visible
-	_konsole.visible = not _angreifer
+	_konsole.visible = not _angreifer and not spiel.brakk_modus   # 18.11. (Paul): im Brakk-Mode keine Bauleiste (links steht die Ego-Liste)
 	var i := 0
 	for eintrag: Array in KACHELN:
 		var k: Kachel = kacheln[eintrag[0]]
@@ -548,7 +548,7 @@ func _ordne_an() -> void:
 		var g := Stil.absatz_groesse(_tipp_text, weite, Stil.KLEIN)
 		var th := ceilf(g.y) + 8.0 + (11.0 if _tipp_titel != "" else 0.0)
 		_tipp.size = Vector2(ceilf(maxf(g.x, Stil.breite(_tipp_titel, Stil.NORMAL))) + 12.0, th)
-		var unten := _konsole.position.y - 3.0 if _konsole.visible else HOEHE - RAND - 50.0
+		var unten := _konsole.position.y - 3.0 if _konsole.visible else (HOEHE - RAND if spiel.brakk_modus else HOEHE - RAND - 50.0)   # 18.11.: Brakk-Mode – ganz unten, unter Brakks Leisten
 		_tipp.position = Vector2(roundf((BREITE - _tipp.size.x) / 2.0), unten - th)
 	_tipp.visible = _tipp_text != ""
 

@@ -164,27 +164,29 @@ Startmenü → **Herausforderungen** → „Herausforderung: …“ (zusammen mi
 - **Doppelte Gegner, doppeltes Geld:** Jeder Trupp kommt zweimal hintereinander (auch in der Vorschau), Prämien und Rundenbonus sind doppelt.
 - **Mauern fest:** Die Karte bringt eine fertige Mauer mit (`mauern_fest` in der Karten-Datei, ein Schlangenlabyrinth mit T-Stücken für Türme). Erdwälle lassen sich weder bauen noch abreißen; ausgebaut wird darauf (Türme, Stellungen, Tore, Panzerung), Fabriken gehen. Alles ab Runde 1. Gesprengte Stücke stehen zur nächsten Bauphase wieder. Die Basis steht fest am Ende des Labyrinths; ein Checkpoint auf der Mauer wird neu gewürfelt. Die Weganzeige zählt die Mauer der Karte nicht als „deine Bauten“.
 
-## Brakk-Mode (18.11., Prototyp)
+## Brakk-Mode (18.11.)
 
-Eigener Modus im Startmenü: Du bist Brakk, in der Ego-Sicht, die ganze Partie lang (kein Umschalten). Gespielt wird auf PaulLand, für diese Partie in HD-2D (die gespeicherte Grafikwahl bleibt). Brakk steht gratis ab Runde 1 vor der Basis. Kein Zwischenstand, keine Phantome, keine Rangliste; Erfolge zählen. Braucht Maus und Tastatur (am Handy noch gesperrt). Code: `scripts/ego_modus.gd`.
-- **WASD** gehen, **Maus** schauen, **Linksklick** schießen (zwei Pistolen im Wechsel), **Leertaste** springen, **Enter** startet die Welle. Eine Fabrik ist dafür nicht nötig (auch nicht in Runde 1); **Neustart** bleibt im Brakk-Mode.
-- **[E] Lichttreppe:** vor einem Erdwall hinauf, oben auf dem Wall hinunter. Die Stufen bauen sich sichtbar nacheinander auf. Über die Kante gehen springt weiterhin hinunter.
-- **[F] Ausbauen:** Ein eigenes Gebäude im Blick (Fabrik, Batterie, Turm, Schildgenerator, höchstens 5 Felder weit) zeigt „[F] … ausbauen“ – [F] öffnet dasselbe Menü wie in der Übersicht, die Maus ist solange frei.
-- **Bauen:** [1]–[8], der Ring projiziert die Vorschau; nur in 5 Feldern Reichweite.
-- **Waffen:** zwei Laserpistolen und die Ringhand als PixelLab-Bilder (`assets/neu/ego/`), Mündungsblitz an der Laufmündung.
-- **Schussgefühl:** eigene Klänge (PixelLab, `assets/ton/brakk-*.wav`: Laserschuss A/B je Pistole, Treffer, Kill), Rückstoß der Sicht, kurzes Zucken des Sichtfelds; Treffer mit Einschlag-Klang, weißem Trefferkreuz und Wackeln; Kill mit Knall, rotem Kreuz, stärkerem Wackeln und 0,07 s Einfrieren (in Echtzeit).
-- Fällt Brakk, bleibt die Kamera am Boden liegen, bis er zur nächsten Runde wieder aufsteht.
+Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie lang. PaulLand in HD-2D (die gespeicherte Grafikwahl bleibt), Brakk steht gratis vor der Basis. Kein Zwischenstand, keine Phantome, keine Rangliste; Erfolge zählen; Neustart bleibt im Modus. Nur Maus und Tastatur. Code: `scripts/ego_modus.gd` (Steuerung, Fähigkeiten, Anzeige), `scripts/brakk_fortschritt.gd` (Stufen, Ringe, Ulti), `scripts/ring_bilder.gd` (Ringbilder).
 
-### Stufen, Fähigkeiten, Ringe und Befehle (18.11.)
-Code: `scripts/brakk_fortschritt.gd` (Stufen, Ringe, Ulti, Ringfelder), `scripts/ring_bilder.gd` (Ringbilder), Rest in `scripts/ego_modus.gd`.
-- **Stufen 1–10:** Erfahrung aus Brakks eigenen Kills (große Gegner mehr) und 10 je abgewehrter Welle. Jede Stufe +5 % Schussschaden und +30 Leben. Unten in der Mitte: Stufe, Leben, Erfahrung; darüber die Fähigkeiten mit Abklingzeit (gesperrte grau mit Stufe). Beim Aufstieg ein Banner.
-- **Freischalten:** Stufe 2 **Tumble [Shift]** (Hechtrolle 3 Felder in Laufrichtung, kurz unverwundbar, 4 s), Stufe 3 **Sammeln [Q]**, Stufe 5 **Doppellanze** (Rechtsklick halten, 0,8 s laden, loslassen: Strahl durch alle Gegner in der Linie, 60 Schaden, 6 s), Stufe 7 **Klonmaschine [R] als Ulti** – lädt durch 30 eigene Kills und ist nach dem Einsatz eine ganze Runde gesperrt.
-- **Zwei Pistolen:** links die Glutpistole (rot-gold, oranger Laser), rechts die cyanfarbene. Die linke ist vorerst eine Umfärbung im Code.
-- **Lichtterminal:** In der Bauphase an der Basis [F]. Ringe kosten Budget (110–140), Verkaufen gibt 75 % zurück (in derselben Bauphase alles). Ein Finger je Ring: frei ab Stufe 1, 3, 5, 7, 9.
-- **Ringe:** stärken Brakks Pistolen und geben im **Ringfeld** passenden Truppen die Stufe 3 mit ihrer Fähigkeit (Farbe = Abzeichen der Fähigkeit). Durchschlagring (Durchschuss), Glutstrahlring (Laserstrahl), Taktring (Feuerteam), Wirbelring (Minigun), Sprungring (Abpraller), Brandring (Brandfeld), Gelring (Plasmagel). Die Bilder sind Pixel-Platzhalter nach Pauls Entwürfen.
-- **Ringfeld:** Mausrad wählt den Ring (die Ringhand hebt sich, der Ring leuchtet), **[C]** wirft sein Feld (1,5 Felder Radius, bis 12 Felder weit) auf den Boden unter dem Fadenkreuz. Ein Feld je Ring, es bleibt liegen, bis es neu geworfen wird. Rechts stehen die getragenen Ringe.
-- **Fabriken im Brakk-Mode:** Truppe wählen und Spezialisieren wie immer, Stufe 2 und 3 gibt es nur über die Ringfelder. Batterien und Türme wie bisher.
-- **Befehle:** **[X] Halten** – Bodentruppen in 3 Feldern um den Punkt unter dem Fadenkreuz bleiben stehen, schießen und laufen keinem Gegner nach. **[V] Rückzug** – alle Bodentruppen in freie Stellungen, sonst vor die Basis, dort halten sie. Beides gilt bis Rundenende.
+**Ablauf**
+- **Fließende Runden:** Die Bauphase hat einen Countdown (45 s in Runde 1, danach 30 s), dann kommt die Welle von selbst; [Enter] startet früher. Keine Fabrikpflicht, alles ist ab Runde 1 frei, jede Runde 5 Erdwälle gratis. Truppen verschwinden am Rundenende wie sonst.
+- **Bauen:** [1]–[7] in 5 Feldern Reichweite (links die Liste), [F] baut das Gebäude im Blick aus. Keine Bauleiste [B].
+- Der Schild vor der Gegnerzone fängt Brakks Schüsse ab. Fällt Brakk, bleibt die Kamera bis zur nächsten Runde liegen.
+
+**Waffen**
+- Klick schießt, die zwei Pistolen wechseln sich ab, beide in Technoclan-Farben: links die Laserpistole (violetter Laser), rechts die Handkanone mit Augen-Linse (cyan; PixelLab).
+- **Überhitzen:** jede Pistole hat eine Hitze (Bögen links/rechts am Fadenkreuz). Voll = 1,5 s gesperrt, rote Mündung mit Dampf; die andere schießt weiter.
+- **Doppellanze** (Rechtsklick halten, loslassen): Strahl durch alle Gegner in der Linie; lässt die Hitze ab – je heißer, desto stärker (bis doppelt).
+
+**Stufen und Fähigkeiten**
+- Erfahrung aus eigenen Kills und abgewehrten Wellen, Stufe 1–10, je Stufe +5 % Schaden und +30 Leben. Unten in der Mitte: Fähigkeiten mit Abklingzeit, Leben, Erfahrung.
+- [E] **Lichttreppe**: auf den Erdwall im Blick (bis 5 Felder), steht 8 s, hinauf durch Hinlaufen. Oben auf dem Wall: [E] **Lichtbrücke** zum nächsten Wall im Blick (bis 5 Felder, 10 s, begehbar) – sonst Treppe hinunter.
+- St. 2 [Shift] **Tumble** · St. 3 [Q] **Lichtanker** (Seil an Mauerkrone/Boden, zieht Brakk hin) · St. 4 **Doppellanze** · St. 6 [X] **Lichtsäule** (Finger wirbelt, nach 1,5 s Einschlag, Farbe und kleiner Effekt des aktiven Rings) · St. 7 [R] **Klonmaschine** (lädt durch 30 eigene Kills, danach eine Runde Pause) · St. 8 [V] **Zeitlupe** (4 s, 60 s Abklingzeit).
+
+**Ringe** (Lichtterminal: [F] an der Basis in der Bauphase, Budget)
+- Sieben Ringe (Bilder nach Pauls Entwürfen), je einer pro Finger – frei ab Stufe 1, 3, 5, 7, 9. Kauf 200, Stufe 2 250, Stufe 3 500; Verkaufen 75 % (in derselben Bauphase alles).
+- **Ringfeld:** [C] in der Bauphase wirft das Feld des aktiven Rings (2 Felder Radius). Fabriken darin bauen die Truppe des Rings auf seiner Stufe (1 spezialisiert, 2 Wertepaket, 3 die Fähigkeit); im Kampf liegen die Felder fest. Fabriken selbst lassen sich nur spezialisieren. Batterien und Türme wie immer.
+- **Aktiver Ring:** das Mausrad wechselt (die Hand schüttelt sich kurz, solange schießt nur rechts); nur er wirkt auf Brakks Pistolen: Durchschlag (durch 2 Gegner), Glutstrahl (+30 % Schaden), Takt (schneller, kühlt schneller), Wirbel (Dauerfeuer läuft an, heizt weniger), Sprung (Abpraller), Brand (Brandfeld), Gel (bremst).
 
 ## Karten (18.11.)
 

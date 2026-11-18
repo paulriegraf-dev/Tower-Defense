@@ -294,6 +294,7 @@ func neue_runde() -> void:
 	zustand = Zustand.AUF_POSTEN if oben else Zustand.BODEN
 	if fortschritt != null:
 		fortschritt.gib(BrakkFortschritt.XP_WELLE, self)   # 18.11.: Brakk-Mode – Erfahrung für die abgewehrte Welle
+		spiel.freie_waelle += BrakkFortschritt.FREIE_WAELLE   # 18.11. (Paul): jede Runde 5 Erdwälle gratis
 	leben = max_leben
 	gesammelt.clear()
 	klon_genutzt = false

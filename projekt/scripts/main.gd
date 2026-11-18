@@ -630,7 +630,7 @@ var herausforderung := ""
 
 ## Alle Bauwerke frei (sonst gibt es in Runde 1 nur Fabriken)?
 func alles_frei() -> bool:
-	return sandbox or welle >= Werte.WAELLE_AB_WELLE or herausforderung in ["keine_fabriken", "mauern_fest"]
+	return sandbox or brakk_modus or welle >= Werte.WAELLE_AB_WELLE or herausforderung in ["keine_fabriken", "mauern_fest"]   # 18.11.: Brakk-Mode – alles ab Runde 1 (5 Gratis-Erdwälle je Runde)
 
 
 ## 18.11.: Bauwerke, die eine Karte (Regelpaket „bauten“, Szenario-Editor) einzeln sperren kann: Werkzeug -> [Schlüssel, Name].
@@ -4361,7 +4361,7 @@ func erstattung(z: Vector2i) -> int:
 			alt += Werte.KOSTEN_TURM_STUFE[i]
 	if fabriken.has(stufenfeld):
 		var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if paar else Werte.KOSTEN_STUFE
-		for i in maxi(0, int(fabriken[stufenfeld].get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0))):
+		for i in maxi(0, int((fabriken[stufenfeld].get("ring_vorher", fabriken[stufenfeld]) as Dictionary).get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0))):   # 18.11.: Brakk-Ring – nur die bezahlte Stufe
 			alt += preise[i]
 	return voll + roundi(alt * Werte.ERSTATTUNG)
 
@@ -4507,7 +4507,7 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	var stufe := int(fabriken[z].get("stufe", 0))
 	if stufe >= Werte.KOSTEN_STUFE.size():
 		return false
-	if brakk_modus and stufe >= 1:
+	if brakk_modus and (stufe >= 1 or fabriken[z].has("ring_vorher")):
 		return false   # 18.11.: Brakk-Mode – Stufe 2 und 3 kommen über Brakks Ringe
 	if stufe == 2 and not (Werte.STUFE_3[fabriken[z]["typ"]] as Dictionary).has(faehigkeit):
 		return false

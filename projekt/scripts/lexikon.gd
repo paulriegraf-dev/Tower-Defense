@@ -703,12 +703,30 @@ func _baue_daten() -> void:
 	var kd: Dictionary = W.KOMMANDANT
 	truppen.append({"name": "Kommandant Brakk", "unter": "Held, einmal pro Partie", "marke": "%d · [8]" % W.KOSTEN_KOMMANDANT, "bild": _figur(kd),
 		"werte": [["Leben", _z(kd["leben"])], ["Tempo", _z(kd["tempo"])], ["Reichweite", _z(kd["reichweite"])], ["Schaden", "2 × " + _z(kd["schaden"])], ["Angriff alle", _z(kd["abklingzeit"]) + " s"]],
-		"abschnitte": [["Steuerung", Stil.LEUCHT, [
-			"[8] und Klick auf ein freies Feld stellt ihn auf (zwischen den Wellen). Er handelt selbst; anklicken = mit [W][A][S][D] steuern. Er schießt von selbst auf den vordersten Gegner.",
-			"[Q] Sammeln: Bodentruppen im Umkreis von %s Feldern folgen ihm (Abklingzeit %s s). Nochmal [Q] = Losschlagen auf das Feld unter der Maus: %s s lang laufen sie schneller und feuern rascher (danach %s s Pause)." % [_z(kd["sammel_radius"]), _z(kd["sammel_abklingzeit"]), _z(kd["sturm_sek"]), _z(kd["sturm_abklingzeit"])],
-			"[E] Klettern: auf einen angrenzenden Erdwall und wieder herunter (%s s). Oben +%s Reichweite und Sicht über sein Wallstück." % [_z(kd["kletter_abklingzeit"]), _z(kd["wall_bonus"])],
-			"[R] Klonmaschine auf das freie Feld unter der Maus, einmal pro Runde: Wer hindurchgeht, wird einmal geklont – mit seinem aktuellen Leben. Das gilt auch für Gegner! Klone geben keine Prämie.",
-			"Auf einem verlorenen Checkpoint holt er ihn %s-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder da." % _z(kd["cp_faktor"])]]]})
+		# 18.11. (Paul): zwei Reiter – das normale Spiel und der Brakk-Mode (Ego-Sicht)
+		"pfad": [
+			{"kurz": "Spiel", "bild": _figur(kd), "abschnitte": [["Im normalen Spiel", Stil.LEUCHT, [
+				"[8] und Klick auf ein freies Feld stellt ihn auf (zwischen den Wellen), einmal pro Partie. Er handelt selbst und schießt auf den vordersten Gegner; anklicken = mit [W][A][S][D] steuern.",
+				"[Q] Sammeln: Bodentruppen im Umkreis von %s Feldern folgen ihm. Nochmal [Q] = Losschlagen auf das Feld unter der Maus: %s s schneller und rascher feuernd." % [_z(kd["sammel_radius"]), _z(kd["sturm_sek"])],
+				"[E] Klettern: auf einen angrenzenden Erdwall und wieder herunter. Oben +%s Reichweite und Sicht über sein Wallstück." % _z(kd["wall_bonus"]),
+				"[R] Klonmaschine, einmal pro Runde: Wer hindurchgeht, wird einmal geklont – auch Gegner. Klone geben keine Prämie.",
+				"Holt verlorene Checkpoints %s-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder da." % _z(kd["cp_faktor"])]]]},
+			{"kurz": "Brakk", "bild": _figur(kd), "abschnitte": [
+				["Brakk-Mode (Startmenü)", Stil.LEUCHT, [
+				"Du bist Brakk in der Ego-Sicht: [W][A][S][D] + Maus, Klick schießt, Leertaste springt.",
+				"Zwei Pistolen im Wechsel. Jede überhitzt bei Dauerfeuer (Bögen am Fadenkreuz) und ist dann kurz gesperrt.",
+				"Runden laufen von selbst: Countdown in der Bauphase, [Enter] startet früher. Keine Fabrik nötig, jede Runde 5 Erdwälle gratis.",
+				"Bauen mit [1]–[7] (5 Felder Reichweite), [F] baut aus. Der Schild der Gegnerzone fängt Schüsse ab."]],
+				["Fähigkeiten (frei mit der Stufe)", Stil.GOLD, [
+				"[E] Lichttreppe auf den Wall im Blick (bis 5 Felder, steht 8 s) – oben auf dem Wall [E] Lichtbrücke zum nächsten Wall.",
+				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (zieht dich hin) · St. 4 Rechtsklick halten: Doppellanze (lässt die Hitze ab).",
+				"St. 6 [X] Lichtsäule (Farbe des aktiven Rings) · St. 7 [R] Klonmaschine (lädt durch 30 Kills) · St. 8 [V] Zeitlupe.",
+				"Stufen: Erfahrung aus eigenen Kills und Wellen; jede Stufe +5 % Schaden, +30 Leben."]],
+				["Ringe (Lichtterminal: [F] an der Basis)", Stil.GOLD, [
+				"Kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe 1, 3, 5, 7, 9.",
+				"[C] in der Bauphase wirft das Ringfeld: Fabriken darin bauen die Truppe des Rings auf seiner Stufe.",
+				"Mausrad wählt den aktiven Ring – er gibt Brakks Pistolen seinen Effekt. Fabriken selbst nur spezialisieren."]]]},
+		]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
 	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "marke_farbe": Stil.LEUCHT, "bild": _figur(pilot),
 		"werte": [["Leben", _z(pilot["leben"])], ["Tempo", _z(pilot["tempo"])]],
