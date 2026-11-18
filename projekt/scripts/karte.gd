@@ -552,7 +552,9 @@ func turm_wert(z: Vector2i, schluessel: String, vorgabe: Variant = null) -> Vari
 		if f.has(schluessel):
 			wert = f[schluessel]
 	if schluessel == "reichweite" and wert != null:
-		wert = float(wert) + anhoehe_bonus(z)   # 18.11.: Turm auf der Anhöhe
+		wert = maxf(0.5, float(wert) + anhoehe_bonus(z) + Werte.mod("turm_reichweite"))   # 18.11.: Anhöhe, Werte-Mod
+	elif schluessel == "schaden" and wert != null:
+		wert = float(wert) * Werte.mod_faktor("turm_schaden")   # 18.11.: Werte-Mod
 	return wert
 
 

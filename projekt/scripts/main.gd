@@ -250,6 +250,7 @@ func _normales_spiel() -> void:
 	elif Werte.BASIS_ZUFALL and not Werte.KARTE_BASIS_FEST:
 		stelle_basis("ueberall")
 	_zeige_einfuehrung()
+	_starte_bauzeit()   # 18.11.: auch schon in Runde 1
 
 
 ## 18.11.: Szenario mit vorgebauten Türmen/Fabriken (Werte.KARTE_STAND): hinstellen, nicht abreißbar (sonst gäbe der
@@ -651,6 +652,11 @@ func herausforderung_sperrt(typ: int) -> String:
 	return ""
 
 
+## 18.11.: Einkommen (Rundenbonus, Prämien, Erzadern) mit „Doppeltes Geld“ und dem Werte-Mod „Einkommen“ der Karte.
+func einkommen(betrag: int) -> int:
+	return roundi(betrag * geld_faktor() * Werte.mod_faktor("einkommen"))
+
+
 func geld_faktor() -> int:
 	return 2 if herausforderung == "doppelt" else 1
 
@@ -871,8 +877,8 @@ func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
 	k.append(["Neustart", _neustart, _F_LEUCHT])
 	k.append(["Startmenü", _zum_menue, _F_TEXT])
 	var conf := {
-		"kicker": "RUNDE %d  ·  GEGENANGRIFF" % int(info["welle"]), "titel": "SIEG", "titel_farbe": _F_GOLD, "rahmen": _F_GOLD,
-		"untertitel": "Das HQ der Myriaden ist zerstört.", "effekt": "funken",
+		"kicker": ("RUNDE %d  ·  GEGENANGRIFF" % int(info["welle"])) if Werte.ziel() == "gegenangriff" else ("RUNDE %d  ·  %s" % [int(info["welle"]), Werte.ziel_name(Werte.ziel()).to_upper()]), "titel": "SIEG", "titel_farbe": _F_GOLD, "rahmen": _F_GOLD,
+		"untertitel": "Das HQ der Myriaden ist zerstört." if Werte.ziel() == "gegenangriff" else "Alle Runden überstanden – die Basis steht.", "effekt": "funken",   # 18.11.: Spielziel
 		"kacheln": [
 			{"name": "RUNDEN", "zahl": info["welle"], "max": info["welle"], "farbe": _F_LEUCHT},
 			{"name": "LEBEN", "zahl": info["leben"], "max": info["max_leben"], "farbe": _F_ROT, "symbol": "herz"},
@@ -937,10 +943,10 @@ func _zeige_niederlage(vw: String, rekord_vorher: int, besiegt: int) -> void:
 		zeilen.append(vw)
 	var untertitel := ["Die Myriaden sind durch.", "Das war knapp. Also, für die Myriaden nicht.", "Die Basis macht jetzt eine kurze Pause.", "Zurück auf Anfang – diesmal mit Plan."]
 	_zeige_tafel({
-		"kicker": "RUNDE %d VON %d" % [welle, Werte.LETZTE_RUNDE], "titel": "BASIS GEFALLEN", "titel_farbe": _F_ROT, "rahmen": _F_ROT,
+		"kicker": ("RUNDE %d · ENDLOS" % welle) if Werte.ziel() == "endlos" else ("RUNDE %d VON %d" % [welle, Werte.LETZTE_RUNDE]), "titel": "BASIS GEFALLEN" if leben <= 0 else "CHECKPOINTS VERLOREN", "titel_farbe": _F_ROT, "rahmen": _F_ROT,
 		"untertitel": untertitel[randi() % untertitel.size()], "effekt": "asche", "glitch": true, "wackeln": true,
 		"kacheln": [
-			{"name": "ERREICHT", "zahl": welle, "max": Werte.LETZTE_RUNDE, "farbe": _F_ROT},
+			{"name": "ERREICHT", "zahl": welle, "max": Werte.LETZTE_RUNDE, "farbe": _F_ROT} if Werte.ziel() != "endlos" else {"name": "ERREICHT", "zahl": welle, "farbe": _F_ROT},
 			{"name": "BESIEGT", "zahl": besiegt, "farbe": _F_KUPFER},
 			durch,
 			{"name": "KAMPFZEIT", "zahl": sek, "zeit": true, "farbe": _F_TEXT}],
@@ -1581,6 +1587,7 @@ func _process(delta: float) -> void:
 	schuetze = null
 	_aktualisiere_vorschau()
 	_aktualisiere_sichtanzeige()
+	_bauzeit_tick(delta)
 	_aktualisiere_hud(delta)
 	_pflege_schilde()
 	if phase != Phase.KAMPF:
@@ -2473,7 +2480,8 @@ func schild_deckung(herkunft: Vector2, betroffen: Array) -> Dictionary:
 	return deckung
 
 
-func starte_welle() -> void:
+## `erzwingen` (18.11.): die Bauzeit eines Szenarios ist um – die Welle kommt auch ohne Fabrik.
+func starte_welle(erzwingen: bool = false) -> void:
 	if phase != Phase.BAU:
 		return
 	if tutorial != null and tutorial.sperrt_welle():
@@ -2486,7 +2494,7 @@ func starte_welle() -> void:
 			return
 		_laufband.visible = false
 		_phantom_zuege_in_runde()
-	elif fabriken.is_empty() and herausforderung != "keine_fabriken" and not brakk_modus:   # 18.11.: in „Keine Fabriken“ und im Brakk-Mode geht es ohne
+	elif fabriken.is_empty() and herausforderung != "keine_fabriken" and not brakk_modus and not erzwingen:   # 18.11.: in „Keine Fabriken“ und im Brakk-Mode geht es ohne
 		melde("Erst eine Fabrik bauen [1].")
 		return
 	_schild_fuer = Karte.KEINE
@@ -2741,10 +2749,17 @@ func _welle_geschafft() -> void:
 		_lade_phantom_stand()
 		_zeige_laufband()
 		return
+	# 18.11. (Stufe 2): Spielziele ohne Gegenangriff
+	if Werte.ziel() == "checkpoints" and karte.cp_aktiv and not karte.cp_feind.has(false):
+		_verloren()   # beide Checkpoints beim Gegner
+		return
+	if Werte.ziel() in ["ueberleben", "checkpoints"] and welle >= Werte.LETZTE_RUNDE:
+		_gewonnen()
+		return
 	if welle == Werte.LETZTE_RUNDE and not endkampf:
 		_starte_gegenangriff()
 		return
-	var bonus := Werte.wellen_bonus(welle) * geld_faktor()   # 18.11.: „Doppeltes Geld“
+	var bonus := einkommen(Werte.wellen_bonus(welle))   # 18.11.: „Doppeltes Geld“, Werte-Mod
 	# Gehaltene Checkpoints zahlen sich aus
 	var gehalten := 0
 	if karte.cp_aktiv:
@@ -2763,6 +2778,23 @@ func _welle_geschafft() -> void:
 		["Checkpoints %d/%d" % [gehalten, karte.checkpoints.size()], cp_bonus], ["Erzadern", erz]])
 	_schliesse_runde("geschafft")
 	_naechste_bauphase()
+
+
+## 18.11. (Stufe 2): Bauzeit-Limit eines Szenarios – nach Ablauf startet die Welle von selbst.
+var bauzeit_rest := -1.0   # Sekunden (Echtzeit); < 0 = kein Limit in dieser Bauphase
+
+func _starte_bauzeit() -> void:
+	bauzeit_rest = float(Werte.bauzeit()) if Werte.bauzeit() > 0 and szenario_editor == null and tutorial == null else -1.0
+
+
+func _bauzeit_tick(delta: float) -> void:
+	if bauzeit_rest < 0.0 or phase != Phase.BAU or _menue != null or (_hud != null and _hud.pausiert()):
+		return
+	bauzeit_rest -= delta / maxf(Engine.time_scale, 0.01)
+	if bauzeit_rest <= 0.0:
+		bauzeit_rest = -1.0
+		melde("Die Bauzeit ist um – die Welle kommt.", 3.0)
+		starte_welle(true)
 
 
 ## 18.11.: Minenfeld – der erste Gegner am Boden auf einem scharfen Feld löst die Mine aus (einmal je Runde).
@@ -2787,13 +2819,13 @@ func erz_ertrag() -> int:
 	for z: Vector2i in karte.boden:
 		if karte.boden[z] == "erz" and (karte.inhalt(z) == Karte.FABRIK or karte.ausbau.get(z, Karte.FREI) == Karte.TURM):
 			n += 1
-	return n * Werte.ERZ_BONUS * geld_faktor()
+	return einkommen(n * Werte.ERZ_BONUS)
 
 
 ## Runde 20, zweiter Teil (18.11.): Die erste Welle ist abgewehrt – Rundenbonus wie sonst, dann fällt der Schild,
 ## die Truppen (bis auf eine je Fabrik) verlassen die Stellungen, und die Gegner kommen in Schleife (Leben wie früher im Endkampf).
 func _starte_gegenangriff() -> void:
-	var bonus := Werte.wellen_bonus(welle) * geld_faktor()   # 18.11.: „Doppeltes Geld“
+	var bonus := einkommen(Werte.wellen_bonus(welle))   # 18.11.: „Doppeltes Geld“, Werte-Mod
 	var zins := Werte.zinsen(budget)
 	budget += bonus + zins
 	endkampf = true
@@ -2845,6 +2877,8 @@ func _naechste_bauphase() -> void:
 			karte.zeige_angriff = true
 			karte.aktualisiere_pfad()
 			melde("Letzte Runde: Dein Schild ist gefallen, die Verteidiger greifen dein HQ an. Dein Plan läuft in Schleife – halte so lange wie möglich oder brich durch.", 12.0)
+		elif Werte.ziel() != "gegenangriff":
+			melde("Letzte Runde: Übersteht ihr diese Welle, ist die Partie gewonnen." if Werte.ziel() == "ueberleben" else "Letzte Runde: Übersteht sie und haltet mindestens einen Checkpoint.", 10.0)
 		else:
 			# 18.11. (Paul): Runde 20 in zwei Teilen – erst die Welle ganz normal abwehren (alle in Stellung wie in
 			# Runde 19), danach fällt der Schild und es geht in den Gegenangriff.
@@ -2877,6 +2911,7 @@ func _naechste_bauphase() -> void:
 	if herausforderung == "mauern_fest":
 		setze_kartenmauern(Werte.MAUERN_FEST, true)   # 18.11.: die fertige Mauer steht zu jeder Bauphase wieder (Erdwälle baut man hier nicht)
 	_speichere_zwischenstand()
+	_starte_bauzeit()   # 18.11.
 	if brakk_modus and ego == null and hd != null and kommandant != null:
 		_ego_umschalten.call_deferred()   # 18.11.: Brakk-Mode – nach einem Fall geht es in der Bauphase wieder in die Ego-Sicht
 
@@ -3238,38 +3273,46 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 	if b == hq and phantom_modus == "angriff":
 		_angriff_ende("hq")
 	elif b == hq:
-		phase = Phase.ENDE
-		if not sandbox:
-			loesche_zwischenstand()   # 18.11.
-		_schliesse_runde("sieg")
-		# 18.11.: Erfolge zum Sieg
-		erfolg("gegenangriff")
-		if leben >= _leben_vor_runde:
-			erfolg("unberuehrt")
-		if not _fabrik_gebaut():
-			erfolg("ohne_fabrik")
-		var als_phantom := false
-		if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "":   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen
-			# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
-			var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
-			var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
-			als_phantom = vpfad != ""
-			if als_phantom:
-				_merke_export(daten, "verteidigung")
-				Profil.phantom_erstellt()
-				erfolg("spiegelbild")   # 18.11.
-				_verteidigung_online.call_deferred(vpfad, daten)
-		var besiegt := 0
-		for n: int in _profil_kills.values():
-			besiegt += n
-		var sek := 0.0
-		for r: Dictionary in _protokoll.get("runden", []):
-			sek += float((r.get("ergebnis", {}) as Dictionary).get("sekunden", 0.0))
-		var vw := _partie_ins_profil(true)
-		_zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
-			"sekunden": sek, "phantom": als_phantom, "wertung": vw}, als_phantom)
+		_gewonnen()
 	else:
 		melde("Schleuder zerstört!", 3.0)
+
+
+## 18.11.: Partie gewonnen – HQ zerstört oder (Szenario) das Spielziel erreicht.
+func _gewonnen() -> void:
+	if phase == Phase.ENDE:
+		return
+	phase = Phase.ENDE
+	if not sandbox:
+		loesche_zwischenstand()   # 18.11.
+	_schliesse_runde("sieg")
+	# 18.11.: Erfolge zum Sieg
+	if Werte.ziel() == "gegenangriff":
+		erfolg("gegenangriff")
+	if leben >= _leben_vor_runde:
+		erfolg("unberuehrt")
+	if not _fabrik_gebaut():
+		erfolg("ohne_fabrik")
+	var als_phantom := false
+	if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "":   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen
+		# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
+		var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
+		var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
+		als_phantom = vpfad != ""
+		if als_phantom:
+			_merke_export(daten, "verteidigung")
+			Profil.phantom_erstellt()
+			erfolg("spiegelbild")   # 18.11.
+			_verteidigung_online.call_deferred(vpfad, daten)
+	var besiegt := 0
+	for n: int in _profil_kills.values():
+		besiegt += n
+	var sek := 0.0
+	for r: Dictionary in _protokoll.get("runden", []):
+		sek += float((r.get("ergebnis", {}) as Dictionary).get("sekunden", 0.0))
+	var vw := _partie_ins_profil(true)
+	_zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
+		"sekunden": sek, "phantom": als_phantom, "wertung": vw}, als_phantom)
 
 
 ## Ziel einer Schleuder: die nächste Truppe in einer Stellung, sonst die nächste Fabrik (als Zelle).
@@ -3519,7 +3562,7 @@ func _quelle_info(quelle: String) -> Dictionary:
 func gegner_besiegt(g: Gegner) -> void:
 	Ton.am_ort(self, "death-myr", g.position)
 	if not g.klon:
-		budget += int(g.daten["praemie"]) * geld_faktor()   # 18.11.: „Doppeltes Geld“
+		budget += einkommen(int(g.daten["praemie"]))   # 18.11.: „Doppeltes Geld“, Werte-Mod
 	gegner_entfernt(g)
 
 
@@ -3972,18 +4015,25 @@ func gegner_am_ziel(g: Gegner) -> void:
 		_phantom_gefallen()
 	elif leben <= 0:
 		leben = 0
-		phase = Phase.ENDE
-		if not sandbox:
-			loesche_zwischenstand()   # 18.11.
-		_schliesse_runde("niederlage")
-		var rekord := Profil.stat("beste_runde")
-		var besiegt := 0
-		for n: int in _profil_kills.values():
-			besiegt += n
-		var vw := _partie_ins_profil(false)
-		_zeige_niederlage(vw, rekord, besiegt)
-		if phantom_modus == "verteidigung":
-			_verteidigung_online.call_deferred("", {})
+		_verloren()
+
+
+## 18.11.: Partie verloren – keine Leben mehr oder (Szenario „Checkpoints halten“) beide Checkpoints beim Gegner.
+func _verloren() -> void:
+	if phase == Phase.ENDE:
+		return
+	phase = Phase.ENDE
+	if not sandbox:
+		loesche_zwischenstand()   # 18.11.
+	_schliesse_runde("niederlage")
+	var rekord := Profil.stat("beste_runde")
+	var besiegt := 0
+	for n: int in _profil_kills.values():
+		besiegt += n
+	var vw := _partie_ins_profil(false)
+	_zeige_niederlage(vw, rekord, besiegt)
+	if phantom_modus == "verteidigung":
+		_verteidigung_online.call_deferred("", {})
 
 
 func einheit_gefallen(e: Einheit) -> void:
@@ -4104,7 +4154,7 @@ func truppen_limit(z: Vector2i) -> int:
 	if fabriken.has(z) and fabriken[z]["typ"] == "pilot":
 		# Pilotenfabrik: immer genug für die Batterie, mit Stufe 1 ein Reservepilot dazu
 		return int(Werte.BATTERIE["plaetze"]) + (1 if stufe >= 1 else 0)
-	var n := (Werte.MAX_JE_FABRIK_ENDKAMPF if endkampf else Werte.MAX_JE_FABRIK) + sandbox_truppen
+	var n := (Werte.MAX_JE_FABRIK_ENDKAMPF if endkampf else Werte.MAX_JE_FABRIK) + sandbox_truppen + int(Werte.mod("fabrik_truppen"))   # 18.11.: Werte-Mod
 	n = maxi(n, 1)
 	if stufe >= 1:
 		n += Werte.STUFE_1_TRUPPEN

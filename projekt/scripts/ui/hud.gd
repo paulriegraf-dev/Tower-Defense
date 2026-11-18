@@ -321,7 +321,9 @@ func aktualisiere(_delta: float) -> void:
 	_zins = Werte.zinsen(s.budget)
 
 	# --- Welle
-	_runde_text = "Runde %d/%d" % [s.welle, Werte.LETZTE_RUNDE]
+	_runde_text = ("Runde %d · endlos" % s.welle) if Werte.ziel() == "endlos" else ("Runde %d/%d" % [s.welle, Werte.LETZTE_RUNDE])   # 18.11.
+	if phase == BAU and float(s.bauzeit_rest) >= 0.0:
+		_runde_text += "  ·  Bauzeit %d s" % ceili(float(s.bauzeit_rest))   # 18.11.: Bauzeit-Limit
 	if s.herausforderung != "":
 		_runde_text += "  ·  " + Werte.herausforderung_name(s.herausforderung)   # 18.11.
 	_welle_zeile = ""

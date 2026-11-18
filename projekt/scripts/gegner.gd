@@ -71,7 +71,7 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	karte = p_karte
 	typ = p_typ
 	_blickt_links = typ in BLICKT_LINKS
-	daten = Werte.GEGNER[typ]
+	daten = Werte.gegner_daten(typ)   # 18.11.: mit den Werte-Mods einer eigenen Karte
 	rolle = daten["rolle"]
 	leben_faktor = p_leben_faktor
 	var grund := Werte.GEGNER_GRUND_LEBEN if int(spiel.welle) >= Werte.GRUND_LEBEN_AB_RUNDE else 0.0   # Grund-Leben erst ab Runde 6

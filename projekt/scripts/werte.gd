@@ -302,6 +302,11 @@ static func einheit_daten(typ: String, stufe: int, faehigkeit: String = "") -> D
 		d["leben"] = float(d["leben"]) * BOLLWERK_LEBEN
 		d["schaden"] = float(d["schaden"]) * BOLLWERK_SCHADEN
 		d["reichweite"] = BOLLWERK_REICHWEITE
+	# 18.11. (Stufe 1): Werte-Mods einer eigenen Karte
+	d["leben"] = float(d["leben"]) * mod_faktor("truppen_leben")
+	d["schaden"] = float(d["schaden"]) * mod_faktor("truppen_schaden")
+	if float(d["reichweite"]) > 0.0:
+		d["reichweite"] = maxf(0.5, float(d["reichweite"]) + mod("truppen_reichweite"))
 	return d
 
 
@@ -674,6 +679,11 @@ static func karte_gueltig(k: Dictionary) -> String:
 	for r: Variant in k["checkpoint_bereiche"]:
 		if not (r is Array) or (r as Array).size() != 4:
 			return "Checkpoint-Bereich ungültig."
+	var rg: Variant = k.get("regeln", {})
+	if not (rg is Dictionary):
+		return "Regeln ungültig."
+	if (rg as Dictionary).has("mods") and not ((rg as Dictionary)["mods"] is Dictionary):
+		return "Werte-Mods ungültig."
 	return ""
 
 
@@ -729,6 +739,8 @@ static func _setze_regeln(k: Dictionary) -> void:
 	START_BUDGET = clampi(int(KARTE_REGELN.get("start_budget", STANDARD_BUDGET)), 0, 99999)
 	START_LEBEN = clampi(int(KARTE_REGELN.get("start_leben", STANDARD_LEBEN)), 1, 999)
 	LETZTE_RUNDE = clampi(int(KARTE_REGELN.get("runden", STANDARD_RUNDEN)), 2, STANDARD_RUNDEN)
+	if ziel() == "endlos":
+		LETZTE_RUNDE = ENDLOS_RUNDEN   # 18.11.: endlos – es gibt keine letzte Runde
 	KARTE_WELLEN = {}
 	var w: Variant = k.get("wellen", {})
 	if w is Dictionary:
@@ -779,6 +791,99 @@ static func karten_vorlage(spalten: int, zeilen: int) -> Dictionary:
 	}
 
 
+## Laser verteidigen die Zone nur im Gegenangriff – ohne Gegenangriff (andere Spielziele) kommen sie nie.
+static func _laser_ab() -> int:
+	return LETZTE_RUNDE if ziel() == "gegenangriff" else ENDLOS_RUNDEN + 1
+
+
+## 18.11. (Stufe 2): Spielziel eines Szenarios (Regelpaket „ziel“). [Schlüssel, Name, Erklärung]
+const ZIELE: Array = [
+	["gegenangriff", "Gegenangriff", "Standard: In der letzten Runde fällt der Schild – das HQ des Gegners muss fallen."],
+	["ueberleben", "Überleben", "Übersteh alle Runden – nach der letzten ist die Partie gewonnen (kein Gegenangriff)."],
+	["endlos", "Endlos", "Runden ohne Ende, die Gegner werden immer zäher. Wie weit kommst du?"],
+	["checkpoints", "Checkpoints halten", "Übersteh alle Runden. Gehören am Rundenende beide Checkpoints dem Gegner, ist die Partie verloren."],
+]
+const ENDLOS_RUNDEN: int = 9999
+const BAUZEITEN: Array[int] = [0, 30, 60, 90]   # Sekunden Bauphase, dann startet die Welle von selbst (0 = unbegrenzt)
+
+
+static func ziel() -> String:
+	return str(KARTE_REGELN.get("ziel", "gegenangriff"))
+
+
+static func ziel_name(schluessel: String) -> String:
+	for z: Array in ZIELE:
+		if z[0] == schluessel:
+			return str(z[1])
+	return schluessel
+
+
+static func ziel_text(schluessel: String) -> String:
+	for z: Array in ZIELE:
+		if z[0] == schluessel:
+			return str(z[2])
+	return ""
+
+
+static func bauzeit() -> int:
+	return maxi(0, int(KARTE_REGELN.get("bauzeit", 0)))
+
+
+## 18.11. (Stufe 1): Werte-Mods einer eigenen Karte (Regelpaket „mods“). Nur diese Schlüssel, je
+## [Schlüssel, Name, Art ("%" = Prozent, "+" = dazu), Standard, kleinster, größter, Schritt]. Fehlt einer, gilt der Standard.
+const MODS: Array = [
+	["gegner_leben", "Gegner: Leben", "%", 100.0, 25.0, 400.0, 10.0],
+	["gegner_tempo", "Gegner: Tempo", "%", 100.0, 50.0, 200.0, 10.0],
+	["gegner_schaden", "Gegner: Schaden", "%", 100.0, 25.0, 400.0, 10.0],
+	["truppen_leben", "Truppen: Leben", "%", 100.0, 25.0, 400.0, 10.0],
+	["truppen_schaden", "Truppen: Schaden", "%", 100.0, 25.0, 400.0, 10.0],
+	["truppen_reichweite", "Truppen: Reichweite", "+", 0.0, -2.0, 3.0, 0.5],
+	["turm_schaden", "Türme: Schaden", "%", 100.0, 25.0, 400.0, 10.0],
+	["turm_reichweite", "Türme: Reichweite", "+", 0.0, -2.0, 3.0, 0.5],
+	["einkommen", "Einkommen", "%", 100.0, 0.0, 400.0, 10.0],
+	["fabrik_truppen", "Truppen je Fabrik", "+", 0.0, -2.0, 5.0, 1.0],
+]
+
+
+static func _mod_eintrag(schluessel: String) -> Array:
+	for m: Array in MODS:
+		if m[0] == schluessel:
+			return m
+	return []
+
+
+## Wert eines Mods (Prozent oder Zuschlag), begrenzt auf seinen Bereich.
+static func mod(schluessel: String) -> float:
+	var m := _mod_eintrag(schluessel)
+	if m.is_empty():
+		return 0.0
+	var mods: Variant = KARTE_REGELN.get("mods", {})
+	var wert: float = float((mods as Dictionary).get(schluessel, m[3])) if mods is Dictionary else float(m[3])
+	return clampf(wert, float(m[4]), float(m[5]))
+
+
+## Prozent-Mod als Faktor (100 % = 1).
+static func mod_faktor(schluessel: String) -> float:
+	return mod(schluessel) / 100.0
+
+
+## Gegner-Werte mit den Mods der Karte (ohne Mods: die Werte aus GEGNER selbst, keine Kopie).
+static func gegner_daten(typ: String) -> Dictionary:
+	var d: Dictionary = GEGNER[typ]
+	var l := mod_faktor("gegner_leben")
+	var t := mod_faktor("gegner_tempo")
+	var s := mod_faktor("gegner_schaden")
+	if l == 1.0 and t == 1.0 and s == 1.0:
+		return d
+	d = d.duplicate()
+	d["leben"] = float(d["leben"]) * l
+	d["tempo"] = float(d["tempo"]) * t
+	for k: String in ["schaden", "schaden_einheit"]:
+		if d.has(k):
+			d[k] = float(d[k]) * s
+	return d
+
+
 static func _feld(p: Array) -> Vector2i:
 	return Vector2i(int(p[0]), int(p[1]))
 
@@ -791,7 +896,7 @@ static func _felder(liste: Array) -> Array[Vector2i]:
 
 
 static func _zonenbauten(zeilen: Array) -> Array:
-	var vorlage := [["schleuder", 1, 5], ["schleuder", 1, 8], ["wurf", 0, 10], ["wurf", 0, 14], ["laser", 2, LETZTE_RUNDE], ["laser", 2, LETZTE_RUNDE], ["laser", 2, LETZTE_RUNDE]]   # 18.11.: Laser in der letzten Runde der Karte
+	var vorlage := [["schleuder", 1, 5], ["schleuder", 1, 8], ["wurf", 0, 10], ["wurf", 0, 14], ["laser", 2, _laser_ab()], ["laser", 2, _laser_ab()], ["laser", 2, _laser_ab()]]   # 18.11.: Laser in der letzten Runde der Karte
 	var liste: Array = []
 	for i in vorlage.size():
 		liste.append({"art": vorlage[i][0], "zelle": Vector2i(vorlage[i][1], zeilen[i]), "ab_welle": vorlage[i][2]})
@@ -1236,6 +1341,11 @@ static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary
 
 ## 18.11.: Entworfener Plan der Runde. Die letzte Runde der Karte ist immer der Gegenangriff (Plan 20), auch bei 10 oder 15 Runden.
 static func wellen_plan(nr: int) -> Dictionary:
+	if ziel() != "gegenangriff":
+		# 18.11.: ohne Gegenangriff keine Schleifen-Welle – nach Runde 19 kehren die späten Pläne 10–19 wieder
+		if nr <= STANDARD_RUNDEN - 1:
+			return WELLEN[clampi(nr, 1, STANDARD_RUNDEN - 1)]
+		return WELLEN[10 + (nr - STANDARD_RUNDEN) % 10]
 	if nr >= LETZTE_RUNDE:
 		return WELLEN[STANDARD_RUNDEN]
 	return WELLEN[clampi(nr, 1, STANDARD_RUNDEN)]

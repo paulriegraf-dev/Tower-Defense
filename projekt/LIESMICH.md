@@ -226,6 +226,18 @@ Im Editor unter „Gelände mit Wirkung“ (Reiter Karte), nur auf eigenen Karte
 - Schnelles Ziehen malt lückenlos (die Felder zwischen zwei Mauspositionen werden mitgemalt).
 - Darstellung: in 2D gemalt; in HD-2D zusätzlich die Anhöhe als flacher Hügel, Blockbäume im Wald und Mauerreste auf der Ruine.
 
+### Mods: Werte und Spielziele (18.11.)
+
+Reiter **Mods** im Szenario-Editor, nur für eigene Karten (PaulLand, Rangliste und Phantome bleiben unberührt). Gespeichert im Regelpaket der Karten-Datei: `regeln.mods`, `regeln.ziel`, `regeln.bauzeit`. Es läuft kein fremder Code – nur diese Zahlen, darum auch im Browser und zum Teilen geeignet.
+- **Werte-Mods** (`Werte.MODS`): Gegner Leben / Tempo / Schaden (in %), Truppen Leben / Schaden (%) und Reichweite (+ Felder), Türme Schaden (%) und Reichweite (+), Einkommen (% auf Rundenbonus, Prämien und Erzadern; Zinsen nicht), Truppen je Fabrik (+). Umschalt+Klick = 5 Schritte. Preise bleiben fest (sonst gäbe der Abriss leicht Geld zurück) – Einkommen wirkt gleich.
+- **Spielziel** (`Werte.ZIELE`):
+  - **Gegenangriff** – Standard.
+  - **Überleben** – alle Runden überstehen, dann Sieg; kein Gegenangriff, keine Laser in der Zone, die letzte Runde ist eine normale Welle.
+  - **Endlos** – keine letzte Runde; nach Runde 19 kehren die Pläne 10–19 wieder, die Gegner werden je Runde weiter zäher. Die Anzeige zeigt „Runde N · endlos“.
+  - **Checkpoints halten** – wie Überleben, aber gehören am Rundenende beide Checkpoints dem Gegner (ab Runde 5), ist die Partie verloren.
+- **Bauzeit** (unbegrenzt / 30 / 60 / 90 s): Nach Ablauf startet die Welle von selbst (auch ohne Fabrik). Die Restzeit steht oben in der Rundenanzeige; Pause hält sie an.
+- Code: `werte.gd` (`MODS`, `mod()`, `gegner_daten()`, `ZIELE`, `wellen_plan`), `main.gd` (`einkommen()`, `_gewonnen()`, `_verloren()`, `_bauzeit_tick()`), Editor `_leiste_mods()`.
+
 ## Erfolge (18.11.)
 
 19 Erfolge als heimliches Tutorial: Sie lenken auf Mechaniken, die man sonst übersieht (Formtürme, Wachposten, Checkpoints zurückholen, Panzerung, Feldlazarett, Kuppel, Zuweisung, Zinsen, Klonmaschine …). Drei sind versteckt („???“): Schildträger von hinten, Runde 20 ohne Lebensverlust, Sieg ohne Fabrik (Batterien zählen nicht). Freischalten zeigt oben eine Einblendung mit Symbol und spielt einen Ton; im Profil (Startmenü oben rechts) steht die Tafel „Erfolge x/19“. In der Sandbox gibt es keine Erfolge. Gespeichert im Profil (`user://profil.json`, Schlüssel `erfolge` und `formen`). Liste und Texte: `scripts/erfolge.gd`. Belohnungen sind vorbereitet: Jeder Eintrag hat ein leeres Feld `belohnung`, ausgegeben wird in `Erfolge._gib_belohnung()`.

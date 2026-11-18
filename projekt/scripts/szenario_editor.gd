@@ -216,12 +216,14 @@ func _process(_delta: float) -> void:
 
 func _baue_leiste(l: ModLeiste) -> void:
 	l.kopf("Szenario: " + str(entwurf.get("name", "")).left(18))
-	l.reiter([["karte", "Karte"], ["regeln", "Regeln"], ["wellen", "Wellen"], ["datei", "Datei"]], _reiter, _zeige_reiter)
+	l.reiter([["karte", "Karte"], ["regeln", "Regeln"], ["mods", "Mods"], ["wellen", "Wellen"], ["datei", "Datei"]], _reiter, _zeige_reiter)
 	match _reiter:
 		"karte":
 			_leiste_karte(l)
 		"regeln":
 			_leiste_regeln(l)
+		"mods":
+			_leiste_mods(l)
 		"wellen":
 			_leiste_wellen(l)
 		"datei":
@@ -303,6 +305,45 @@ func _leiste_regeln(l: ModLeiste) -> void:
 	l.chips(hf, str(r.get("herausforderung", "")), func(h: String) -> void:
 		r["herausforderung"] = h
 		_geaendert())
+
+
+## 18.11. (Stufe 1 und 2): Spielziel, Bauzeit und Werte-Mods (Werte.ZIELE, Werte.BAUZEITEN, Werte.MODS).
+func _leiste_mods(l: ModLeiste) -> void:
+	var r: Dictionary = entwurf["regeln"]
+	l.abschnitt("Spielziel")
+	var ziele: Array = []
+	for z: Array in Werte.ZIELE:
+		ziele.append([z[0], z[1]])
+	var ziel := str(r.get("ziel", "gegenangriff"))
+	l.chips(ziele, ziel, func(z: String) -> void:
+		r["ziel"] = z
+		_geaendert())
+	l.text(Werte.ziel_text(ziel) + (" Die Rundenzahl (Regeln) gilt hier nicht." if ziel == "endlos" else ""))
+	l.abschnitt("Bauzeit je Runde (danach startet die Welle)")
+	var zeiten: Array = []
+	for s: int in Werte.BAUZEITEN:
+		zeiten.append([s, "unbegrenzt" if s == 0 else "%d s" % s])
+	l.chips(zeiten, int(r.get("bauzeit", 0)), func(s: int) -> void:
+		r["bauzeit"] = s
+		_geaendert())
+	l.trenner()
+	l.abschnitt("Werte (Umschalt+Klick = 5 Schritte)")
+	var mods: Dictionary = r.get("mods", {})
+	for m: Array in Werte.MODS:
+		var schl: String = m[0]
+		var wert: float = float(mods.get(schl, m[3]))
+		var text := ("%d %%" % roundi(wert)) if m[2] == "%" else (("+" if wert >= 0.0 else "") + ("%s" % wert).trim_suffix(".0"))
+		l.zeile(str(m[1]), text, func(d: int) -> void:
+			var neu := clampf(float(mods.get(schl, m[3])) + ModLeiste.schritt(d) * float(m[6]), float(m[4]), float(m[5]))
+			if is_equal_approx(neu, float(m[3])):
+				mods.erase(schl)
+			else:
+				mods[schl] = neu
+			r["mods"] = mods
+			_geaendert(), not is_equal_approx(wert, float(m[3])))
+	l.knopf("Alle Werte zurücksetzen", func() -> void:
+		r.erase("mods")
+		_geaendert(), Stil.TEXT_BLASS)
 
 
 func _leiste_wellen(l: ModLeiste) -> void:

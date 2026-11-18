@@ -941,7 +941,9 @@ func _male_kartenbild(ci: Control, kname: String) -> void:
 	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 7.0), text, Stil.KLEIN, Stil.TEXT)
 	var basis_text := "Basis fest" if bool(k.get("basis_fest", false)) else "Basis zufällig"
 	var cp_text := "Checkpoints fest" if bool(k.get("checkpoints_fest", false)) else "Checkpoints gewürfelt"
-	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 17.0), basis_text + " · " + cp_text, Stil.KLEIN, Stil.TEXT_BLASS)
+	var ziel := str(regeln.get("ziel", "gegenangriff"))
+	var ziel_text := ("Ziel: " + Werte.ziel_name(ziel) + " · ") if ziel != "gegenangriff" else ""   # 18.11.: Spielziel
+	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 17.0), ziel_text + basis_text + " · " + cp_text, Stil.KLEIN, Stil.TEXT_BLASS)
 
 
 ## Die drei Technoclan-Truppen posieren rechts auf der Bühne (Standbilder, leicht atmend).
