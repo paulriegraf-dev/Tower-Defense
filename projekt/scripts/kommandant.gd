@@ -1,6 +1,7 @@
 class_name Kommandant
 extends Einheit
 var touch_richtung := Vector2.ZERO   # 17.11.: Joystick am Handy, -1..1
+var ego := false                     # 18.11.: Ego-Sicht – der Spieler steuert und schießt selbst (ego_modus.gd)
 ## Kommandant Brakk: einmal pro Partie. Angeklickt mit WASD gesteuert, sonst handelt er selbst (16.11.):
 ##   im Kampf geht er auf Gegner nahe seinem Posten los, ohne Gegner kehrt er zum Posten zurück (wo man ihn zuletzt hingestellt hat).
 ## Schießt von selbst auf den vordersten Gegner.
@@ -63,9 +64,10 @@ func _process(delta: float) -> void:
 	if anker == Vector2.INF:
 		anker = position
 	var gesteuert := r != Vector2.ZERO
-	if not gesteuert and not spiel.kommandant_gewaehlt() and am_boden() and _angriff_t < 0.0:
+	if not gesteuert and not ego and not spiel.kommandant_gewaehlt() and am_boden() and _angriff_t < 0.0:
 		r = _selbst()
-	_sprite.bewegt(r != Vector2.ZERO)
+	if not ego:
+		_sprite.bewegt(r != Vector2.ZERO)
 	if r != Vector2.ZERO:
 		var schritt := r.normalized() * float(daten["tempo"]) * Werte.ZELLE * delta
 		if absf(r.x) > 0.0:
@@ -75,7 +77,7 @@ func _process(delta: float) -> void:
 		if gesteuert:
 			anker = position   # gesteuert: der Posten wandert mit
 	# Schießen: im Kampf auf den vordersten Gegner in Reichweite
-	if spiel.im_kampf():
+	if spiel.im_kampf() and not ego:
 		_angriff(delta)
 	queue_redraw()
 

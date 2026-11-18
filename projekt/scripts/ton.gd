@@ -16,6 +16,8 @@ const PEGEL := {
 	"tc-rail": -12.0, "tc-plasma": -4.0, "tc-blaster": -6.0, "tc-grenade": -6.0, "tc-pistol": -4.0, "tc-heavy": -10.0,
 	"tc-arc": -8.0, "myr-launch": -6.0, "hit-boom": -9.0, "hit-pboom": -6.0, "hit-thud": -4.0, "death-myr": -6.0,
 	"death-tc": -3.0, "tf-earth": -8.0, "tf-stone": -6.0, "alert": -4.0, "ui-klick": -6.0,
+	# 18.11.: Brakk-Mode (Ego-Sicht), mit PixelLab erzeugt (WAV)
+	"brakk-schuss-a": -3.0, "brakk-schuss-b": -3.0, "brakk-treffer": -2.0, "brakk-kill": -1.0,
 }
 
 static var _laeuft := {}        # Klang -> Array der Endzeiten
@@ -73,6 +75,8 @@ static func spiele(spiel: Node, art: String, db := 0.0, seite := 0.0) -> void:
 static func _strom(art: String) -> AudioStream:
 	if not _stroeme.has(art):
 		var pfad := "res://assets/ton/%s.ogg" % art
+		if not ResourceLoader.exists(pfad):
+			pfad = "res://assets/ton/%s.wav" % art   # 18.11.: auch WAV (PixelLab-Klänge)
 		_stroeme[art] = load(pfad) if ResourceLoader.exists(pfad) else null
 	return _stroeme[art]
 

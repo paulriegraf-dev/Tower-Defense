@@ -12,6 +12,8 @@ const NACHBARN: Array[Vector2i] = [Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN, Ve
 const KEINE := Vector2i(-1, -1)
 
 var feld: Dictionary = {}          # Zelle -> WALL / FABRIK
+var gelaende: Dictionary = {}      # 18.11.: Zelle -> "fels" / "wasser" (aus der Karten-Datei; weder begehbar noch bebaubar)
+var fest: Dictionary = {}          # 18.11.: vorgebaute Erdwälle der Karte -> true (ausbaubar, nicht abreißbar)
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
 var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
 var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN (aus der Form der Nachbarwälle)
@@ -93,13 +95,19 @@ var _blaetter: Dictionary = {}      # Einheitentyp -> Textur (für das Bild an d
 
 func _ready() -> void:
 	position = Vector2(0, Werte.KARTE_OBEN)
+	gelaende = Werte.GELAENDE.duplicate()
 	_astar_einheiten = _neues_astar()
 	for typ: String in Werte.GEGNER:
 		_astar_gegner[typ] = _neues_astar()
+	# 18.11.: Fels und Wasser sind für niemanden begehbar (auch nicht einzureißen)
+	for z: Vector2i in gelaende:
+		_astar_einheiten.set_point_solid(z, true)
+		for typ: String in _astar_gegner:
+			(_astar_gegner[typ] as AStarGrid2D).set_point_solid(z, true)
 	for z in basis_felder(basis):
 		if in_karte(z):
 			_gewichte_fuer(z)
-	var lagen := _zufalls_checkpoints() if Werte.CHECKPOINTS_ZUFAELLIG else Werte.CHECKPOINTS.duplicate()
+	var lagen := _zufalls_checkpoints() if Werte.CHECKPOINTS_ZUFAELLIG and not Werte.KARTE_CP_FEST else Werte.CHECKPOINTS.duplicate()
 	for i in Werte.CHECKPOINTS.size():
 		checkpoints.append(lagen[i])
 		cp_feind.append(false)
@@ -164,7 +172,33 @@ func inhalt(z: Vector2i) -> int:
 
 
 func ist_frei(z: Vector2i) -> bool:
-	return in_karte(z) and not feld.has(z)
+	return in_karte(z) and not feld.has(z) and not gelaende.has(z)
+
+
+## 18.11.: Weglänge auf der leeren Karte (nur Gelände) – Grundlage der Weganzeige „+N durch deine Bauten“.
+## Ohne Gelände wie bisher die Luftlinie in Feldern (Manhattan).
+var _astar_gelaende: AStarGrid2D = null
+var _gelaende_stand := -1
+
+func grund_abstand(von: Vector2i, nach: Vector2i) -> int:
+	var luft := absi(nach.x - von.x) + absi(nach.y - von.y)
+	if gelaende.is_empty() and fest.is_empty():
+		return luft
+	# Gelände und die Mauer der Karte zählen nicht als „deine Bauten“ (neu aufbauen, wenn sich die Mauer geändert hat)
+	if _astar_gelaende == null or _gelaende_stand != fest.size():
+		_gelaende_stand = fest.size()
+		_astar_gelaende = _neues_astar()
+		for z: Vector2i in gelaende:
+			_astar_gelaende.set_point_solid(z, true)
+		for z: Vector2i in fest:
+			_astar_gelaende.set_point_solid(z, true)
+	var weg := _astar_gelaende.get_id_path(von, nach)
+	return weg.size() - 1 if not weg.is_empty() else luft
+
+
+## 18.11.: Fels versperrt die Sicht wie ein fremder Erdwall, Wasser nicht.
+func ist_fels(z: Vector2i) -> bool:
+	return gelaende.get(z, "") == "fels"
 
 
 func ist_bebaubar(z: Vector2i) -> bool:
@@ -234,6 +268,7 @@ func entferne(z: Vector2i) -> void:
 		generator_paar.erase(generator_paar[z])
 		generator_paar.erase(z)
 	panzer.erase(z)
+	fest.erase(z)   # 18.11.: eine vorgebaute Mauer, die fällt, ist weg wie jede andere
 	besatzung.erase(z)
 	fabrik_typ.erase(z)
 	posten.erase(z)
@@ -583,11 +618,13 @@ func _strahl_frei(von: Vector2, nach: Vector2) -> bool:
 		var z := zelle_bei(von.lerp(nach, float(i) / schritte))
 		if z == vorher:
 			continue
-		if z != start and feld.has(z):
+		if z != start and (feld.has(z) or ist_fels(z)):
 			return false
-		# schräg von Feld zu Feld = genau über eine Ecke: gesperrt, sobald dort ein Wall anliegt
+		# schräg von Feld zu Feld = genau über eine Ecke: gesperrt, sobald dort ein Wall (oder Fels) anliegt
 		if z.x != vorher.x and z.y != vorher.y:
-			if feld.has(Vector2i(z.x, vorher.y)) or feld.has(Vector2i(vorher.x, z.y)):
+			var e1 := Vector2i(z.x, vorher.y)
+			var e2 := Vector2i(vorher.x, z.y)
+			if feld.has(e1) or feld.has(e2) or ist_fels(e1) or ist_fels(e2):
 				return false
 		vorher = z
 	return true
@@ -613,6 +650,8 @@ func _zufalls_checkpoints() -> Array[Vector2i]:
 		if Vector2(a - c).length() < Werte.CP_ABSTAND_ZUEINANDER:
 			continue
 		if spawn.distance_to(Vector2(a)) < Werte.CP_ABSTAND_SPAWN:
+			continue
+		if gelaende.has(a) or gelaende.has(c) or feld.has(a) or feld.has(c):   # 18.11.: nicht auf Fels, Wasser oder einer fertigen Mauer
 			continue
 		return lagen
 	return Werte.CHECKPOINTS.duplicate()
@@ -953,7 +992,7 @@ func sicht_von_wall(wall: Vector2i, von: Vector2, nach: Vector2) -> bool:
 		if z == vorher:
 			continue
 		vorher = z
-		if z != ziel and feld.get(z, FREI) == WALL and stueck_nr(z) != eigen:
+		if z != ziel and ((feld.get(z, FREI) == WALL and stueck_nr(z) != eigen) or ist_fels(z)):
 			return false
 	return true
 
@@ -1342,6 +1381,7 @@ func _draw() -> void:
 			_r(z, 8 + (h % 5) * 8, 8 + ((h >> 4) % 5) * 8, 4, 4, GRAS_HELL)
 			_r(z, 12 + ((h >> 8) % 5) * 8, 20 + ((h >> 12) % 4) * 8, 4, 4, GRAS_DUNKEL)
 
+	_zeichne_gelaende()
 	_zeichne_start()
 	_zeichne_basis()
 	for i in checkpoints.size():
@@ -1834,6 +1874,40 @@ func _zeichne_wall_neu(z: Vector2i, alpha: float) -> void:
 	if not unten:
 		draw_texture(neu_bild("wand/front.png"), o + Vector2(0, 46), a)
 		draw_rect(Rect2(o + Vector2(0, 64), Vector2(64, 4)), Color(0, 0, 0, 0.28 * alpha))
+
+
+## 18.11.: Gelände aus der Karten-Datei. Wasser: blaue Fläche mit hellem Ufer und Wellen. Fels: Brocken mit Licht oben
+## links und Schatten unten. In HD-2D liegt das als Boden unter den Felsklötzen (hd_ansicht.gd).
+const WASSER := Color("2b5d8a")
+const WASSER_HELL := Color("5f9cc9")
+const FELS := Color("4a423b")
+const FELS_HELL := Color("7a7064")
+const FELS_LICHT := Color("9a8f80")
+
+func _zeichne_gelaende() -> void:
+	for z: Vector2i in gelaende:
+		var h := hash(z)
+		if gelaende[z] == "wasser":
+			_r(z, 0, 0, 64, 64, WASSER)
+			for n: Vector2i in NACHBARN:
+				if gelaende.get(z + n, "") != "wasser":
+					var r := Rect2(0, 0, 64, 4) if n == Vector2i.UP else (Rect2(0, 60, 64, 4) if n == Vector2i.DOWN \
+						else (Rect2(0, 0, 4, 64) if n == Vector2i.LEFT else Rect2(60, 0, 4, 64)))
+					_r(z, r.position.x, r.position.y, r.size.x, r.size.y, WASSER_HELL)
+			for i in 3:
+				var wx := 8 + ((h >> (i * 5)) % 6) * 7
+				var wy := 12 + i * 16
+				_r(z, wx, wy, 12, 2, Color(WASSER_HELL, 0.7))
+		else:
+			_r(z, 0, 0, 64, 64, FELS)
+			for i in 3:
+				var bx := 4 + ((h >> (i * 4)) % 4) * 10
+				var by := 4 + i * 18
+				var bw := 22 + ((h >> (i * 3 + 9)) % 3) * 6
+				_r(z, bx, by + 14, bw, 4, Color(0, 0, 0, 0.3))
+				_r(z, bx, by, bw, 14, FELS_HELL)
+				_r(z, bx, by, bw, 3, FELS_LICHT)
+				_r(z, bx, by, 3, 14, FELS_LICHT)
 
 
 ## Neue Grafik: Boden wie in Terrain-Conquester und der Stilprobe – Grasfliesen aus dem TC-Blatt (zufällig gedreht),

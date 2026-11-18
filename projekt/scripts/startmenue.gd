@@ -14,6 +14,7 @@ signal gewaehlt(sandbox: bool)
 signal phantom_gewaehlt(art: String, pfad: String)
 signal tutorial_gewaehlt
 signal uebersicht_gewaehlt
+signal brakk_gewaehlt   # 18.11.: Brakk-Mode
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
 const LICHT := Color("7fe0ff")
@@ -34,6 +35,8 @@ var _wahl := 0
 var _maus := Vector2(-100, -100)
 var _zeit := 0.0
 var _tutorial := false
+var _wahl_karte := "felsenpass"    # 18.11.: Karte auf der Seite „Herausforderungen“
+var _wahl_herausforderung := ""      # 18.11.: Herausforderung auf derselben Seite ("" = keine)
 var _meldung := ""
 var _eintraege: Array = []         # [Text, Aktion, Untertitel, Farbe]
 # Titelbild (NES/Mega-Drive-Art): nur beim ersten Öffnen nach Programmstart, eine Taste/ein Klick führt zur Liste
@@ -116,7 +119,9 @@ func _baue() -> void:
 	match _seite:
 		"haupt":
 			_eintraege = [
-				["Spielen", _zeige.bind("spielen"), "", LICHT],
+				["Spielen", _zeige.bind("spielen"), "Hauptkarte PaulLand", LICHT],
+				["Herausforderungen", _zeige.bind("herausforderung"), "weitere Karten", Stil.TEXT],
+				["Brakk-Mode", _brakk_mode, "Ego-Sicht als Brakk · Prototyp", Stil.TEXT],
 				["Sandbox", _starte.bind(true, "sandbox"), "", Stil.TEXT],
 				["Phantom-Modus", _zeige.bind("phantom"), "", Stil.TEXT],
 				["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT],
@@ -127,6 +132,15 @@ func _baue() -> void:
 			if runde > 0:
 				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie", KUPFER_HELL])
 				_eintraege[1][3] = Stil.TEXT
+		"herausforderung":
+			# 18.11.: weitere Karten und Herausforderungen – zählt nicht für Rangliste und Phantome (außer PaulLand ohne Herausforderung)
+			var haupt := _wahl_karte == "paulland" and _wahl_herausforderung == ""
+			_eintraege = [
+				["Los geht's", _starte.bind(true, "normal", _wahl_karte, _wahl_herausforderung), "wie „Spielen“ – zählt für Rangliste und Phantome" if haupt else "zählt nicht für Rangliste und Phantome", LICHT],
+				["Karte: " + _karten_titel(_wahl_karte), _naechste_karte, _karten_text(_wahl_karte), Stil.TEXT],
+				["Herausforderung: " + Werte.herausforderung_name(_wahl_herausforderung), _naechste_herausforderung, Werte.herausforderung_text(_wahl_herausforderung), Stil.TEXT],
+				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
+			]
 		"spielen":
 			_eintraege = [
 				["Los geht's", _los, "20 Runden gegen die Myriaden" + (" · mit Tutorial" if _tutorial else ""), LICHT],
@@ -177,6 +191,28 @@ func _baue() -> void:
 	_wahl = clampi(_wahl, 0, _eintraege.size() - 1)
 
 
+## 18.11.: Kartenwahl auf der Seite „Herausforderungen“ (Titel und Beschreibung stehen in karten/<name>.json).
+static func _karten_titel(name: String) -> String:
+	return str(Werte.karten_daten(name).get("name", name))
+
+
+static func _karten_text(name: String) -> String:
+	return str(Werte.karten_daten(name).get("beschreibung", ""))
+
+
+func _naechste_herausforderung() -> void:
+	var schluessel: Array = Werte.HERAUSFORDERUNGEN.map(func(h: Array) -> String: return str(h[0]))
+	var i := schluessel.find(_wahl_herausforderung)
+	_wahl_herausforderung = str(schluessel[(i + 1) % schluessel.size()])
+	_baue()
+
+
+func _naechste_karte() -> void:
+	var i := Werte.KARTEN.find(_wahl_karte)
+	_wahl_karte = Werte.KARTEN[(i + 1) % Werte.KARTEN.size()]
+	_baue()
+
+
 static func _anzahl(n: int, eins: String, mehr: String, keins: String) -> String:
 	if n <= 0:
 		return keins
@@ -187,11 +223,24 @@ func _los() -> void:
 	_starte(true, "tutorial" if _tutorial else "normal")
 
 
+## 18.11.: Brakk-Mode – braucht Maus und Tastatur (die Ego-Sicht fängt die Maus).
+func _brakk_mode() -> void:
+	if Touch.noetig():
+		_meldung = "Der Brakk-Mode braucht Maus und Tastatur – am Handy geht er noch nicht."
+		return
+	_starte(true, "brakk")
+
+
 ## Startet einen Modus. Gespielt wird auf der großen Karte (Paul 16.11.); nur aufgezeichnete Bauten (Phantom
 ## angreifen) bringen ihre eigene Kartengröße mit. Passt die Größe nicht, wird umgestellt und die Szene neu geladen –
 ## main.gd startet dann über naechster_start gleich in den Modus.
-func _starte(gross: bool, art: String) -> void:
-	if Werte.karte_gross != gross:
+## 18.11.: Ebenso die Karte – alles außer „Herausforderungen“ spielt auf der Hauptkarte PaulLand.
+## Herausforderung: "" für alle anderen Modi – so bleibt keine aus einer früheren Partie hängen.
+func _starte(gross: bool, art: String, karte: String = "paulland", herausforderung: String = "") -> void:
+	Werte.herausforderung = herausforderung
+	spiel.herausforderung = herausforderung
+	if Werte.karte_gross != gross or (gross and Werte.karte_name != karte):
+		Werte.karte_name = karte
 		Werte.setze_karte(gross)
 		Werte.speichere_einstellungen()
 		spiel.naechster_start = art
@@ -203,6 +252,8 @@ func _starte(gross: bool, art: String) -> void:
 		gewaehlt.emit(true)
 	elif art == "tutorial":
 		tutorial_gewaehlt.emit()
+	elif art == "brakk":
+		brakk_gewaehlt.emit()
 	elif art.begins_with("angriff:"):
 		phantom_gewaehlt.emit("verteidigung", art.trim_prefix("angriff:"))
 	elif art.begins_with("verteidigt:"):
@@ -226,6 +277,11 @@ func _ready() -> void:
 
 ## 18.11.: Zwischenstand laden – main.gd setzt ihn beim Neuaufbau der Szene hin.
 func _fortsetzen() -> void:
+	var karte: String = str(spiel.lies_zwischenstand().get("karte", "paulland"))   # 18.11.: auf der Karte der Partie
+	if karte != Werte.karte_name:
+		Werte.karte_name = karte
+		Werte.speichere_einstellungen()
+	Werte.herausforderung = str(spiel.lies_zwischenstand().get("herausforderung", ""))   # 18.11.
 	spiel.naechster_start = "fortsetzen"
 	Ladebild.lade(_welt.get_tree())
 
@@ -688,7 +744,7 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
 	else:
 		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät"}[_seite]
+	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen"}[_seite]
 	if unter != "":
 		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
 	# Liste

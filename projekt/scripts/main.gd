@@ -51,6 +51,8 @@ var effekte: Effekte
 var figuren: Node2D
 var turmbilder := {}               # neue Grafik: Turm-Zelle -> TurmBild (y-sortiert zwischen den Figuren)
 var hd: HdAnsicht = null           # HD-2D-Ansicht (Grafik „HD-2D“)
+var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
+var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
 var endkampf := false               # letzte Runde: Gegner ohne Ende, Sieg durch Zerstören des HQ
@@ -126,6 +128,7 @@ var _ende_text: Label
 
 
 func _ready() -> void:
+	herausforderung = Werte.herausforderung   # 18.11.: vom Startmenü (überlebt den Neustart der Szene)
 	if Touch.noetig():
 		add_child(Touch.new())   # 17.11.: Handy/Tablet – lange drücken = Rechtsklick, zwei Finger = Zoom, Hinweis bei Hochkant
 	Ladebild.fertig.call_deferred()   # 17.11.: läuft gerade ein Ladebild, darf es jetzt voll laufen und ausblenden
@@ -157,7 +160,7 @@ func _ready() -> void:
 	_aktualisiere_zone()
 	karte.cp_aktiv = welle >= Werte.CHECKPOINTS_AB_WELLE
 	karte.zeige_schwachstelle = welle >= Werte.SPRENGER_AB_WELLE
-	karte.aktualisiere_pfad()
+	setze_kartenmauern()   # 18.11.: vorgebaute Erdwälle der Karte (aktualisiert auch den Weg)
 	_beginne_protokoll()
 	_baue_hud()
 	var start := naechster_start
@@ -168,6 +171,8 @@ func _ready() -> void:
 		_menue_gewaehlt(true)   # aus dem Startmenü, nach dem Wechsel der Kartengröße
 	elif start == "tutorial":
 		_tutorial_gewaehlt()
+	elif start == "brakk":
+		_brakk_modus_gewaehlt()   # 18.11.
 	elif start == "fortsetzen":
 		_lade_zwischenstand()   # 18.11.
 	elif start.begins_with("verteidigt:"):
@@ -181,6 +186,7 @@ func _ready() -> void:
 		_menue.gewaehlt.connect(_menue_gewaehlt)
 		_menue.phantom_gewaehlt.connect(_phantom_gewaehlt)
 		_menue.tutorial_gewaehlt.connect(_tutorial_gewaehlt)
+		_menue.brakk_gewaehlt.connect(_brakk_modus_gewaehlt)
 		_menue.uebersicht_gewaehlt.connect(func(): _lexikon.visible = true)
 		Musik.spiele(get_tree(), "menue")
 		if start == "liste":
@@ -224,8 +230,22 @@ func _tutorial_gewaehlt() -> void:
 
 ## Normales Spiel (auch gegen ein Angriffs-Phantom): Die Basis steht jede Partie woanders.
 func _normales_spiel() -> void:
-	if Werte.BASIS_ZUFALL:
+	_herausforderung_einrichten()   # 18.11.: vor der Basis – die fertige Mauer steht zuerst
+	if herausforderung == "mauern_fest":
+		setze_basis(Werte.BASIS_ZELLE)   # 18.11.: am Ende des Labyrinths, damit die Gegner die ganze Mauer ablaufen
+	elif Werte.BASIS_ZUFALL and not Werte.KARTE_BASIS_FEST:
 		stelle_basis("ueberall")
+
+
+## 18.11.: Vorgebaute Erdwälle der Karte hinstellen (ausbaubar, nicht abreißbar). `felder` leer = die der Karte.
+func setze_kartenmauern(felder: Array[Vector2i] = Werte.MAUERN, nicht_unter_brakk: bool = false) -> void:
+	var brakk_feld: Vector2i = karte.zelle_bei(kommandant.position) if nicht_unter_brakk and kommandant != null else Karte.KEINE
+	for z: Vector2i in felder:
+		if karte.ist_frei(z) and not karte.ist_basis(z) and not karte.checkpoints.has(z) and z != brakk_feld:
+			karte.setze(z, Karte.WALL)
+		if karte.inhalt(z) == Karte.WALL:
+			karte.fest[z] = true
+	karte.aktualisiere_pfad()
 
 
 # ------------------------------------------------------------ Phantom-Modus
@@ -532,6 +552,66 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 
 # ------------------------------------------------------------ Profil und Online-Pool (18.11.)
 
+# ------------------------------------------------------------ Herausforderungen (18.11.)
+## Startmenü → Herausforderungen: "" (keine), "keine_fabriken", "doppelt", "mauern_fest" (Liste in Werte.HERAUSFORDERUNGEN).
+## Zählt nicht für Rangliste und Phantome; Erfolge zählen. Setzt das Startmenü (auch bei jedem anderen Modus, dann "").
+var herausforderung := ""
+
+
+## Alle Bauwerke frei (sonst gibt es in Runde 1 nur Fabriken)?
+func alles_frei() -> bool:
+	return sandbox or welle >= Werte.WAELLE_AB_WELLE or herausforderung in ["keine_fabriken", "mauern_fest"]
+
+
+## Grund, warum die Herausforderung dieses Bauwerk verbietet ("" = erlaubt).
+func herausforderung_sperrt(typ: int) -> String:
+	if herausforderung == "keine_fabriken" and typ == Karte.FABRIK:
+		return "Herausforderung „Keine Fabriken“: Fabriken sind gesperrt – Türme, Batterien und Brakk gehen."
+	if herausforderung == "mauern_fest" and typ == Karte.WALL:
+		return "Herausforderung „Mauern fest“: Die Mauer steht schon – bau Türme, Stellungen und Tore darauf."
+	return ""
+
+
+func geld_faktor() -> int:
+	return 2 if herausforderung == "doppelt" else 1
+
+
+## Zu Beginn einer Partie mit Herausforderung: fertige Mauer hinstellen bzw. das Startpaket sofort geben.
+func _herausforderung_einrichten() -> void:
+	if herausforderung == "":
+		return
+	if herausforderung == "mauern_fest":
+		setze_kartenmauern(Werte.MAUERN_FEST)
+		# Lag ein Checkpoint auf der Mauer (dort bleibt sie offen), würfeln wir ihn neu und schließen die Lücke
+		var im_weg := false
+		for cp: Vector2i in karte.checkpoints:
+			if Werte.MAUERN_FEST.has(cp):
+				im_weg = true
+		if im_weg:
+			setze_checkpoints(karte._zufalls_checkpoints())
+			setze_kartenmauern(Werte.MAUERN_FEST)
+	elif herausforderung == "keine_fabriken":
+		freie_waelle = Werte.STARTPAKET_WAELLE
+	melde("Herausforderung: %s – %s" % [Werte.herausforderung_name(herausforderung), Werte.herausforderung_text(herausforderung)], 9.0)
+
+
+## „Doppelte Gegner“: jeder Trupp kommt zweimal hintereinander (tiefe Kopie – die Wellen in Werte bleiben unberührt).
+func _verdoppelt(w: Dictionary) -> Dictionary:
+	var d: Dictionary = w.duplicate(true)
+	for g: Dictionary in d.get("gruppen", []):
+		g["anzahl"] = int(g["anzahl"]) * 2
+	for schluessel: String in ["trupps", "pausen", "locker", "ausgaenge", "jeder"]:
+		if not d.has(schluessel):
+			continue
+		var alt: Array = d[schluessel]
+		var neu: Array = []
+		for e: Variant in alt:
+			neu.append(e)
+			neu.append(e.duplicate(true) if e is Array else e)
+		d[schluessel] = neu
+	return d
+
+
 ## 18.11.: Erfolg freischalten (erfolge.gd) – nicht in der Sandbox.
 func erfolg(id: String) -> void:
 	if sandbox or _protokoll.has("sandbox_sprung"):
@@ -836,7 +916,7 @@ static func loesche_zwischenstand() -> void:
 
 
 func _speichere_zwischenstand() -> void:
-	if sandbox or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
+	if sandbox or brakk_modus or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
 		return
 	if tutorial != null and is_instance_valid(tutorial):
 		return
@@ -845,12 +925,12 @@ func _speichere_zwischenstand() -> void:
 		cps.append([z.x, z.y])
 	var d := {
 		"version": 1, "gespeichert": Time.get_datetime_string_from_system(),
-		"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN,
+		"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN, "karte": Werte.karte_name,
 		"welle": welle, "leben": leben, "budget": budget, "freie_waelle": freie_waelle, "variante": variante,
 		"basis": [karte.basis.x, karte.basis.y], "checkpoints": cps, "cp_feind": Array(karte.cp_feind),
 		"stand": Phantom._stand(_zellen_jetzt(), _schilde_jetzt()),
 		"kommandant": [kommandant.aufstellung.x, kommandant.aufstellung.y] if kommandant != null else [],
-		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad,
+		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad, "herausforderung": herausforderung,
 		"protokoll": _protokoll, "protokoll_datei": _protokoll_datei, "kills": _profil_kills,
 	}
 	# erst in eine Zwischendatei, dann umbenennen: ein Absturz beim Schreiben lässt den alten Stand heil
@@ -912,7 +992,10 @@ func _schilde_jetzt() -> Dictionary:
 ## Startmenü → „Fortsetzen“: den gesicherten Stand hinstellen. Passt er nicht, beginnt eine neue Partie.
 func _lade_zwischenstand() -> void:
 	var d := lies_zwischenstand()
-	var passt: bool = not d.is_empty() and int(d.get("spalten", 0)) == Werte.SPALTEN and int(d.get("zeilen", 0)) == Werte.ZEILEN
+	herausforderung = str(d.get("herausforderung", ""))   # 18.11.
+	Werte.herausforderung = herausforderung
+	var passt: bool = not d.is_empty() and int(d.get("spalten", 0)) == Werte.SPALTEN and int(d.get("zeilen", 0)) == Werte.ZEILEN \
+			and str(d.get("karte", "paulland")) == Werte.karte_name
 	if passt and str(d.get("phantom_modus", "")) == "verteidigung":
 		passt = starte_phantom_verteidigung(str(d.get("angriff_pfad", "")))
 	if not passt:
@@ -927,6 +1010,9 @@ func _lade_zwischenstand() -> void:
 	_protokoll_datei = str(d["protokoll_datei"])
 	_profil_kills = d.get("kills", {})
 	_setze_stand(d["stand"])
+	for z: Vector2i in Werte.MAUERN + (Werte.MAUERN_FEST if herausforderung == "mauern_fest" else ([] as Array[Vector2i])):   # 18.11.: vorgebaute Mauern bleiben nicht abreißbar
+		if karte.inhalt(z) == Karte.WALL:
+			karte.fest[z] = true
 	var kz: Array = d.get("kommandant", [])
 	if kz.size() == 2:
 		_setze_kommandant(Vector2i(int(kz[0]), int(kz[1])))
@@ -1825,7 +1911,7 @@ func _aktualisiere_weganzeige(delta: float) -> void:
 	var von := karte.start_zelle()
 	for i in range(karte.erstes_ziel(), karte.checkpoints.size() + 1):
 		var nach := karte.ziel_zelle(i)
-		frei += absi(nach.x - von.x) + absi(nach.y - von.y)
+		frei += karte.grund_abstand(von, nach)   # 18.11.: Umwege durch Fels und Wasser zählen nicht als „deine Bauten“
 		von = nach
 	var umweg := maxi(0, weg.size() - 1 - frei)
 	# Wegfelder in Reichweite (grob: Luftlinie, ohne Sichtregel)
@@ -2150,7 +2236,7 @@ func starte_welle() -> void:
 			return
 		_laufband.visible = false
 		_phantom_zuege_in_runde()
-	elif fabriken.is_empty():
+	elif fabriken.is_empty() and herausforderung != "keine_fabriken":   # 18.11.: in „Keine Fabriken“ geht es ohne
 		melde("Erst eine Fabrik bauen [1].")
 		return
 	_schild_fuer = Karte.KEINE
@@ -2307,6 +2393,8 @@ func naechste_welle() -> Dictionary:
 	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
 		return Werte.welle_aus_plan({"name": "Angriff von %s" % str(_angriff_phantom.get("spieler", "?")), "trupps": _phantom_trupps(welle), "wurf_frei": true}, welle)
 	var w := Werte.welle(welle)
+	if herausforderung == "doppelt":
+		w = _verdoppelt(w)   # 18.11.: jeder Trupp kommt zweimal (Vorschau und Welle)
 	if not sandbox or sandbox_gegner.is_empty():
 		return w
 	var anzahl := {}
@@ -2396,7 +2484,7 @@ func _welle_geschafft() -> void:
 	if welle == Werte.LETZTE_RUNDE and not endkampf:
 		_starte_gegenangriff()
 		return
-	var bonus := Werte.wellen_bonus(welle)
+	var bonus := Werte.wellen_bonus(welle) * geld_faktor()   # 18.11.: „Doppeltes Geld“
 	# Gehaltene Checkpoints zahlen sich aus
 	var gehalten := 0
 	if karte.cp_aktiv:
@@ -2422,7 +2510,7 @@ func _welle_geschafft() -> void:
 ## Runde 20, zweiter Teil (18.11.): Die erste Welle ist abgewehrt – Rundenbonus wie sonst, dann fällt der Schild,
 ## die Truppen (bis auf eine je Fabrik) verlassen die Stellungen, und die Gegner kommen in Schleife (Leben wie früher im Endkampf).
 func _starte_gegenangriff() -> void:
-	var bonus := Werte.wellen_bonus(welle)
+	var bonus := Werte.wellen_bonus(welle) * geld_faktor()   # 18.11.: „Doppeltes Geld“
 	var zins := Werte.zinsen(budget)
 	budget += bonus + zins
 	endkampf = true
@@ -2453,7 +2541,7 @@ func _starte_gegenangriff() -> void:
 func _naechste_bauphase() -> void:
 	welle += 1
 	waehle_variante()
-	if welle == Werte.WAELLE_AB_WELLE and not sandbox and phantom_modus != "angriff":
+	if welle == Werte.WAELLE_AB_WELLE and not sandbox and phantom_modus != "angriff" and herausforderung in ["", "doppelt"]:
 		freie_waelle = Werte.STARTPAKET_WAELLE
 		melde("Erdwälle sind frei: Die ersten %d bekommst du geschenkt. Lenke damit den Gegnerweg um – unten rechts siehst du, wie lang er wird." % freie_waelle, 9.0)
 	if welle == Werte.CHECKPOINTS_AB_WELLE:
@@ -2502,7 +2590,11 @@ func _naechste_bauphase() -> void:
 		karte.cp_fortschritt[i] = 0.0
 		karte.cp_tempo[i] = 0.0
 	effekte.leeren()
+	if herausforderung == "mauern_fest":
+		setze_kartenmauern(Werte.MAUERN_FEST, true)   # 18.11.: die fertige Mauer steht zu jeder Bauphase wieder (Erdwälle baut man hier nicht)
 	_speichere_zwischenstand()
+	if brakk_modus and ego == null and hd != null and kommandant != null:
+		_ego_umschalten.call_deferred()   # 18.11.: Brakk-Mode – nach einem Fall geht es in der Bauphase wieder in die Ego-Sicht
 
 
 # ------------------------------------------------- Rückmeldungen der Figuren
@@ -2872,7 +2964,7 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 			erfolg("ohne_fabrik")
 		var text := "Sieg! Das gegnerische HQ ist zerstört."
 		var als_phantom := false
-		if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung"):
+		if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "":   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen
 			# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
 			var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
 			var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
@@ -3139,7 +3231,7 @@ func _quelle_info(quelle: String) -> Dictionary:
 func gegner_besiegt(g: Gegner) -> void:
 	Ton.am_ort(self, "death-myr", g.position)
 	if not g.klon:
-		budget += int(g.daten["praemie"])
+		budget += int(g.daten["praemie"]) * geld_faktor()   # 18.11.: „Doppeltes Geld“
 	gegner_entfernt(g)
 
 
@@ -3160,7 +3252,65 @@ func _setze_kommandant(z: Vector2i) -> void:
 
 ## WASD steuert Brakk, solange er angeklickt ist und kein Menü oder Fenster die Tastatur braucht (16.11.: sonst handelt er selbst).
 func kommandant_steuerbar() -> bool:
-	return kommandant_gewaehlt() and _tastatur_frei()
+	return kommandant_gewaehlt() and _tastatur_frei() and ego == null
+
+
+## 18.11. (Paul): Brakk-Mode – eigener Modus aus dem Startmenü. Normales Spiel auf PaulLand, für diese Partie in HD-2D
+## (die gespeicherte Grafikwahl bleibt), Brakk steht gratis ab Runde 1 vor der Basis, die Ego-Sicht startet gleich.
+## Kein Zwischenstand, keine Phantome, keine Rangliste.
+func _brakk_modus_gewaehlt() -> void:
+	brakk_modus = true
+	Werte.setze_grafik("hd")   # nicht gespeichert
+	_normales_spiel()
+	_menue_weg()
+	var z := _feld_vor_basis()
+	if z != Karte.KEINE:
+		_setze_kommandant(z)
+		_notiere({"a": "bau", "typ": "kommandant", "x": z.x, "y": z.y})
+	# die HD-Ansicht entsteht erst im nächsten Bild (_process) – dann in die Ego-Sicht
+	for i in 3:
+		await get_tree().process_frame
+	if ego == null and hd != null and kommandant != null:
+		_ego_umschalten()
+
+
+## Freies Feld möglichst nah vor der Basis (Richtung Gegner), für Brakk im Brakk-Mode.
+func _feld_vor_basis() -> Vector2i:
+	var bestes := Karte.KEINE
+	var beste_d := INF
+	for y in Werte.ZEILEN:
+		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
+			var z := Vector2i(x, y)
+			if not karte.ist_bebaubar(z):
+				continue
+			var d := Vector2(z - (karte.basis + Vector2i(-2, 0))).length()
+			if d < beste_d:
+				beste_d = d
+				bestes = z
+	return bestes
+
+
+## [G] Ego-Sicht mit Brakk an/aus (18.11., Prototyp): nur im Brakk-Mode (Paul 18.11.), in HD-2D und wenn Brakk steht.
+func _ego_umschalten() -> void:
+	if ego != null and brakk_modus:
+		return   # 18.11. (Paul): Der Brakk-Mode gibt es nur in der Ego-Sicht – kein Umschalten
+	if ego != null:
+		ego.beenden()
+		return
+	if not brakk_modus:
+		melde("Die Ego-Sicht gibt es im Brakk-Mode (Startmenü).", 4.0)
+		return
+	if hd == null:
+		melde("Die Ego-Sicht gibt es nur in der Grafik HD-2D.", 4.0)
+		return
+	if kommandant == null or kommandant.gefallen:
+		melde("Stelle zuerst Brakk aufs Feld [8].", 4.0)
+		return
+	if phantom_modus == "angriff":
+		return
+	ego = EgoModus.new()
+	add_child(ego)
+	ego.starten(self)
 
 
 func kommandant_gewaehlt() -> bool:
@@ -3712,8 +3862,11 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 			return "Zu nah am Gegner für eine neue Stellung."
 	elif phase != Phase.BAU:
 		return "Gebaut wird zwischen den Wellen."
-	if typ != Karte.FABRIK and welle < Werte.WAELLE_AB_WELLE and not sandbox:
+	if typ != Karte.FABRIK and not alles_frei():
 		return "Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE
+	var sperre := herausforderung_sperrt(typ)   # 18.11.
+	if sperre != "":
+		return sperre
 	if typ == Karte.GENERATOR:
 		var hof := karte.hof_von(z)
 		if hof.is_empty():
@@ -3862,7 +4015,7 @@ func erstattung(z: Vector2i) -> int:
 
 ## Abreißen in der Bauphase (Wall samt Ausbau). Erstattung siehe erstattung().
 func reisse_ab(z: Vector2i) -> bool:
-	if phantom_modus == "angriff" or phase != Phase.BAU or karte.inhalt(z) == Karte.FREI:
+	if phantom_modus == "angriff" or phase != Phase.BAU or karte.inhalt(z) == Karte.FREI or karte.fest.has(z):
 		return false
 	var zurueck := erstattung(z)
 	_notiere({"a": "abriss", "x": z.x, "y": z.y})
@@ -3891,6 +4044,9 @@ func reisse_ab(z: Vector2i) -> bool:
 ## brauchen einen zweiten Rechtsklick – der erste sagt nur, was es zurückgäbe.
 func _rechtsklick_abriss(z: Vector2i) -> bool:
 	if phantom_modus == "angriff" or phase != Phase.BAU or karte.inhalt(z) == Karte.FREI:
+		return false
+	if karte.fest.has(z):
+		melde("Diese Mauer gehört zur Karte – abreißen geht nicht, ausbauen schon.", 3.0)
 		return false
 	var war: int = karte.inhalt(z)
 	var teuer: bool = war == Karte.FABRIK or war == Karte.BATTERIE or war == Karte.GENERATOR or karte.ausbau.get(z, Karte.FREI) == Karte.TURM
@@ -4234,7 +4390,10 @@ func waehle(typ: int) -> void:
 		return
 	if phase == Phase.ENDE or (phase == Phase.KAMPF and not darf_in_welle(typ)):
 		return
-	if typ != Karte.FABRIK and welle < Werte.WAELLE_AB_WELLE and not sandbox:
+	if herausforderung_sperrt(typ) != "":   # 18.11.
+		melde(herausforderung_sperrt(typ), 4.0)
+		return
+	if typ != Karte.FABRIK and not alles_frei():
 		melde("Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE)
 		return
 	werkzeug = Karte.FREI if werkzeug == typ else typ
@@ -4282,6 +4441,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_R:
 				if kommandant != null:
 					_kommandant_meldung(stelle_klonmaschine(karte.zelle_bei(maus_welt())))
+			KEY_G:
+				_ego_umschalten()
 			KEY_SPACE:
 				starte_welle()
 			KEY_L:
@@ -4540,7 +4701,7 @@ func _werkzeug_tipp(typ: int) -> String:
 		Karte.FABRIK:
 			return "Baut Truppen, die die nächste freie Stellung besetzen. Anklicken: Truppe wählen, ausbauen, Ziel wählen."
 		Karte.WALL:
-			if welle < Werte.WAELLE_AB_WELLE and not sandbox:
+			if not alles_frei():
 				return "Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE
 			return "Maustaste halten = ziehen, Rechtsklick = abreißen (in dieser Bauphase Gebautes voll zurück, sonst %d %%)." % roundi(Werte.ERSTATTUNG * 100.0)
 		Karte.STELLUNG:

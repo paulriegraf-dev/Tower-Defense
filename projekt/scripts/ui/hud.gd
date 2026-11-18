@@ -322,6 +322,8 @@ func aktualisiere(_delta: float) -> void:
 
 	# --- Welle
 	_runde_text = "Runde %d/%d" % [s.welle, Werte.LETZTE_RUNDE]
+	if s.herausforderung != "":
+		_runde_text += "  ·  " + Werte.herausforderung_name(s.herausforderung)   # 18.11.
 	_welle_zeile = ""
 	_welle_zusatz = ""
 	_gruppen = []
@@ -368,11 +370,11 @@ func aktualisiere(_delta: float) -> void:
 func _aktualisiere_kacheln() -> void:
 	var s := spiel
 	var phase: int = s.phase
-	var ab_welle_2: bool = s.welle >= Werte.WAELLE_AB_WELLE or s.sandbox
+	var ab_welle_2: bool = s.alles_frei()   # 18.11.: in manchen Herausforderungen alles ab Runde 1
 	for typ: int in kacheln:
 		var k: Kachel = kacheln[typ]
 		k.visible = not _angreifer
-		var aus: bool = (phase != BAU and not (phase == KAMPF and s.darf_in_welle(typ))) or (typ != Karte.FABRIK and not ab_welle_2) or _angreifer
+		var aus: bool = (phase != BAU and not (phase == KAMPF and s.darf_in_welle(typ))) or (typ != Karte.FABRIK and not ab_welle_2) or _angreifer or s.herausforderung_sperrt(typ) != ""   # 18.11.: von der Herausforderung gesperrt
 		var preis: int = s.kosten(typ)
 		k.preis = str(preis)
 		k.preis_farbe = Stil.GOLD if s.budget >= preis else Stil.WARN

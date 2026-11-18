@@ -11,7 +11,7 @@ extends Node3D
 ## - Das Hauptfenster zeigt selbst nur noch die Oberfläche (HUD, Menüs) über der 3D-Ansicht.
 ## Bedienung: Mausrad zoomt (rastet ein), mittlere Maustaste ziehen oder Pfeiltasten schwenken, Pos1 = ganze Karte.
 
-const H := 0.8                 # Wandhöhe in Feldern
+var H := 0.8                   # Wandhöhe in Feldern (18.11.: veränderlich – die Ego-Sicht zieht die Mauern hoch)
 const SCHICHT_OBERFLAECHE := 1
 const SCHICHT_KARTE := 2
 const SCHICHT_DECKE := 4
@@ -32,6 +32,8 @@ var _umriss_mat := {}           # Farbe (html) -> ShaderMaterial je Textur
 var umriss_an := true
 var _balken := {}               # instance_id -> [Hintergrund, Füllung] (Lebensbalken über der Figur)
 var _weiss: ImageTexture
+var ego: Node = null           # 18.11.: Ego-Sicht (ego_modus.gd) aktiv – sie führt dann die Kamera
+var _decke_mat: StandardMaterial3D
 
 # Kamera: z = Zoom 0 (weit) .. 1 (nah); cx, cz = Blickpunkt in Feldern
 var _z := 0.5
@@ -79,6 +81,7 @@ func einrichten(p_spiel: Node) -> void:
 	decke_mat.texture_repeat = false
 	decke_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	decke_mat.no_depth_test = true
+	_decke_mat = decke_mat
 	decke_mat.render_priority = 10
 	var decke := _flaeche(Vector2(Werte.SPALTEN, Werte.ZEILEN), decke_mat)
 	decke.position = Vector3(Werte.SPALTEN / 2.0, 0.02, Werte.ZEILEN / 2.0)
@@ -218,7 +221,8 @@ func _bei_neuem_knoten(n: Node) -> void:
 
 func _process(delta: float) -> void:
 	var echt := delta / maxf(Engine.time_scale, 0.01)   # Kamera unabhängig vom Spieltempo
-	_kamera_weiter(echt)
+	if ego == null:
+		_kamera_weiter(echt)
 	_wand_in -= echt
 	if _wand_in <= 0.0:
 		_wand_in = 0.2
@@ -813,6 +817,10 @@ func _baue_waende() -> void:
 			_bruestung(z)
 		if karte.panzer.has(z):
 			_wallpanzer(z)
+	# 18.11.: Felsen aus der Karten-Datei als unregelmäßige Steinklötze (Wasser liegt nur als Boden)
+	for z: Vector2i in karte.gelaende:
+		if karte.gelaende[z] == "fels":
+			_fels(z)
 	var mesh := ArrayMesh.new()
 	var i := 0
 	for name: String in _flaechen:
@@ -884,6 +892,19 @@ func _mauer(z: Vector2i, schlicht: bool) -> void:
 		var k := 0.08
 		_viereck(_st("kontakt"), [Vector3(x0 - k + 0.06, 0.006, z0 - k + 0.1), Vector3(x1 + k + 0.06, 0.006, z0 - k + 0.1),
 			Vector3(x1 + k + 0.06, 0.006, z1 + k + 0.1), Vector3(x0 - k + 0.06, 0.006, z1 + k + 0.1)])
+
+
+## 18.11.: Felsbrocken – ein breiter Sockel und ein kleinerer, versetzter Stein darauf (je Feld anders, aus dem Hash).
+func _fels(z: Vector2i) -> void:
+	var h := hash(z)
+	var x0 := float(z.x)
+	var z0 := float(z.y)
+	var hoch := H * (0.75 + float(h % 5) * 0.08)
+	var stein := Color("7a7064")
+	_klotz("farbe", x0 + 0.03, x0 + 0.97, 0.0, hoch, z0 + 0.03, z0 + 0.97, stein)
+	var dx := float((h >> 4) % 3) * 0.1
+	var dz := float((h >> 7) % 3) * 0.1
+	_klotz("farbe", x0 + 0.15 + dx, x0 + 0.65 + dx, hoch, hoch + H * 0.35, z0 + 0.15 + dz, z0 + 0.65 + dz, stein.lightened(0.12))
 
 
 ## Quader mit einer Farbe (Licht über die Normalen).
@@ -2095,6 +2116,8 @@ func _schwenke(relativ: Vector2) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if ego != null:
+		return   # Ego-Sicht: Maus und Tasten gehören ihr
 	# Linke Maustaste ziehen schwenkt wie in der Stilprobe – aber nur ohne Bauwerkzeug und ohne Zuweisungspfeil
 	# (Wälle malen und Stellungen zuweisen bleiben so wie bisher). Ein Klick ohne Ziehen geht ganz normal ans Spiel.
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
@@ -2166,6 +2189,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Mausposition als Weltpunkt der 2D-Logik. Zuerst die Höhe der Mauerkronen (Klick auf einen Wall trifft ihn),
 ## sonst der Boden.
 func maus_welt(nur_boden: bool = false) -> Vector2:
+	if ego != null:
+		return ego.ziel_welt(nur_boden)   # Ego-Sicht: der Punkt unter dem Fadenkreuz
 	var mp := get_viewport().get_mouse_position()
 	var von := kamera.project_ray_origin(mp)
 	var r := kamera.project_ray_normal(mp)
@@ -2181,6 +2206,8 @@ func maus_welt(nur_boden: bool = false) -> Vector2:
 ## Fabrik, Batterie oder Generator, deren Bild unter der Maus liegt – auch wenn eine Mauer davor steht (16.11.).
 ## Liefert Karte.KEINE, wenn keins getroffen ist; bei mehreren das, dessen Fuß der Maus am nächsten ist.
 func bau_unter_maus() -> Vector2i:
+	if ego != null:
+		return Karte.KEINE
 	var mp := get_viewport().get_mouse_position()
 	var bester := Karte.KEINE
 	var naechst := INF

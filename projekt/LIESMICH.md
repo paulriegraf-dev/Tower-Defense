@@ -157,6 +157,33 @@ unten neben den Bauknöpfen zeigen, wie viele Schritte du gerade erreicht hast.
 
 Zu Beginn jeder Bauphase ab Runde 2 sichert das Spiel den Stand in `user://zwischenstand.json` (Welle, Leben, Budget, freie Erdwälle, Basis, Checkpoints samt Besitz, der Bau so, wie er gerade steht – auch Gesprengtes bleibt weg –, Brakk, Bauprotokoll). Lädt der Browser die Seite neu oder wird das Spiel geschlossen, steht im Startmenü oben **„Fortsetzen · Runde N“**, und einmal pro Programmstart erscheint der Hinweis, dass eine Partie ohne Ende lief. Gelöscht wird der Stand bei Sieg, Niederlage, Neustart und „Hauptmenü“. Nur normales Spiel und Phantom-Verteidigung (nicht Sandbox, Tutorial, Phantom-Angriff). Nicht mitgesichert: die Werte je Bauwerk (Schaden, Kills) und die Lage der Schleudern (ziehen ohnehin jede Runde um). Code: `main.gd` → Abschnitt „Zwischenstand“.
 
+## Herausforderungen (18.11.)
+
+Startmenü → **Herausforderungen** → „Herausforderung: …“ (zusammen mit der Kartenwahl). Zählen nicht für Rangliste und Phantome; Erfolge zählen; der Zwischenstand merkt sich die Herausforderung, „Neustart“ behält sie. Die gewählte steht oben in der Rundenanzeige. Liste: `Werte.HERAUSFORDERUNGEN`, Regeln: `main.gd` → Abschnitt „Herausforderungen“.
+- **Keine Fabriken:** Fabriken gesperrt; Türme, Batterien und Brakk gehen. Alles ist ab Runde 1 frei, die Gratis-Erdwälle gibt es sofort, die Welle startet auch ohne Fabrik.
+- **Doppelte Gegner, doppeltes Geld:** Jeder Trupp kommt zweimal hintereinander (auch in der Vorschau), Prämien und Rundenbonus sind doppelt.
+- **Mauern fest:** Die Karte bringt eine fertige Mauer mit (`mauern_fest` in der Karten-Datei, ein Schlangenlabyrinth mit T-Stücken für Türme). Erdwälle lassen sich weder bauen noch abreißen; ausgebaut wird darauf (Türme, Stellungen, Tore, Panzerung), Fabriken gehen. Alles ab Runde 1. Gesprengte Stücke stehen zur nächsten Bauphase wieder. Die Basis steht fest am Ende des Labyrinths; ein Checkpoint auf der Mauer wird neu gewürfelt. Die Weganzeige zählt die Mauer der Karte nicht als „deine Bauten“.
+
+## Brakk-Mode (18.11., Prototyp)
+
+Eigener Modus im Startmenü: Du bist Brakk, in der Ego-Sicht, die ganze Partie lang (kein Umschalten). Gespielt wird auf PaulLand, für diese Partie in HD-2D (die gespeicherte Grafikwahl bleibt). Brakk steht gratis ab Runde 1 vor der Basis. Kein Zwischenstand, keine Phantome, keine Rangliste; Erfolge zählen. Braucht Maus und Tastatur (am Handy noch gesperrt). Code: `scripts/ego_modus.gd`.
+- **WASD** gehen, **Maus** schauen, **Linksklick** schießen (zwei Pistolen im Wechsel), **Leertaste** springen, **Enter** startet die Welle.
+- **[E] Lichttreppe:** vor einem Erdwall hinauf, oben auf dem Wall hinunter. Die Stufen bauen sich sichtbar nacheinander auf. Über die Kante gehen springt weiterhin hinunter.
+- **[F] Ausbauen:** Ein eigenes Gebäude im Blick (Fabrik, Batterie, Turm, Schildgenerator, höchstens 5 Felder weit) zeigt „[F] … ausbauen“ – [F] öffnet dasselbe Menü wie in der Übersicht, die Maus ist solange frei.
+- **Bauen:** [1]–[8], der Ring projiziert die Vorschau; nur in 5 Feldern Reichweite.
+- **Schussgefühl:** eigene Klänge (PixelLab, `assets/ton/brakk-*.wav`: Schuss A/B je Pistole, Treffer, Kill), Rückstoß der Sicht, kurzes Zucken des Sichtfelds; Treffer mit Einschlag-Klang, weißem Trefferkreuz und Wackeln; Kill mit Knall, rotem Kreuz, stärkerem Wackeln und 0,07 s Einfrieren (in Echtzeit).
+- Fällt Brakk, bleibt die Kamera am Boden liegen, bis er zur nächsten Runde wieder aufsteht.
+
+## Karten (18.11.)
+
+Karten sind Daten: `karten/<name>.json` (Größe, HQ, Zonenbauten, Schleuderplätze, Ausgänge für den Phantom-Modus, Basis fest/zufällig, Checkpoint-Bereiche oder feste Checkpoints, Gelände `fels`/`wasser`, vorgebaute Erdwälle `mauern`, dazu `mauern_fest` für die Herausforderung „Mauern fest“). Geladen in `Werte.lade_karte()`.
+- **PaulLand** (`paulland.json`) ist die **Hauptkarte** – die bisherige große Karte, Wert für Wert unverändert. „Spielen“, Sandbox und Phantom-Modus laufen immer auf PaulLand; nur hier entstehen Phantome und zählt die Rangliste.
+- **Felsenpass** (`felsenpass.json`): Ein Felsriegel am Rand der Zone mit zwei Pässen, Felsgruppen als Engstellen, zwei Seen. Beide Pässe verteidigen – oder einen mit Erdwällen zumauern (dann laufen alle durch den anderen) und diese Mauer gegen Sprenger und Würfe halten.
+- **Gelände:** Fels und Wasser sind für niemanden begehbar und nicht bebaubar; Gegner reißen sie nie ein. Fels versperrt die Sicht wie ein fremder Erdwall, Wasser nicht. Checkpoints liegen nie darauf. Die Weganzeige zählt Umwege um Gelände nicht als „durch deine Bauten“.
+- **Vorgebaute Erdwälle** einer Karte lassen sich ausbauen, aber nicht abreißen.
+- Auswahl: Startmenü → **Herausforderungen** → „Karte: …“. Partien dort zählen nicht für Rangliste und Phantome (außer PaulLand ohne Herausforderung = wie „Spielen“). Der Zwischenstand merkt sich die Karte.
+- Testläufe: `TD_KARTE_NAME=felsenpass`.
+
 ## Erfolge (18.11.)
 
 19 Erfolge als heimliches Tutorial: Sie lenken auf Mechaniken, die man sonst übersieht (Formtürme, Wachposten, Checkpoints zurückholen, Panzerung, Feldlazarett, Kuppel, Zuweisung, Zinsen, Klonmaschine …). Drei sind versteckt („???“): Schildträger von hinten, Runde 20 ohne Lebensverlust, Sieg ohne Fabrik (Batterien zählen nicht). Freischalten zeigt oben eine Einblendung mit Symbol und spielt einen Ton; im Profil (Startmenü oben rechts) steht die Tafel „Erfolge x/19“. In der Sandbox gibt es keine Erfolge. Gespeichert im Profil (`user://profil.json`, Schlüssel `erfolge` und `formen`). Liste und Texte: `scripts/erfolge.gd`. Belohnungen sind vorbereitet: Jeder Eintrag hat ein leeres Feld `belohnung`, ausgegeben wird in `Erfolge._gib_belohnung()`.

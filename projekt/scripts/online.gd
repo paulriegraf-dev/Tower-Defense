@@ -28,6 +28,26 @@ static func aktiv() -> bool:
 	return OS.get_environment("TD_OFFLINE") == "" and DisplayServer.get_name() != "headless" or OS.get_environment("TD_ONLINE") != ""
 
 
+## 18.11.: Godot liest beim Laden einer JSON-Datei jede Zahl als Kommazahl, und JSON.stringify schreibt sie dann als
+## „6.0“ – die Datenbank lehnt das beim Umwandeln in eine Ganzzahl ab („invalid input syntax for type integer“).
+## Deshalb gehen ganze Kommazahlen als Ganzzahlen hinaus (echte Kommazahlen bleiben, wie sie sind).
+static func _ganzzahlig(v: Variant) -> Variant:
+	if v is float:
+		var f: float = v
+		return int(f) if f == floorf(f) and absf(f) < 1.0e15 else f
+	if v is Dictionary:
+		var d := {}
+		for k: Variant in (v as Dictionary):
+			d[k] = _ganzzahlig(v[k])
+		return d
+	if v is Array:
+		var a: Array = []
+		for e: Variant in (v as Array):
+			a.append(_ganzzahlig(e))
+		return a
+	return v
+
+
 ## Eine Anfrage an Supabase. Gibt die gelesene Antwort zurück, bei Fehlern null.
 static func _anfrage(methode: HTTPClient.Method, pfad: String, koerper: Variant = null) -> Variant:
 	var baum := _baum()
@@ -38,7 +58,7 @@ static func _anfrage(methode: HTTPClient.Method, pfad: String, koerper: Variant 
 	await baum.process_frame
 	baum.root.add_child(h)
 	var kopf := PackedStringArray(["apikey: " + SCHLUESSEL, "Content-Type: application/json", "Accept: application/json"])
-	var text := "" if koerper == null else JSON.stringify(koerper)
+	var text := "" if koerper == null else JSON.stringify(_ganzzahlig(koerper))
 	var fehler := h.request(URL + pfad, kopf, methode, text)
 	if fehler != OK:
 		h.queue_free()

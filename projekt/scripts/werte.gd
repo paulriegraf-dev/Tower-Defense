@@ -209,7 +209,7 @@ const AUFRAEUM_OHNE_TREFFER_SEK: float = 8.0  # ... oder die so lange niemand me
 const AUFRAEUM_JAEGER_JE_GEGNER: int = 2      # höchstens so viele Truppen steigen je solchem Gegner ab
 const AUFRAEUM_DRAUSSEN_SEK: float = 15.0     # ... und nur für Gegner, die schon so lange außerhalb der Zone unterwegs sind
 const AUFRAEUM_HOECHSTENS_GEGNER: int = 3     # 16.11. (Paul): aufgeräumt wird erst, wenn nur noch so wenige Gegner übrig sind –
-                                              # vorher verließen alle schlagartig die Stellungen, obwohl noch ein Trupp unterwegs war
+											  # vorher verließen alle schlagartig die Stellungen, obwohl noch ein Trupp unterwegs war
 const ABFANG_JE_FELD: int = 2        # höchstens so viele Bodentruppen fangen auf demselben Feld ab
 const ABFANG_WEIT: int = 14          # so viele Felder voraus auf dem Gegnerweg wird ein Abfangfeld gesucht
 const STUFE_1_TRUPPEN: int = 1                  # so viele Truppen hält eine spezialisierte Fabrik zusätzlich
@@ -270,7 +270,7 @@ const MINIGUN_TREFFER_VERLUST: float = 0.5   # ein Treffer kostet nur diesen Ant
 const MINIGUN_SCHNELLSTE: float = 0.3        # bei vollem Anlauf nur noch dieser Anteil der Pause
 const MINIGUN_ABKLING: float = 0.6           # 15.11.: Grundpause der Minigun (die alte Gunner-Pause); der Gunner selbst feuert jetzt alle 1,4 s im Zweierstoß
 const MINIGUN_SCHADEN_FAKTOR: float = 0.86   # 15.11.: Minigun-Treffer = Schaden je Treffer × dies (8 / 9,3: wie vorher)
-                                             # Übergang: die Minigun zeigt nur den ersten Mündungsblitz, bis sie eine eigene Dauerfeuer-Animation hat
+											 # Übergang: die Minigun zeigt nur den ersten Mündungsblitz, bis sie eine eigene Dauerfeuer-Animation hat
 const ABPRALLER_SPRUENGE: int = 2
 const ABPRALLER_WEITE: float = 2.5           # Felder bis zum nächsten Ziel
 const ABPRALLER_SCHADEN: float = 0.7         # jeder Sprung richtet so viel vom vorigen an
@@ -462,12 +462,18 @@ static func lade_einstellungen() -> void:
 		wand_stil = str(c.get_value("grafik", "wand", "tech"))
 		grafik_gefragt = bool(c.get_value("grafik", "touch_gefragt", false))
 		karte_gross = bool(c.get_value("karte", "gross", true))
+		karte_name = str(c.get_value("karte", "name", "paulland"))
 		vollbild = bool(c.get_value("grafik", "vollbild", true))
 		musik = clampi(int(c.get_value("ton", "musik_prozent", 40)), 0, 100)
 		toene = clampi(int(c.get_value("ton", "effekte_prozent", 80)), 0, 100)
 	if OS.get_environment("TD_KARTE") != "":
 		karte_gross = OS.get_environment("TD_KARTE") == "gross"   # für Testläufe: normal oder gross
+	if OS.get_environment("TD_KARTE_NAME") != "":
+		karte_name = OS.get_environment("TD_KARTE_NAME")   # für Testläufe: paulland, felsenpass …
 	setze_karte(karte_gross)
+	# 18.11.: Die große Karte kommt aus karten/<name>.json (Hauptkarte PaulLand); fehlt die Datei, gilt PaulLand.
+	if karte_gross and not lade_karte(karte_name):
+		lade_karte("paulland")
 	if OS.get_environment("TD_GRAFIK") != "":
 		grafik = OS.get_environment("TD_GRAFIK")   # für Testläufe: klassisch, neu oder hd
 	setze_grafik(grafik)
@@ -494,6 +500,7 @@ static func speichere_einstellungen() -> void:
 	c.set_value("grafik", "wand", wand_stil)
 	c.set_value("grafik", "touch_gefragt", grafik_gefragt)
 	c.set_value("karte", "gross", karte_gross)
+	c.set_value("karte", "name", karte_name)
 	c.set_value("grafik", "vollbild", vollbild)
 	c.set_value("ton", "musik_prozent", musik)
 	c.set_value("ton", "effekte_prozent", toene)
@@ -504,6 +511,11 @@ static func speichere_einstellungen() -> void:
 ## Groß: dieselbe Anordnung, Zeilen ×13/9 gestreckt (HQ in der Mitte der Zone), Bereiche und Basis nach rechts mitgewachsen.
 static func setze_karte(gross: bool) -> void:
 	karte_gross = gross
+	GELAENDE = {}   # 18.11.: Gelände und vorgebaute Mauern kommen nur aus einer Karten-Datei (lade_karte)
+	MAUERN = []
+	MAUERN_FEST = []
+	KARTE_BASIS_FEST = false
+	KARTE_CP_FEST = false
 	if not gross:
 		SPALTEN = 20
 		ZEILEN = 10
@@ -532,6 +544,101 @@ static func setze_karte(gross: bool) -> void:
 
 
 ## Zonenbauten mit den Zeilen `zeilen` (Reihenfolge wie in der Liste oben, Spalten und Wellen bleiben).
+## 18.11.: Karten als Daten. Eine Karte = karten/<name>.json mit Größe, HQ, Zonenbauten, Schleuderplätzen, Ausgängen
+## (Phantom-Modus), Basis, Checkpoint-Bereichen, Gelände (Fels, Wasser) und vorgebauten Erdwällen.
+## „paulland“ ist die Hauptkarte (dieselben Werte wie setze_karte(true)); nur auf ihr gibt es Phantome und Rangliste.
+const KARTEN: Array[String] = ["paulland", "felsenpass"]
+static var karte_name := "paulland"
+static var KARTE_TITEL := "PaulLand"
+static var KARTE_BASIS_FEST := false        # Basis immer auf BASIS_ZELLE statt zufällig
+static var KARTE_CP_FEST := false           # Checkpoints immer auf CHECKPOINTS statt zufällig
+static var GELAENDE: Dictionary = {}        # Feld -> "fels" (versperrt Weg, Bauen und Sicht) / "wasser" (Weg und Bauen)
+static var MAUERN: Array[Vector2i] = []     # vorgebaute Erdwälle: ausbaubar, nicht abreißbar
+static var MAUERN_FEST: Array[Vector2i] = []   # fertige Mauer für die Herausforderung „Mauern fest“
+
+
+## 18.11.: Herausforderungen (Startmenü → Herausforderungen). Zählen nicht für Rangliste und Phantome.
+## [Schlüssel, Name, Beschreibung] – "" = keine. Die gewählte steht in `herausforderung` (nicht gespeichert).
+const HERAUSFORDERUNGEN: Array = [
+	["", "keine", "normale Regeln"],
+	["keine_fabriken", "Keine Fabriken", "Nur Türme, Batterien und Brakk – alles ab Runde 1, die Gratis-Erdwälle sofort."],
+	["doppelt", "Doppelte Gegner, doppeltes Geld", "Jeder Trupp kommt zweimal; Prämien und Rundenbonus doppelt."],
+	["mauern_fest", "Mauern fest", "Die Karte bringt eine fertige Mauer mit: keine Erdwälle bauen oder abreißen, nur darauf ausbauen."],
+]
+static var herausforderung := ""
+
+
+static func herausforderung_name(schluessel: String) -> String:
+	for h: Array in HERAUSFORDERUNGEN:
+		if h[0] == schluessel:
+			return str(h[1])
+	return schluessel
+
+
+static func herausforderung_text(schluessel: String) -> String:
+	for h: Array in HERAUSFORDERUNGEN:
+		if h[0] == schluessel:
+			return str(h[2])
+	return ""
+
+
+static func ist_hauptkarte() -> bool:
+	return karte_gross and karte_name == "paulland"
+
+
+static func karten_daten(name: String) -> Dictionary:
+	var pfad := "res://karten/%s.json" % name
+	if not FileAccess.file_exists(pfad):
+		return {}
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(pfad))
+	if d is Dictionary:
+		return d
+	return {}
+
+
+static func lade_karte(name: String) -> bool:
+	var k := karten_daten(name)
+	if k.is_empty():
+		return false
+	karte_name = name
+	KARTE_TITEL = str(k.get("name", name))
+	SPALTEN = int(k["spalten"])
+	ZEILEN = int(k["zeilen"])
+	KARTE_FAKTOR = (SPALTEN - 1) / 19.0
+	START_ZELLE = _feld(k["hq"])
+	ANGRIFFS_ZELLE = _feld(k["angriff"])
+	ZONENBAUTEN = _zonenbauten(k["zonenbauten_zeilen"])
+	SCHLEUDER_PLAETZE = _felder(k["schleuder_plaetze"])
+	var a: Dictionary = k["ausgaenge"]
+	AUSGAENGE = {"": _feld(a["mitte"]), "oben": _feld(a["oben"]), "unten": _feld(a["unten"])}
+	BASIS_ZELLE = _feld(k["basis"])
+	KARTE_BASIS_FEST = bool(k.get("basis_fest", false))
+	var bereiche: Array[Rect2i] = []
+	for r: Array in k["checkpoint_bereiche"]:
+		bereiche.append(Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3])))
+	CHECKPOINT_BEREICHE = bereiche
+	CHECKPOINTS = _felder(k["checkpoints"])
+	KARTE_CP_FEST = bool(k.get("checkpoints_fest", false))
+	GELAENDE = {}
+	for art: String in ["fels", "wasser"]:
+		for z: Vector2i in _felder(k.get(art, [])):
+			GELAENDE[z] = art
+	MAUERN = _felder(k.get("mauern", []))
+	MAUERN_FEST = _felder(k.get("mauern_fest", []))
+	return true
+
+
+static func _feld(p: Array) -> Vector2i:
+	return Vector2i(int(p[0]), int(p[1]))
+
+
+static func _felder(liste: Array) -> Array[Vector2i]:
+	var aus: Array[Vector2i] = []
+	for p: Array in liste:
+		aus.append(_feld(p))
+	return aus
+
+
 static func _zonenbauten(zeilen: Array) -> Array:
 	var vorlage := [["schleuder", 1, 5], ["schleuder", 1, 8], ["wurf", 0, 10], ["wurf", 0, 14], ["laser", 2, 20], ["laser", 2, 20], ["laser", 2, 20]]
 	var liste: Array = []
