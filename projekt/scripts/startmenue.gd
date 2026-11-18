@@ -400,6 +400,15 @@ func _name_text() -> String:
 func _starte_eingabe() -> void:
 	if _tippt():
 		return
+	if OS.has_feature("web") and DisplayServer.is_touchscreen_available():
+		# 18.11. (Paul): am Handy öffnet das unsichtbare Feld keine Bildschirmtastatur – dort das Eingabefenster des Browsers
+		var alt := Profil.name() if Profil.hat_namen() else ""
+		var antwort: Variant = JavaScriptBridge.eval("window.prompt(%s, %s)" % [JSON.stringify("Dein Spitzname (bis %d Zeichen):" % Profil.NAME_MAX), JSON.stringify(alt)], true)
+		if antwort is String:
+			_eingabe.text = (antwort as String).strip_edges().substr(0, Profil.NAME_MAX)
+			_bestaetige_namen()
+			_baue()
+		return
 	_eingabe.text = Profil.name() if Profil.hat_namen() else ""
 	_eingabe.grab_focus()
 	_eingabe.caret_column = _eingabe.text.length()
