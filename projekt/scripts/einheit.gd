@@ -47,6 +47,10 @@ var sturm_bis := 0.0                # Losschlagen: so lange schneller und rasche
 var sturm_ziel := Karte.KEINE       # ... und dorthin stürmen
 var klon := false                   # aus der Klonmaschine (wird nicht noch einmal geklont)
 var _gefolgt := false
+var art := ""                       # 18.11.: Truppentyp (technogunner, scharfschuetze ...)
+var ring_faehigkeit := ""           # 18.11.: Brakk-Mode – im Ringfeld kämpft die Truppe wie auf Stufe 3 mit dieser Fähigkeit
+var _ring_vorher: Array = []        # [daten, faehigkeit, ausbaustufe, max_leben] von vor dem Ringfeld
+var halte_punkt := Vector2.INF       # 18.11.: Brakk-Befehl „Halten“ / „Rückzug“: hier bleiben, nichts nachlaufen (INF = frei)
 
 ## Farbe des Abzeichens je Stufe-3-Fähigkeit
 const ABZEICHEN := {
@@ -58,6 +62,7 @@ const ABZEICHEN := {
 
 func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe: int = 0, p_faehigkeit: String = "") -> void:
 	ausbaustufe = 0 if typ == "pilot" else stufe
+	art = typ
 	ist_pilot = typ == "pilot"
 	spiel = p_spiel
 	karte = p_karte
@@ -334,7 +339,7 @@ func _process(delta: float) -> void:
 				return
 			# Nachrücken: Ist eine Stellung frei geworden (oder näher als für den, der dorthin unterwegs ist)?
 			_posten_check -= delta
-			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self) and (ist_pilot or not spiel.aufraeumen()):   # Checkpoint zurückholen und Aufräumen gehen vor
+			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self) and (ist_pilot or not spiel.aufraeumen()) and halte_punkt == Vector2.INF:   # Checkpoint zurückholen und Aufräumen gehen vor
 				_posten_check = 1.0
 				if (ist_pilot or not spiel.im_endkampf() or spiel.endkampf_stellung_frei(self)) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
 					_marschziel = Karte.KEINE
@@ -344,7 +349,7 @@ func _process(delta: float) -> void:
 				_repariere(delta)   # Piloten kämpfen nicht: Reserve wartet an der Fabrik – oder repariert, was ausgefallen ist
 				return
 			# 1) Wer schießen kann, bleibt stehen und schießt. Das geht immer vor – es wird nicht blind weitergelaufen.
-			var weite: float = daten["reichweite"] * Werte.ZELLE
+			var weite: float = (daten["reichweite"] + _hoehe()) * Werte.ZELLE   # 18.11.: Anhöhe
 			var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
 			if ziel == null:
 				ziel = spiel.zonenbau_in_reichweite(position, weite, true)
@@ -364,6 +369,9 @@ func _process(delta: float) -> void:
 				_sprite.bewegt(false)
 				_feuere_auf(ziel)
 				return
+			if halte_punkt != Vector2.INF:
+				_halten(delta)   # 18.11.: Brakk-Befehl – am Haltepunkt bleiben
+				return
 			# 2) Sonst ein Ziel wählen und hingehen.
 			_plan_in -= delta
 			if _plan_in <= 0.0:
@@ -371,6 +379,32 @@ func _process(delta: float) -> void:
 				_waehle_marschziel()
 			_gehe(delta)
 
+
+## 18.11.: Brakk-Befehl: zum Haltepunkt gehen und dort stehen bleiben (geschossen wird vorher im Ablauf).
+func _halten(delta: float) -> void:
+	if position.distance_to(halte_punkt) <= Werte.ZELLE * 0.5:
+		_punkte.clear()
+		_sprite.bewegt(false)
+		return
+	if _punkte.is_empty():
+		if not _plane_zur_zelle(karte.zelle_bei(halte_punkt)):
+			halte_punkt = position   # kein Weg dorthin: hier halten
+			return
+		_punkte.append(halte_punkt)
+	_gehe(delta)
+
+
+## 18.11.: Brakk-Befehl „Rückzug“: in eine freie Stellung, sonst zum Sammelpunkt `vor_basis` und dort halten.
+func rueckzug(vor_basis: Vector2) -> void:
+	halte_punkt = Vector2.INF
+	folge = null
+	sturm_bis = 0.0
+	sturm_ziel = Karte.KEINE
+	_punkte.clear()
+	_marschziel = Karte.KEINE
+	_suche_posten()
+	if zustand == Zustand.BODEN:
+		halte_punkt = vor_basis + _versatz * 1.5
 
 ## Steckt die Truppe gerade in einem Tor und hat noch Weg vor sich? Dann läuft sie erst hindurch
 ## (auch durch mehrere Tore hintereinander), statt mittendrin stehen zu bleiben oder umzudrehen.
@@ -625,6 +659,35 @@ func _treffe(e: Dictionary) -> void:
 	ziel.call("nimm_schaden", schaden)
 
 
+## 18.11.: Brakk-Mode – Ringfeld: solange die Truppe darin steht, Werte und Fähigkeit wie auf Stufe 3 (das Leben behält seinen Anteil).
+func ring_an(f: String) -> void:
+	if ring_faehigkeit == f:
+		return
+	if ring_faehigkeit == "":
+		_ring_vorher = [daten, faehigkeit, ausbaustufe, max_leben]
+	var anteil := leben / maxf(1.0, max_leben)
+	daten = Werte.grafik_einheit(Werte.einheit_daten(art, 3, f), art, 3)
+	faehigkeit = f
+	ausbaustufe = 3
+	max_leben = float(daten["leben"])
+	leben = max_leben * anteil
+	ring_faehigkeit = f
+	queue_redraw()
+
+
+func ring_aus() -> void:
+	if ring_faehigkeit == "":
+		return
+	var anteil := leben / maxf(1.0, max_leben)
+	daten = _ring_vorher[0] as Dictionary
+	faehigkeit = str(_ring_vorher[1])
+	ausbaustufe = int(_ring_vorher[2])
+	max_leben = float(_ring_vorher[3])
+	leben = max_leben * anteil
+	ring_faehigkeit = ""
+	queue_redraw()
+
+
 ## Vom Kommandanten gesammelt: Stellung freigeben und ihm folgen.
 func folge_kommandant(k: Node2D) -> void:
 	if posten_zelle != Karte.KEINE and karte.posten.get(posten_zelle) == self:
@@ -641,7 +704,7 @@ func folge_kommandant(k: Node2D) -> void:
 ## Folgen bzw. Stürmen: was in Reichweite ist, wird beschossen; sonst zum Kommandanten bzw. zum Sturmziel.
 func _folgen(delta: float) -> void:
 	_gefolgt = true
-	var weite: float = daten["reichweite"] * Werte.ZELLE
+	var weite: float = (daten["reichweite"] + _hoehe()) * Werte.ZELLE   # 18.11.: Anhöhe
 	var ziel: Node2D = spiel.gegner_in_reichweite(position, weite, true, Karte.KEINE, spiel.zielmodus(fabrik_zelle))
 	if ziel != null:
 		_sprite.bewegt(false)
@@ -673,6 +736,8 @@ func _gehe(delta: float) -> bool:
 	if _punkte.is_empty():
 		return true
 	var schritt: float = daten["tempo"] * Werte.ZELLE * delta * (float(Werte.KOMMANDANT["sturm_tempo"]) if sturm_bis > 0.0 else 1.0)
+	if not (self is Kommandant):
+		schritt *= karte.sumpf_faktor(position)   # 18.11.: Sumpf (Brakk vorerst ausgenommen)
 	var ziel := _punkte[0]
 	if absf(ziel.x - position.x) > 1.0:
 		_sprite.flip_h = ziel.x < position.x
@@ -707,6 +772,14 @@ func posten_verloren() -> void:
 	_marschziel = Karte.KEINE
 
 
+## 18.11. (Etappe 2): Schuss oder Wurf aus der Ferne (Battlesphäre, Schleuder, Laser) – auf einer Ruine gibt es Deckung.
+## (Brakk vorerst ausgenommen.)
+func nimm_fernschaden(menge: float) -> void:
+	if not (self is Kommandant) and karte.boden_bei(position) == "ruine":
+		menge *= 1.0 - Werte.RUINE_DECKUNG
+	nimm_schaden(menge)
+
+
 func nimm_schaden(menge: float) -> void:
 	_anlauf *= 1.0 - Werte.MINIGUN_TREFFER_VERLUST   # Minigun: ein Treffer kostet einen Teil des Anlaufs
 	var f: float = spiel.schild_faktor(position)   # Schildgenerator-Kuppel
@@ -724,7 +797,12 @@ func nimm_schaden(menge: float) -> void:
 
 ## Reichweite in Feldern, so wie sie gerade gilt (in der Stellung mit Bonus).
 func reichweite_jetzt() -> float:
-	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else 0.0)
+	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else _hoehe())
+
+
+## 18.11.: Anhöhe – mehr Reichweite am Boden (in der Stellung rechnet posten_bonus sie ein). Brakk vorerst ausgenommen.
+func _hoehe() -> float:
+	return 0.0 if self is Kommandant else karte.anhoehe_bonus(karte.zelle_bei(position))
 
 
 func _draw() -> void:

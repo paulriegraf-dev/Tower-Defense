@@ -2,11 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#140a22">
-		<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
 		<title>Pauls TD Battler</title>
 		<style>
 html, body, #canvas {
@@ -15,17 +11,9 @@ html, body, #canvas {
 	border: 0;
 }
 
-html, body {
-	position: fixed;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	background-color: #140a22;
-}
-
 body {
 	color: white;
-	background-color: #140a22;
+	background-color: black;
 	overflow: hidden;
 	touch-action: none;
 }
@@ -123,7 +111,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":10281216,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":10366476,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -227,37 +215,6 @@ const engine = new Engine(GODOT_CONFIG);
 	}
 }());
 		</script>
-	<script>
-// 17.11.: Handy/Tablet – beim ersten Tippen ins Vollbild (wie ein Video) und Querformat festhalten.
-// Das iPhone erlaubt Vollbild für Webseiten nicht; dort hilft nur „Zum Home-Bildschirm“ (siehe Hinweis im Spiel).
-(function () {
-	if (!('ontouchstart' in window)) return;
-	function vollbild() {
-		var d = document.documentElement;
-		var an = document.fullscreenElement || document.webkitFullscreenElement;
-		var r = d.requestFullscreen || d.webkitRequestFullscreen;
-		if (!an && r) {
-			try { var p = r.call(d, { navigationUI: 'hide' }); if (p && p.catch) p.catch(function () {}); } catch (e) {}
-		}
-		if (screen.orientation && screen.orientation.lock) {
-			screen.orientation.lock('landscape').catch(function () {});
-		}
-	}
-	document.addEventListener('touchend', vollbild, { passive: true });
-	// 17.11. abends: Nach dem Drehen meldet iOS (Home-Bildschirm-App) die neue Fenstergröße oft verspätet –
-	// das Bild blieb dann verschoben, oben ein schwarzer Rand. Darum nach dem Drehen nachträglich neu ausmessen lassen.
-	function neu_messen() {
-		window.scrollTo(0, 0);
-		[50, 250, 600, 1200].forEach(function (ms) {
-			setTimeout(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('resize')); }, ms);
-		});
-	}
-	window.addEventListener('orientationchange', neu_messen);
-	if (screen.orientation) screen.orientation.addEventListener('change', neu_messen);
-	if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { window.scrollTo(0, 0); });
-	window.addEventListener('load', neu_messen);
-})();
-</script>
-</body>
+	</body>
 </html>
 

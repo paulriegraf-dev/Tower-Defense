@@ -2,6 +2,8 @@ class_name Kommandant
 extends Einheit
 var touch_richtung := Vector2.ZERO   # 17.11.: Joystick am Handy, -1..1
 var ego := false                     # 18.11.: Ego-Sicht – der Spieler steuert und schießt selbst (ego_modus.gd)
+var fortschritt: BrakkFortschritt = null   # 18.11.: Brakk-Mode – Stufen, Ringe, Ulti (brakk_fortschritt.gd)
+var unverwundbar := 0.0              # 18.11.: Brakk-Mode – Tumble: so lange (Sekunden) prallt alles ab
 ## Kommandant Brakk: einmal pro Partie. Angeklickt mit WASD gesteuert, sonst handelt er selbst (16.11.):
 ##   im Kampf geht er auf Gegner nahe seinem Posten los, ohne Gegner kehrt er zum Posten zurück (wo man ihn zuletzt hingestellt hat).
 ## Schießt von selbst auf den vordersten Gegner.
@@ -40,11 +42,14 @@ func einrichten_kommandant(p_spiel: Node, p_karte: Karte, zelle: Vector2i) -> vo
 
 
 func _process(delta: float) -> void:
+	if fortschritt != null:
+		fortschritt.wirke(spiel)   # 18.11.: Ringfelder auch, wenn Brakk gefallen ist
 	if gefallen:
 		return
 	_abkling -= delta
 	_treffer -= delta
 	q_rest -= delta
+	unverwundbar -= delta
 	e_rest -= delta
 	gesammelt = gesammelt.filter(func(e): return is_instance_valid(e) and e.folge == self)
 	if oben and karte.inhalt(posten_zelle) != Karte.WALL:
@@ -254,7 +259,7 @@ func _runter(gestuerzt: bool) -> bool:
 
 
 func nimm_schaden(menge: float) -> void:
-	if gefallen:
+	if gefallen or unverwundbar > 0.0:
 		return
 	var f: float = spiel.schild_faktor(position)
 	if f < 1.0:
@@ -285,6 +290,8 @@ func neue_runde() -> void:
 		posten_zelle = Karte.KEINE
 		position = karte.mitte(aufstellung)
 	zustand = Zustand.AUF_POSTEN if oben else Zustand.BODEN
+	if fortschritt != null:
+		fortschritt.gib(BrakkFortschritt.XP_WELLE, self)   # 18.11.: Brakk-Mode – Erfahrung für die abgewehrte Welle
 	leben = max_leben
 	gesammelt.clear()
 	klon_genutzt = false

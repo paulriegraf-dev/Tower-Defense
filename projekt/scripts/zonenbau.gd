@@ -32,7 +32,7 @@ func start(p_spiel: Node, p_karte: Karte, p_art: String, p_zelle: Vector2i) -> v
 	position = karte.mitte(zelle)
 	match art:
 		"hq":
-			max_leben = Werte.HQ_LEBEN
+			max_leben = Werte.hq_leben()
 			if Werte.grafik_neu:
 				# Neue Grafik: Myr-Bau als Bild (Pixel ×2 wie die Truppen)
 				var bild := Sprite2D.new()
@@ -106,7 +106,7 @@ func _process(delta: float) -> void:
 			_abkling = Werte.LASER["abklingzeit"]
 			_sprite.angriff(Werte.LASER["abklingzeit"])
 			spiel.schuss(position + Vector2(20, -24), opfer.position, Color("ff3ad0"))
-			opfer.nimm_schaden(Werte.LASER["schaden"])
+			opfer.nimm_fernschaden(Werte.LASER["schaden"])   # 18.11.: Fernschuss (Ruine deckt)
 
 
 ## Auf ein anderes Feld der Zone wechseln: sofort (zwischen den Runden) oder hinfahren (in der Runde).

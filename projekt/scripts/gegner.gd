@@ -100,11 +100,16 @@ func tempo() -> float:
 		return 0.0
 	if _im_gefecht > 0.0 and daten["fernkampf"]:
 		t *= Werte.FERNKAMPF_GEFECHT_TEMPO
+	var r := t
 	if gebremst > 0.0:
-		return t * Werte.PLASMAGEL_TEMPO
-	if gefroren > 0.0:
-		return t * float(Werte.TURMARTEN["frost"]["bremse_tempo"])
-	return t
+		r = t * Werte.PLASMAGEL_TEMPO
+	elif gefroren > 0.0:
+		r = t * float(Werte.TURMARTEN["frost"]["bremse_tempo"])
+	# 18.11. (Etappe 2): Sumpf bremst zusätzlich, zusammen aber nie unter SUMPF_MIN_TEMPO (schon Langsameres bleibt)
+	var s: float = spiel.karte.sumpf_faktor(position) if not _auf_wall else 1.0
+	if s < 1.0:
+		r = minf(r, maxf(r * s, t * Werte.SUMPF_MIN_TEMPO))
+	return r
 
 
 func _tempo_ungebremst() -> float:
@@ -220,6 +225,8 @@ func _process(delta: float) -> void:
 		queue_redraw()
 	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 or eingefroren > 0.0 else Color.WHITE))
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
+	if reichweite > 0.0:
+		reichweite += karte.anhoehe_bonus(karte.zelle_bei(position)) * Werte.ZELLE   # 18.11.: Anhöhe gilt auch für Gegner
 
 	# Energieschild einer Batterie im Weg: stehen bleiben und draufschlagen, bis er bricht.
 	if not _auf_wall:
@@ -264,7 +271,7 @@ func _process(delta: float) -> void:
 			_sprite.angriff(daten["abklingzeit"])
 			if ziel != null:
 				spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
-				ziel.nimm_schaden(float(daten.get("schaden_einheit", daten["schaden"])))
+				ziel.nimm_fernschaden(float(daten.get("schaden_einheit", daten["schaden"])))   # 18.11.: Fernschuss (Ruine deckt)
 			else:
 				spiel.schuss(position + Vector2(0, -6), karte.mitte(bau), Color("ff7ad9"))
 				karte.beschiesse(bau, daten["schaden"])

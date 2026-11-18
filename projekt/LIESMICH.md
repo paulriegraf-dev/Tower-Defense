@@ -131,7 +131,7 @@ Jede Runde hat einen Plan mit Namen; die Vorschau zeigt ihn („Nebelwand: 3 Rau
 | 19 | Generalprobe | Prüfung | alles gestaffelt |
 | 20 | Gegenangriff | Finale | Wettlauf: je Durchgang 4 Sprenger, Türme jeden 3. Durchgang, HQ hat 1500 Leben, Bauen außer Erdwällen erlaubt |
 
-Die Gegner werden je Runde um 0,23 zäher (Runde 19: ×5,1), in Runde 20 gilt ×2,6.
+Die Gegner werden je Runde um 0,20 zäher (Runde 19: ×4,6); in Runde 20 hat die erste Welle die Leben von Runde 19, der Gegenangriff danach ×2,2.
 
 ## Gegnertypen (entworfene Runden, Ansage in der Bauphase davor)
 | Runde | Neu | Regel |
@@ -175,6 +175,17 @@ Eigener Modus im Startmenü: Du bist Brakk, in der Ego-Sicht, die ganze Partie l
 - **Schussgefühl:** eigene Klänge (PixelLab, `assets/ton/brakk-*.wav`: Laserschuss A/B je Pistole, Treffer, Kill), Rückstoß der Sicht, kurzes Zucken des Sichtfelds; Treffer mit Einschlag-Klang, weißem Trefferkreuz und Wackeln; Kill mit Knall, rotem Kreuz, stärkerem Wackeln und 0,07 s Einfrieren (in Echtzeit).
 - Fällt Brakk, bleibt die Kamera am Boden liegen, bis er zur nächsten Runde wieder aufsteht.
 
+### Stufen, Fähigkeiten, Ringe und Befehle (18.11.)
+Code: `scripts/brakk_fortschritt.gd` (Stufen, Ringe, Ulti, Ringfelder), `scripts/ring_bilder.gd` (Ringbilder), Rest in `scripts/ego_modus.gd`.
+- **Stufen 1–10:** Erfahrung aus Brakks eigenen Kills (große Gegner mehr) und 10 je abgewehrter Welle. Jede Stufe +5 % Schussschaden und +30 Leben. Unten in der Mitte: Stufe, Leben, Erfahrung; darüber die Fähigkeiten mit Abklingzeit (gesperrte grau mit Stufe). Beim Aufstieg ein Banner.
+- **Freischalten:** Stufe 2 **Tumble [Shift]** (Hechtrolle 3 Felder in Laufrichtung, kurz unverwundbar, 4 s), Stufe 3 **Sammeln [Q]**, Stufe 5 **Doppellanze** (Rechtsklick halten, 0,8 s laden, loslassen: Strahl durch alle Gegner in der Linie, 60 Schaden, 6 s), Stufe 7 **Klonmaschine [R] als Ulti** – lädt durch 30 eigene Kills und ist nach dem Einsatz eine ganze Runde gesperrt.
+- **Zwei Pistolen:** links die Glutpistole (rot-gold, oranger Laser), rechts die cyanfarbene. Die linke ist vorerst eine Umfärbung im Code.
+- **Lichtterminal:** In der Bauphase an der Basis [F]. Ringe kosten Budget (110–140), Verkaufen gibt 75 % zurück (in derselben Bauphase alles). Ein Finger je Ring: frei ab Stufe 1, 3, 5, 7, 9.
+- **Ringe:** stärken Brakks Pistolen und geben im **Ringfeld** passenden Truppen die Stufe 3 mit ihrer Fähigkeit (Farbe = Abzeichen der Fähigkeit). Durchschlagring (Durchschuss), Glutstrahlring (Laserstrahl), Taktring (Feuerteam), Wirbelring (Minigun), Sprungring (Abpraller), Brandring (Brandfeld), Gelring (Plasmagel). Die Bilder sind Pixel-Platzhalter nach Pauls Entwürfen.
+- **Ringfeld:** Mausrad wählt den Ring (die Ringhand hebt sich, der Ring leuchtet), **[C]** wirft sein Feld (1,5 Felder Radius, bis 12 Felder weit) auf den Boden unter dem Fadenkreuz. Ein Feld je Ring, es bleibt liegen, bis es neu geworfen wird. Rechts stehen die getragenen Ringe.
+- **Fabriken im Brakk-Mode:** Truppe wählen und Spezialisieren wie immer, Stufe 2 und 3 gibt es nur über die Ringfelder. Batterien und Türme wie bisher.
+- **Befehle:** **[X] Halten** – Bodentruppen in 3 Feldern um den Punkt unter dem Fadenkreuz bleiben stehen, schießen und laufen keinem Gegner nach. **[V] Rückzug** – alle Bodentruppen in freie Stellungen, sonst vor die Basis, dort halten sie. Beides gilt bis Rundenende.
+
 ## Karten (18.11.)
 
 Karten sind Daten: `karten/<name>.json` (Größe, HQ, Zonenbauten, Schleuderplätze, Ausgänge für den Phantom-Modus, Basis fest/zufällig, Checkpoint-Bereiche oder feste Checkpoints, Gelände `fels`/`wasser`, vorgebaute Erdwälle `mauern`, dazu `mauern_fest` für die Herausforderung „Mauern fest“). Geladen in `Werte.lade_karte()`.
@@ -184,6 +195,31 @@ Karten sind Daten: `karten/<name>.json` (Größe, HQ, Zonenbauten, Schleuderplä
 - **Vorgebaute Erdwälle** einer Karte lassen sich ausbauen, aber nicht abreißen.
 - Auswahl: Startmenü → **Herausforderungen** → „Karte: …“. Partien dort zählen nicht für Rangliste und Phantome (außer PaulLand ohne Herausforderung = wie „Spielen“). Der Zwischenstand merkt sich die Karte.
 - Testläufe: `TD_KARTE_NAME=felsenpass`.
+- **Regelpaket** (18.11., optional, Schlüssel `regeln`, `wellen`, `stand` in der Karten-Datei): Startbudget, Startleben, Rundenzahl (10/15/20 – die letzte ist immer der Gegenangriff mit Plan 20, die Laser stehen dann; Zähigkeit im Gegenangriff und HQ-Leben wachsen mit der Rundenzahl: 10 Runden ×1,2 und 850, 15 Runden ×1,7 und 1150, 20 Runden ×2,2 und 1500), gesperrte Bauten, voreingestellte Herausforderung, Einführungstext; eigene Wellen je Runde; vorgebaute Türme/Fabriken (gehören zur Karte, nicht abreißbar). Ohne `regeln` gilt alles wie gewohnt (PaulLand). `Werte.START_BUDGET`, `START_LEBEN` und `LETZTE_RUNDE` sind dafür keine Konstanten mehr.
+
+## Szenario-Editor (18.11.)
+
+Startmenü → **Sandbox** → „Sandbox spielen“ (wie bisher) oder **„Szenario bauen“**. Der Editor läuft in der Draufsicht ohne Wellen (HD-2D wird dafür vorübergehend abgeschaltet, die Einstellung bleibt). Links das **Mod-HUD** (`scripts/ui/modleiste.gd`, eine frei bestückbare Leiste im Stil der Sandbox-Leiste, auch für spätere Modi gedacht) mit vier Reitern:
+- **Karte:** Werkzeug wählen, auf der Karte malen (Klick und Ziehen), **Rechtsklick radiert**. Fels, Wasser, Erdwall (vorgebaut), Mauer fest (lila, nur für die Herausforderung „Mauern fest“), Turm (auf einem Erdwall der Karte, die Form bestimmt die Art), Fabrik (nochmal klicken wechselt die Truppe), Basis (fest oder zufällig), Checkpoint 1/2 (fest: Klick; Bereich: Rechteck ziehen). In der Zone des Gegners wird nichts gemalt. Kartengröße 20×10 / 28×14 / 36×16: Zone, Schleuderplätze, Ausgänge, Zonenbauten-Zeilen, Basis und Checkpoint-Bereiche werden aus der Größe berechnet (`Werte.karten_vorlage`, bei 28×14 genau wie PaulLand); Gelände bleibt, soweit es passt.
+- **Regeln:** Name, Beschreibung (steht in der Kartenwahl), Einführung (Fenster zu Spielbeginn), Startbudget (±10, Umschalt ±50), Startleben, Runden, erlaubte Bauten (an/aus je Bauwerk), voreingestellte Herausforderung.
+- **Wellen:** Runde wählen, „Planer zeigen“ öffnet den Taktikplaner aus dem Phantom-Angriff (ohne Budgetgrenze). Runden ohne eigenen Plan laufen mit der entworfenen Welle. Eigene Wellen kommen wie im Phantom-Modus geschlossen über ihren Ausgang; Würfe zielen selbst.
+- **Datei:** Prüfen, Speichern, **Szenario testen** (startet eine Partie; „Hauptmenü“ in der Partie führt zurück in den Editor), Exportieren (im Browser als Download, am PC in den Download-Ordner), Neu, Laden (Rechtsklick löscht, mit Rückfrage), Hauptmenü.
+- **Prüfung vor dem Speichern:** Von oberem Rand, Mitte und unterem Rand der Zone muss ein Weg durch die Checkpoints zur Basis führen, nur über Gelände (Fels, Wasser, Erdwälle und Fabriken der Karte sperren – nichts wird eingerissen); mit „Mauer fest“ wird zusätzlich mit dieser Mauer geprüft. Checkpoints nicht auf Fels/Wasser/Mauern, Basis (3×2) muss passen. Bei Checkpoint-Bereichen darf kein Feld des Bereichs abgeschlossen sein, bei zufälliger Basis kein Feld der Karte. Fehler pulsieren rot auf der Karte, die Gründe stehen in der Leiste.
+- **Speicherort:** `user://karten/eigen_<name>.json` (gleiches Format wie `karten/`). Eigene Karten erscheinen unter **Herausforderungen** in der Kartenwahl („(eigene)“) und bringen ihre Herausforderung mit; sie zählen nicht für Rangliste und Phantome. Der Zwischenstand merkt sich die Karte.
+- **Teilen:** Exportierte Datei ins Fenster ziehen = Import (im Editor und im Startmenü, PC und Browser, `files_dropped`). Die Datei wird geprüft (`Werte.karte_gueltig`) und als neue eigene Karte abgelegt.
+- Code: `scripts/szenario_editor.gd` (Editor, Prüfung, Datei), `scripts/ui/modleiste.gd` (Mod-HUD und Fenster `ModLeiste.Tafel`), Regeln im Spiel: `main.gd` → `BAUTEN`, `herausforderung_sperrt`, `_kartenbauten_einrichten`, `_zeige_einfuehrung`, `naechste_welle`.
+
+### Gelände mit Wirkung (18.11., Etappe 2)
+
+Im Editor unter „Gelände mit Wirkung“ (Reiter Karte), nur auf eigenen Karten. Alles ist begehbar; die Wege der Gegner ändern sich dadurch nicht (Sumpf kostet nur Zeit). Brakk ist vorerst ausgenommen. Werte in `werte.gd`, Abschnitt nach `MAUERN_FEST` (`ANHOEHE_BONUS`, `SUMPF_TEMPO` …), in der Karten-Datei je Art eine Felderliste (`anhoehe`, `sumpf`, `bruecke`, `ruine`, `wald`, `erz`). In der Übersicht [I] → Regeln → „Gelände“.
+- **Anhöhe:** +1 Reichweite für Truppen am Boden, Stellungen und Türme darauf (auch Funk- und Heilumkreis) – und für Gegner. Batterien nicht. Bebaubar.
+- **Sumpf:** Gegner und eigene Truppen laufen mit 70 % Tempo; zusammen mit Frost oder Plasmagel nie unter 45 % (Langsameres bleibt). Nicht bebaubar.
+- **Brücke:** nur auf Wasser malbar, begehbar, nicht bebaubar – ein Durchgang, den niemand zumauert.
+- **Ruine:** Truppen darauf nehmen 25 % weniger Schaden von Battlesphären, Schleudern und Lasern (Nahkampf voll). Nur Erdwälle, die kosten dort 5 (Abriss: 75 % davon).
+- **Wald:** versperrt die Sicht wie Fels; hineinschießen geht. Truppen im Wald sieht eine Battlesphäre erst aus 2 Feldern. Nicht bebaubar.
+- **Erzader:** eine Fabrik oder ein Turm darauf bringt +10 Budget je Runde (mit „Doppeltes Geld“ doppelt).
+- **Rückgängig:** [Strg+Z] oder Knopf im Reiter Karte – jeder Pinselstrich und jeder Klick in der Leiste ist ein Schritt (bis 60). Änderungen im Taktikplaner zählen nicht.
+- Darstellung: schlicht gemalt in 2D; HD-2D zeigt denselben Boden (noch ohne eigene 3D-Formen für Hügel und Bäume).
 
 ## Erfolge (18.11.)
 
@@ -265,7 +301,7 @@ Rechtsklick reißt ab. Was in derselben Bauphase gebaut oder aufgewertet wurde, 
 
 Im Startmenü unter **Phantom-Modus** (alles per Mausklick). Das Phantom wird **zufällig** aus dem Pool gezogen, es gibt keine Auswahlliste; auch die Ersatz-Phantome sind zufällig. „Nochmal angreifen“ im Schlussbild bleibt beim selben Bau.
 
-- **Angreifer** – Seitenwechsel. Der aufgezeichnete Bau eines Spielers verteidigt (jede Runde frisch, ohne Dauerschaden, 15 Leben), du planst die Welle auf dem **Laufband**. Budget je Runde = Preis der entworfenen Welle dieser Runde. Bauen kannst du dort nicht.
+- **Angreifer** – Seitenwechsel. Der aufgezeichnete Bau eines Spielers verteidigt (jede Runde frisch, ohne Dauerschaden, 15 Leben), du planst die Welle auf dem **Laufband**. Budget je Runde = Preis der entworfenen Welle, geglättet mit den Nachbarrunden ((Vorrunde + 2 × diese + Folgerunde) / 4; letzte Runde ungeglättet). Preise: Hund 10, Sphäre 35, Fahne 75, Sprenger 55, Rauch 50, Belagerung 180, Schild 70, Sani 50, Schwarm 110, Wurf +40. Bauen kannst du dort nicht.
 - **Verteidiger** – normales Spiel, aber die 20 Wellen stammen von einem gespeicherten Angriff. Die Ansage oben zeigt den Plan der Runde. Runden ohne Plan laufen mit der entworfenen Welle.
 
 Laufband: unten die Trupps zu Fuß (Breite = Dauer, Lücke = Pause), darüber die Würfe. Einheit unten anklicken = in den gewählten Trupp; Kärtchen anklicken = wählen; Kärtchen ziehen oder −/+ 1 s = Pause; „→ Wurf“ macht aus dem Trupp einen Wurf (höchstens 4 Einheiten, +30 Punkte, kein Belagerungsturm; vor Runde 10 wird die Wurf-Schleuder dafür hingestellt). „Ziel“ am Wurf-Trupp: Klick auf ein freies Feld im orangen Kreis legt das Landefeld fest. [L] blendet das Band aus, Leertaste startet den Angriff. „Vorlage“ lädt die entworfene Welle der Runde.

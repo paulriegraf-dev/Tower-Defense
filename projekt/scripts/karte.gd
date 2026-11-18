@@ -14,6 +14,7 @@ const KEINE := Vector2i(-1, -1)
 var feld: Dictionary = {}          # Zelle -> WALL / FABRIK
 var gelaende: Dictionary = {}      # 18.11.: Zelle -> "fels" / "wasser" (aus der Karten-Datei; weder begehbar noch bebaubar)
 var fest: Dictionary = {}          # 18.11.: vorgebaute Erdwälle der Karte -> true (ausbaubar, nicht abreißbar)
+var boden: Dictionary = {}         # 18.11. (Etappe 2): Zelle -> Gelände mit Wirkung (Werte.BODEN_ARTEN), begehbar
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
 var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
 var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN (aus der Form der Nachbarwälle)
@@ -96,6 +97,7 @@ var _blaetter: Dictionary = {}      # Einheitentyp -> Textur (für das Bild an d
 func _ready() -> void:
 	position = Vector2(0, Werte.KARTE_OBEN)
 	gelaende = Werte.GELAENDE.duplicate()
+	boden = Werte.BODEN.duplicate()
 	_astar_einheiten = _neues_astar()
 	for typ: String in Werte.GEGNER:
 		_astar_gegner[typ] = _neues_astar()
@@ -196,13 +198,60 @@ func grund_abstand(von: Vector2i, nach: Vector2i) -> int:
 	return weg.size() - 1 if not weg.is_empty() else luft
 
 
+## 18.11.: Szenario-Editor – Gelände eines Felds setzen ("fels", "wasser" oder "" = weg) und die Wegsuche nachziehen.
+func setze_gelaende(z: Vector2i, art: String) -> void:
+	if not in_karte(z):
+		return
+	if art == "":
+		gelaende.erase(z)
+	else:
+		gelaende[z] = art
+	for typ: String in _astar_gegner:
+		(_astar_gegner[typ] as AStarGrid2D).set_point_solid(z, art != "")
+	_astar_einheiten.set_point_solid(z, art != "")
+	_gewichte_fuer(z)
+	if art != "":
+		_astar_einheiten.set_point_solid(z, true)
+	_astar_gelaende = null
+	aktualisiere_pfad()
+
+
 ## 18.11.: Fels versperrt die Sicht wie ein fremder Erdwall, Wasser nicht.
 func ist_fels(z: Vector2i) -> bool:
 	return gelaende.get(z, "") == "fels"
 
 
 func ist_bebaubar(z: Vector2i) -> bool:
-	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and not ist_basis(z) and not checkpoints.has(z)
+	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and not ist_basis(z) and not checkpoints.has(z) 		and not Werte.BODEN_UNBEBAUBAR.has(str(boden.get(z, "")))   # 18.11.: Sumpf, Brücke, Wald
+
+
+## 18.11. (Etappe 2): Gelände mit Wirkung an einem Punkt (Weltkoordinaten) bzw. Feld; "" = keins.
+func boden_bei(punkt: Vector2) -> String:
+	return str(boden.get(zelle_bei(punkt), ""))
+
+
+## Anhöhe: so viel mehr Reichweite (Felder) für alles, was auf dem Feld steht.
+func anhoehe_bonus(z: Vector2i) -> float:
+	return Werte.ANHOEHE_BONUS if boden.get(z, "") == "anhoehe" else 0.0
+
+
+## Sumpf: Tempo-Faktor an einem Punkt (1 = normal).
+func sumpf_faktor(punkt: Vector2) -> float:
+	return Werte.SUMPF_TEMPO if boden_bei(punkt) == "sumpf" else 1.0
+
+
+## Versperrt dieses Feld die Sicht? Fels immer, Wald auch (18.11.).
+func sperrt_sicht(z: Vector2i) -> bool:
+	return gelaende.get(z, "") == "fels" or boden.get(z, "") == "wald"
+
+
+## Szenario-Editor: Gelände mit Wirkung setzen ("" = weg). Begehbar bleibt es; Wege ändern sich nicht.
+func setze_boden(z: Vector2i, art: String) -> void:
+	if art == "":
+		boden.erase(z)
+	else:
+		boden[z] = art
+	queue_redraw()
 
 
 ## Die eigene Basis belegt 3×2 Felder (16.11.): `basis` ist das untere mittlere Feld (Ziel der Gegner), dazu je eins links
@@ -419,7 +468,7 @@ func ist_wachposten(z: Vector2i) -> bool:
 
 ## Reichweiten-Bonus einer Stellung auf `z` für eine Einheit mit `daten`.
 func posten_bonus(z: Vector2i, daten: Dictionary) -> float:
-	return Werte.stellung_bonus(daten) + (Werte.WACHPOSTEN_BONUS if ist_wachposten(z) else 0.0)
+	return Werte.stellung_bonus(daten) + (Werte.WACHPOSTEN_BONUS if ist_wachposten(z) else 0.0) + anhoehe_bonus(z)   # 18.11.: Anhöhe
 
 
 ## Welcher Turm entstünde auf `z`? Bestimmt durch die freien Nachbarwälle (siehe Werte.TURMARTEN). "" = keiner.
@@ -497,6 +546,8 @@ func turm_wert(z: Vector2i, schluessel: String, vorgabe: Variant = null) -> Vari
 		var f: Dictionary = (Werte.TURM_STUFE_3[art] as Dictionary).get(str(turm_faehigkeit.get(z, "")), {})
 		if f.has(schluessel):
 			wert = f[schluessel]
+	if schluessel == "reichweite" and wert != null:
+		wert = float(wert) + anhoehe_bonus(z)   # 18.11.: Turm auf der Anhöhe
 	return wert
 
 
@@ -612,19 +663,20 @@ func sicht_frei(von: Vector2, nach: Vector2) -> bool:
 
 func _strahl_frei(von: Vector2, nach: Vector2) -> bool:
 	var start := zelle_bei(von)
+	var ende := zelle_bei(nach)
 	var vorher := start
 	var schritte := int(von.distance_to(nach) / 2.0) + 1
 	for i in range(1, schritte + 1):
 		var z := zelle_bei(von.lerp(nach, float(i) / schritte))
 		if z == vorher:
 			continue
-		if z != start and (feld.has(z) or ist_fels(z)):
+		if z != start and (feld.has(z) or ist_fels(z) or (z != ende and boden.get(z, "") == "wald")):   # 18.11.: durch Wald nicht, hinein schon
 			return false
 		# schräg von Feld zu Feld = genau über eine Ecke: gesperrt, sobald dort ein Wall (oder Fels) anliegt
 		if z.x != vorher.x and z.y != vorher.y:
 			var e1 := Vector2i(z.x, vorher.y)
 			var e2 := Vector2i(vorher.x, z.y)
-			if feld.has(e1) or feld.has(e2) or ist_fels(e1) or ist_fels(e2):
+			if feld.has(e1) or feld.has(e2) or sperrt_sicht(e1) or sperrt_sicht(e2):
 				return false
 		vorher = z
 	return true
@@ -992,7 +1044,7 @@ func sicht_von_wall(wall: Vector2i, von: Vector2, nach: Vector2) -> bool:
 		if z == vorher:
 			continue
 		vorher = z
-		if z != ziel and ((feld.get(z, FREI) == WALL and stueck_nr(z) != eigen) or ist_fels(z)):
+		if z != ziel and ((feld.get(z, FREI) == WALL and stueck_nr(z) != eigen) or sperrt_sicht(z)):
 			return false
 	return true
 
@@ -1382,6 +1434,7 @@ func _draw() -> void:
 			_r(z, 12 + ((h >> 8) % 5) * 8, 20 + ((h >> 12) % 4) * 8, 4, 4, GRAS_DUNKEL)
 
 	_zeichne_gelaende()
+	_zeichne_boden_wirkung()
 	_zeichne_start()
 	_zeichne_basis()
 	for i in checkpoints.size():
@@ -1908,6 +1961,68 @@ func _zeichne_gelaende() -> void:
 				_r(z, bx, by, bw, 14, FELS_HELL)
 				_r(z, bx, by, bw, 3, FELS_LICHT)
 				_r(z, bx, by, 3, 14, FELS_LICHT)
+
+
+## 18.11. (Etappe 2): Gelände mit Wirkung, schlicht gezeichnet (gleich in Klassisch und Neu).
+const ANHOEHE := Color("a39a5c")
+const SUMPF := Color("3d4a2c")
+const HOLZ := Color("8a6239")
+const HOLZ_HELL := Color("b58550")
+const WALD := Color("244a26")
+const WALD_HELL := Color("3f7a3a")
+const ERZ := Color("c98a3d")
+
+func _zeichne_boden_wirkung() -> void:
+	for z: Vector2i in boden:
+		var h := hash(z)
+		match str(boden[z]):
+			"anhoehe":
+				# erhöhte Fläche: hellere Kuppe, Schattenkante unten und rechts
+				_r(z, 0, 0, 64, 64, Color(ANHOEHE, 0.55))
+				_r(z, 4, 4, 56, 52, Color(ANHOEHE.lightened(0.25), 0.45))
+				for n: Vector2i in [Vector2i.DOWN, Vector2i.RIGHT]:
+					if boden.get(z + n, "") != "anhoehe":
+						_r(z, 0 if n == Vector2i.DOWN else 58, 58 if n == Vector2i.DOWN else 0, 64 if n == Vector2i.DOWN else 6, 6 if n == Vector2i.DOWN else 64, Color(0, 0, 0, 0.3))
+				for i in 3:
+					_r(z, 12 + i * 14, 30 - i * 6, 10, 2, Color(1, 1, 1, 0.35))
+			"sumpf":
+				_r(z, 0, 0, 64, 64, Color(SUMPF, 0.8))
+				for i in 4:
+					var px := 6 + ((h >> (i * 4)) % 6) * 9
+					var py := 6 + i * 14
+					_r(z, px, py, 14, 6, Color(WASSER, 0.7))
+					_r(z, px + 2, py - 6, 2, 6, Color("6f8a3c"))
+			"bruecke":
+				_r(z, 0, 0, 64, 64, WASSER)
+				_r(z, 4, 0, 56, 64, HOLZ)
+				for i in 8:
+					_r(z, 4, i * 8 + 1, 56, 2, HOLZ_HELL)
+				_r(z, 4, 0, 4, 64, Color(0, 0, 0, 0.35))
+				_r(z, 56, 0, 4, 64, Color(0, 0, 0, 0.35))
+			"ruine":
+				_r(z, 0, 0, 64, 64, Color(STEIN_DUNKEL, 0.35))
+				for i in 4:
+					var bx := 4 + ((h >> (i * 3)) % 5) * 10
+					var by := 6 + i * 14
+					_r(z, bx, by, 16, 9, STEIN)
+					_r(z, bx, by, 16, 3, STEIN_HELL)
+			"wald":
+				_r(z, 0, 0, 64, 64, Color(WALD, 0.6))
+				var o := Vector2(z) * Werte.ZELLE
+				for i in 4:
+					var m := o + Vector2(18 + (i % 2) * 28 + ((h >> (i * 5)) % 3) * 2, 18 + int(i / 2.0) * 28)
+					draw_circle(m + Vector2(2, 3), 15.0, Color(0, 0, 0, 0.3))
+					draw_circle(m, 15.0, WALD)
+					draw_circle(m + Vector2(-4, -4), 8.0, WALD_HELL)
+			"erz":
+				for i in 3:
+					var ex := 6 + ((h >> (i * 4)) % 3) * 16
+					var ey := 6 + i * 18
+					var spitze := PackedVector2Array([Vector2(ex, ey + 18), Vector2(ex + 8, ey), Vector2(ex + 16, ey + 18)])
+					for k in spitze.size():
+						spitze[k] += Vector2(z) * Werte.ZELLE
+					draw_colored_polygon(spitze, ERZ)
+					_r(z, ex + 7, ey + 5, 3, 9, Color(1, 0.9, 0.6, 0.85))
 
 
 ## Neue Grafik: Boden wie in Terrain-Conquester und der Stilprobe – Grasfliesen aus dem TC-Blatt (zufällig gedreht),

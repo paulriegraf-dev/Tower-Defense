@@ -1,0 +1,159 @@
+class_name RingBilder
+extends RefCounted
+## 18.11.: Brakk-Mode – Pixelbilder der Ringe (16×16), aus Zeichenrastern gebaut. Platzhalter bis zu den PixelLab-Bildern;
+## jede Form folgt einem Entwurf von Paul (Auge in Klauen, Drache, Tech-Band, Blockturm, Pyramiden, Goldrüstung, Zielscheibe).
+## Zeichen: . leer, o Umriss, m Metall, M Metall hell, d Metall dunkel, k schwarz, g Gold, G Gold hell, w weiß,
+##          s Stein (Ringfarbe), S Stein hell, r Stein dunkel.
+
+const RASTER := {
+	"durchschuss": [   # Auge in Klauen
+		"..o..........o..",
+		".oMo..oooo..oMo.",
+		".omMooMwwMooMmo.",
+		"..omowwwwwwomo..",
+		".omowwSsswwwomo.",
+		"omMowwsrkswwoMmo",
+		".omowwssrswwomo.",
+		"..omowwwwwwomo..",
+		".omMooMwwMooMmo.",
+		".oMmo.oooo.omMo.",
+		".om..........mo.",
+		"om............mo",
+		"om............mo",
+		".om..........mo.",
+		"..ommmmmmmmmmo..",
+		"...oooooooooo...",
+	],
+	"laser": [   # schwarzer Drache mit rotem Kristall
+		"o..o........o..o",
+		"ok.ko.oooo.ok.ko",
+		".okkookSSkookko.",
+		"..okkkSsssskko..",
+		".okkkssSsssskko.",
+		"okkkrssssssrkkko",
+		".okkkrssssrkkko.",
+		"..okkkrrrrkkko..",
+		".okkkkkkkkkkkko.",
+		".okso.oooo.oskko",
+		".ok..........ko.",
+		"ok............ko",
+		"os............so",
+		".ok..........ko.",
+		"..okksskksskko..",
+		"...oooooooooo...",
+	],
+	"feuerteam": [   # Tech-Band mit Lichtleiste und rundem Emitter
+		"................",
+		"................",
+		"....oooooooo....",
+		"..ooMMMMMMMMoo..",
+		".oMMssssssssMMo.",
+		"oMMMMMMMMMoooMMo",
+		"omdddddddmoSSomo",
+		"omo......omSSomo",
+		"omo.......oooMmo",
+		"omo..........omo",
+		"omo..........omo",
+		"oMo..........oMo",
+		".oMoo......ooMo.",
+		".oMssoooooossMo.",
+		"..ooMMMMMMMMoo..",
+		"....oooooooo....",
+	],
+	"minigun": [   # gestapelte Blöcke mit Gitter
+		"................",
+		".oooo.oooo.oooo.",
+		".osdo.osdo.osdo.",
+		".odso.odso.odso.",
+		".oddoooddoooddo.",
+		".odmmdddmmdddmo.",
+		".oddmmdddmmdddo.",
+		".odddddddddddddo",
+		"..odo......odo..",
+		".odo........odo.",
+		"od............do",
+		"od............do",
+		"od............do",
+		".od..........do.",
+		"..odddddddddddo.",
+		"...oooooooooooo.",
+	],
+	"abpraller": [   # zwei Pyramiden
+		"..........o.....",
+		".........oMo....",
+		"...o....oMmdo...",
+		"..oMo..oMmmddo..",
+		".oMmdooMmmmdddo.",
+		"oMmmddoMmmsdddo.",
+		"oMmsddooMsdddo..",
+		".ooooooooooooo..",
+		"..odo......odo..",
+		".odo........odo.",
+		"od............do",
+		"od............do",
+		"od............do",
+		".od..........do.",
+		"..oddddddddddo..",
+		"...oooooooooo...",
+	],
+	"brandfeld": [   # Goldrüstung mit Rubin
+		"....oooooooo....",
+		"..ooGggggggGoo..",
+		".oGgoooooooogGo.",
+		".ogorsSSsssrogo.",
+		"oGgorssSsssrogGo",
+		"oggorssssssrogg.",
+		".oGgoorrrrrogGo.",
+		"..ogwggggggwgo..",
+		"..oogggggggggo..",
+		".ogo........ogo.",
+		"og............go",
+		"og............go",
+		"oG............Go",
+		".og..........go.",
+		"..oggggggggggo..",
+		"...oooooooooo...",
+	],
+	"plasmagel": [   # grüne Zielscheibe mit Goldkreuz
+		"......oGGo......",
+		"....ooogGooo....",
+		"...osssogosss o.",
+		"..osSoooooossso.",
+		".oGosoSSSSoosGo.",
+		"oGGgoSoooSogGGGo",
+		".oGosoSSSSoosGo.",
+		"..ossoooooosso..",
+		"...osssogossso..",
+		"....ooogGooo....",
+		".om...oGGo...mo.",
+		"om............mo",
+		"om............mo",
+		".om..........mo.",
+		"..ommmmmmmmmmo..",
+		"...oooooooooo...",
+	],
+}
+
+static var _cache := {}
+
+
+static func bild(ring: String, farbe: Color) -> Texture2D:
+	if _cache.has(ring):
+		return _cache[ring] as Texture2D
+	var raster: Array = RASTER.get(ring, RASTER["feuerteam"])
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var pal := {
+		"o": Color("15121b"), "m": Color("8a93a6"), "M": Color("d0d6e2"), "d": Color("3a3f4c"), "k": Color("232029"),
+		"g": Color("c9952e"), "G": Color("ffd66b"), "w": Color("f2f2f2"),
+		"s": farbe, "S": farbe.lightened(0.45), "r": farbe.darkened(0.45),
+	}
+	for y in mini(16, raster.size()):
+		var z: String = raster[y]
+		for x in mini(16, z.length()):
+			var c := z[x]
+			if pal.has(c):
+				img.set_pixel(x, y, pal[c] as Color)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[ring] = tex
+	return tex

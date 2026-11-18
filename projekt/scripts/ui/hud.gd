@@ -331,9 +331,9 @@ func aktualisiere(_delta: float) -> void:
 	if s.endkampf:
 		var hq_leben: int = ceili(s.hq.leben) if is_instance_valid(s.hq) else 0
 		if _angreifer:
-			_welle_zeile = "Dein HQ hält %d/%d · Durchgang %d" % [hq_leben, int(Werte.HQ_LEBEN), s._durchgang]
+			_welle_zeile = "Dein HQ hält %d/%d · Durchgang %d" % [hq_leben, int(Werte.hq_leben()), s._durchgang]
 		else:
-			_welle_zeile = "Zerstöre das HQ: %d/%d" % [hq_leben, int(Werte.HQ_LEBEN)]
+			_welle_zeile = "Zerstöre das HQ: %d/%d" % [hq_leben, int(Werte.hq_leben())]
 	elif phase == KAMPF:
 		w = s._welle
 		_runde_text += "  ·  noch %d" % (s._noch_offen() + s.gegner.size())

@@ -111,7 +111,12 @@ func zeige(neuer_plan: Array) -> void:
 	_neu()
 
 
+var ohne_budget := false        # 18.11.: Szenario-Editor – Wellen ohne Budgetgrenze planen
+
+
 func budget() -> int:
+	if ohne_budget:
+		return 99999
 	return Phantom.budget(spiel.welle)
 
 
@@ -311,7 +316,7 @@ func _vorlage() -> void:
 	plan.clear()
 	var t := ERSTER_START
 	var erster := true
-	for v: Dictionary in Werte.WELLEN[spiel.welle]["trupps"]:
+	for v: Dictionary in Werte.wellen_plan(spiel.welle)["trupps"]:   # 18.11.: letzte Runde = Gegenangriff
 		if int(v.get("jeder", 1)) > 1:
 			continue
 		var neu := {"weg": v["weg"], "typen": (v["typen"] as Array).duplicate(), "pause": float(v.get("pause", 0.0))}
@@ -550,7 +555,8 @@ func _male_band(ci: Control) -> void:
 	var rest := budget() - verbraucht()
 	Stil.symbol(ci, "muenze", Vector2(x + 4.0, 8), 1.0, Stil.GOLD)
 	x += 10.0
-	x += Stil.schreibe(ci, Vector2(x, 8), "%d / %d" % [verbraucht(), budget()], Stil.KLEIN, Stil.GOLD if rest >= 0 else Stil.WARN) + 6.0
+	var preis_text := ("Preis %d" % verbraucht()) if ohne_budget else ("%d / %d" % [verbraucht(), budget()])   # 18.11.: Editor ohne Grenze
+	x += Stil.schreibe(ci, Vector2(x, 8), preis_text, Stil.KLEIN, Stil.GOLD if rest >= 0 else Stil.WARN) + 6.0
 	var balken := Rect2(Vector2(x, 7), Vector2(60, 3))
 	ci.draw_rect(balken, Stil.METALL_TIEF)
 	ci.draw_rect(Rect2(balken.position, Vector2(balken.size.x * clampf(float(verbraucht()) / maxf(1.0, float(budget())), 0.0, 1.0), 3)), Stil.GOLD if rest >= 0 else Stil.WARN)
@@ -687,7 +693,7 @@ func _male_konsole(ci: Control) -> void:
 	ci.draw_rect(schirm, Color("20140c"))
 	var rest := budget() - verbraucht()
 	Stil.symbol(ci, "muenze", schirm.get_center() + Vector2(0, -5), 1.0, Stil.GOLD)
-	Stil.schreibe_mittig(ci, schirm.get_center() + Vector2(0, 5), str(rest), Stil.KLEIN, Stil.GOLD if rest >= 0 else Stil.WARN)
+	Stil.schreibe_mittig(ci, schirm.get_center() + Vector2(0, 5), "frei" if ohne_budget else str(rest), Stil.KLEIN, Stil.GOLD if rest >= 0 else Stil.WARN)
 	var sy := schirm.position.y
 	while sy < schirm.end.y:
 		ci.draw_rect(Rect2(Vector2(schirm.position.x, sy), Vector2(schirm.size.x, 0.5)), Color(0, 0, 0, 0.35))

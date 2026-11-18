@@ -53,6 +53,7 @@ var turmbilder := {}               # neue Grafik: Turm-Zelle -> TurmBild (y-sort
 var hd: HdAnsicht = null           # HD-2D-Ansicht (Grafik „HD-2D“)
 var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
 var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
+var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
 var endkampf := false               # letzte Runde: Gegner ohne Ende, Sieg durch Zerstören des HQ
@@ -133,6 +134,10 @@ func _ready() -> void:
 		add_child(Touch.new())   # 17.11.: Handy/Tablet – lange drücken = Rechtsklick, zwei Finger = Zoom, Hinweis bei Hochkant
 	Ladebild.fertig.call_deferred()   # 17.11.: läuft gerade ein Ladebild, darf es jetzt voll laufen und ausblenden
 	Werte.lade_einstellungen()
+	if naechster_start == "editor":
+		SzenarioEditor.uebernimm()   # 18.11.: der Entwurf ist die Karte – vor dem Aufbau der Karte
+	budget = Werte.START_BUDGET   # 18.11.: erst jetzt steht die Karte fest (Regelpaket eines Szenarios)
+	leben = Werte.START_LEBEN
 	# Vollbild wie eingestellt (Standard an; das Projekt startet schon im Vollbild)
 	var ist_voll := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 	if Werte.vollbild != ist_voll:
@@ -175,6 +180,10 @@ func _ready() -> void:
 		_brakk_modus_gewaehlt()   # 18.11.
 	elif start == "fortsetzen":
 		_lade_zwischenstand()   # 18.11.
+	elif start == "editor":
+		szenario_editor = SzenarioEditor.new()   # 18.11.
+		add_child(szenario_editor)
+		szenario_editor.einrichten(self)
 	elif start.begins_with("verteidigt:"):
 		starte_phantom_verteidigung(start.trim_prefix("verteidigt:"))
 	elif start.begins_with("angriff:"):
@@ -230,11 +239,51 @@ func _tutorial_gewaehlt() -> void:
 
 ## Normales Spiel (auch gegen ein Angriffs-Phantom): Die Basis steht jede Partie woanders.
 func _normales_spiel() -> void:
+	_kartenbauten_einrichten()      # 18.11.: vorgebaute Türme/Fabriken eines Szenarios
 	_herausforderung_einrichten()   # 18.11.: vor der Basis – die fertige Mauer steht zuerst
 	if herausforderung == "mauern_fest":
 		setze_basis(Werte.BASIS_ZELLE)   # 18.11.: am Ende des Labyrinths, damit die Gegner die ganze Mauer ablaufen
 	elif Werte.BASIS_ZUFALL and not Werte.KARTE_BASIS_FEST:
 		stelle_basis("ueberall")
+	_zeige_einfuehrung()
+
+
+## 18.11.: Szenario mit vorgebauten Türmen/Fabriken (Werte.KARTE_STAND): hinstellen, nicht abreißbar (sonst gäbe der
+## Abriss Geld für etwas, das nie bezahlt wurde). Liegt ein zufälliger Checkpoint darauf, wird er neu gewürfelt.
+func _kartenbauten_einrichten() -> void:
+	if Werte.KARTE_STAND.is_empty():
+		return
+	_setze_stand(Werte.KARTE_STAND)
+	setze_kartenmauern()
+	_markiere_kartenbauten()
+	for cp: Vector2i in karte.checkpoints:
+		if karte.feld.has(cp):
+			setze_checkpoints(karte._zufalls_checkpoints())
+			break
+
+
+## Alle Felder, die das Szenario vorgebaut hat, als „gehört zur Karte“ markieren (auch nach „Fortsetzen“).
+func _markiere_kartenbauten() -> void:
+	var st: Dictionary = Werte.KARTE_STAND
+	var felder: Array[Vector2i] = []
+	for w: Array in st.get("waelle", []):
+		felder.append(Vector2i(int(w[0]), int(w[1])))
+	for f: Dictionary in st.get("fabriken", []):
+		felder.append(Vector2i(int(f["x"]), int(f["y"])))
+	for b: Dictionary in st.get("batterien", []):
+		felder.append(Vector2i(int(b["x"]), int(b["y"])))
+		felder.append(Vector2i(int(b["px"]), int(b["py"])))
+	for z: Vector2i in felder:
+		if karte.inhalt(z) != Karte.FREI:
+			karte.fest[z] = true
+
+
+## 18.11.: Einführungstext eines Szenarios zu Spielbeginn (Fenster mit „Los“).
+func _zeige_einfuehrung() -> void:
+	var text := str(Werte.KARTE_REGELN.get("einfuehrung", "")).strip_edges()
+	if text == "" or DisplayServer.get_name() == "headless":
+		return
+	add_child(ModLeiste.Tafel.new(Werte.KARTE_TITEL, text, [["Los geht's", Callable()]]))
 
 
 ## 18.11.: Vorgebaute Erdwälle der Karte hinstellen (ausbaubar, nicht abreißbar). `felder` leer = die der Karte.
@@ -563,8 +612,18 @@ func alles_frei() -> bool:
 	return sandbox or welle >= Werte.WAELLE_AB_WELLE or herausforderung in ["keine_fabriken", "mauern_fest"]
 
 
-## Grund, warum die Herausforderung dieses Bauwerk verbietet ("" = erlaubt).
+## 18.11.: Bauwerke, die eine Karte (Regelpaket „bauten“, Szenario-Editor) einzeln sperren kann: Werkzeug -> [Schlüssel, Name].
+const BAUTEN := {
+	Karte.FABRIK: ["fabrik", "Fabrik"], Karte.WALL: ["wall", "Erdwall"], Karte.STELLUNG: ["stellung", "Stellung"],
+	Karte.TURM: ["turm", "Turm"], Karte.GENERATOR: ["generator", "Schildgenerator"], Karte.BATTERIE: ["batterie", "Batterie"],
+	Karte.TOR: ["tor", "Tor"], Karte.PANZER: ["panzer", "Panzerung"], Karte.KOMMANDANT: ["kommandant", "Brakk"],
+}
+
+
+## Grund, warum die Herausforderung (oder die Karte) dieses Bauwerk verbietet ("" = erlaubt).
 func herausforderung_sperrt(typ: int) -> String:
+	if BAUTEN.has(typ) and not Werte.baut_erlaubt(str(BAUTEN[typ][0])):
+		return "Auf dieser Karte gesperrt: %s." % str(BAUTEN[typ][1])
 	if herausforderung == "keine_fabriken" and typ == Karte.FABRIK:
 		return "Herausforderung „Keine Fabriken“: Fabriken sind gesperrt – Türme, Batterien und Brakk gehen."
 	if herausforderung == "mauern_fest" and typ == Karte.WALL:
@@ -813,6 +872,9 @@ func _zum_menue() -> void:
 	if _menue == null and not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.: bewusst verlassen – kein „Fortsetzen“ mehr
 	naechster_start = ""
+	if SzenarioEditor.testet:
+		SzenarioEditor.testet = false   # 18.11.: „Szenario testen“ – zurück in den Editor
+		naechster_start = "editor"
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
 
@@ -1013,6 +1075,7 @@ func _lade_zwischenstand() -> void:
 	for z: Vector2i in Werte.MAUERN + (Werte.MAUERN_FEST if herausforderung == "mauern_fest" else ([] as Array[Vector2i])):   # 18.11.: vorgebaute Mauern bleiben nicht abreißbar
 		if karte.inhalt(z) == Karte.WALL:
 			karte.fest[z] = true
+	_markiere_kartenbauten()   # 18.11.: vorgebaute Türme/Fabriken eines Szenarios
 	var kz: Array = d.get("kommandant", [])
 	if kz.size() == 2:
 		_setze_kommandant(Vector2i(int(kz[0]), int(kz[1])))
@@ -1157,7 +1220,7 @@ func _neuer_zonenbau(art: String, zelle: Vector2i) -> Zonenbau:
 ## Startfeld für den nächsten Gegner: irgendwo in der Zone (verteilt, nicht gebündelt) –
 ## oder der eingenommene Checkpoint, an dem die Welle startet.
 func _spawn_zelle() -> Vector2i:
-	if phantom_modus != "":
+	if phantom_modus != "" or Werte.KARTE_WELLEN.has(welle):   # 18.11.: eigene Wellen eines Szenarios kommen wie geplant
 		# Phantom-Modus: jeder Trupp kommt geschlossen an seinem Ausgang heraus, damit die geplante Reihenfolge hält.
 		# 16.11.: Ein gewählter Ausgang (oben/unten) gilt immer – auch wenn ein eingenommener Checkpoint sonst der
 		# Startpunkt wäre. Nur „Mitte“ startet dann am Checkpoint.
@@ -2261,7 +2324,7 @@ func starte_welle() -> void:
 	karte.zeige_pfad_kraeftig = false
 	_welle = naechste_welle()
 	if endkampf:
-		_welle["leben_faktor"] = Werte.ENDKAMPF_LEBEN   # 18.11.: der Abwehrteil von Runde 20 hat normale Leben
+		_welle["leben_faktor"] = Werte.endkampf_leben()   # 18.11.: der Abwehrteil von Runde 20 hat normale Leben
 	_trupp = []
 	_im_flug = 0
 	_wurf_schlange = []
@@ -2270,8 +2333,8 @@ func starte_welle() -> void:
 	_ausfall_zeit.clear()
 	_reparaturen.clear()
 	_wurf_nahe = Vector2.INF
-	if phantom_modus != "" and not (_welle["wurf"] as Array).is_empty():
-		_sorge_fuer_wurf_schleuder()
+	if (phantom_modus != "" or Werte.KARTE_WELLEN.has(welle)) and not (_welle["wurf"] as Array).is_empty():
+		_sorge_fuer_wurf_schleuder()   # 18.11.: auch für eigene Wellen eines Szenarios
 	_lade_durchgang()
 	_wurf_aktiv = []
 	_wurf_sofort = false
@@ -2323,6 +2386,9 @@ func wurf_standorte() -> Array:
 
 ## Angriff: Der nächste Linksklick auf die Karte setzt das Landefeld dieses Wurf-Trupps.
 func waehle_wurfziel(trupp: Dictionary) -> void:
+	if szenario_editor != null:
+		melde("Im Szenario sucht die Wurf-Schleuder ihr Ziel selbst.", 4.0)   # 18.11.
+		return
 	_wurfziel_fuer = trupp
 	_laufband.visible = false
 	melde("Wurfziel: Klick auf ein freies Feld im orangen Kreis. Rechtsklick oder [Esc] bricht ab.", 8.0)
@@ -2393,6 +2459,9 @@ func naechste_welle() -> Dictionary:
 	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
 		return Werte.welle_aus_plan({"name": "Angriff von %s" % str(_angriff_phantom.get("spieler", "?")), "trupps": _phantom_trupps(welle), "wurf_frei": true}, welle)
 	var w := Werte.welle(welle)
+	if Werte.KARTE_WELLEN.has(welle):
+		# 18.11.: Szenario mit eigener Welle für diese Runde (Taktikplaner im Szenario-Editor); sonst die entworfene
+		w = Werte.welle_aus_plan({"name": "Welle des Szenarios", "trupps": Werte.KARTE_WELLEN[welle], "wurf_frei": true}, welle)
 	if herausforderung == "doppelt":
 		w = _verdoppelt(w)   # 18.11.: jeder Trupp kommt zweimal (Vorschau und Welle)
 	if not sandbox or sandbox_gegner.is_empty():
@@ -2496,15 +2565,27 @@ func _welle_geschafft() -> void:
 	var zins := Werte.zinsen(budget)
 	if zins >= Werte.ZINS_STUFEN * Werte.ZINS_JE_SCHRITT:
 		erfolg("sparfuchs")   # 18.11.
-	budget += bonus + cp_bonus + zins
+	var erz := erz_ertrag()
+	budget += bonus + cp_bonus + zins + erz
 	var text := "Runde %d überstanden: +%d Budget" % [welle, bonus]
 	if zins > 0:
 		text += ", +%d Zinsen" % zins
+	if erz > 0:
+		text += ", +%d aus Erzadern" % erz
 	if cp_bonus > 0:
 		text += ", +%d für gehaltene Checkpoints (%d von %d)" % [cp_bonus, gehalten, karte.checkpoints.size()]
 	melde(text + ".", 5.0)
 	_schliesse_runde("geschafft")
 	_naechste_bauphase()
+
+
+## 18.11. (Etappe 2): Erzadern – jede Fabrik oder jeder Turm auf einer Erzader bringt ERZ_BONUS je Runde.
+func erz_ertrag() -> int:
+	var n := 0
+	for z: Vector2i in karte.boden:
+		if karte.boden[z] == "erz" and (karte.inhalt(z) == Karte.FABRIK or karte.ausbau.get(z, Karte.FREI) == Karte.TURM):
+			n += 1
+	return n * Werte.ERZ_BONUS * geld_faktor()
 
 
 ## Runde 20, zweiter Teil (18.11.): Die erste Welle ist abgewehrt – Rundenbonus wie sonst, dann fällt der Schild,
@@ -2514,7 +2595,7 @@ func _starte_gegenangriff() -> void:
 	var zins := Werte.zinsen(budget)
 	budget += bonus + zins
 	endkampf = true
-	_welle["leben_faktor"] = Werte.ENDKAMPF_LEBEN
+	_welle["leben_faktor"] = Werte.endkampf_leben()
 	karte.schild = false
 	karte.zeige_angriff = true
 	karte.aktualisiere_pfad()
@@ -2876,6 +2957,8 @@ func fernziel(von: Vector2, weite: float, nur: int = 0) -> Einheit:
 	var beste := weite * weite
 	for e in einheiten:
 		var d := von.distance_squared_to(e.position)
+		if d <= beste and e.am_boden() and karte.boden_bei(e.position) == "wald" and d > pow(Werte.WALD_SICHT * Werte.ZELLE, 2.0):
+			continue   # 18.11.: im Wald erst aus der Nähe zu sehen
 		if d <= beste and ((nur != 2 and e.in_stellung()) or (nur != 1 and e.am_boden() and karte.sicht_frei(von, e.position))):
 			beste = d
 			bestes = e
@@ -3052,7 +3135,7 @@ func _einschlag_haufen(punkt: Vector2) -> void:
 		print("HAUFEN R%d Stein bei %s" % [welle, karte.zelle_bei(punkt)])
 	for e in einheiten.duplicate():
 		if is_instance_valid(e) and e.bodentruppe() and e.position.distance_to(punkt) <= radius:
-			e.nimm_schaden(Werte.SCHLEUDER["schaden_haufen"])
+			e.nimm_fernschaden(Werte.SCHLEUDER["schaden_haufen"])   # 18.11.: Ruine deckt
 
 
 ## Ein Sprenger ohne lohnenden Erdwall hat eine Fabrik erreicht: Sie fällt für die Runde aus, Bodentruppen daneben werden getroffen.
@@ -3105,7 +3188,7 @@ func _einschlag_einheit(kennung: int) -> void:
 	if e != null and _prallt_ab(e.position):
 		return
 	if e != null and einheiten.has(e) and e.in_stellung():
-		e.nimm_schaden(Werte.SCHLEUDER["schaden_einheit"])
+		e.nimm_fernschaden(Werte.SCHLEUDER["schaden_einheit"])   # 18.11.: Ruine deckt
 
 
 ## Mausposition in Weltkoordinaten – in der HD-2D-Ansicht über die 3D-Kamera ermittelt.
@@ -3886,12 +3969,22 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 		if grund != "":
 			return grund
 	elif not karte.ist_bebaubar(z):
-		return "Hier ist kein Platz."
+		return "Hier ist kein Platz." if not Werte.BODEN_UNBEBAUBAR.has(str(karte.boden.get(z, ""))) else "Auf %s wird nicht gebaut." % ("einer Brücke" if karte.boden[z] == "bruecke" else ("Sumpf" if karte.boden[z] == "sumpf" else "Waldboden"))
+	elif karte.boden.get(z, "") == "ruine" and typ != Karte.WALL:
+		return "Auf einer Ruine geht nur ein Erdwall (für %d)." % Werte.RUINE_KOSTEN_WALL
 	elif typ == Karte.BATTERIE and not karte.ist_bebaubar(partner_feld(z)):
 		return "Kein Platz für die Pilotenfabrik daneben – mit [T] drehen."
-	if budget < kosten(typ):
+	if budget < kosten_bei(z, typ):
 		return "Nicht genug Budget."
 	return ""
+
+
+## 18.11.: Preis an einem bestimmten Feld – ein Erdwall auf einer Ruine ist billiger.
+func kosten_bei(z: Vector2i, typ: int) -> int:
+	var preis := kosten(typ)
+	if typ == Karte.WALL and preis > 0 and karte.boden.get(z, "") == "ruine":
+		return mini(preis, Werte.RUINE_KOSTEN_WALL)
+	return preis
 
 
 func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
@@ -3901,7 +3994,7 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		if not still:
 			melde(grund)
 		return false
-	var preis := kosten(typ)
+	var preis := kosten_bei(z, typ)
 	if typ == Karte.WALL and freie_waelle > 0:
 		freie_waelle -= 1
 		_gratis[z] = true
@@ -3997,7 +4090,7 @@ func erstattung(z: Vector2i) -> int:
 			# der Preis, den die zuletzt gebaute Fabrik gekostet hat
 			alt += int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + Werte.KOSTEN_FABRIK_PROZENT / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
 		else:
-			alt += kosten(war)
+			alt += kosten_bei(z, war)   # 18.11.: auf der Ruine zählt der billigere Preis
 	var ausbau: int = karte.ausbau.get(z, Karte.FREI)
 	if ausbau != Karte.FREI and not frisch_bau.has("ausbau"):
 		alt += kosten(ausbau)
@@ -4154,6 +4247,8 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	var stufe := int(fabriken[z].get("stufe", 0))
 	if stufe >= Werte.KOSTEN_STUFE.size():
 		return false
+	if brakk_modus and stufe >= 1:
+		return false   # 18.11.: Brakk-Mode – Stufe 2 und 3 kommen über Brakks Ringe
 	if stufe == 2 and not (Werte.STUFE_3[fabriken[z]["typ"]] as Dictionary).has(faehigkeit):
 		return false
 	if budget < Werte.KOSTEN_STUFE[stufe]:
@@ -4412,6 +4507,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		Werte.speichere_einstellungen()
 		get_viewport().set_input_as_handled()
 		return
+	if szenario_editor != null:
+		return   # 18.11.: im Szenario-Editor malt der Editor (szenario_editor.gd)
 	if _menue != null:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:

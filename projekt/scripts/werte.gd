@@ -21,7 +21,9 @@ static var START_ZELLE := Vector2i(0, 4)    # HQ des Gegners; Mitte seiner Zone
 const ZONE_SPALTEN: int = 3
 const HQ_LEBEN: float = 1500.0   # 15.11.: vorher 2200 (Runde 20 war kaum zu gewinnen)
 static var ANGRIFFS_ZELLE := Vector2i(1, 4) # dorthin marschieren die eigenen Truppen in der letzten Runde (Feld vor dem HQ)
-const LETZTE_RUNDE: int = 20           # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
+## 18.11.: aus der Karte (Regelpaket „runden“: 10/15/20); ohne Angabe 20. Die letzte Runde ist immer der Gegenangriff.
+static var LETZTE_RUNDE: int = 20      # ab dieser Runde: Gegenangriff. Gegner kommen ohne Ende, Sieg = HQ zerstört
+const STANDARD_RUNDEN: int = 20
 const ENDKAMPF_TRUPP_PAUSE: float = 2.0    # 18.11.: vorher 1,0 – weniger gebündelt; Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
 const ENDKAMPF_PAUSE: float = 6.0     # 15.11.: vorher 3 – Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
 const ENDKAMPF_LEBEN: float = 2.2      # 18.11.: vorher 2,6 (15.11.: 3,4) – Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
@@ -153,8 +155,11 @@ const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alle
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
 # --- Wirtschaft --------------------------------------------------------
-const START_BUDGET: int = 120
-const START_LEBEN: int = 15
+## 18.11.: Startbudget und -leben kommen aus der Karte (Regelpaket); ohne Angabe gelten die Standardwerte.
+const STANDARD_BUDGET: int = 120
+const STANDARD_LEBEN: int = 15
+static var START_BUDGET: int = STANDARD_BUDGET
+static var START_LEBEN: int = STANDARD_LEBEN
 const KOSTEN_FABRIK: int = 50      # die erste Fabrik
 const KOSTEN_FABRIK_PROZENT: float = 25.0  # jede weitere Fabrik kostet so viel Prozent mehr als die vorige (auf 5 gerundet)
 const ZONE_ABSTAND: int = 2        # so viele Felder halten eigene Truppen Abstand zur Zone (außer in der letzten Runde), damit die Gegner herauskommen
@@ -512,10 +517,12 @@ static func speichere_einstellungen() -> void:
 static func setze_karte(gross: bool) -> void:
 	karte_gross = gross
 	GELAENDE = {}   # 18.11.: Gelände und vorgebaute Mauern kommen nur aus einer Karten-Datei (lade_karte)
+	BODEN = {}
 	MAUERN = []
 	MAUERN_FEST = []
 	KARTE_BASIS_FEST = false
 	KARTE_CP_FEST = false
+	_setze_regeln({})   # 18.11.: Standardregeln (Budget, Leben, 20 Runden), keine eigenen Wellen, nichts vorgebaut
 	if not gross:
 		SPALTEN = 20
 		ZEILEN = 10
@@ -556,6 +563,20 @@ static var GELAENDE: Dictionary = {}        # Feld -> "fels" (versperrt Weg, Bau
 static var MAUERN: Array[Vector2i] = []     # vorgebaute Erdwälle: ausbaubar, nicht abreißbar
 static var MAUERN_FEST: Array[Vector2i] = []   # fertige Mauer für die Herausforderung „Mauern fest“
 
+## 18.11. (Etappe 2): Gelände mit Wirkung – begehbar, aber mit Regeln (nur auf eigenen Karten aus dem Szenario-Editor).
+## In der Karten-Datei je Art eine Liste von Feldern (Schlüssel wie in BODEN_ARTEN). Brakk ist (noch) ausgenommen.
+const BODEN_ARTEN: Array[String] = ["anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz"]
+const BODEN_NAMEN := {"anhoehe": "Anhöhe", "sumpf": "Sumpf", "bruecke": "Brücke", "ruine": "Ruine", "wald": "Wald", "erz": "Erzader"}
+const BODEN_UNBEBAUBAR: Array[String] = ["sumpf", "bruecke", "wald"]   # dort steht nichts; auf der Ruine nur Erdwälle
+const ANHOEHE_BONUS: float = 1.0      # Anhöhe: +Reichweite (Felder) für Truppen, Stellungen, Türme und Gegner darauf (nicht Batterien)
+const SUMPF_TEMPO: float = 0.7        # Sumpf: Tempo für Gegner und eigene Truppen ...
+const SUMPF_MIN_TEMPO: float = 0.45   # ... zusammen mit Frost/Plasmagel nie unter diesen Anteil (schon Langsameres bleibt)
+const RUINE_DECKUNG: float = 0.25     # Ruine: so viel weniger Schaden von Fernkämpfern (Battlesphäre, Schleuder, Laser)
+const RUINE_KOSTEN_WALL: int = 5      # Ruine: ein Erdwall darauf kostet nur so viel (die Mauer steht schon halb)
+const WALD_SICHT: float = 2.0         # Wald: versperrt die Sicht wie Fels; Truppen darin sieht eine Battlesphäre erst so nah (Felder)
+const ERZ_BONUS: int = 10             # Erzader: eine Fabrik oder ein Turm darauf bringt so viel Budget je Runde
+static var BODEN: Dictionary = {}     # Feld -> Art aus BODEN_ARTEN
+
 
 ## 18.11.: Herausforderungen (Startmenü → Herausforderungen). Zählen nicht für Rangliste und Phantome.
 ## [Schlüssel, Name, Beschreibung] – "" = keine. Die gewählte steht in `herausforderung` (nicht gespeichert).
@@ -586,20 +607,84 @@ static func ist_hauptkarte() -> bool:
 	return karte_gross and karte_name == "paulland"
 
 
+## 18.11.: Eigene Karten aus dem Szenario-Editor liegen in user://karten/<name>.json (Name beginnt mit "eigen_",
+## damit er nie mit einer mitgelieferten Karte zusammenfällt).
+const EIGENE_KARTEN := "user://karten/"
+static var KARTE_REGELN: Dictionary = {}    # Regelpaket der Karte (siehe _setze_regeln); leer = Standard
+static var KARTE_WELLEN: Dictionary = {}    # eigene Wellen: Runde (int) -> Trupps im Format von WELLEN
+static var KARTE_STAND: Dictionary = {}     # vorgebaute Türme/Fabriken im Format von Phantom._stand (leer = nichts)
+
+
 static func karten_daten(name: String) -> Dictionary:
 	var pfad := "res://karten/%s.json" % name
 	if not FileAccess.file_exists(pfad):
+		pfad = EIGENE_KARTEN + name + ".json"
+	if not FileAccess.file_exists(pfad):
 		return {}
 	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(pfad))
-	if d is Dictionary:
+	if d is Dictionary and karte_gueltig(d) == "":
 		return d
 	return {}
+
+
+static func ist_eigene_karte(name: String) -> bool:
+	return not KARTEN.has(name) and FileAccess.file_exists(EIGENE_KARTEN + name + ".json")
+
+
+## Namen aller eigenen Karten (ohne Endung), alphabetisch.
+static func eigene_karten() -> Array[String]:
+	var aus: Array[String] = []
+	var d := DirAccess.open(EIGENE_KARTEN)
+	if d == null:
+		return aus
+	for f in d.get_files():
+		if f.ends_with(".json"):
+			aus.append(f.get_basename())
+	aus.sort()
+	return aus
+
+
+## Prüft, ob ein Wörterbuch eine ladbare Karte ist ("" = ja, sonst der Grund). Für Import und eigene Dateien.
+static func karte_gueltig(k: Dictionary) -> String:
+	for s: String in ["spalten", "zeilen", "hq", "angriff", "zonenbauten_zeilen", "schleuder_plaetze", "ausgaenge", "basis", "checkpoint_bereiche", "checkpoints"]:
+		if not k.has(s):
+			return "Es fehlt „%s“." % s
+	if not (k["spalten"] is float or k["spalten"] is int) or not (k["zeilen"] is float or k["zeilen"] is int):
+		return "Größe ist keine Zahl."
+	var sp := int(k["spalten"])
+	var ze := int(k["zeilen"])
+	if sp < 12 or sp > 60 or ze < 6 or ze > 30:
+		return "Größe %d×%d geht nicht." % [sp, ze]
+	if not (k["zonenbauten_zeilen"] is Array) or (k["zonenbauten_zeilen"] as Array).size() != 7:
+		return "Zonenbauten passen nicht."
+	if not (k["ausgaenge"] is Dictionary) or not (k["ausgaenge"] as Dictionary).has_all(["mitte", "oben", "unten"]):
+		return "Ausgänge passen nicht."
+	if not (k["checkpoints"] is Array) or (k["checkpoints"] as Array).size() != 2 or not (k["checkpoint_bereiche"] is Array) or (k["checkpoint_bereiche"] as Array).size() != 2:
+		return "Es braucht genau zwei Checkpoints."
+	for liste: String in ["schleuder_plaetze", "checkpoints", "fels", "wasser", "mauern", "mauern_fest"] + BODEN_ARTEN:
+		if not k.has(liste):
+			continue
+		if not (k[liste] is Array):
+			return "„%s“ ist keine Liste." % liste
+		for p: Variant in k[liste]:
+			if not (p is Array) or (p as Array).size() < 2:
+				return "„%s“ enthält ein ungültiges Feld." % liste
+	for r: Variant in k["checkpoint_bereiche"]:
+		if not (r is Array) or (r as Array).size() != 4:
+			return "Checkpoint-Bereich ungültig."
+	return ""
 
 
 static func lade_karte(name: String) -> bool:
 	var k := karten_daten(name)
 	if k.is_empty():
 		return false
+	uebernimm_karte(name, k)
+	return true
+
+
+## 18.11.: Stellt alle Kartenwerte aus einem Karten-Wörterbuch ein (Datei oder Entwurf im Szenario-Editor).
+static func uebernimm_karte(name: String, k: Dictionary) -> void:
 	karte_name = name
 	KARTE_TITEL = str(k.get("name", name))
 	SPALTEN = int(k["spalten"])
@@ -607,6 +692,7 @@ static func lade_karte(name: String) -> bool:
 	KARTE_FAKTOR = (SPALTEN - 1) / 19.0
 	START_ZELLE = _feld(k["hq"])
 	ANGRIFFS_ZELLE = _feld(k["angriff"])
+	_setze_regeln(k)   # vor den Zonenbauten: die Laser stehen in der letzten Runde
 	ZONENBAUTEN = _zonenbauten(k["zonenbauten_zeilen"])
 	SCHLEUDER_PLAETZE = _felder(k["schleuder_plaetze"])
 	var a: Dictionary = k["ausgaenge"]
@@ -625,7 +711,70 @@ static func lade_karte(name: String) -> bool:
 			GELAENDE[z] = art
 	MAUERN = _felder(k.get("mauern", []))
 	MAUERN_FEST = _felder(k.get("mauern_fest", []))
-	return true
+	BODEN = {}
+	for art: String in BODEN_ARTEN:
+		for z: Vector2i in _felder(k.get(art, [])):
+			if not GELAENDE.has(z):
+				BODEN[z] = art
+
+
+## 18.11.: Regelpaket einer Karte (Szenario-Editor). `k` = ganze Karte; fehlt "regeln", gilt alles wie gewohnt.
+## regeln: {"start_budget", "start_leben", "runden" (10/15/20), "bauten" {Name: false = gesperrt}, "herausforderung", "einfuehrung"}
+## wellen: {"<Runde>": [Trupps wie in WELLEN]}, stand: vorgebaute Türme/Fabriken im Format von Phantom._stand.
+static func _setze_regeln(k: Dictionary) -> void:
+	var r: Variant = k.get("regeln", {})
+	KARTE_REGELN = (r as Dictionary).duplicate(true) if r is Dictionary else {}
+	START_BUDGET = clampi(int(KARTE_REGELN.get("start_budget", STANDARD_BUDGET)), 0, 99999)
+	START_LEBEN = clampi(int(KARTE_REGELN.get("start_leben", STANDARD_LEBEN)), 1, 999)
+	LETZTE_RUNDE = clampi(int(KARTE_REGELN.get("runden", STANDARD_RUNDEN)), 2, STANDARD_RUNDEN)
+	KARTE_WELLEN = {}
+	var w: Variant = k.get("wellen", {})
+	if w is Dictionary:
+		for nr: Variant in w:
+			if w[nr] is Array and not (w[nr] as Array).is_empty():
+				KARTE_WELLEN[int(nr)] = (w[nr] as Array).duplicate(true)
+	var s: Variant = k.get("stand", {})
+	KARTE_STAND = (s as Dictionary).duplicate(true) if s is Dictionary else {}
+
+
+## Ist dieses Bauwerk auf der Karte erlaubt? `name` wie in BAUTEN_NAMEN (main.gd), z. B. "fabrik".
+static func baut_erlaubt(name: String) -> bool:
+	var b: Variant = KARTE_REGELN.get("bauten", {})
+	return not (b is Dictionary) or bool((b as Dictionary).get(name, true))
+
+
+## 18.11.: Grundgerüst einer neuen Karte der Größe spalten×zeilen für den Szenario-Editor: Zone (HQ, Zonenbauten,
+## Schleuderplätze, Ausgänge), Basis und Checkpoint-Bereiche aus der Größe berechnet. Bei 28×14 genau wie PaulLand.
+static func karten_vorlage(spalten: int, zeilen: int) -> Dictionary:
+	var mitte := floori(zeilen / 2.0) - 1                    # 14 -> 6, 10 -> 4, 16 -> 7
+	var oben := floori((zeilen - 2) / 4.0)                   # Zeile der oberen Zonenbauten: 14 -> 3
+	var unten := zeilen - 1 - oben                 # ... und der unteren: 14 -> 10
+	var n := floori((zeilen + 6) / 4.0)                      # Schleuderplätze je Seite: 14 -> 5, 10 -> 4
+	var plaetze: Array = []
+	for y in n:
+		plaetze.append([1, y])
+	for y in range(zeilen - n, zeilen):
+		plaetze.append([1, y])
+	var b := float(spalten - 1)
+	var x1 := roundi(0.22 * b)
+	var b1 := roundi(0.33 * b)
+	var x2 := roundi(0.44 * b)
+	var b2 := roundi(0.41 * b)
+	var halb := floori(zeilen / 2.0)
+	var bereiche := [[x1, 1, b1, zeilen - 2], [x2, 1, b2, zeilen - 2]]
+	var cp1: Array = [x1 + floori(b1 / 4.0), mitte]
+	var cp2: Array = [x2 + floori(b2 / 2.0), halb]
+	return {
+		"name": "Neues Szenario", "beschreibung": "",
+		"spalten": spalten, "zeilen": zeilen,
+		"hq": [0, mitte], "angriff": [1, mitte],
+		"zonenbauten_zeilen": [oben, unten, unten, oben, oben, halb, unten],
+		"schleuder_plaetze": plaetze,
+		"ausgaenge": {"mitte": [0, mitte], "oben": [1, 1], "unten": [1, zeilen - 2]},
+		"basis": [spalten - 2, halb], "basis_fest": false,
+		"checkpoint_bereiche": bereiche, "checkpoints": [cp1, cp2], "checkpoints_fest": false,
+		"fels": [], "wasser": [], "mauern": [], "mauern_fest": [],
+	}
 
 
 static func _feld(p: Array) -> Vector2i:
@@ -640,7 +789,7 @@ static func _felder(liste: Array) -> Array[Vector2i]:
 
 
 static func _zonenbauten(zeilen: Array) -> Array:
-	var vorlage := [["schleuder", 1, 5], ["schleuder", 1, 8], ["wurf", 0, 10], ["wurf", 0, 14], ["laser", 2, 20], ["laser", 2, 20], ["laser", 2, 20]]
+	var vorlage := [["schleuder", 1, 5], ["schleuder", 1, 8], ["wurf", 0, 10], ["wurf", 0, 14], ["laser", 2, LETZTE_RUNDE], ["laser", 2, LETZTE_RUNDE], ["laser", 2, LETZTE_RUNDE]]   # 18.11.: Laser in der letzten Runde der Karte
 	var liste: Array = []
 	for i in vorlage.size():
 		liste.append({"art": vorlage[i][0], "zelle": Vector2i(vorlage[i][1], zeilen[i]), "ab_welle": vorlage[i][2]})
@@ -948,7 +1097,7 @@ const WELLEN := {
 	7: {"name": "Kleiner Fahnensturm", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"], "pause": -2.0},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere"]},   # 18.11. Balance: vorher 3 Sphären (Runde 7 war der häufigste frühe Abbruch), eine wandert nach Runde 8
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
 	]},
@@ -956,22 +1105,22 @@ const WELLEN := {
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},   # 18.11.: vorher 3
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
 	]},
 	9: {"name": "Köder", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger"], "pause": 17.0},
-		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "hund", "hund", "hund"]},   # 18.11.: Einführung mit einem Schildträger (vorher 2; Runde 9 war der größte Sprung)
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["hund", "hund", "hund", "sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["hund", "hund", "hund", "sphaere", "sphaere", "sphaere"]},   # 18.11.: vorher 4 Sphären, eine wandert nach Runde 10
 	]},
 	10: {"name": "Über die Mauer", "stufe": "Einführung", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere"]},   # 18.11.: vorher 4
 		{"weg": "l", "typen": ["sprenger", "sprenger", "hund", "hund"]},
 		{"weg": "l", "typen": ["schild", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund"]},
@@ -999,9 +1148,8 @@ const WELLEN := {
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere"], "locker": true},
 		{"weg": "w", "typen": ["hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund", "hund"]},
-		{"weg": "l", "typen": ["schild", "sphaere", "sphaere"]},
 		{"weg": "l", "typen": ["schild", "schild", "hund", "hund", "hund", "hund"]},
-	]},
+	]},   # 18.11.: Trupp „Schild + 2 Sphären“ nach Runde 14 verschoben (Runde 13 Spitze, Runde 14 Atempause zu tief)
 	14: {"name": "Abrisskommando", "stufe": "Kombination", "trupps": [
 		{"weg": "l", "typen": ["rauch", "rauch"]},
 		{"weg": "l", "typen": ["sprenger", "sprenger", "sprenger"]},
@@ -1009,6 +1157,7 @@ const WELLEN := {
 		{"weg": "l", "typen": ["sani", "sphaere", "sphaere", "sphaere", "sphaere"]},
 		{"weg": "l", "typen": ["schild", "sani", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["schwarm", "hund", "hund"]},
+		{"weg": "l", "typen": ["schild", "sphaere", "sphaere"]},   # 18.11.: aus Runde 13
 	]},
 	15: {"name": "Fahnensturm", "stufe": "Prüfung", "trupps": [
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
@@ -1080,7 +1229,14 @@ const WELLEN := {
 
 ## Eine Welle: was kommt, in welcher Reihenfolge, was wird geworfen. `variante` und `wurf_nr` gibt es nur noch der alten Aufrufe wegen.
 static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary:
-	return welle_aus_plan(WELLEN[clampi(nr, 1, LETZTE_RUNDE)], nr)
+	return welle_aus_plan(wellen_plan(nr), nr)
+
+
+## 18.11.: Entworfener Plan der Runde. Die letzte Runde der Karte ist immer der Gegenangriff (Plan 20), auch bei 10 oder 15 Runden.
+static func wellen_plan(nr: int) -> Dictionary:
+	if nr >= LETZTE_RUNDE:
+		return WELLEN[STANDARD_RUNDEN]
+	return WELLEN[clampi(nr, 1, STANDARD_RUNDEN)]
 
 
 ## Dasselbe für einen beliebigen Plan im Format von WELLEN (Phantom-Modus: der Plan eines Spielers).
@@ -1134,6 +1290,20 @@ static func welle_aus_plan(plan: Dictionary, nr: int) -> Dictionary:
 		"leben_faktor": snappedf(1.0 + LEBEN_JE_RUNDE * (mini(nr, LETZTE_RUNDE - 1) - 1), 0.1),   # 18.11.: Runde 20 erst wie 19; Endkampf setzt main.gd
 		"abstand": 0.7,            # Sekunden zwischen zwei Gegnern
 	}
+
+
+## 18.11. Balance: Gegenangriff und HQ wachsen mit der Rundenzahl der Karte. Bei 20 Runden genau ENDKAMPF_LEBEN und HQ_LEBEN;
+## bei 10/15 Runden im Verhältnis des Leben-Faktors der vorletzten Runde (10 Runden: ×1,2 statt ×2,2 und 850 HQ-Leben).
+static func endkampf_anteil() -> float:
+	return (1.0 + LEBEN_JE_RUNDE * (LETZTE_RUNDE - 2)) / (1.0 + LEBEN_JE_RUNDE * (STANDARD_RUNDEN - 2))
+
+
+static func endkampf_leben() -> float:
+	return snappedf(ENDKAMPF_LEBEN * endkampf_anteil(), 0.1)
+
+
+static func hq_leben() -> float:
+	return snappedf(HQ_LEBEN * endkampf_anteil(), 50.0)
 
 
 ## Extra-Reichweite einer Einheit in der Stellung (je Einheit verschieden).

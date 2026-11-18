@@ -375,6 +375,8 @@ func _baue_fabrik() -> void:
 	if stufe == 0:
 		_upgrade_knopf = _karte_breit("Spezialisieren", preise[0], "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr." % d["name"],
 			spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
+	elif stufe < 3 and spiel.brakk_modus:
+		_zeile("Brakk-Mode: Stufe 2 und 3 gibt es hier nicht – Brakks Ringe (Lichtterminal an der Basis) geben sie Truppen in ihrem Feld.", Stil.KLEIN, Stil.LEUCHT)   # 18.11.
 	elif stufe == 1:
 		_upgrade_knopf = _karte_breit("Stufe 2", preise[1], Werte.STUFE_2[f["typ"]]["text"], spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
 	elif stufe == 2:

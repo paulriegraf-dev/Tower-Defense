@@ -9,6 +9,8 @@ const BILD := Vector2(1280, 720)
 const KARTE_SICHT := Vector2(1280, 640)   # zwischen oberer und unterer Leiste
 
 var spiel: Node
+var sicht := KARTE_SICHT       # 18.11.: sichtbarer Kartenbereich in Bildpixeln (der Szenario-Editor zieht links seine Leiste ab)
+var sicht_links := 0.0         # ... und dort beginnt er
 var _ziel_zoom := 1.0
 const NAH := 1.5
 var _links_start := Vector2.INF
@@ -38,21 +40,23 @@ func setze_zoom_anteil(a: float) -> void:
 func _ganz() -> float:
 	var w := float(Werte.SPALTEN * Werte.ZELLE)
 	var h := float(Werte.ZEILEN * Werte.ZELLE)
-	return minf(1.0, minf(KARTE_SICHT.x / w, KARTE_SICHT.y / h))
+	return minf(1.0, minf(sicht.x / w, sicht.y / h))
 
 
 func _begrenzen() -> void:
 	var w := float(Werte.SPALTEN * Werte.ZELLE)
 	var h := float(Werte.ZEILEN * Werte.ZELLE)
 	var z := zoom.x
-	var halb := KARTE_SICHT / 2.0 / z
-	# Mitte der Kartensicht liegt in der Bildmitte (beide Leisten sind gleich hoch)
-	if w <= KARTE_SICHT.x / z + 0.5:
-		position.x = w / 2.0
+	var halb := sicht / 2.0 / z
+	# Mitte der Kartensicht liegt in der Bildmitte (beide Leisten sind gleich hoch); 18.11.: waagrecht um die
+	# Leiste des Editors verschoben (0 im Spiel)
+	var verschiebung := (sicht_links + sicht.x / 2.0 - BILD.x / 2.0) / z
+	if w <= sicht.x / z + 0.5:
+		position.x = w / 2.0 - verschiebung
 	else:
-		position.x = clampf(position.x, halb.x, w - halb.x)
+		position.x = clampf(position.x, halb.x - verschiebung, w - halb.x - verschiebung)
 	var oben := float(Werte.KARTE_OBEN)
-	if h <= KARTE_SICHT.y / z + 0.5:
+	if h <= sicht.y / z + 0.5:
 		position.y = oben + h / 2.0
 	else:
 		position.y = clampf(position.y, oben + halb.y, oben + h - halb.y)
@@ -102,7 +106,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseMotion and (event as InputEventMouseMotion).button_mask & MOUSE_BUTTON_MASK_LEFT and _links_start != Vector2.INF:
-		var frei: bool = spiel.werkzeug == Karte.FREI and spiel._zieh_von == Karte.KEINE
+		var frei: bool = spiel.werkzeug == Karte.FREI and spiel._zieh_von == Karte.KEINE and spiel.szenario_editor == null   # 18.11.: im Editor malt die linke Taste
 		if frei and not _links_zieht and (event as InputEventMouseMotion).position.distance_to(_links_start) > 6.0:
 			_links_zieht = true
 		if _links_zieht:

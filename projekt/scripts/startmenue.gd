@@ -1,7 +1,7 @@
 class_name Startmenue extends CanvasLayer
 ## Startmenü (16.11.2026, schlicht wie bei anderen Tower-Defense-Spielen): Titel, darunter eine senkrechte Liste.
 ##   Spielen        → Los, Karte normal/groß, Tutorial an/aus
-##   Sandbox
+##   Sandbox        → Sandbox spielen / Szenario bauen (18.11.)
 ##   Phantom-Modus  → Angreifen / Verteidigen
 ##   Einstellungen  → Grafik, Vollbild, Mauern, Übersicht
 ##   Beenden
@@ -119,11 +119,12 @@ func _baue() -> void:
 	match _seite:
 		"haupt":
 			_eintraege = [
-				["Spielen", _zeige.bind("spielen"), "Hauptkarte PaulLand", LICHT],
-				["Herausforderungen", _zeige.bind("herausforderung"), "weitere Karten", Stil.TEXT],
-				["Brakk-Mode", _brakk_mode, "Ego-Sicht als Brakk · Prototyp", Stil.TEXT],
-				["Sandbox", _starte.bind(true, "sandbox"), "", Stil.TEXT],
+				# 18.11. (Paul): Reihenfolge nach Wichtigkeit
+				["Spielen", _zeige.bind("spielen"), "", LICHT],
 				["Phantom-Modus", _zeige.bind("phantom"), "", Stil.TEXT],
+				["Brakk-Mode", _brakk_mode, "", Stil.TEXT],
+				["Sandbox", _zeige.bind("sandbox"), "", Stil.TEXT],
+				["Herausforderungen", _zeige.bind("herausforderung"), "", Stil.TEXT],
 				["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT],
 				["Beenden", _beenden, "", Stil.TEXT_BLASS],
 			]
@@ -132,6 +133,13 @@ func _baue() -> void:
 			if runde > 0:
 				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie", KUPFER_HELL])
 				_eintraege[1][3] = Stil.TEXT
+		"sandbox":
+			# 18.11.: Sandbox als Unterseite – spielen wie bisher oder eigene Karte bauen
+			_eintraege = [
+				["Sandbox spielen", _starte.bind(true, "sandbox"), "unendlich Budget, alle Bauwerke ab Runde 1", LICHT],
+				["Szenario bauen", _szenario_bauen, "eigene Karte mit Gelände, Regeln und Wellen", Stil.TEXT],
+				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
+			]
 		"herausforderung":
 			# 18.11.: weitere Karten und Herausforderungen – zählt nicht für Rangliste und Phantome (außer PaulLand ohne Herausforderung)
 			var haupt := _wahl_karte == "paulland" and _wahl_herausforderung == ""
@@ -193,7 +201,8 @@ func _baue() -> void:
 
 ## 18.11.: Kartenwahl auf der Seite „Herausforderungen“ (Titel und Beschreibung stehen in karten/<name>.json).
 static func _karten_titel(name: String) -> String:
-	return str(Werte.karten_daten(name).get("name", name))
+	var titel := str(Werte.karten_daten(name).get("name", name))
+	return titel + (" (eigene)" if Werte.ist_eigene_karte(name) else "")
 
 
 static func _karten_text(name: String) -> String:
@@ -208,9 +217,36 @@ func _naechste_herausforderung() -> void:
 
 
 func _naechste_karte() -> void:
-	var i := Werte.KARTEN.find(_wahl_karte)
-	_wahl_karte = Werte.KARTEN[(i + 1) % Werte.KARTEN.size()]
+	var alle: Array[String] = Werte.KARTEN.duplicate()
+	alle.append_array(Werte.eigene_karten())   # 18.11.: eigene Szenarien aus dem Editor
+	var i := alle.find(_wahl_karte)
+	_wahl_karte = alle[(i + 1) % alle.size()]
+	# 18.11.: ein Szenario bringt seine Herausforderung mit (umstellen geht weiterhin)
+	var regeln: Variant = Werte.karten_daten(_wahl_karte).get("regeln", {})
+	_wahl_herausforderung = str((regeln as Dictionary).get("herausforderung", "")) if regeln is Dictionary else ""
 	_baue()
+
+
+## 18.11.: Szenario-Editor – baut die Szene neu auf (main.gd startet über naechster_start in den Editor).
+func _szenario_bauen() -> void:
+	Werte.herausforderung = ""
+	spiel.herausforderung = ""
+	spiel.naechster_start = "editor"
+	Ladebild.lade(_welt.get_tree())
+
+
+## 18.11.: Eine exportierte Karte ins Fenster ziehen = importieren (PC und Browser). Danach steht sie in der Kartenwahl.
+func _dateien_fallen(pfade: PackedStringArray) -> void:
+	for p: String in pfade:
+		var grund: Array = []
+		var kname := SzenarioEditor.importiere(p, grund)
+		if kname == "":
+			_meldung = str(grund[0])
+			continue
+		_wahl_karte = kname
+		_zeige("herausforderung")
+		_meldung = "Importiert: %s" % _karten_titel(kname)
+		return
 
 
 static func _anzahl(n: int, eins: String, mehr: String, keins: String) -> String:
@@ -265,6 +301,8 @@ func _starte(gross: bool, art: String, karte: String = "paulland", herausforderu
 static var _unterbrochen_gemeldet := false
 
 func _ready() -> void:
+	if not _welt.get_window().files_dropped.is_connected(_dateien_fallen):
+		_welt.get_window().files_dropped.connect(_dateien_fallen)   # 18.11.: Import eigener Karten
 	if _seite != "haupt":
 		return
 	_baue()
@@ -744,7 +782,7 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
 	else:
 		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen"}[_seite]
+	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox"}[_seite]
 	if unter != "":
 		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
 	# Liste

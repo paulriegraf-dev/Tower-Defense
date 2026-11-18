@@ -1,44 +1,122 @@
 {
 	"format": 1,
-	"stand": "Startwerte (14.11.2026); Wurf 40, Fahnenträger 60, Sprenger 55 auf Pauls Wunsch; neu: Schildträger 45, Sanitäter 50, Schwarmgeist 70 (Wellen 9–20 überarbeitet)",
+	"stand": "18.11.2026 Balance: Schild 70, Schwarm 110, Belagerung 180, Fahne 75; Budget geglättet (Nachbarrunden)",
 	"patch": "73e32fae5e59",
 	"anker": "hund",
 	"preise": {
 		"hund": 10,
 		"sphaere": 35,
-		"fahne": 60,
+		"fahne": 75,
 		"sprenger": 55,
 		"rauch": 50,
-		"belagerung": 150,
-		"schild": 45,
+		"belagerung": 180,
+		"schild": 70,
 		"sani": 50,
-		"schwarm": 70
+		"schwarm": 110
 	},
 	"wurf_aufschlag": 40,
-	"regel": "Budget je Runde = Summe der Preise der entworfenen Welle (Werte.WELLEN) plus Wurf-Aufschlag je Wurf. Ändern sich Welle oder Preise, wird neu gerechnet.",
+	"regel": "Budget je Runde = (Preis der Vorrunde + 2 × eigener Preis + Preis der Folgerunde) / 4, auf 5 gerundet; Preis einer Runde = Summe der Preise ihrer entworfenen Welle (Werte.WELLEN) plus Wurf-Aufschlag je Wurf. Letzte Runde ungeglättet.",
 	"runden": {
 		"1": {
-			"budget": 60,
+			"budget": 65,
 			"einheiten": {
 				"hund": 6
 			},
 			"name": "Erste Rudel",
 			"wuerfe": 0
 		},
+		"2": {
+			"budget": 90,
+			"einheiten": {
+				"hund": 8
+			},
+			"name": "Rudel",
+			"wuerfe": 0
+		},
+		"3": {
+			"budget": 135,
+			"einheiten": {
+				"hund": 10,
+				"sphaere": 1
+			},
+			"name": "Späher",
+			"wuerfe": 0
+		},
+		"4": {
+			"budget": 180,
+			"einheiten": {
+				"hund": 12,
+				"sphaere": 2
+			},
+			"name": "Feuerschutz",
+			"wuerfe": 0
+		},
+		"5": {
+			"budget": 230,
+			"einheiten": {
+				"hund": 14,
+				"sphaere": 2
+			},
+			"name": "Vorstoß",
+			"wuerfe": 0
+		},
+		"6": {
+			"budget": 305,
+			"einheiten": {
+				"fahne": 1,
+				"hund": 16,
+				"sphaere": 2
+			},
+			"name": "Die Fahne",
+			"wuerfe": 0
+		},
+		"7": {
+			"budget": 395,
+			"einheiten": {
+				"fahne": 2,
+				"hund": 18,
+				"sphaere": 2
+			},
+			"name": "Kleiner Fahnensturm",
+			"wuerfe": 0
+		},
+		"8": {
+			"budget": 480,
+			"einheiten": {
+				"fahne": 1,
+				"hund": 15,
+				"sphaere": 4,
+				"sprenger": 2
+			},
+			"name": "Sprengmeister",
+			"wuerfe": 0
+		},
+		"9": {
+			"budget": 595,
+			"einheiten": {
+				"fahne": 1,
+				"hund": 20,
+				"schild": 1,
+				"sphaere": 3,
+				"sprenger": 2
+			},
+			"name": "Köder",
+			"wuerfe": 0
+		},
 		"10": {
-			"budget": 705,
+			"budget": 735,
 			"einheiten": {
 				"fahne": 1,
 				"hund": 27,
 				"schild": 1,
-				"sphaere": 4,
+				"sphaere": 5,
 				"sprenger": 2
 			},
 			"name": "Über die Mauer",
 			"wuerfe": 2
 		},
 		"11": {
-			"budget": 760,
+			"budget": 835,
 			"einheiten": {
 				"fahne": 1,
 				"hund": 22,
@@ -51,56 +129,60 @@
 			"wuerfe": 1
 		},
 		"12": {
-			"budget": 745,
+			"budget": 885,
 			"einheiten": {
 				"fahne": 1,
-				"hund": 15,
+				"hund": 12,
 				"rauch": 3,
 				"schild": 3,
+				"schwarm": 1,
 				"sphaere": 6
 			},
 			"name": "Nebelwand",
 			"wuerfe": 1
 		},
 		"13": {
-			"budget": 825,
+			"budget": 955,
 			"einheiten": {
 				"belagerung": 1,
 				"fahne": 1,
-				"hund": 23,
-				"schild": 3,
-				"sphaere": 6
+				"hund": 20,
+				"schild": 2,
+				"schwarm": 1,
+				"sphaere": 4
 			},
 			"name": "Der Turm",
 			"wuerfe": 1
 		},
 		"14": {
-			"budget": 870,
+			"budget": 1075,
 			"einheiten": {
-				"hund": 7,
+				"hund": 6,
 				"rauch": 4,
 				"sani": 2,
-				"schild": 1,
-				"sphaere": 4,
+				"schild": 2,
+				"schwarm": 1,
+				"sphaere": 6,
 				"sprenger": 5
 			},
 			"name": "Abrisskommando",
 			"wuerfe": 1
 		},
 		"15": {
-			"budget": 900,
+			"budget": 1155,
 			"einheiten": {
 				"fahne": 4,
-				"hund": 18,
+				"hund": 16,
 				"sani": 1,
 				"schild": 4,
+				"schwarm": 1,
 				"sphaere": 6
 			},
 			"name": "Fahnensturm",
 			"wuerfe": 1
 		},
 		"16": {
-			"budget": 1035,
+			"budget": 1195,
 			"einheiten": {
 				"belagerung": 1,
 				"fahne": 2,
@@ -114,7 +196,7 @@
 			"wuerfe": 2
 		},
 		"17": {
-			"budget": 1165,
+			"budget": 1305,
 			"einheiten": {
 				"fahne": 2,
 				"hund": 28,
@@ -128,7 +210,7 @@
 			"wuerfe": 2
 		},
 		"18": {
-			"budget": 1330,
+			"budget": 1575,
 			"einheiten": {
 				"belagerung": 2,
 				"fahne": 2,
@@ -143,7 +225,7 @@
 			"wuerfe": 2
 		},
 		"19": {
-			"budget": 1790,
+			"budget": 1895,
 			"einheiten": {
 				"belagerung": 2,
 				"fahne": 3,
@@ -158,16 +240,8 @@
 			"name": "Generalprobe",
 			"wuerfe": 3
 		},
-		"2": {
-			"budget": 80,
-			"einheiten": {
-				"hund": 8
-			},
-			"name": "Rudel",
-			"wuerfe": 0
-		},
 		"20": {
-			"budget": 1285,
+			"budget": 1415,
 			"einheiten": {
 				"fahne": 3,
 				"hund": 18,
@@ -180,77 +254,7 @@
 			},
 			"name": "Gegenangriff",
 			"wuerfe": 2,
-			"zusatz_jeder_3_durchgang": 300
-		},
-		"3": {
-			"budget": 135,
-			"einheiten": {
-				"hund": 10,
-				"sphaere": 1
-			},
-			"name": "Späher",
-			"wuerfe": 0
-		},
-		"4": {
-			"budget": 190,
-			"einheiten": {
-				"hund": 12,
-				"sphaere": 2
-			},
-			"name": "Feuerschutz",
-			"wuerfe": 0
-		},
-		"5": {
-			"budget": 210,
-			"einheiten": {
-				"hund": 14,
-				"sphaere": 2
-			},
-			"name": "Vorstoß",
-			"wuerfe": 0
-		},
-		"6": {
-			"budget": 290,
-			"einheiten": {
-				"fahne": 1,
-				"hund": 16,
-				"sphaere": 2
-			},
-			"name": "Die Fahne",
-			"wuerfe": 0
-		},
-		"7": {
-			"budget": 405,
-			"einheiten": {
-				"fahne": 2,
-				"hund": 18,
-				"sphaere": 3
-			},
-			"name": "Kleiner Fahnensturm",
-			"wuerfe": 0
-		},
-		"8": {
-			"budget": 425,
-			"einheiten": {
-				"fahne": 1,
-				"hund": 15,
-				"sphaere": 3,
-				"sprenger": 2
-			},
-			"name": "Sprengmeister",
-			"wuerfe": 0
-		},
-		"9": {
-			"budget": 600,
-			"einheiten": {
-				"fahne": 1,
-				"hund": 20,
-				"schild": 2,
-				"sphaere": 4,
-				"sprenger": 2
-			},
-			"name": "Köder",
-			"wuerfe": 0
+			"zusatz_jeder_3_durchgang": 360
 		}
 	}
 }

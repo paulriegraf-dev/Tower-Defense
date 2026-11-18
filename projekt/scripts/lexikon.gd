@@ -814,12 +814,24 @@ func _baue_daten() -> void:
 				"Zurückholen: Je verlorenem Checkpoint geht eine Bodentruppe hin und hält ihn – nur solange die Welle läuft und kurz danach.",
 				"Jeder Checkpoint, der am Rundenende dir gehört, bringt +%d Budget." % W.BONUS_JE_CHECKPOINT]]]},
 		{"name": "Zone und HQ", "unter": "die drei linken Spalten", "marke": "Runde %d" % W.LETZTE_RUNDE, "marke_farbe": Stil.KUPFER, "bild": _einzel(Werte.NEU + "gebaeude/myr_hq_gross.png", Vector2(128, 128)),
-			"werte": [["HQ-Leben", _z(W.HQ_LEBEN)], ["Abstand", "%d Felder" % W.ZONE_ABSTAND]],
+			"werte": [["HQ-Leben", _z(W.hq_leben())], ["Abstand", "%d Felder" % W.ZONE_ABSTAND]],
 			"abschnitte": [["Regeln", Stil.LEUCHT, [
 				"In der Zone kann nicht gebaut werden. Ein Schild schützt alles darin bis zur letzten Runde.",
 				"Eigene Truppen halten Abstand zur Zone, damit die Gegner herauskommen.",
 				"Runde %d hat zwei Teile: Erst wehrt ihr die Welle ganz normal ab. Dann fällt der Schild und es kommt der Gegenangriff: Das HQ muss fallen. Gegner kommen ohne Ende, je Fabrik bleibt nur eine Truppe in Stellung, und jede Fabrik hat bis zu %d aktive Truppen." % [W.LETZTE_RUNDE, W.MAX_JE_FABRIK_ENDKAMPF],
 				"Ausgefallene Gebäude laufen dort nach einiger Zeit wieder an.",
 				"Während des Gegenangriffs darfst du weiterbauen und ausbauen – nur keine neuen Erdwälle."]]]},
+		# 18.11. (Etappe 2): Gelände mit Wirkung auf eigenen Karten aus dem Szenario-Editor
+		{"name": "Gelände", "unter": "auf eigenen Karten", "marke": "Szenario", "marke_farbe": Stil.LEUCHT, "bild": _einzel(Werte.NEU + "kulisse/felsen.png", Vector2(96, 64)),
+			"werte": [["Anhöhe", "+%s Reichweite" % _z(W.ANHOEHE_BONUS)], ["Sumpf", "%d %% Tempo" % roundi(W.SUMPF_TEMPO * 100.0)], ["Erzader", "+%d je Runde" % W.ERZ_BONUS]],
+			"abschnitte": [["Gesperrt", Stil.TEXT_BLASS, [
+				"Fels und Wasser: für niemanden begehbar, nicht bebaubar, Gegner reißen sie nie ein. Fels versperrt die Sicht, Wasser nicht."]],
+				["Mit Wirkung (begehbar)", Stil.LEUCHT, [
+				"Anhöhe: +%s Reichweite für Truppen, Stellungen und Türme darauf – auch für Gegner, nicht für Batterien." % _z(W.ANHOEHE_BONUS),
+				"Sumpf: Gegner und Truppen laufen mit %d %% Tempo, zusammen mit Frost nie unter %d %%. Nicht bebaubar." % [roundi(W.SUMPF_TEMPO * 100.0), roundi(W.SUMPF_MIN_TEMPO * 100.0)],
+				"Brücke: Weg über Wasser, nicht bebaubar – niemand kann sie zumauern.",
+				"Ruine: Truppen darauf nehmen %d %% weniger Schaden von Sphären, Schleudern und Lasern. Nur Erdwälle, die kosten dort %d." % [roundi(W.RUINE_DECKUNG * 100.0), W.RUINE_KOSTEN_WALL],
+				"Wald: versperrt die Sicht wie Fels (hineinschießen geht). Truppen im Wald sieht eine Battlesphäre erst aus %s Feldern. Nicht bebaubar." % _z(W.WALD_SICHT),
+				"Erzader: Eine Fabrik oder ein Turm darauf bringt +%d Budget je Runde." % W.ERZ_BONUS]]]},
 	]
 	_daten = [gegner, truppen, bauten, regeln]

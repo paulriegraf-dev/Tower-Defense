@@ -21,7 +21,9 @@ static func ordner(art: String) -> Array:
 		liste_.append(w + "/" + str(UNTERORDNER[art]))
 	return liste_
 # Startwerte, falls „Phantom Dateien/preise.json“ fehlt. Anker: Hund = 10.
-const PREISE := {"hund": 10, "sphaere": 35, "fahne": 60, "sprenger": 55, "rauch": 50, "belagerung": 150, "schild": 45, "sani": 50, "schwarm": 70}
+## 18.11. Balance: Schild 45 → 70, Schwarm 70 → 110, Belagerung 150 → 180, Fahne 60 → 75 (in den Angriffs-Phantomen
+## liefen Schildträger ab Runde 3, 8 Schwarmgeister oder 10–16 Fahnenträger je Runde – zu viel Wirkung je Budget).
+const PREISE := {"hund": 10, "sphaere": 35, "fahne": 75, "sprenger": 55, "rauch": 50, "belagerung": 180, "schild": 70, "sani": 50, "schwarm": 110}
 const WURF_AUFSCHLAG: int = 40
 const WURF_HOECHSTENS: int = 4          # so viele Einheiten fasst ein Wurf
 const NICHT_WERFBAR: Array[String] = ["belagerung"]
@@ -76,11 +78,21 @@ static func plan_preis(trupps: Array) -> int:
 	return summe
 
 
-## Budget des Angreifers in Runde `nr`: so viel kostet die entworfene Welle dieser Runde.
-## (Trupps, die in der letzten Runde nur in jedem n-ten Durchgang kommen, zählen nicht mit.)
+## Budget des Angreifers in Runde `nr`: 18.11. geglättet – Preis der entworfenen Welle dieser Runde doppelt,
+## der Nachbarrunden einfach (vorher sprang es z. B. von Runde 8 auf 9 um 41 %). Die letzte Runde bleibt ungeglättet.
 static func budget(nr: int) -> int:
+	if nr >= Werte.LETZTE_RUNDE:
+		return _wellen_preis(nr)
+	var vorher := _wellen_preis(maxi(nr - 1, 1))
+	var nachher := _wellen_preis(mini(nr + 1, Werte.LETZTE_RUNDE - 1))
+	return roundi((vorher + 2 * _wellen_preis(nr) + nachher) / 20.0) * 5
+
+
+## Preis der entworfenen Welle einer Runde.
+## (Trupps, die in der letzten Runde nur in jedem n-ten Durchgang kommen, zählen anteilig.)
+static func _wellen_preis(nr: int) -> int:
 	var summe := 0
-	for t: Dictionary in Werte.WELLEN[clampi(nr, 1, Werte.LETZTE_RUNDE)]["trupps"]:
+	for t: Dictionary in Werte.wellen_plan(nr)["trupps"]:   # 18.11.: letzte Runde = Gegenangriff
 		# Trupps, die in der letzten Runde nur in jedem n-ten Durchgang kommen, zählen anteilig (ein Drittel je Durchgang)
 		summe += roundi(trupp_preis(t) / float(maxi(1, int(t.get("jeder", 1)))))
 	return summe
