@@ -55,6 +55,8 @@ var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
 var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
 const BRAKK_GEGNER_MAL := 3            # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal …
 const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel mehr Leben
+const BRAKK_ABSTAND_MAL := 0.5             # 18.11. (Paul): Gegner eines Trupps starten dichter …
+const BRAKK_PAUSE_MAL := 0.6               # … und zwischen zwei Trupps vergeht weniger Zeit
 var _brakk_praemie := 0.0                # Bruchteile der gedrittelten Prämie
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var gegner: Array[Gegner] = []
@@ -698,6 +700,23 @@ func _verdoppelt(w: Dictionary, mal: int = 2) -> Dictionary:   # 18.11.: `mal` �
 			for i in mal - 1:
 				neu.append(e.duplicate(true) if e is Array else e)
 		d[schluessel] = neu
+	return d
+
+
+## 18.11. (Paul): Brakk-Mode – jeder Trupp kommt mit `mal`-facher Stärke auf einmal (statt `mal` Trupps nacheinander),
+## seine Gegner starten in halbem Abstand: weniger Einzelgänger, mehr Druck, kürzere Runden.
+func _gebuendelt(w: Dictionary, mal: int) -> Dictionary:
+	var d: Dictionary = w.duplicate(true)
+	for g: Dictionary in d.get("gruppen", []):
+		g["anzahl"] = int(g["anzahl"]) * mal
+	var neu: Array = []
+	for t: Variant in d.get("trupps", []):
+		var groesser: Array = []
+		for i in mal:
+			groesser.append_array(t as Array)
+		neu.append(groesser)
+	d["trupps"] = neu
+	d["abstand"] = float(d.get("abstand", 1.0)) * BRAKK_ABSTAND_MAL
 	return d
 
 
@@ -1624,6 +1643,8 @@ func _process(delta: float) -> void:
 				# 17.11.: lockere Formation mit deutlich mehr Abstand (gegen Flächenschaden)
 				var ist_locker := not _locker.is_empty() and bool(_locker[0])
 				var staffel := Werte.LOCKER_STAFFEL_SEK if ist_locker else Werte.TRUPP_STAFFEL_SEK
+				if brakk_modus:
+					staffel *= BRAKK_ABSTAND_MAL   # 18.11. (Paul): Brakk-Mode – enger beisammen
 				for m in _trupp:
 					if is_instance_valid(m):
 						m.locker = ist_locker
@@ -1648,6 +1669,8 @@ func _process(delta: float) -> void:
 				_spawn_in += Werte.ENDKAMPF_TRUPP_PAUSE if endkampf else Werte.TRUPP_PAUSE
 				if not _pausen.is_empty():
 					_spawn_in = maxf(_spawn_in + float(_pausen[0]), 0.6)
+				if brakk_modus:
+					_spawn_in = maxf(_spawn_in * BRAKK_PAUSE_MAL, 0.4)   # 18.11. (Paul): Brakk-Mode – kürzere Pausen
 			else:
 				_spawn_in += _welle["abstand"]
 	_wurf_tick(delta)
@@ -2669,7 +2692,7 @@ func naechste_welle() -> Dictionary:
 		w = _verdoppelt(w)   # 18.11.: jeder Trupp kommt zweimal (Vorschau und Welle)
 	if brakk_modus:
 		# 18.11. (Paul): Brakk-Mode – erst einmal deutlich schwerer: dreimal so viele Gegner, je Runde zusätzlich zäher
-		w = _verdoppelt(w, BRAKK_GEGNER_MAL)
+		w = _gebuendelt(w, BRAKK_GEGNER_MAL)   # 18.11. (Paul): gebündelt – jeder Trupp in dreifacher Stärke auf einmal
 		w["leben_faktor"] = float(w.get("leben_faktor", 1.0)) * (1.0 + BRAKK_LEBEN_JE_RUNDE * float(welle - 1))
 	if not sandbox or sandbox_gegner.is_empty():
 		return w
