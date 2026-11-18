@@ -1,0 +1,9 @@
+.godot/
+partien/
+
+# Backups/Archive (bleiben auf der Platte, nur nicht in Git)
+*.zip
+*.tgz
+*.tar.gz
+_vor_profil_18-11/
+md5-liste.txt
