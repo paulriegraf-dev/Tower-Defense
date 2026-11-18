@@ -228,9 +228,7 @@ func beenden() -> void:
 	if _anker_seil != null:
 		_anker_seil.queue_free()
 		_anker_haken.queue_free()
-	for b: Node in _berge_ringsum:
-		if is_instance_valid(b):
-			b.queue_free()
+	_berge_zurueck()
 	for k: Node3D in _feld_knoten.values():
 		k.queue_free()
 	if _vorschau != null:
@@ -2272,41 +2270,60 @@ func _ringe_auf_hand(rp: Vector2, wpx: float, auf: float) -> void:
 
 # ------------------------------------------------------------------ Brakk-Mode: Kulisse ringsum (18.11.)
 
-var _berge_ringsum: Array = []
+## 18.11. (Paul): In der Ego-Sicht ein durchgehendes Bergpanorama ringsum – ein offener Zylinder mit der Bergtextur
+## (wiederholt, auf einer Grundhöhe), statt einzelner Bergbilder auf verschiedenen Höhen (das sah blockartig aus).
+## Die Bergbilder der Übersicht werden solange ausgeblendet.
+const PANORAMA_RADIUS := 42.0
+const PANORAMA_HOCH := 24.0
+const PANORAMA_WIEDERHOLT := 7.0
+var _berge_ringsum: Array = []       # [Panorama] und die ausgeblendeten Bergbilder der Übersicht
+var _berge_versteckt: Array = []
 
 
-## In der Übersicht stehen die Berge nur hinten (die Kamera schaut von vorn). In der Ego-Sicht schaut man überallhin:
-## dieselben Bergbilder auch links, rechts und vorn – abwechselnd gespiegelt und versetzt, damit es nicht nach Kopie aussieht.
 func _baue_berge_ringsum() -> void:
 	var berge: Texture2D = karte.neu_bild("kulisse/berge.png")
 	if berge == null:
 		return
-	var sw := float(Werte.SPALTEN)
-	var zh := float(Werte.ZEILEN)
-	var punkte: Array = []
-	var z := -8.0
-	while z < zh + 14.0:
-		punkte.append(Vector3(-14.0, 0.0, z))          # links (Gegnerzone)
-		punkte.append(Vector3(sw + 14.0, 0.0, z))      # rechts
-		z += 15.5
-	var x := -6.0
-	while x < sw + 14.0:
-		punkte.append(Vector3(x, 0.0, zh + 13.5))      # vorn
-		x += 15.5
-	for i in punkte.size():
-		var p: Vector3 = punkte[i]
-		var b := hd._neues_bild()
-		b.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-		b.texture = berge
-		b.region_rect = Rect2(0, 0, 256, 128)
-		b.pixel_size = 0.075
-		b.offset = Vector2(-128, -(128 - 116))
-		b.flip_h = i % 2 == 1
-		b.modulate = Color(0.82, 0.86, 0.92)
-		var ab := float(i % 3) * 1.2   # versetzt nach außen
-		var q := p + Vector3(-ab if p.x < 0.0 else (ab if p.x > sw else 0.0), 0.0, ab if p.z > zh else 0.0)
-		b.position = Vector3(q.x, hd.gelaende_hoehe(q.x, q.z) - 0.6, q.z)
-		_berge_ringsum.append(b)
+	# die Bergbilder der Übersicht ausblenden
+	for c: Node in hd.get_children():
+		if c is Sprite3D and (c as Sprite3D).texture == berge and (c as Sprite3D).visible:
+			(c as Sprite3D).visible = false
+			_berge_versteckt.append(c)
+	var zyl := CylinderMesh.new()
+	zyl.top_radius = PANORAMA_RADIUS
+	zyl.bottom_radius = PANORAMA_RADIUS
+	zyl.height = PANORAMA_HOCH
+	zyl.radial_segments = 96
+	zyl.rings = 1
+	zyl.cap_top = false
+	zyl.cap_bottom = false
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_texture = berge
+	mat.albedo_color = Color(0.82, 0.86, 0.92)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	mat.texture_repeat = true
+	mat.uv1_scale = Vector3(PANORAMA_WIEDERHOLT, 1.0, 1.0)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	mat.alpha_scissor_threshold = 0.5
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.disable_fog = true
+	var m := MeshInstance3D.new()
+	m.mesh = zyl
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hd.add_child(m)
+	m.position = Vector3(float(Werte.SPALTEN) / 2.0, PANORAMA_HOCH / 2.0 + 0.5, float(Werte.ZEILEN) / 2.0)
+	_berge_ringsum.append(m)
+
+
+func _berge_zurueck() -> void:
+	for b: Node in _berge_ringsum:
+		if is_instance_valid(b):
+			b.queue_free()
+	for c: Node in _berge_versteckt:
+		if is_instance_valid(c):
+			(c as Sprite3D).visible = true
 
 
 # ------------------------------------------------------------------ Brakk-Mode: fließende Runden (18.11.)
