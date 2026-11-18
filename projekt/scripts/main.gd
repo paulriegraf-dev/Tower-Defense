@@ -53,6 +53,8 @@ var turmbilder := {}               # neue Grafik: Turm-Zelle -> TurmBild (y-sort
 var hd: HdAnsicht = null           # HD-2D-Ansicht (Grafik „HD-2D“)
 var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
 var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
+const BRAKK_GEGNER_MAL := 3            # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal …
+const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel mehr Leben
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
@@ -681,10 +683,10 @@ func _herausforderung_einrichten() -> void:
 
 
 ## „Doppelte Gegner“: jeder Trupp kommt zweimal hintereinander (tiefe Kopie – die Wellen in Werte bleiben unberührt).
-func _verdoppelt(w: Dictionary) -> Dictionary:
+func _verdoppelt(w: Dictionary, mal: int = 2) -> Dictionary:   # 18.11.: `mal` – Brakk-Mode verdreifacht
 	var d: Dictionary = w.duplicate(true)
 	for g: Dictionary in d.get("gruppen", []):
-		g["anzahl"] = int(g["anzahl"]) * 2
+		g["anzahl"] = int(g["anzahl"]) * mal
 	for schluessel: String in ["trupps", "pausen", "locker", "ausgaenge", "jeder"]:
 		if not d.has(schluessel):
 			continue
@@ -692,7 +694,8 @@ func _verdoppelt(w: Dictionary) -> Dictionary:
 		var neu: Array = []
 		for e: Variant in alt:
 			neu.append(e)
-			neu.append(e.duplicate(true) if e is Array else e)
+			for i in mal - 1:
+				neu.append(e.duplicate(true) if e is Array else e)
 		d[schluessel] = neu
 	return d
 
@@ -2663,6 +2666,10 @@ func naechste_welle() -> Dictionary:
 		w = Werte.welle_aus_plan({"name": "Welle des Szenarios", "trupps": Werte.KARTE_WELLEN[welle], "wurf_frei": true}, welle)
 	if herausforderung == "doppelt":
 		w = _verdoppelt(w)   # 18.11.: jeder Trupp kommt zweimal (Vorschau und Welle)
+	if brakk_modus:
+		# 18.11. (Paul): Brakk-Mode – erst einmal deutlich schwerer: dreimal so viele Gegner, je Runde zusätzlich zäher
+		w = _verdoppelt(w, BRAKK_GEGNER_MAL)
+		w["leben_faktor"] = float(w.get("leben_faktor", 1.0)) * (1.0 + BRAKK_LEBEN_JE_RUNDE * float(welle - 1))
 	if not sandbox or sandbox_gegner.is_empty():
 		return w
 	var anzahl := {}
@@ -3317,6 +3324,8 @@ func _gewonnen() -> void:
 
 ## Ziel einer Schleuder: die nächste Truppe in einer Stellung, sonst die nächste Fabrik (als Zelle).
 func schleuderziel(von: Vector2, weite: float) -> Variant:
+	if brakk_modus and kommandant != null and not kommandant.gefallen and randf() < 0.5 and von.distance_to(kommandant.position) <= weite:
+		return kommandant   # 18.11. (Paul): Brakk-Mode – jeder zweite Wurf gilt Brakk, wenn er in Reichweite ist
 	var bestes: Variant = null
 	var beste := weite * weite
 	for e in einheiten:
@@ -3418,7 +3427,7 @@ func wurf(von: Zonenbau, ziel: Variant) -> void:
 		effekte.wurf(von.position + Vector2(0, -30), karte.mitte(ziel), Werte.SCHLEUDER["flugzeit"], _einschlag_gebaeude.bind(ziel), "stein", "", arm)
 	else:
 		var e := ziel as Einheit
-		effekte.wurf(von.position + Vector2(0, -30), e.position, Werte.SCHLEUDER["flugzeit"], _einschlag_einheit.bind(e.get_instance_id()), "stein", "", arm)
+		effekte.wurf(von.position + Vector2(0, -30), e.position, Werte.SCHLEUDER["flugzeit"], _einschlag_einheit.bind(e.get_instance_id(), e.position), "stein", "", arm)
 
 
 func _einschlag_gebaeude(zelle: Vector2i) -> void:
@@ -3429,10 +3438,17 @@ func _einschlag_gebaeude(zelle: Vector2i) -> void:
 		karte.beschiesse(zelle, Werte.SCHLEUDER["schaden_fabrik"])   # fällt für die Runde aus, wird nicht zerstört
 
 
-func _einschlag_einheit(kennung: int) -> void:
+func _einschlag_einheit(kennung: int, gezielt: Vector2 = Vector2.INF) -> void:
 	if not is_instance_id_valid(kennung):
 		return
 	var e := instance_from_id(kennung) as Einheit
+	if e is Kommandant and brakk_modus:
+		# 18.11. (Paul): Brakk-Mode – der Stein fliegt auf einen Punkt; wer rechtzeitig wegspringt (Shift), wird nicht getroffen
+		Ton.am_ort(self, "hit-thud", gezielt)
+		effekte.flaeche(gezielt, Werte.ZELLE * 0.7, Color("c9a26b"))
+		if not _prallt_ab(gezielt) and e.position.distance_to(gezielt) <= Werte.ZELLE * 0.7:
+			e.nimm_schaden(Werte.SCHLEUDER["schaden_einheit"])
+		return
 	if e != null and _prallt_ab(e.position):
 		return
 	if e != null and einheiten.has(e) and e.in_stellung():
@@ -4507,8 +4523,8 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	var stufe := int(fabriken[z].get("stufe", 0))
 	if stufe >= Werte.KOSTEN_STUFE.size():
 		return false
-	if brakk_modus and (stufe >= 1 or fabriken[z].has("ring_vorher")):
-		return false   # 18.11.: Brakk-Mode – Stufe 2 und 3 kommen über Brakks Ringe
+	if brakk_modus:
+		return false   # 18.11. (Paul): Brakk-Mode – keine Fabrik-Ausbauten, alles über Brakks Ringe
 	if stufe == 2 and not (Werte.STUFE_3[fabriken[z]["typ"]] as Dictionary).has(faehigkeit):
 		return false
 	if budget < Werte.KOSTEN_STUFE[stufe]:

@@ -7,7 +7,8 @@ const STUFE_HOECHST := 10
 const ERFAHRUNG_BIS := [0, 12, 30, 55, 90, 135, 190, 255, 330, 420]   # Gesamterfahrung, ab der Stufe 1..10 gilt
 const XP_KILL := 1
 const XP_WELLE := 10
-const SCHADEN_JE_STUFE := 0.05        # +5 % Schussschaden je Stufe über 1
+const SCHADEN_START := 0.72            # 18.11. (Paul): Brakk startet schwächer (etwa 10 statt 14 je Schuss) …
+const SCHADEN_JE_STUFE := 0.08        # … und wird je Stufe um 8 % stärker
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
 ## Freischaltungen: Fähigkeit -> Stufe
 const AB := {"tumble": 2, "anker": 3, "lanze": 4, "saeule": 6, "ulti": 7, "zeitlupe": 8}
@@ -59,7 +60,7 @@ func frei(was: String) -> bool:
 
 
 func schaden_faktor() -> float:
-	return 1.0 + SCHADEN_JE_STUFE * float(stufe - 1)
+	return SCHADEN_START * (1.0 + SCHADEN_JE_STUFE * float(stufe - 1))
 
 
 ## Anteil 0..1 bis zur nächsten Stufe (1 auf der höchsten).

@@ -372,11 +372,13 @@ func _baue_fabrik() -> void:
 		if not bauphase:
 			_zeile("In der Welle gilt das Umstellen für die nächste Truppe.", Stil.KLEIN, Stil.TEXT_BLASS)
 	_pfad(["Grund", "Spezial", "Stufe 2", "Fähigkeit"], stufe + 1)
-	if stufe == 0:
+	if spiel.brakk_modus:
+		# 18.11. (Paul): im Brakk-Mode keine Ausbauten – Truppe und Stufe kommen über Brakks Ringfelder
+		var ring := str(f.get("ring", ""))
+		_zeile("Im Feld des Rings: baut %s auf Stufe %d." % [d["name"], stufe] if ring != "" else "Brakk-Mode: keine Ausbauten. Ein Ringfeld (Lichtterminal an der Basis, [C] in der Bauphase) gibt Fabriken Truppe und Stufe.", Stil.KLEIN, Stil.LEUCHT)
+	elif stufe == 0:
 		_upgrade_knopf = _karte_breit("Spezialisieren", preise[0], "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr." % d["name"],
 			spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
-	elif stufe < 3 and spiel.brakk_modus:
-		_zeile("Brakk-Mode: Stufe 2 und 3 gibt es hier nicht – Brakks Ringe (Lichtterminal an der Basis) geben sie Truppen in ihrem Feld.", Stil.KLEIN, Stil.LEUCHT)   # 18.11.
 	elif stufe == 1:
 		_upgrade_knopf = _karte_breit("Stufe 2", preise[1], Werte.STUFE_2[f["typ"]]["text"], spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
 	elif stufe == 2:

@@ -716,16 +716,17 @@ func _baue_daten() -> void:
 				"Du bist Brakk in der Ego-Sicht: [W][A][S][D] + Maus, Klick schießt, Leertaste springt.",
 				"Zwei Pistolen im Wechsel. Jede überhitzt bei Dauerfeuer (Bögen am Fadenkreuz) und ist dann kurz gesperrt.",
 				"Runden laufen von selbst: Countdown in der Bauphase, [Enter] startet früher. Keine Fabrik nötig, jede Runde 5 Erdwälle gratis.",
+				"Viele Gegner, Schleudern werfen auch auf Brakk: roter Landekreis – mit [Shift] ausweichen. Der rote Bogen am Rand zeigt, woher Treffer kommen.",
 				"Bauen mit [1]–[7] (5 Felder Reichweite), [F] baut aus. Der Schild der Gegnerzone fängt Schüsse ab."]],
 				["Fähigkeiten (frei mit der Stufe)", Stil.GOLD, [
 				"[E] Lichttreppe auf den Wall im Blick (bis 5 Felder, steht 8 s) – oben auf dem Wall [E] Lichtbrücke zum nächsten Wall.",
 				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (zieht dich hin) · St. 4 Rechtsklick halten: Doppellanze (lässt die Hitze ab).",
-				"St. 6 [X] Lichtsäule (Farbe des aktiven Rings) · St. 7 [R] Klonmaschine (lädt durch 30 Kills) · St. 8 [V] Zeitlupe.",
+				"St. 6 [X] Lichtsäule (zielen, Linksklick setzt; Art je aktivem Ring) · St. 7 [R] Klonmaschine (lädt durch 30 Kills) · St. 8 [V] Zeitlupe.",
 				"Stufen: Erfahrung aus eigenen Kills und Wellen; jede Stufe +5 % Schaden, +30 Leben."]],
 				["Ringe (Lichtterminal: [F] an der Basis)", Stil.GOLD, [
 				"Kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe 1, 3, 5, 7, 9.",
 				"[C] in der Bauphase wirft das Ringfeld: Fabriken darin bauen die Truppe des Rings auf seiner Stufe.",
-				"Mausrad wählt den aktiven Ring – er gibt Brakks Pistolen seinen Effekt. Fabriken selbst nur spezialisieren."]]]},
+				"Mausrad wählt den aktiven Ring – er gibt Brakks Pistolen seinen Effekt und färbt Treppe, Brücke, Anker und Säule. Fabriken haben hier keine Ausbauten."]]]},
 		]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
 	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "marke_farbe": Stil.LEUCHT, "bild": _figur(pilot),

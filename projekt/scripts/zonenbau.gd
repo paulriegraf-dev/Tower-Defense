@@ -94,7 +94,7 @@ func _process(delta: float) -> void:
 			if ziel == null:
 				_abkling = 0.5
 				return
-			_abkling = Werte.SCHLEUDER["abklingzeit"]
+			_abkling = Werte.SCHLEUDER["abklingzeit"] * (0.5 if spiel.brakk_modus else 1.0)   # 18.11. (Paul): Brakk-Mode – doppelt so viele Würfe
 			_sprite.angriff(Werte.SCHLEUDER_ABWURF * 2.0)   # Arm holt aus und schlägt vor; der Stein löst sich zur Hälfte
 			get_tree().create_timer(Werte.SCHLEUDER_ABWURF).timeout.connect(ruck)
 			spiel.wurf(self, ziel)

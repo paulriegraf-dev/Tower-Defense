@@ -170,6 +170,8 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 
 **Ablauf**
 - **Fließende Runden:** Die Bauphase hat einen Countdown (45 s in Runde 1, danach 30 s), dann kommt die Welle von selbst; [Enter] startet früher. Keine Fabrikpflicht, alles ist ab Runde 1 frei, jede Runde 5 Erdwälle gratis. Truppen verschwinden am Rundenende wie sonst.
+- **Schwierigkeit (zum Ausprobieren hoch):** dreimal so viele Gegner, je Runde +6 % Leben zusätzlich, Schleudern werfen doppelt so oft und zielen auch auf Brakk – der Stein fliegt auf einen Punkt (roter Landekreis, Warnzeichen), mit [Shift] ausweichen. Brakk startet mit 72 % Schaden, +8 % je Stufe.
+- **Anzeige:** roter Bogen am Bildrand zeigt, woher ein Treffer kam; roter Rand bei Treffern und wenig Leben; Lebensleiste mit heller Verlust-Spur.
 - **Bauen:** [1]–[7] in 5 Feldern Reichweite (links die Liste), [F] baut das Gebäude im Blick aus. Keine Bauleiste [B].
 - Der Schild vor der Gegnerzone fängt Brakks Schüsse ab. Fällt Brakk, bleibt die Kamera bis zur nächsten Runde liegen.
 
@@ -180,13 +182,14 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 
 **Stufen und Fähigkeiten**
 - Erfahrung aus eigenen Kills und abgewehrten Wellen, Stufe 1–10, je Stufe +5 % Schaden und +30 Leben. Unten in der Mitte: Fähigkeiten mit Abklingzeit, Leben, Erfahrung.
-- [E] **Lichttreppe**: auf den Erdwall im Blick (bis 5 Felder), steht 8 s, hinauf durch Hinlaufen. Oben auf dem Wall: [E] **Lichtbrücke** zum nächsten Wall im Blick (bis 5 Felder, 10 s, begehbar) – sonst Treppe hinunter.
-- St. 2 [Shift] **Tumble** · St. 3 [Q] **Lichtanker** (Seil an Mauerkrone/Boden, zieht Brakk hin) · St. 4 **Doppellanze** · St. 6 [X] **Lichtsäule** (Finger wirbelt, nach 1,5 s Einschlag, Farbe und kleiner Effekt des aktiven Rings) · St. 7 [R] **Klonmaschine** (lädt durch 30 eigene Kills, danach eine Runde Pause) · St. 8 [V] **Zeitlupe** (4 s, 60 s Abklingzeit).
+- [E] **Lichttreppe**: auf den Erdwall im Blick (bis 5 Felder), steht 8 s, hinauf durch Hinlaufen. Oben auf dem Wall: [E] **Lichtbrücke** zum nächsten Wall im Blick (bis 5 Felder, 10 s, begehbar, 12 s Abklingzeit; eine blasse Bahn zeigt vorher, wohin) – sonst Treppe hinunter. Treppe, Brücke und Anker leuchten in der Farbe des aktiven Rings.
+- St. 2 [Shift] **Tumble** · St. 3 [Q] **Lichtanker** (Seil an Mauerkrone/Boden, zieht Brakk hin) · St. 4 **Doppellanze** · St. 6 [X] **Lichtsäule** ([X] zielen, Linksklick setzen – solange kein Schuss; Finger wirbelt, nach 1,5 s Einschlag; je aktivem Ring anders: ohne Ring Fläche, Durchschlag Linie aus 5 Säulen, Glutstrahl klein und doppelt, Takt drei Einschläge, Wirbel 3 s stehend, Sprung springt auf 3 Gegner, Brand Brandfeld, Gel bremst 4 s) · St. 7 [R] **Klonmaschine** (lädt durch 30 eigene Kills, danach eine Runde Pause) · St. 8 [V] **Zeitlupe** (4 s, 60 s Abklingzeit).
 
 **Ringe** (Lichtterminal: [F] an der Basis in der Bauphase, Budget)
+- Fabriken haben im Brakk-Mode keine Ausbauten (auch kein Spezialisieren).
 - Sieben Ringe (Bilder nach Pauls Entwürfen), je einer pro Finger – frei ab Stufe 1, 3, 5, 7, 9. Kauf 200, Stufe 2 250, Stufe 3 500; Verkaufen 75 % (in derselben Bauphase alles).
-- **Ringfeld:** [C] in der Bauphase wirft das Feld des aktiven Rings (2 Felder Radius). Fabriken darin bauen die Truppe des Rings auf seiner Stufe (1 spezialisiert, 2 Wertepaket, 3 die Fähigkeit); im Kampf liegen die Felder fest. Fabriken selbst lassen sich nur spezialisieren. Batterien und Türme wie immer.
-- **Aktiver Ring:** das Mausrad wechselt (die Hand schüttelt sich kurz, solange schießt nur rechts); nur er wirkt auf Brakks Pistolen: Durchschlag (durch 2 Gegner), Glutstrahl (+30 % Schaden), Takt (schneller, kühlt schneller), Wirbel (Dauerfeuer läuft an, heizt weniger), Sprung (Abpraller), Brand (Brandfeld), Gel (bremst).
+- **Ringfeld:** [C] in der Bauphase wirft das Feld des aktiven Rings (2 Felder Radius). Fabriken darin bauen die Truppe des Rings auf seiner Stufe (1 spezialisiert, 2 Wertepaket, 3 die Fähigkeit); im Kampf liegen die Felder fest. Batterien und Türme wie immer.
+- **Aktiver Ring:** das Mausrad wechselt (die Hand schüttelt sich kurz, solange schießt nur rechts); nur er wirkt auf Brakks Pistolen: Durchschlag (durch 2 Gegner), Glutstrahl (+30 % Schaden), Takt (schneller, kühlt schneller), Wirbel (Dauerfeuer läuft an, heizt weniger), Sprung (Abpraller), Brand (Brandfeld), Gel (bremst; gebremste Gegner nehmen 30 % mehr Schaden von Brakk).
 
 ## Karten (18.11.)
 
