@@ -6,8 +6,8 @@ class_name Musik
 ## Lautstärke über Werte.musik in Prozent (Einstellungen, 10er-Schritte). Im Spiel spielt die Musik leiser als im Menü.
 
 const STUECKE := {
-	"menue": {"pfad": "res://assets/Musik/td-battler-menue-take-2-loop.mp3", "db": -9.0, "start": 46.092, "ende": 132.48},
-	"ingame": {"pfad": "res://assets/Musik/td-battler-ingame-lebendig-take-2-loop-take-2.mp3", "db": -15.0, "start": 46.417, "ende": 90.27},
+	"menue": {"pfad": "res://assets/Musik/td-battler-menue-take-2-loop.mp3", "db": -13.0, "start": 46.092, "ende": 132.48},
+	"ingame": {"pfad": "res://assets/Musik/td-battler-ingame-lebendig-take-2-loop-take-2.mp3", "db": -19.0, "start": 46.417, "ende": 90.27},
 }
 const BLENDE_SEK := 1.5
 

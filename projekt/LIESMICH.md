@@ -167,7 +167,7 @@ Startmenü → **Herausforderungen** → „Herausforderung: …“ (zusammen mi
 ## Brakk-Mode (18.11., Prototyp)
 
 Eigener Modus im Startmenü: Du bist Brakk, in der Ego-Sicht, die ganze Partie lang (kein Umschalten). Gespielt wird auf PaulLand, für diese Partie in HD-2D (die gespeicherte Grafikwahl bleibt). Brakk steht gratis ab Runde 1 vor der Basis. Kein Zwischenstand, keine Phantome, keine Rangliste; Erfolge zählen. Braucht Maus und Tastatur (am Handy noch gesperrt). Code: `scripts/ego_modus.gd`.
-- **WASD** gehen, **Maus** schauen, **Linksklick** schießen (zwei Pistolen im Wechsel), **Leertaste** springen, **Enter** startet die Welle.
+- **WASD** gehen, **Maus** schauen, **Linksklick** schießen (zwei Pistolen im Wechsel), **Leertaste** springen, **Enter** startet die Welle. Eine Fabrik ist dafür nicht nötig (auch nicht in Runde 1); **Neustart** bleibt im Brakk-Mode.
 - **[E] Lichttreppe:** vor einem Erdwall hinauf, oben auf dem Wall hinunter. Die Stufen bauen sich sichtbar nacheinander auf. Über die Kante gehen springt weiterhin hinunter.
 - **[F] Ausbauen:** Ein eigenes Gebäude im Blick (Fabrik, Batterie, Turm, Schildgenerator, höchstens 5 Felder weit) zeigt „[F] … ausbauen“ – [F] öffnet dasselbe Menü wie in der Übersicht, die Maus ist solange frei.
 - **Bauen:** [1]–[8], der Ring projiziert die Vorschau; nur in 5 Feldern Reichweite.

@@ -17,7 +17,7 @@ const PEGEL := {
 	"tc-arc": -8.0, "myr-launch": -6.0, "hit-boom": -9.0, "hit-pboom": -6.0, "hit-thud": -4.0, "death-myr": -6.0,
 	"death-tc": -3.0, "tf-earth": -8.0, "tf-stone": -6.0, "alert": -4.0, "ui-klick": -6.0,
 	# 18.11.: Brakk-Mode (Ego-Sicht), mit PixelLab erzeugt (WAV)
-	"brakk-schuss-a": -3.0, "brakk-schuss-b": -3.0, "brakk-treffer": -2.0, "brakk-kill": -1.0,
+	"brakk-schuss-a": -9.0, "brakk-schuss-b": -9.0, "brakk-treffer": -5.0, "brakk-kill": -3.0,   # 18.11. (Paul): Waffen leiser
 }
 
 static var _laeuft := {}        # Klang -> Array der Endzeiten

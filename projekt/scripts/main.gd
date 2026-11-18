@@ -987,7 +987,7 @@ func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Butt
 func _neustart() -> void:
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
-	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else "normal"
+	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else ("brakk" if brakk_modus else "normal")   # 18.11.: Neustart bleibt im Brakk-Mode
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
 
@@ -2486,7 +2486,7 @@ func starte_welle() -> void:
 			return
 		_laufband.visible = false
 		_phantom_zuege_in_runde()
-	elif fabriken.is_empty() and herausforderung != "keine_fabriken":   # 18.11.: in „Keine Fabriken“ geht es ohne
+	elif fabriken.is_empty() and herausforderung != "keine_fabriken" and not brakk_modus:   # 18.11.: in „Keine Fabriken“ und im Brakk-Mode geht es ohne
 		melde("Erst eine Fabrik bauen [1].")
 		return
 	_schild_fuer = Karte.KEINE

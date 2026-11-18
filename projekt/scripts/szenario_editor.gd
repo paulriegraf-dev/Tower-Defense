@@ -64,6 +64,7 @@ var _ok := false
 var _runde := 1
 var _plaene: Dictionary = {}             # Runde -> Trupps (der Taktikplaner bearbeitet diese Listen direkt)
 var _text_ebene: CanvasLayer = null
+var _text_uebernehmen: Callable          # 18.11.: „Fertig“ des offenen Textfensters (auch Strg+Enter)
 var _symmetrie := false                  # 18.11.: Symmetrie-Pinsel – malt gespiegelt an der Mittelzeile mit
 var _rueckgaengig: Array[String] = []    # 18.11.: frühere Stände des Entwurfs (JSON), der letzte = vor dem letzten Schritt
 
@@ -1010,10 +1011,11 @@ func _bearbeite_text(schluessel: String, titel: String, mehrzeilig: bool) -> voi
 	kasten.set_border_width_all(3)
 	kasten.set_content_margin_all(18)
 	tafel.add_theme_stylebox_override("panel", kasten)
-	tafel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	tafel.position = Vector2(140, 40)
-	tafel.size = Vector2(1000, 0)
-	grund.add_child(tafel)
+	# 18.11.: mittig in der Bildfläche (1280×720) – vorher rutschte das Fenster nach rechts aus dem Bild
+	var mitte := CenterContainer.new()
+	mitte.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grund.add_child(mitte)
+	mitte.add_child(tafel)
 	var spalte := VBoxContainer.new()
 	spalte.add_theme_constant_override("separation", 10)
 	tafel.add_child(spalte)
@@ -1027,7 +1029,7 @@ func _bearbeite_text(schluessel: String, titel: String, mehrzeilig: bool) -> voi
 	if mehrzeilig:
 		var te := TextEdit.new()
 		te.text = str(quelle.get(schluessel, ""))
-		te.custom_minimum_size = Vector2(960, 300)
+		te.custom_minimum_size = Vector2(960, 260)
 		te.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 		feld = te
 	else:
@@ -1040,9 +1042,18 @@ func _bearbeite_text(schluessel: String, titel: String, mehrzeilig: bool) -> voi
 	feld.add_theme_font_override("font", Stil.schrift())
 	feld.add_theme_font_size_override("font_size", 30)
 	spalte.add_child(feld)
+	var hinweis := Label.new()
+	hinweis.text = ("Strg+Enter übernimmt" if mehrzeilig else "Enter übernimmt") + " · Esc bricht ab"
+	hinweis.add_theme_font_override("font", Stil.schrift())
+	hinweis.add_theme_font_size_override("font_size", 22)
+	hinweis.add_theme_color_override("font_color", Stil.TEXT_BLASS)
+	spalte.add_child(hinweis)
 	var reihe := HBoxContainer.new()
 	reihe.alignment = BoxContainer.ALIGNMENT_END
+	reihe.add_theme_constant_override("separation", 12)
 	spalte.add_child(reihe)
+	_text_uebernehmen = func() -> void:
+		_text_fertig(quelle, schluessel, (feld as TextEdit).text if feld is TextEdit else (feld as LineEdit).text)
 	for k: Array in [["Abbrechen", false], ["Fertig", true]]:
 		var b := Button.new()
 		b.text = k[0]
@@ -1056,6 +1067,19 @@ func _bearbeite_text(schluessel: String, titel: String, mehrzeilig: bool) -> voi
 				_schliesse_text())
 		reihe.add_child(b)
 	feld.grab_focus.call_deferred()
+
+
+## 18.11.: Esc bricht das Textfenster ab, Strg+Enter übernimmt (im mehrzeiligen Feld ist Enter ein Zeilenumbruch).
+func _input(event: InputEvent) -> void:
+	if _text_ebene == null or not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var k := event as InputEventKey
+	if k.keycode == KEY_ESCAPE:
+		_schliesse_text()
+		get_viewport().set_input_as_handled()
+	elif (k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER) and k.is_command_or_control_pressed() and _text_uebernehmen.is_valid():
+		_text_uebernehmen.call()
+		get_viewport().set_input_as_handled()
 
 
 func _text_fertig(quelle: Dictionary, schluessel: String, wert: String) -> void:
