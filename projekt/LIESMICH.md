@@ -171,7 +171,8 @@ Eigener Modus im Startmenü: Du bist Brakk, in der Ego-Sicht, die ganze Partie l
 - **[E] Lichttreppe:** vor einem Erdwall hinauf, oben auf dem Wall hinunter. Die Stufen bauen sich sichtbar nacheinander auf. Über die Kante gehen springt weiterhin hinunter.
 - **[F] Ausbauen:** Ein eigenes Gebäude im Blick (Fabrik, Batterie, Turm, Schildgenerator, höchstens 5 Felder weit) zeigt „[F] … ausbauen“ – [F] öffnet dasselbe Menü wie in der Übersicht, die Maus ist solange frei.
 - **Bauen:** [1]–[8], der Ring projiziert die Vorschau; nur in 5 Feldern Reichweite.
-- **Schussgefühl:** eigene Klänge (PixelLab, `assets/ton/brakk-*.wav`: Schuss A/B je Pistole, Treffer, Kill), Rückstoß der Sicht, kurzes Zucken des Sichtfelds; Treffer mit Einschlag-Klang, weißem Trefferkreuz und Wackeln; Kill mit Knall, rotem Kreuz, stärkerem Wackeln und 0,07 s Einfrieren (in Echtzeit).
+- **Waffen:** zwei Laserpistolen und die Ringhand als PixelLab-Bilder (`assets/neu/ego/`), Mündungsblitz an der Laufmündung.
+- **Schussgefühl:** eigene Klänge (PixelLab, `assets/ton/brakk-*.wav`: Laserschuss A/B je Pistole, Treffer, Kill), Rückstoß der Sicht, kurzes Zucken des Sichtfelds; Treffer mit Einschlag-Klang, weißem Trefferkreuz und Wackeln; Kill mit Knall, rotem Kreuz, stärkerem Wackeln und 0,07 s Einfrieren (in Echtzeit).
 - Fällt Brakk, bleibt die Kamera am Boden liegen, bis er zur nächsten Runde wieder aufsteht.
 
 ## Karten (18.11.)

@@ -245,6 +245,34 @@ func ist_hoch(z: Vector2i) -> bool:
 	return karte.feld.get(z, -1) == Karte.WALL and karte.ausbau.get(z, Karte.FREI) != Karte.TOR
 
 
+## 18.11.: Leere (ganz durchsichtige) Zeilen am unteren Rand eines Bildausschnitts – zwischengespeichert je Bild und Ausschnitt.
+var _leer_cache := {}
+
+func _leer_unten(tex: Texture2D, r: Rect2) -> int:
+	var schluessel := "%d|%s" % [tex.get_instance_id(), r]
+	if _leer_cache.has(schluessel):
+		return int(_leer_cache[schluessel])
+	var bild := tex.get_image()
+	var leer := 0
+	if bild != null:
+		if bild.is_compressed():
+			bild.decompress()
+		var ri := Rect2i(r)
+		for y in range(ri.end.y - 1, ri.position.y - 1, -1):
+			var voll := false
+			for x in range(ri.position.x, ri.end.x):
+				if bild.get_pixel(x, y).a > 0.05:
+					voll = true
+					break
+			if voll:
+				break
+			leer += 1
+		if leer >= ri.size.y:
+			leer = 0
+	_leer_cache[schluessel] = leer
+	return leer
+
+
 func _welt_3d(p: Vector2, hoehe: float) -> Vector3:
 	return Vector3(p.x / Werte.ZELLE, hoehe, (p.y - Werte.KARTE_OBEN) / Werte.ZELLE)
 
@@ -316,6 +344,16 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 	var traeger: Node2D = eltern as Node2D if eltern is Node2D else s
 	var hoehe := H if ist_hoch(karte.zelle_bei(traeger.global_position)) else 0.0
 	b.position = _welt_3d(s.global_position, hoehe + 0.002)
+	# 18.11.: Ego-Sicht – aus Augenhöhe schwebten die Figuren: Das Bild drehte sich ganz zur Kamera, sein Fuß lag 22 px
+	# südlich (für die Schrägsicht) und unten sind oft leere Zeilen. Hier stehen sie aufrecht auf ihrem echten Fußpunkt
+	# (dort liegt auch der Schatten), ohne leere Zeilen. Die Draufsicht bleibt wie sie ist.
+	if ego != null:
+		b.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+		if traeger is Gegner or traeger is Einheit:
+			b.position = _welt_3d(traeger.global_position, hoehe + 0.002)
+		b.offset.y -= _leer_unten(s.texture, s.region_rect if s.region_enabled else Rect2(Vector2.ZERO, s.texture.get_size()))
+	else:
+		b.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	b.set_meta("turm", traeger is TurmBild)
 	_lebensbalken(id, traeger, b, groesse)
 	# Umriss durch Wände: Gegner rot, eigene Bodentruppen violett (nicht für Türme und Truppen oben auf dem Wall)
@@ -487,7 +525,9 @@ func _bauten_bilder() -> void:
 			b.flip_h = false
 			b.pixel_size = FABRIK_MASSSTAB / Werte.ZELLE
 			b.offset = Vector2(-32, -(64 - 57))
-			_fabrik_einsetzen(z, b, _welt_3d(m + Vector2(0, 26), FABRIK_SOCKEL + 0.01))
+			# 18.11.: in der Ego-Sicht mittig und aufrecht auf dem Sockel (von schräg oben passt der Südrand besser)
+			b.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y if ego != null else BaseMaterial3D.BILLBOARD_ENABLED
+			_fabrik_einsetzen(z, b, _welt_3d(m + (Vector2(0, 4) if ego != null else Vector2(0, 26)), FABRIK_SOCKEL + 0.01))
 		elif typ == Karte.BATTERIE:
 			b.texture = karte.neu_bild("batterie/bat_%d.png" % clampi(int(karte.batterie_stufe_neu.get(z, 0)), 0, 3))
 			var t: float = karte.batterie_schuss.get(z, -1.0)

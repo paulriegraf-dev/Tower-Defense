@@ -82,8 +82,8 @@ var _uhr_vorher := 0             # Zeitpunkt des letzten Bilds (µs) für die Ec
 var _ebene: CanvasLayer
 var _bild: Control
 var _karte_klein: Control
-var _tex_pistole: ImageTexture
-var _tex_ring: ImageTexture
+var _tex_pistole: Texture2D
+var _tex_ring: Texture2D
 var _strahlen: Array = []       # [MeshInstance3D, Rest]
 var _strahl_mat: StandardMaterial3D
 var _bau_strahl: MeshInstance3D
@@ -843,9 +843,27 @@ func _bau_strahl_weiter() -> void:
 
 # ------------------------------------------------------------------ Oberfläche: Waffen, Fadenkreuz, Minikarte
 
+## 18.11.: Waffen und Hand aus PixelLab (assets/neu/ego); fehlen die Bilder, die gezeichneten Platzhalter.
+const PISTOLE_BILD := "res://assets/neu/ego/pistole.png"
+const RINGHAND_BILD := "res://assets/neu/ego/ringhand.png"
+var _muendung := Vector2(-1, -1)    # Laufmündung im Pistolenbild (Bildpunkte); -1 = Platzhalter (oben Mitte)
+var _ring_licht := Vector2(15.5, 15.0)   # Leuchtpunkt des Rings im Handbild
+var _waffen_teiler := 150.0         # Bildhöhe / Teiler = Bildschirmpunkte je Waffen-Bildpunkt
+var _neigung := NEIGUNG
+
 func _baue_oberflaeche() -> void:
-	_tex_pistole = ImageTexture.create_from_image(_male_pistole())
-	_tex_ring = ImageTexture.create_from_image(_male_ringhand())
+	if ResourceLoader.exists(PISTOLE_BILD):
+		_tex_pistole = load(PISTOLE_BILD)
+		_muendung = Vector2(11, 11)   # leuchtender Emitter oben links
+		_waffen_teiler = 200.0        # das Bild ist größer (64×96) als der Platzhalter
+		_neigung = 0.0                # schon schräg zur Bildmitte gezeichnet
+	else:
+		_tex_pistole = ImageTexture.create_from_image(_male_pistole())
+	if ResourceLoader.exists(RINGHAND_BILD):
+		_tex_ring = load(RINGHAND_BILD)
+		_ring_licht = Vector2(22, 5)  # Holoscheibe über den Knöcheln
+	else:
+		_tex_ring = ImageTexture.create_from_image(_male_ringhand())
 	_ebene = CanvasLayer.new()
 	_ebene.layer = 2
 	add_child(_ebene)
@@ -864,30 +882,31 @@ func _baue_oberflaeche() -> void:
 
 func _male_bild() -> void:
 	var g := _bild.get_viewport_rect().size
-	var px := maxf(2.0, floorf(g.y / 150.0))          # ein Bildpunkt der Waffe in Bildschirmpunkten
-	var ts := Vector2(_tex_pistole.get_size()) * px
+	var px := maxf(2.0, floorf(g.y / 150.0))          # Bildpunkt für Fadenkreuz und Anzeigen
+	var wpx := maxf(2.0, floorf(g.y / _waffen_teiler))   # 18.11.: ein Bildpunkt der Waffe in Bildschirmpunkten
+	var ts := Vector2(_tex_pistole.get_size()) * wpx
 	var wipp := Vector2(cos(_gang * 0.5) * 3.0, absf(sin(_gang * 0.5)) * 4.0) if _geht else Vector2.ZERO
 	# rechte Pistole
 	var r_rueck := float(_rueckstoss[1])
-	var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * px) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * px
-	_waffe(_tex_pistole, r_pos, ts, -NEIGUNG, float(_blitz[1]) > 0.0, px, false)
+	var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * wpx
+	_waffe(_tex_pistole, r_pos, ts, -_neigung, float(_blitz[1]) > 0.0, wpx, false)
 	# linke Hand: Pistole (gespiegelt) oder Ring – beim Wechsel taucht die eine ab und die andere auf
 	var l_rueck := float(_rueckstoss[0])
 	var ab := clampf(_ring * 2.0, 0.0, 1.0)              # Pistole sinkt
 	var auf := clampf(_ring * 2.0 - 1.0, 0.0, 1.0)       # Ring kommt
-	var l_basis := Vector2(g.x * 0.20 - ts.x * 0.5, g.y - ts.y + 12.0 * px) + Vector2(-wipp.x, wipp.y)
+	var l_basis := Vector2(g.x * 0.20 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + Vector2(-wipp.x, wipp.y)
 	if ab < 1.0:
-		var lp := l_basis + Vector2(-l_rueck * 2.0, l_rueck * 6.0) * px + Vector2(0, ab * ts.y)
-		_waffe(_tex_pistole, lp, ts, NEIGUNG, float(_blitz[0]) > 0.0, px, true)
+		var lp := l_basis + Vector2(-l_rueck * 2.0, l_rueck * 6.0) * wpx + Vector2(0, ab * ts.y)
+		_waffe(_tex_pistole, lp, ts, _neigung, float(_blitz[0]) > 0.0, wpx, true)
 	if auf > 0.0:
-		var rs := Vector2(_tex_ring.get_size()) * px
-		var rp := Vector2(g.x * 0.22 - rs.x * 0.5, g.y - rs.y + 4.0 * px) + Vector2(-wipp.x, wipp.y) + Vector2(0, (1.0 - auf) * rs.y)
+		var rs := Vector2(_tex_ring.get_size()) * wpx
+		var rp := Vector2(g.x * 0.22 - rs.x * 0.5, g.y - rs.y + 4.0 * wpx) + Vector2(-wipp.x, wipp.y) + Vector2(0, (1.0 - auf) * rs.y)
 		_bild.draw_texture_rect(_tex_ring, Rect2(rp.round(), rs), false)
 		# Ring leuchtet (pulsiert)
 		var puls := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 120.0)
-		var mitte := rp + Vector2(15.5, 15.0) * px
-		_bild.draw_circle(mitte, 5.0 * px, Color(LICHT, 0.18 * puls * auf))
-		_bild.draw_circle(mitte, 2.5 * px, Color(LICHT, 0.35 * puls * auf))
+		var mitte := rp + _ring_licht * wpx
+		_bild.draw_circle(mitte, 5.0 * wpx, Color(LICHT, 0.18 * puls * auf))
+		_bild.draw_circle(mitte, 2.5 * wpx, Color(LICHT, 0.35 * puls * auf))
 	if _frei():   # 18.11.: bei offenem Menü kein Fadenkreuz und kein Hinweis darüber
 		_fadenkreuz(g, px)
 	_bauliste(g)
@@ -905,7 +924,9 @@ func _waffe(tex: Texture2D, pos: Vector2, ts: Vector2, winkel: float, blitz: boo
 	_bild.draw_set_transform(dreh, winkel, Vector2(-1.0 if spiegeln else 1.0, 1.0))
 	_bild.draw_texture_rect(tex, Rect2(Vector2(-ts.x / 2.0, -ts.y), ts), false)
 	if blitz:
-		_muendungsblitz(Vector2(-1.0 * px, -ts.y + 1.0 * px), px)
+		# 18.11.: an der echten Laufmündung des Bilds (Platzhalter: oben Mitte)
+		var m := _muendung if _muendung.x >= 0.0 else Vector2(ts.x / 2.0 / px - 1.0, 1.0)
+		_muendungsblitz(Vector2(-ts.x / 2.0, -ts.y) + m * px, px)
 	_bild.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
