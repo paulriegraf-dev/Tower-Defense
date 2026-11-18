@@ -47,6 +47,8 @@ var _stick_finger := -1
 var _stick_mitte := STICK_RUHE
 var _stick_aus := Vector2.ZERO        # -1..1, y nach oben = vorwärts
 var _blick_finger := -1
+var _letzte := {}                      # 18.11. (Paul): Finger -> letzte Position; die Bewegung je Finger selbst ausrechnen
+const SPRUNG_MAX := 90.0               # größere Sprünge in einem Bild sind Messfehler (anderer Finger) – verwerfen
 var _knopf: Dictionary = {}           # Finger -> {id, start, pos, gezogen}
 var _maus_meins := false              # nachgemachte Maus eines eigenen Fingers: nicht ans Spiel
 
@@ -109,14 +111,23 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
+			_letzte[t.index] = t.position
 			if _druck(t.index, t.position):
 				get_viewport().set_input_as_handled()
 		else:
+			_letzte.erase(t.index)
 			if _los(t.index, t.position):
 				get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
-		if _ziehen(d.index, d.position, d.relative):
+		# 18.11. (Paul): Nicht `d.relative` nehmen – im Browser bezieht es sich mit zwei Fingern teils auf den anderen
+		# Finger, dann springt der Blick. Jeder Finger rechnet seine Bewegung aus seiner eigenen letzten Position.
+		var vorher: Vector2 = _letzte.get(d.index, d.position)
+		_letzte[d.index] = d.position
+		var rel := d.position - vorher
+		if rel.length() > SPRUNG_MAX:
+			rel = Vector2.ZERO
+		if _ziehen(d.index, d.position, rel):
 			get_viewport().set_input_as_handled()
 
 
@@ -150,8 +161,8 @@ func _druck(f: int, p: Vector2) -> bool:
 		_stick_mitte = p
 		_stick_aus = Vector2.ZERO
 		return true
-	if _blick_finger < 0:
-		_blick_finger = f
+	if _blick_finger < 0 and p.x >= STICK_ZONE_X:
+		_blick_finger = f   # 18.11. (Paul): links laufen, rechts schauen – getrennte Hälften
 		return true
 	return true
 
