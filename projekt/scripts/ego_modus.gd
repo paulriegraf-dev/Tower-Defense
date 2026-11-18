@@ -1735,8 +1735,6 @@ func _male_terminal() -> void:
 
 # ------------------------------------------------------------------ Brakk-Mode: Ringfelder (18.11.)
 
-## Fingerpunkte im Handbild (ringhand.png, 48×72): Zeigefinger oben, dann die gekrümmten Finger zum Daumen hin.
-const FINGER_PUNKTE := [Vector2(35, 17), Vector2(29, 29), Vector2(21, 31), Vector2(13, 29), Vector2(6, 30)]
 
 
 ## Mausrad: nächster / vorheriger Ring; die Hand hebt sich und zeigt ihn.
@@ -1896,19 +1894,53 @@ func _felder_weiter(dt: float) -> void:
 		_vorschau.visible = false
 
 
-## Die getragenen Ringe auf den Fingern der Ringhand – der gewählte leuchtet groß.
+## 18.11. (Paul): Ringplätze auf der Ringhand (ringhand.png, 48×72, Faust mit erhobenem Zeigefinger), in Bildpunkten:
+## [links, rechts, oben] eines 3 Bildpunkte hohen Bands quer über das Fingerglied – in der Reihenfolge, in der die
+## Finger frei werden: Mittelfinger, Ringfinger, Zeigefinger (über dem Projektorring), kleiner Finger, Daumen.
+const FINGER_BAENDER := [[18, 24, 23], [11, 17, 25], [32, 38, 15], [4, 9, 28], [39, 45, 41]]
+## Material des Bands je Ring (wie in ring_bilder.gd): Silber, Schwarz, Gold, dunkles Metall.
+const BAND_FARBE := {"durchschuss": "8a93a6", "laser": "2b2830", "feuerteam": "c4ccd8", "minigun": "4a505e",
+	"abpraller": "4a505e", "brandfeld": "c9952e", "plasmagel": "8a93a6"}
+
+
+## Die getragenen Ringe sitzen als Bänder auf ihren Fingern, mit dem Stein in der Ringfarbe; der gewählte leuchtet.
 func _ringe_auf_hand(rp: Vector2, wpx: float, auf: float) -> void:
 	var f := brakk.fortschritt
 	if f == null:
 		return
-	for i in f.ringe.size():
-		var farbe := _ring_farbe(f.ringe[i])
-		var m: Vector2 = rp + (FINGER_PUNKTE[i] as Vector2) * wpx
+	var o := rp.round()
+	var umriss := Color(UMRISS, auf)
+	for i in mini(f.ringe.size(), FINGER_BAENDER.size()):
+		var ring := f.ringe[i]
+		var farbe := _ring_farbe(ring)
+		var b: Array = FINGER_BAENDER[i]
+		var x0 := float(b[0])
+		var x1 := float(b[1])
+		var y := float(b[2])
+		var breite := x1 - x0 + 1.0
+		var metall := Color(str(BAND_FARBE.get(ring, "8a93a6")))
 		var gew := i == f.gewaehlt and _hand_zeigen > 0.0
-		_male_ring(_bild, m, (4.0 if gew else 3.0) * wpx, f.ringe[i], auf)
+		var px := func(x: float, yy: float, w: float, h: float, c: Color) -> void:
+			_bild.draw_rect(Rect2(o + Vector2(x, yy) * wpx, Vector2(w, h) * wpx), c)
 		if gew:
 			var puls := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 90.0)
-			_bild.draw_circle(m, 6.0 * wpx, Color(farbe, 0.18 * puls * auf))
+			_bild.draw_circle(o + Vector2((x0 + x1 + 1.0) / 2.0, y + 1.5) * wpx, 5.5 * wpx, Color(farbe, 0.22 * puls * auf))
+		# Band: Umriss oben und unten, drei Zeilen Metall (hell, mittel, dunkel)
+		px.call(x0, y - 1.0, breite, 1.0, umriss)
+		px.call(x0, y + 3.0, breite, 1.0, umriss)
+		px.call(x0, y, breite, 1.0, Color(metall.lightened(0.35), auf))
+		px.call(x0, y + 1.0, breite, 1.0, Color(metall, auf))
+		px.call(x0, y + 2.0, breite, 1.0, Color(metall.darkened(0.35), auf))
+		# Stein in der Mitte (2×3), beim gewählten heller
+		var mx := floorf((x0 + x1) / 2.0)
+		px.call(mx - 1.0, y - 1.0, 4.0, 5.0, umriss)
+		var stein := farbe.lightened(0.25) if gew else farbe
+		if ring == "durchschuss":
+			px.call(mx, y, 2.0, 3.0, Color(Color("f2f2f2"), auf))   # Auge: weiß mit farbiger Mitte
+			px.call(mx, y + 1.0, 2.0, 1.0, Color(stein, auf))
+		else:
+			px.call(mx, y, 2.0, 3.0, Color(stein, auf))
+			px.call(mx, y, 1.0, 1.0, Color(stein.lightened(0.6), auf))
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Befehle (18.11.)

@@ -861,6 +861,15 @@ func _baue_waende() -> void:
 	for z: Vector2i in karte.gelaende:
 		if karte.gelaende[z] == "fels":
 			_fels(z)
+	# 18.11. (Etappe 2): Gelände mit Wirkung – Anhöhe als flacher Hügel, Wald mit Bäumen, Ruine mit Mauerresten
+	for z: Vector2i in karte.boden:
+		match str(karte.boden[z]):
+			"anhoehe":
+				_huegel(z)
+			"wald":
+				_baeume(z)
+			"ruine":
+				_ruinenreste(z)
 	var mesh := ArrayMesh.new()
 	var i := 0
 	for name: String in _flaechen:
@@ -945,6 +954,39 @@ func _fels(z: Vector2i) -> void:
 	var dx := float((h >> 4) % 3) * 0.1
 	var dz := float((h >> 7) % 3) * 0.1
 	_klotz("farbe", x0 + 0.15 + dx, x0 + 0.65 + dx, hoch, hoch + H * 0.35, z0 + 0.15 + dz, z0 + 0.65 + dz, stein.lightened(0.12))
+
+
+## 18.11.: Anhöhe – flache Kuppe in zwei Stufen (niedrig, damit Figuren darauf nicht versinken).
+func _huegel(z: Vector2i) -> void:
+	var x0 := float(z.x)
+	var z0 := float(z.y)
+	var erde := Color("8f8452")
+	_klotz("farbe", x0, x0 + 1.0, 0.0, 0.05, z0, z0 + 1.0, erde)
+	_klotz("farbe", x0 + 0.12, x0 + 0.88, 0.05, 0.09, z0 + 0.12, z0 + 0.88, erde.lightened(0.12))
+
+
+## 18.11.: Wald – zwei bis drei Blockbäume je Feld (Stamm und zwei Kronen).
+func _baeume(z: Vector2i) -> void:
+	var h := hash(z)
+	var stamm := Color("5a3d24")
+	var krone := Color("2f6b33")
+	for i in 2 + h % 2:
+		var bx := float(z.x) + 0.18 + float((h >> (i * 3)) % 4) * 0.17
+		var bz := float(z.y) + 0.2 + float(i) * 0.28
+		var hoch := H * (0.55 + float((h >> (i * 5)) % 3) * 0.1)
+		_klotz("farbe", bx + 0.07, bx + 0.15, 0.0, hoch * 0.45, bz + 0.07, bz + 0.15, stamm)
+		_klotz("farbe", bx - 0.06, bx + 0.28, hoch * 0.4, hoch * 0.8, bz - 0.06, bz + 0.28, krone)
+		_klotz("farbe", bx + 0.02, bx + 0.2, hoch * 0.8, hoch, bz + 0.02, bz + 0.2, krone.lightened(0.15))
+
+
+## 18.11.: Ruine – niedrige, zerbrochene Mauerreste.
+func _ruinenreste(z: Vector2i) -> void:
+	var h := hash(z)
+	var stein := Color("8d8a96")
+	for i in 3:
+		var bx := float(z.x) + 0.08 + float((h >> (i * 4)) % 3) * 0.25
+		var bz := float(z.y) + 0.1 + float(i) * 0.28
+		_klotz("farbe", bx, bx + 0.24, 0.0, H * (0.12 + float((h >> (i * 2)) % 3) * 0.06), bz, bz + 0.18, stein.darkened(float(i) * 0.08))
 
 
 ## Quader mit einer Farbe (Licht über die Normalen).
