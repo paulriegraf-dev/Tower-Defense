@@ -53,7 +53,7 @@ var turmbilder := {}               # neue Grafik: Turm-Zelle -> TurmBild (y-sort
 var hd: HdAnsicht = null           # HD-2D-Ansicht (Grafik „HD-2D“)
 var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
 var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
-const BRAKK_GEGNER_MAL := 2.2          # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal … (vorher 3)
+const BRAKK_GEGNER_MAL := 1.98         # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal … (19.11.: 10 % weniger, vorher 2,2)
 const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel mehr Leben
 const BRAKK_ABSTAND_MAL := 0.5             # 18.11. (Paul): Gegner eines Trupps starten dichter …
 const BRAKK_PAUSE_MAL := 0.6               # … und zwischen zwei Trupps vergeht weniger Zeit
@@ -4157,6 +4157,8 @@ func _bei_zerstoert(zelle: Vector2i, typ: int) -> void:
 ## Startpaket: so viele Erdwälle sind noch gratis; welche Felder gratis gebaut wurden (geben beim Abriss nichts zurück).
 var freie_waelle := 0
 var _gratis: Dictionary = {}
+var freie_stellungen := 0                 # 19.11. (Paul): Brakk-Mode – so viele Stellungen sind noch gratis (jede Runde eine)
+var _gratis_stellung: Dictionary = {}    # Felder mit einer gratis gebauten Stellung (geben beim Abriss nichts zurück)
 
 func kosten(typ: int) -> int:
 	match typ:
@@ -4165,7 +4167,7 @@ func kosten(typ: int) -> int:
 		Karte.WALL:
 			return 0 if freie_waelle > 0 else Werte.KOSTEN_WALL
 		Karte.STELLUNG:
-			return Werte.KOSTEN_STELLUNG
+			return 0 if freie_stellungen > 0 else Werte.KOSTEN_STELLUNG
 		Karte.TURM:
 			return Werte.KOSTEN_TURM
 		Karte.TOR:
@@ -4329,6 +4331,9 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if typ == Karte.WALL and freie_waelle > 0:
 		freie_waelle -= 1
 		_gratis[z] = true
+	if typ == Karte.STELLUNG and freie_stellungen > 0:
+		freie_stellungen -= 1
+		_gratis_stellung[z] = true
 	_merke_bezahlt(z, "panzer" if typ == Karte.PANZER else ("ausbau" if _ist_ausbau(typ) else "bau"), preis)
 	budget -= preis
 	if not still:
@@ -4423,7 +4428,7 @@ func erstattung(z: Vector2i) -> int:
 		else:
 			alt += kosten_bei(z, war)   # 18.11.: auf der Ruine zählt der billigere Preis
 	var ausbau: int = karte.ausbau.get(z, Karte.FREI)
-	if ausbau != Karte.FREI and not frisch_bau.has("ausbau"):
+	if ausbau != Karte.FREI and not frisch_bau.has("ausbau") and not (ausbau == Karte.STELLUNG and _gratis_stellung.has(z)):
 		alt += kosten(ausbau)
 	if karte.panzer.has(z) and not frisch_bau.has("panzer"):
 		alt += Werte.KOSTEN_PANZER

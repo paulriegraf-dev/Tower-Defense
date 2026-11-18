@@ -8,6 +8,7 @@ const ERFAHRUNG_BIS := [0, 12, 30, 55, 90, 135, 190, 255, 330, 420]   # Gesamter
 const XP_KILL := 1
 const XP_WELLE := 10
 const XP_KILL_ANTEIL := 0.5          # 18.11. (Paul): Kills geben nur die halbe Erfahrung (dreimal so viele Gegner)
+const XP_MAL := 1.15                  # 19.11. (Paul): Brakk bekommt 15 % mehr Erfahrung (Kills und Wellen)
 const SCHADEN_START := 1.85            # 19.11. (Paul, Bot-Partien): Brakk ist die Hauptfigur – etwa 26 je Schuss, ein Hund fällt anfangs mit 2 Schüssen (vorher 1,7) …
 const SCHADEN_JE_STUFE := 0.10        # … und je Stufe 10 % stärker (Platz nach oben für Ringe und Stufen)
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
@@ -15,6 +16,7 @@ const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
 const AB := {"tumble": 2, "anker": 3, "lanze": 4, "saeule": 6, "ulti": 7, "zeitlupe": 8}
 const NAMEN := {"saeule": "Lichtsäule [X]", "zeitlupe": "Zeitlupe [V]", "tumble": "Tumble [Shift]", "anker": "Lichtanker [Q]", "lanze": "Doppellanze [Rechtsklick]", "ulti": "Klonmaschine [R]"}
 const FREIE_WAELLE := 5               # 18.11. (Paul): so viele Erdwälle bekommt Brakk jede Runde geschenkt
+const FREIE_STELLUNGEN := 1           # 19.11. (Paul): … und so viele Stellungen
 const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klonmaschine) auf
 ## 18.11. (Paul): Ringe für die linke Hand – am Lichtterminal der Basis gekauft und ausgebaut (Budget).
 ##   Ringfeld ([C] in der Bauphase): Fabriken darin bauen die Truppe des Rings auf seiner Stufe
@@ -74,6 +76,7 @@ var aufstieg_zeit := -1.0             # für das Banner: Sekunden seit dem letzt
 var neu_frei: Array[String] = []      # was beim letzten Aufstieg freigeschaltet wurde (für das Banner)
 var ulti_ladung := 0                  # eigene Kills seit der letzten Ulti
 var kill_xp := 0.0                    # gesammelte Bruchteile der Kill-Erfahrung
+var _xp_rest := 0.0                    # Bruchteile aus XP_MAL
 var ulti_ab_welle := 0                # vorher geht die Ulti nicht (nach einem Einsatz: eine ganze Runde Pause)
 var ringe: Array[String] = []          # getragene Ringe (je Finger einer)
 var ring_stufen := {}                  # Ring -> Stufe 1..3
@@ -107,7 +110,11 @@ func anteil() -> float:
 
 ## Erfahrung dazu; steigt Brakk auf, wächst sein Leben (und er wird um den Zuwachs geheilt). Gibt die Zahl der Aufstiege zurück.
 func gib(xp: int, brakk: Kommandant) -> int:
-	erfahrung += xp
+	# 19.11. (Paul): +15 % Erfahrung (Bruchteile werden gesammelt)
+	var roh := float(xp) * XP_MAL + _xp_rest
+	var ganz := floori(roh)
+	_xp_rest = roh - float(ganz)
+	erfahrung += ganz
 	var auf := 0
 	while stufe < STUFE_HOECHST and erfahrung >= int(ERFAHRUNG_BIS[stufe]):
 		stufe += 1
@@ -230,8 +237,19 @@ static func im_feld(z: Vector2i, ecke: Vector2i) -> bool:
 	return z.x >= ecke.x and z.x < ecke.x + FELD_GROESSE and z.y >= ecke.y and z.y < ecke.y + FELD_GROESSE
 
 
-## 19.11.: Wert des aktiven Rings auf seiner Stufe (Tabelle `brakk_stufen` in RINGE) – `std`, wenn der Ring ihn nicht hat.
+## 19.11. (Paul): Ringe stapeln – für Brakks Schüsse (Autoattacke) wirken ALLE getragenen Ringe zugleich, jeder auf seiner
+## Stufe (Tabelle `brakk_stufen` in RINGE). Jeder Wert gehört genau einem Ring; `std`, wenn keiner ihn hat.
 func brakk_wert(schluessel: String, std: Variant) -> Variant:
+	for r: String in ringe:
+		var st := clampi(ring_stufe(r), 1, 3)
+		var d: Dictionary = RINGE[r]["brakk_stufen"][st - 1]
+		if d.has(schluessel):
+			return d[schluessel]
+	return std
+
+
+## Nur der aktive Ring (für Fähigkeiten wie Lichtsäule und Doppellanze) – "" während des Ringwechsels.
+func brakk_wert_aktiv(schluessel: String, std: Variant) -> Variant:
 	var r := aktiv()
 	if r == "":
 		return std
@@ -249,19 +267,23 @@ func schuss_schaden() -> float:
 	return schaden_faktor() * float(brakk_wert("schaden", 1.0))
 
 
+## Fähigkeiten (Lichtsäule, Doppellanze): Stufenschaden mal nur dem Schadensbonus des aktiven Rings.
+func faehigkeit_schaden() -> float:
+	return schaden_faktor() * float(brakk_wert_aktiv("schaden", 1.0))
+
+
 func schuss_takt() -> float:
 	return float(brakk_wert("takt", 1.0))
 
 
 ## Überhitzen (ego_modus.gd): Wirbelring – Schüsse heizen weniger; Taktring – kühlt schneller.
 func hitze_faktor() -> float:
-	if aktiv() == "feuerteam":
-		return 0.6   # 18.11. (Paul, Schießstand): Taktring – heizt weniger, sonst überhitzt er sein Tempo weg
-	return 0.7 if aktiv() == "minigun" else 1.0
+	# 18.11. (Schießstand): Taktring 0,6, Wirbelring 0,7 – 19.11.: getragen genügt, beide zusammen stapeln
+	return (0.6 if hat("feuerteam") else 1.0) * (0.7 if hat("minigun") else 1.0)
 
 
 func kuehl_faktor() -> float:
-	return 1.8 if aktiv() == "feuerteam" else 1.0   # 18.11. (Schießstand): vorher 1,5
+	return 1.8 if hat("feuerteam") else 1.0   # 18.11. (Schießstand): vorher 1,5; 19.11.: getragen genügt
 
 
 ## Jedes Bild (vom Kommandanten): in der Bauphase bauen Fabriken in einem Ringfeld die Truppe des Rings auf seiner Stufe.

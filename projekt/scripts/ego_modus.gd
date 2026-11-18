@@ -113,7 +113,7 @@ var _ring_blitz := 0.0            # 18.11.: kurzes Aufblitzen des neu gewählten
 const RAD_PAUSE := 0.25
 var _rad_summe := 0.0
 var _rad_zuletzt := -10.0
-const COUNTDOWN := 30.0            # 18.11. (Paul): Brakk-Mode – so lange (Spielsekunden) dauert die Bauphase, dann kommt die Welle von selbst
+const COUNTDOWN := 45.0            # 18.11. (Paul): Brakk-Mode – so lange (echte Sekunden, 19.11.: vorher 30 Spielsekunden) dauert die Bauphase, dann kommt die Welle von selbst
 const COUNTDOWN_ERSTE := 45.0      # in Runde 1 etwas mehr Zeit
 var _countdown := -1.0           # läuft: Restzeit (-1 = keine Bauphase)
 # 18.11. (Paul): Überhitzen wie in Battlefront 2 – je Pistole eine Hitze 0..1; voll = kurz gesperrt
@@ -163,6 +163,7 @@ func starten(p_spiel: Node) -> void:
 	if spiel.brakk_modus and brakk.fortschritt == null:
 		brakk.fortschritt = BrakkFortschritt.new(brakk)   # 18.11.: Stufen und Ringe für diese Partie
 		spiel.freie_waelle += BrakkFortschritt.FREIE_WAELLE
+		spiel.freie_stellungen += BrakkFortschritt.FREIE_STELLUNGEN
 	_baue_oberflaeche()
 	_baue_berge_ringsum()   # 18.11.: Kulisse auch links, rechts und vorn
 	for n: String in ["_sandbox_leiste", "_zoom_grund"]:
@@ -508,7 +509,7 @@ func _process(delta: float) -> void:
 	_einflug_weiter(echt)   # 18.11.
 	if _briefing != null and _briefing.visible:
 		_briefing.queue_redraw()
-	_fliessende_runden(delta)   # 18.11.
+	_fliessende_runden(echt)   # 18.11.; 19.11.: in Echtzeit (das Spiel läuft fest auf ×2)
 	_kuehlen(echt)
 	_treppe_rest -= echt
 	if brakk.fortschritt != null:
@@ -1389,6 +1390,8 @@ func _bauliste(g: Vector2) -> void:
 		var p := "" if typ == Karte.TURM else str(preis)
 		if typ == Karte.WALL and spiel.freie_waelle > 0:
 			p = "×%d" % spiel.freie_waelle
+		if typ == Karte.STELLUNG and spiel.freie_stellungen > 0:
+			p = "×%d" % spiel.freie_stellungen   # 19.11.: gratis Stellung
 		var pf := Stil.GOLD if spiel.budget >= preis else Stil.WARN
 		Stil.schreibe(_bild, Vector2(r.end.x - 8.0 - Stil.breite(p, 18), m), p, 18, pf if geht else Stil.TEXT_BLASS)
 	Stil.schreibe(_bild, Vector2(x, hinter.end.y + 14.0), "Rechtsklick: weglegen" if touch == null else "nochmal tippen: weglegen", 16, Stil.TEXT_BLASS)
@@ -1586,6 +1589,11 @@ func _schaden_faktor() -> float:
 	return brakk.fortschritt.schuss_schaden() if brakk.fortschritt != null else 1.0
 
 
+## 19.11. (Paul): Fähigkeiten (Lichtsäule, Doppellanze) – nur der aktive Ring zählt, die Ringe stapeln sich nur für die Schüsse.
+func _faehigkeit_faktor() -> float:
+	return brakk.fortschritt.faehigkeit_schaden() if brakk.fortschritt != null else 1.0
+
+
 ## Pause zwischen zwei Schüssen (Anteil): Taktring 0,8, Wirbelring läuft im Dauerfeuer bis 1/1,6 an.
 func _takt_faktor() -> float:
 	var f := brakk.fortschritt
@@ -1775,7 +1783,7 @@ func _lanze_feuer() -> void:
 		var t := (c - von).dot(r)
 		if t <= 0.0 or t >= weite or (von + r * t).distance_to(c) > 0.45:
 			continue
-		g.nimm_schaden(LANZE_SCHADEN * _schaden_faktor() * lanze_hitze * _gel_bonus(g))
+		g.nimm_schaden(LANZE_SCHADEN * _faehigkeit_faktor() * lanze_hitze * _gel_bonus(g, true))
 		treffer += 1
 		if g._tot:
 			kills += 1
@@ -2033,7 +2041,7 @@ func _male_terminal() -> void:
 			Stil.schreibe(ci, Vector2(r.position.x + 56.0, r.get_center().y), "frei", 18, Stil.TEXT_BLASS)
 		else:
 			Stil.schreibe(ci, Vector2(r.position.x + 56.0, r.get_center().y), "ab Stufe %d" % int(BrakkFortschritt.FINGER_AB[i]), 18, Color(0.4, 0.42, 0.47))
-	Stil.absatz(ci, Vector2(lx, ly + 340.0), "Der aktive Ring (Mausrad) stärkt Brakks Pistolen. In der Bauphase wirft [C] sein Feld: Fabriken darin bauen seine Truppe auf seiner Stufe.", 270.0, 14, Stil.TEXT_BLASS)
+	Stil.absatz(ci, Vector2(lx, ly + 340.0), "Alle getragenen Ringe stärken Brakks Pistolen. Der aktive Ring (Mausrad) bestimmt die Fähigkeiten; [C] setzt in der Bauphase sein Feld (2×2) – Fabriken darin bauen seine Truppe.", 270.0, 14, Stil.TEXT_BLASS)
 	# rechts: alle Ringe
 	var rx := o.x + 310.0
 	var rw := w - 330.0
@@ -2970,7 +2978,7 @@ func _einschlag(p: Vector2, radius: float, schaden: float, wucht: float) -> Arra
 	spiel.schuss_herkunft = Vector2.INF
 	for g: Gegner in getroffen:
 		if is_instance_valid(g) and not g._tot:
-			g.nimm_schaden(schaden * _schaden_faktor() * _gel_bonus(g))
+			g.nimm_schaden(schaden * _faehigkeit_faktor() * _gel_bonus(g, true))
 	spiel.schadensquelle = ""
 	for g: Gegner in getroffen:
 		if is_instance_valid(g) and g._tot:
@@ -3001,7 +3009,7 @@ func _einschlaege_weiter(dt: float) -> void:
 		spiel.schadensquelle = "fabrik:-1,-1"
 		for g: Gegner in spiel.gegner.duplicate():
 			if is_instance_valid(g) and not g._tot and g.position.distance_to(p) <= SAEULE_RADIUS * Werte.ZELLE * 0.8 and not spiel._geschuetzt(g):
-				g.nimm_schaden(SAEULE_SCHADEN * 0.12 * _schaden_faktor() * _gel_bonus(g))
+				g.nimm_schaden(SAEULE_SCHADEN * 0.12 * _faehigkeit_faktor() * _gel_bonus(g, true))
 				if g._tot:
 					_kill(g)
 		spiel.schadensquelle = ""
@@ -3024,7 +3032,7 @@ func _saeule_sprung(p: Vector2, schon: Array) -> void:
 			return
 		_strahl(_zu3d(von, 0.5), _zu3d(bester.position, 0.5), _saeule_farbe)
 		spiel.schadensquelle = "fabrik:-1,-1"
-		bester.nimm_schaden(SAEULE_SCHADEN * 0.5 * _schaden_faktor() * _gel_bonus(bester))
+		bester.nimm_schaden(SAEULE_SCHADEN * 0.5 * _faehigkeit_faktor() * _gel_bonus(bester, true))
 		spiel.schadensquelle = ""
 		if bester._tot:
 			_kill(bester)
@@ -3085,9 +3093,11 @@ func _brakk_sprung(erstes: Gegner, spruenge: int, schaden: float) -> void:
 
 
 ## Gelring aktiv: gebremste Gegner (von Brakk, Gel-Fabriken oder der Gel-Säule) nehmen mehr Schaden von Brakk.
-func _gel_bonus(g: Gegner) -> float:
+func _gel_bonus(g: Gegner, faehigkeit: bool = false) -> float:
 	var f := brakk.fortschritt
-	return float(f.brakk_wert("gel_bonus", 1.0)) if f != null and g.gebremst > 0.0 else 1.0
+	if f == null or g.gebremst <= 0.0:
+		return 1.0
+	return float(f.brakk_wert_aktiv("gel_bonus", 1.0) if faehigkeit else f.brakk_wert("gel_bonus", 1.0))
 
 
 ## [V]: Zeitlupe – die Welt läuft halb so schnell, Brakk (Echtzeit) nicht. Lange Abklingzeit.

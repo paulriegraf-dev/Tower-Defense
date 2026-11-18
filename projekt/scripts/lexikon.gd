@@ -731,7 +731,7 @@ func _baue_daten() -> void:
 				"Kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe 1, 3, 5, 7, 9.",
 				"Neun Ringe, je einer für jede Stufe-3-Fähigkeit: Durchschlag, Glutstrahl, Ziel (Scharfschützen) · Takt, Wirbel, Wall (Technogunner) · Sprung, Brand, Gel (Plasmawerfer). Brakks Ringeffekt wächst mit der Ringstufe.",
 				"[C] in der Bauphase: Ringfeld (2×2 Felder, höchstens 4 Fabriken) – Vorschau, [C] oder Linksklick setzt. Fabriken darin bauen die Truppe des Rings auf seiner Stufe.",
-				"Mausrad wählt den aktiven Ring – er gibt Brakks Pistolen seinen Effekt und färbt Treppe, Brücke, Anker und Säule. Fabriken haben hier keine Ausbauten und werden nur um 10 % teurer statt 25 %."]]]},
+				"Alle getragenen Ringe wirken zusammen auf Brakks Schüsse. Das Mausrad wählt den aktiven Ring – er bestimmt Lichtsäule, Doppellanze, die Farben und welches Feld [C] setzt. Fabriken haben hier keine Ausbauten und werden nur um 10 % teurer statt 25 %."]]]},
 		]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
 	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "marke_farbe": Stil.LEUCHT, "bild": _figur(pilot),
