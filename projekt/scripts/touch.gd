@@ -155,7 +155,12 @@ func _process(delta: float) -> void:
 		_lang_zeit += echt
 		if _lang_zeit >= LANG_SEK:
 			_lang_zeit = -1.0
-			_klick(MOUSE_BUTTON_RIGHT, _lang_pos)
+			# 18.11.: Auf einem Knopf der Oberfläche zeigt langes Drücken dessen Tipp; sonst wie bisher Rechtsklick.
+			var hud: Node = spiel.get("_hud") as Node if spiel != null else null
+			if hud != null and hud.has_method("touch_tipp") and hud.touch_tipp(_lang_pos):
+				_knopf_loslassen()
+			else:
+				_klick(MOUSE_BUTTON_RIGHT, _lang_pos)
 	_brakk.queue_redraw()
 	var g := get_viewport().get_visible_rect().size
 	var fenster := DisplayServer.window_get_size()
@@ -290,6 +295,17 @@ func _rad(knopf: MouseButton, pos: Vector2) -> void:
 		e.global_position = e.position
 		e.factor = 1.0
 		Input.parse_input_event(e)
+
+
+## 18.11.: Nach dem Tipp-Zeigen den gedrückten Knopf weit draußen „loslassen“ – so löst er beim echten Loslassen
+## nicht aus (sonst startete ein langes Drücken auf Start die Welle).
+func _knopf_loslassen() -> void:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.pressed = false
+	e.position = Vector2(-10000, -10000)
+	e.global_position = e.position
+	Input.parse_input_event(e)
 
 
 func _klick(knopf: MouseButton, pos: Vector2) -> void:

@@ -480,6 +480,7 @@ func _repariere(delta: float) -> void:
 ## `ziel` ist ein Gegner oder (in der letzten Runde) ein Gebäude in der Zone.
 func _feuere_auf(ziel: Node2D) -> void:
 	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]   # Schadensliste: alles von hier zählt für die Fabrik
+	spiel.schuetze = self   # 18.11.: für den Erfolg „Einsamer Posten“
 	spiel.schuss_herkunft = position
 	# Im Rauch sieht die Einheit nichts – außer mit Klarsicht (Scharfschütze ab Stufe 2) oder auf ein markiertes Ziel.
 	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (in_stellung() and spiel.peilung(posten_zelle)) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
@@ -593,6 +594,7 @@ func _treffe(e: Dictionary) -> void:
 	var ziel = e["ziel"]
 	var lebt: bool = is_instance_valid(ziel) and not ziel.is_queued_for_deletion() and not (ziel is Gegner and (ziel as Gegner)._tot)
 	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]
+	spiel.schuetze = self   # 18.11.: für den Erfolg „Einsamer Posten“
 	spiel.schuss_herkunft = position
 	var farbe := Color(daten["schussfarbe"])
 	var schaden := float(daten["schaden"]) * (Werte.MINIGUN_SCHADEN_FAKTOR if e["minigun"] else 1.0)

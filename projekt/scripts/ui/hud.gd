@@ -30,6 +30,12 @@ const KACHELN := [
 const KACHEL_B := 28.0
 const KACHEL_H := 40.0
 const KACHEL_ABSTAND := 3.0
+## 18.11.: Auf Touchgeräten sind die Kacheln so groß gezeichnet (28 UI-Pixel ≈ 5 mm am Handy, Ziel ≥ 9 mm).
+const KACHEL_TOUCH := 1.75
+var _kachel_faktor := 1.0
+## 18.11.: Touch – langes Drücken zeigt den Tipp des Knopfs unter dem Finger (es gibt kein Überfahren mit der Maus).
+var _touch_tipp: Control = null
+var _touch_tipp_bis := 0.0
 
 var spiel: Node
 var schadensliste: Control         # setzt main.gd (Knopf oben rechts zeigt sie wie [Tab])
@@ -188,6 +194,8 @@ class Emblem extends Button:
 func _ready() -> void:
 	if OS.get_environment("TD_KONSOLE") in ["a", "b"]:
 		entwurf = OS.get_environment("TD_KONSOLE")
+	if Touch.noetig() or OS.get_environment("TD_TOUCH") != "":   # TD_TOUCH: Touch-Leiste am PC ansehen
+		_kachel_faktor = KACHEL_TOUCH
 	# Zuweisungspfeil Fabrik -> Stellung (HD-2D): im Bild gezeichnet, unter den Inseln (16.11.)
 	_zuweis = Control.new()
 	_zuweis.size = Vector2(1280, 720)
@@ -226,6 +234,7 @@ func _ready() -> void:
 		if ResourceLoader.exists(pfad):
 			k.bild = load(pfad)
 		k.size = Vector2(KACHEL_B, KACHEL_H)
+		k.scale = Vector2(_kachel_faktor, _kachel_faktor)
 		k.pressed.connect(spiel.waehle.bind(k.typ))
 		_konsole.add_child(k)
 		kacheln[k.typ] = k
@@ -411,36 +420,62 @@ func _aktualisiere_oben_rechts() -> void:
 func _aktualisiere_tipps() -> void:
 	# Tafel oben: Name des Knopfs unter der Maus bzw. die Ansage hinter dem „Neu“-Abzeichen
 	_tipp_oben_text = ""
+	if _touch_tipp != null and _jetzt() > _touch_tipp_bis:
+		_touch_tipp = null
 	for b: Emblem in _oben_rechts + [menue]:
-		if b.is_hovered():
+		if _drueber(b):
 			_tipp_oben_text = str(b.get_meta("tipp", ""))
 			_tipp_oben_x = b.position.x + b.size.x
-	if _neu.visible and _neu.is_hovered():
+	if _neu.visible and _drueber(_neu):
 		_tipp_oben_text = _neu_text
 		_tipp_oben_x = -1.0   # mittig unter der Welleninsel
 	# Tafel unten: Kachel unter der Maus, sonst gewähltes Werkzeug, Meldung oder Warnung
 	var unter := Karte.FREI
 	for typ: int in kacheln:
-		if (kacheln[typ] as Kachel).is_hovered():
+		if _drueber(kacheln[typ]):
 			unter = typ
 	_monitor_typ = unter if unter != Karte.FREI else int(spiel.werkzeug)
-	if tempo.is_hovered() and spiel._meldung_zeit <= 0.0:
+	if _drueber(tempo) and spiel._meldung_zeit <= 0.0:
 		_tipp_titel = "Tempo  [F]"
 		_tipp_text = "Spielgeschwindigkeit: ×1 › ×2 › ×3 › ×1."
 		_tipp_warnung = false
 		return
 	var h: Array = spiel.hinweis_text(unter)
-	if start.is_hovered() and not start.disabled and spiel._meldung_zeit <= 0.0:
+	if _drueber(start) and not start.disabled and spiel._meldung_zeit <= 0.0:
 		h = ["Startet deinen Angriff." if _angreifer else "Startet die nächste Welle.", false]
 	_tipp_text = h[0]
 	_tipp_warnung = h[1]
 	_tipp_titel = ""
 	var titel_typ: int = unter if unter != Karte.FREI else spiel.werkzeug
-	if start.is_hovered() and not start.disabled and spiel._meldung_zeit <= 0.0:
+	if _drueber(start) and not start.disabled and spiel._meldung_zeit <= 0.0:
 		_tipp_titel = "Start  [Leertaste]"
 	elif kacheln.has(titel_typ) and _tipp_text != "" and spiel._meldung_zeit <= 0.0:
 		var k: Kachel = kacheln[titel_typ]
 		_tipp_titel = "%s  [%s]" % [k.name_text, k.taste]
+
+
+## Maus darüber – oder am Handy gerade lange gedrückt (18.11.).
+func _drueber(b: BaseButton) -> bool:
+	return b.is_hovered() or b == _touch_tipp
+
+
+## 18.11.: Von touch.gd beim langen Drücken (Position im Bild). Liegt dort eine Kachel oder ein Emblem, zeigt sie
+## 4 s ihren Tipp, und touch.gd macht keinen Rechtsklick daraus. true = Tipp gezeigt.
+func touch_tipp(bei: Vector2) -> bool:
+	var knoepfe: Array[Control] = [start, tempo, menue, _neu]
+	for k: Kachel in kacheln.values():
+		knoepfe.append(k)
+	for b: Emblem in _oben_rechts:
+		knoepfe.append(b)
+	for c: Control in knoepfe:
+		if not c.is_visible_in_tree():
+			continue
+		var lokal: Vector2 = c.get_global_transform().affine_inverse() * bei
+		if Rect2(Vector2.ZERO, c.size).has_point(lokal):
+			_touch_tipp = c
+			_touch_tipp_bis = _jetzt() + 4.0
+			return true
+	return false
 
 
 func _ordne_an() -> void:
@@ -483,20 +518,24 @@ func _ordne_an() -> void:
 
 	# unten Mitte: Konsole
 	var n := kacheln.size()
-	var reihe := n * KACHEL_B + (n - 1) * KACHEL_ABSTAND
+	var f := _kachel_faktor
+	var reihe := n * KACHEL_B * f + (n - 1) * KACHEL_ABSTAND
 	var kw := reihe + 2.0 * SCHULTER
-	var kh := 50.0
+	var kh := 50.0 + roundf(KACHEL_H * (f - 1.0))
+	var kx := roundf((BREITE - kw) / 2.0)
+	if f > 1.0:
+		kx = minf(kx, tempo.position.x - 4.0 - kw)   # 18.11.: breite Touch-Leiste rückt links neben Tempo und Start
 	_konsole.size = Vector2(kw, kh)
-	_konsole.position = Vector2(roundf((BREITE - kw) / 2.0), HOEHE - kh + roundf(_konsole_tief + _klapp_anteil * (kh - 6.0)))
+	_konsole.position = Vector2(kx, HOEHE - kh + roundf(_konsole_tief + _klapp_anteil * (kh - 6.0)))
 	var klapp_w := 18.0 if not eingeklappt else Stil.breite("Bauleiste [B]", Stil.KLEIN) + 18.0
 	_klapp.size = Vector2(roundf(klapp_w), 9)
-	_klapp.position = Vector2(roundf((BREITE - klapp_w) / 2.0), _konsole.position.y - 6.0)
+	_klapp.position = Vector2(roundf(kx + (kw - klapp_w) / 2.0), _konsole.position.y - 6.0)
 	_klapp.visible = _konsole.visible
 	_konsole.visible = not _angreifer
 	var i := 0
 	for eintrag: Array in KACHELN:
 		var k: Kachel = kacheln[eintrag[0]]
-		k.position = Vector2(SCHULTER + i * (KACHEL_B + KACHEL_ABSTAND), 8.0)
+		k.position = Vector2(SCHULTER + i * (KACHEL_B * f + KACHEL_ABSTAND), 8.0)
 		i += 1
 
 	# Tafel über der Konsole
@@ -1000,6 +1039,13 @@ func pause_an() -> void:
 		spiel._laufband.visible = false   # 18.11.: Taktikplaner nicht über dem Pause-Menü; main holt ihn danach zurück
 		spiel._laufband_vor_pause = true
 	_hauptseite()
+
+
+## 18.11.: Fenster verliert den Fokus (Alt+Tab, anderer Browser-Tab, Handy: App im Hintergrund) → im Kampf pausieren.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		if _pause != null and spiel != null and spiel.phase == KAMPF:
+			pause_an()
 
 
 func pause_aus() -> void:

@@ -153,6 +153,14 @@ Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennumme
 **Zinsen:** Für je 100 Budget, das am Rundenende noch übrig ist, gibt es 10 dazu, höchstens 50. Die fünf Felder
 unten neben den Bauknöpfen zeigen, wie viele Schritte du gerade erreicht hast.
 
+## Fortsetzen nach Neuladen (18.11.)
+
+Zu Beginn jeder Bauphase ab Runde 2 sichert das Spiel den Stand in `user://zwischenstand.json` (Welle, Leben, Budget, freie Erdwälle, Basis, Checkpoints samt Besitz, der Bau so, wie er gerade steht – auch Gesprengtes bleibt weg –, Brakk, Bauprotokoll). Lädt der Browser die Seite neu oder wird das Spiel geschlossen, steht im Startmenü oben **„Fortsetzen · Runde N“**, und einmal pro Programmstart erscheint der Hinweis, dass eine Partie ohne Ende lief. Gelöscht wird der Stand bei Sieg, Niederlage, Neustart und „Hauptmenü“. Nur normales Spiel und Phantom-Verteidigung (nicht Sandbox, Tutorial, Phantom-Angriff). Nicht mitgesichert: die Werte je Bauwerk (Schaden, Kills) und die Lage der Schleudern (ziehen ohnehin jede Runde um). Code: `main.gd` → Abschnitt „Zwischenstand“.
+
+## Erfolge (18.11.)
+
+19 Erfolge als heimliches Tutorial: Sie lenken auf Mechaniken, die man sonst übersieht (Formtürme, Wachposten, Checkpoints zurückholen, Panzerung, Feldlazarett, Kuppel, Zuweisung, Zinsen, Klonmaschine …). Drei sind versteckt („???“): Schildträger von hinten, Runde 20 ohne Lebensverlust, Sieg ohne Fabrik (Batterien zählen nicht). Freischalten zeigt oben eine Einblendung mit Symbol und spielt einen Ton; im Profil (Startmenü oben rechts) steht die Tafel „Erfolge x/19“. In der Sandbox gibt es keine Erfolge. Gespeichert im Profil (`user://profil.json`, Schlüssel `erfolge` und `formen`). Liste und Texte: `scripts/erfolge.gd`. Belohnungen sind vorbereitet: Jeder Eintrag hat ein leeres Feld `belohnung`, ausgegeben wird in `Erfolge._gib_belohnung()`.
+
 ## Bauprotokoll und Nachspielen
 Das Spiel schreibt jede Partie mit: was in welcher Runde wohin gebaut, abgerissen oder umgestellt wurde, wo die
 Checkpoints lagen und wie jede Runde ausging. Die Datei liegt nach jeder Runde aktuell in `partien/partie-<Datum>-<Zeit>.json`

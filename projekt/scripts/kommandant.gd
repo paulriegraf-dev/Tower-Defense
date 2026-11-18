@@ -133,6 +133,7 @@ func _angriff(delta: float) -> void:
 			if _sprite.flip_h:
 				m.x = -m.x
 			spiel.schadensquelle = "fabrik:-1,-1"
+			spiel.schuetze = null   # 18.11.: Brakk zählt nicht als Wachposten-Truppe
 			spiel.schuss_herkunft = position
 			Ton.am_ort(spiel, "tc-pistol", position)
 			spiel.strahl(position + m, _angriff_ziel.position, Color(daten["schussfarbe"]), 3.0)

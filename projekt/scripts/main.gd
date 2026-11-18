@@ -22,6 +22,9 @@ var _durchgang_sek := 0.0           # Kampfzeit, zu der der laufende Durchgang d
 var _phantom_pfad := ""             # Angriff: Datei des Phantoms, gegen das es gerade geht
 var _ersatz: Array = []             # Angriff: Dateien weiterer Phantome, die übernehmen, wenn die Verteidigung fällt
 var _geknackt := 0                  # Angriff: so viele Verteidigungen sind schon gefallen
+var _aktiv_pfad := ""               # Angriff: Datei der Verteidigung, die gerade steht (auch ein Ersatz-Phantom)
+var _profil_kills: Dictionary = {}  # Profil (18.11.): wer in dieser Partie wie viele Gegner besiegt hat
+var _angriff_pfad := ""             # Verteidigung: Datei des Angriffs-Phantoms, gegen das es geht
 var _wurfziel_fuer: Dictionary = {} # Angriff: dieser Wurf-Trupp wartet auf den Klick für sein Landefeld
 var _ende_knoepfe: HBoxContainer
 var _btn_menue: Button              # oben rechts: Partie abbrechen und zurück ins Hauptmenü (zweiter Klick bestätigt)
@@ -165,6 +168,8 @@ func _ready() -> void:
 		_menue_gewaehlt(true)   # aus dem Startmenü, nach dem Wechsel der Kartengröße
 	elif start == "tutorial":
 		_tutorial_gewaehlt()
+	elif start == "fortsetzen":
+		_lade_zwischenstand()   # 18.11.
 	elif start.begins_with("verteidigt:"):
 		starte_phantom_verteidigung(start.trim_prefix("verteidigt:"))
 	elif start.begins_with("angriff:"):
@@ -241,6 +246,7 @@ func starte_phantom_verteidigung(pfad: String) -> bool:
 		melde("Dieses Phantom lässt sich nicht laden.", 5.0)
 		return false
 	phantom_modus = "verteidigung"
+	_angriff_pfad = pfad
 	_normales_spiel()
 	_protokoll["gegen_angriff"] = pfad.get_file()
 	melde("Du verteidigst gegen den Angriff von %s. Seine Welle steht jede Runde oben in der Ansage." % str(_angriff_phantom.get("spieler", "einem Phantom")), 8.0)
@@ -269,11 +275,16 @@ func starte_phantom_angriff(pfad: String) -> bool:
 	_geknackt = 0
 	nebel.vergiss()
 	_ersatz = []
-	var pool := Phantom.liste("verteidigung")
-	pool.shuffle()   # Ersatz-Phantome zufällig aus dem Pool
-	for f: Dictionary in pool:
-		if str(f["pfad"]).get_file() != pfad.get_file() and _ersatz.size() < 2:
-			_ersatz.append(f["pfad"])
+	_aktiv_pfad = pfad
+	if not Online.ersatz_pfade.is_empty():
+		_ersatz = Online.ersatz_pfade.duplicate()   # 18.11.: online gezogen (das Startmenü hat sie schon geladen)
+		Online.ersatz_pfade = []
+	else:
+		var pool := Phantom.liste("verteidigung")
+		pool.shuffle()   # Ersatz-Phantome zufällig aus dem Pool
+		for f: Dictionary in pool:
+			if str(f["pfad"]).get_file() != pfad.get_file() and _ersatz.size() < 2:
+				_ersatz.append(f["pfad"])
 	leben = Werte.START_LEBEN
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
 	_lade_phantom_stand()
@@ -292,6 +303,11 @@ func _lade_phantom_stand() -> void:
 	if welle > runden.size():
 		return
 	var stand: Dictionary = runden[welle - 1]["stand"]
+	_setze_stand(stand)
+
+
+## 18.11.: Stellt einen Bau im Format von Phantom._stand hin (Runde eines Phantoms oder Zwischenstand).
+func _setze_stand(stand: Dictionary) -> void:
 	_schliesse_fabrikmenue()
 	for z: Vector2i in karte.feld.keys():
 		karte.entferne(z)
@@ -380,6 +396,7 @@ func _angriff_runde_fertig(geknackt: bool = false) -> void:
 	var genommen := _leben_vor_runde - leben
 	_angriff_log.append({
 		"runde": welle,
+		"gegen_pfad": _aktiv_pfad,
 		"geknackt": geknackt,
 		"trupps": (_plaene.get(welle, []) as Array).duplicate(true),
 		"punkte": Phantom.plan_preis(_plaene.get(welle, [])),
@@ -398,9 +415,11 @@ func _phantom_gefallen() -> void:
 	var neu := {}
 	if not endkampf and welle < Werte.LETZTE_RUNDE:
 		while not _ersatz.is_empty() and neu.is_empty():
-			var kandidat := Phantom.lade(_ersatz.pop_front())
+			var kpfad: String = _ersatz.pop_front()
+			var kandidat := Phantom.lade(kpfad)
 			if (kandidat.get("runden", []) as Array).size() > welle:
 				neu = kandidat
+				neu["_pfad"] = kpfad
 	if neu.is_empty():
 		_angriff_runde_fertig(true)
 		_angriff_ende("durchbruch", true)
@@ -454,6 +473,8 @@ func _ersatz_uebernimmt(neu: Dictionary) -> void:
 	_wurf_aktiv = []
 	_im_flug = 0
 	_phantom = neu
+	_aktiv_pfad = str(neu.get("_pfad", ""))
+	_phantom.erase("_pfad")
 	leben = Werte.START_LEBEN
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
 	var b: Array = _phantom["karte"].get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])
@@ -479,7 +500,7 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 		genommen += int(e["leben_genommen"])
 	var wertung := Phantom.wertung(_angriff_log)
 	var daten := {
-		"format": 1, "art": "angriff", "spieler": "Paul", "begonnen": Time.get_datetime_string_from_system(),
+		"format": 1, "art": "angriff", "spieler": Profil.name(), "profil": Profil.id(), "begonnen": Time.get_datetime_string_from_system(),
 		"gegen": str(_phantom.get("quelle", "")),
 		"ergebnis": {"ausgang": grund, "runde": welle, "leben_genommen": genommen, "punkte": punkte, "geknackt": _geknackt + (1 if grund == "durchbruch" else 0),
 			"durchgaenge_runde_20": _durchgang if endkampf else 0, "wertung": wertung["gesamt"]},
@@ -487,6 +508,11 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 	}
 	var pfad := Phantom.speichere("angriff", daten)
 	_merke_export(daten, "angriff")
+	Profil.angriff_ende(int(wertung["gesamt"]), _geknackt + (1 if grund == "durchbruch" else 0))
+	if _geknackt + (1 if grund == "durchbruch" else 0) > 0:
+		erfolg("einbrecher")   # 18.11.
+	if pfad != "":
+		_angriff_online.call_deferred(pfad, daten, int(wertung["gesamt"]))
 	var zeilen: PackedStringArray = []
 	match grund:
 		"durchbruch":
@@ -502,6 +528,113 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 	zeilen.append("Budget eingesetzt: %d" % punkte)
 	zeilen.append("Gespeichert als Angriffs-Phantom." if pfad != "" else "(Speichern hat nicht geklappt.)")
 	_zeige_ende("\n".join(zeilen), 26)
+
+
+# ------------------------------------------------------------ Profil und Online-Pool (18.11.)
+
+## 18.11.: Erfolg freischalten (erfolge.gd) – nicht in der Sandbox.
+func erfolg(id: String) -> void:
+	if sandbox or _protokoll.has("sandbox_sprung"):
+		return
+	Erfolge.melde(id)
+
+
+## 18.11.: Wurde in dieser Partie je eine Fabrik gebaut? (Pilotenfabriken der Batterien zählen nicht.)
+func _fabrik_gebaut() -> bool:
+	for r: Dictionary in _protokoll.get("runden", []):
+		for a: Dictionary in r.get("aktionen", []):
+			if str(a.get("a", "")) == "bau" and str(a.get("typ", "")) == "fabrik":
+				return true
+	return false
+
+
+var schuetze: Node = null   # 18.11.: die Truppe, deren Schuss gerade trifft (Erfolg „Einsamer Posten“)
+
+
+## Ein besiegter Gegner fürs Profil: welche Einheit, welcher Turm, Brakk oder eine Batterie.
+func _profil_kill(quelle: String) -> void:
+	if sandbox or phantom_modus == "angriff" or quelle == "":
+		return
+	var schluessel := ""
+	if quelle == "fabrik:-1,-1":
+		schluessel = "brakk"
+	elif quelle.begins_with("fabrik:"):
+		var xy := quelle.trim_prefix("fabrik:").split(",")
+		var z := Vector2i(int(xy[0]), int(xy[1]))
+		if fabriken.has(z):
+			schluessel = "einheit:" + str(fabriken[z]["typ"])
+	elif quelle.begins_with("turm:"):
+		schluessel = quelle
+	elif quelle.begins_with("batterie"):
+		schluessel = "batterie"
+	if schluessel != "":
+		_profil_kills[schluessel] = int(_profil_kills.get(schluessel, 0)) + 1
+	if schluessel == "brakk" and Profil.kills("brakk") + int(_profil_kills["brakk"]) >= 50:
+		erfolg("kommandant")
+
+
+## Partie als Verteidiger zu Ende: Profil fortschreiben. Gegen ein Angriffs-Phantom gibt es eine Wertung (Text zurück).
+func _partie_ins_profil(sieg: bool) -> String:
+	if sandbox or phantom_modus == "angriff":
+		return ""
+	var gehalten := welle if sieg else welle - 1
+	var vw := -1
+	var text := ""
+	if phantom_modus == "verteidigung":
+		var w := Phantom.verteidigungs_wertung(gehalten, leben, sieg)
+		vw = int(w["gesamt"])
+		text = "Verteidigungswertung: %d Punkte  ·  %s" % [vw, "  ·  ".join(w["zeilen"])]
+	Profil.partie_ende(sieg, welle, _profil_kills, vw)
+	_profil_kills = {}
+	return text
+
+
+func _online_hinweis(ok: bool, was: String) -> void:
+	if not is_instance_valid(_export_hinweis) or _export_text == "":
+		return
+	_export_hinweis.text = ("Online hochgeladen: %s – andere Spieler treffen jetzt darauf." % was) if ok else "Keine Verbindung – dein Lauf liegt als Datei bereit (herunterladen und an Paul schicken)."
+
+
+## Angriff hochladen und für jede Verteidigung, gegen die er lief, ein Duell melden (Elo).
+func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
+	if not Online.aktiv():
+		return
+	var id: String = await Online.hochladen("angriff", pfad.get_file(), daten)
+	_online_hinweis(id != "", "dein Angriff")
+	if id == "":
+		return
+	Online.pfad_id[pfad] = id
+	var je: Dictionary = {}   # Pfad der Verteidigung -> [genommen, geknackt]
+	var folge: Array = []
+	for r: Dictionary in daten.get("runden", []):
+		var g := str(r.get("gegen_pfad", ""))
+		if not je.has(g):
+			je[g] = [0, false]
+			folge.append(g)
+		je[g][0] = int(je[g][0]) + int(r.get("leben_genommen", 0))
+		if r.get("geknackt", false):
+			je[g][1] = true
+	for g: String in folge:
+		var vid := Online.id_von(g)
+		if vid != "":
+			await Online.duell(id, vid, Phantom.duell_ergebnis(int(je[g][0]), bool(je[g][1])), wertung)
+
+
+## Verteidigung gegen ein Angriffs-Phantom (oder ein Sieg im normalen Spiel) zu Ende: Bau hochladen, Duell melden.
+func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
+	if not Online.aktiv():
+		return
+	var vid := ""
+	if pfad != "":
+		vid = await Online.hochladen("verteidigung", pfad.get_file(), daten)
+		_online_hinweis(vid != "", "dein Bau")
+		if vid != "":
+			Online.pfad_id[pfad] = vid
+	if phantom_modus == "verteidigung" and _angriff_pfad != "":
+		var aid := Online.id_von(_angriff_pfad)
+		var genommen := Werte.START_LEBEN - leben
+		if aid != "":
+			await Online.duell(aid, vid, Phantom.duell_ergebnis(genommen, leben <= 0), 0)
 
 
 # ------------------------------------------------------------ Schlussbild
@@ -542,7 +675,7 @@ func _zeige_ende(text: String, schrift: int = 36, mit_angriff: bool = false) -> 
 		b1.custom_minimum_size = Vector2(340, 44)
 		b1.add_theme_font_size_override("font_size", 17)
 		b1.add_theme_color_override("font_color", Color("ffe9a8"))
-	_export_hinweis.text = "Dein Lauf als Datei: herunterladen und an Paul schicken – dann wird er zum Phantom für andere Spieler." if _export_text != "" else ""
+	_export_hinweis.text = ("Wird online hochgeladen …" if Online.aktiv() else "Dein Lauf als Datei: herunterladen und an Paul schicken – dann wird er zum Phantom für andere Spieler.") if _export_text != "" else ""
 	_ende.visible = true
 
 
@@ -579,6 +712,8 @@ func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Butt
 
 ## Neustart ohne Umweg über das Menü. Die Partie ist da schon gespeichert (partien/, nach einem Sieg auch als Phantom).
 func _neustart() -> void:
+	if not sandbox and phantom_modus != "angriff":
+		loesche_zwischenstand()   # 18.11.
 	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else "normal"
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
@@ -595,6 +730,8 @@ func _abbruch_klick() -> void:
 
 
 func _zum_menue() -> void:
+	if _menue == null and not sandbox and phantom_modus != "angriff":
+		loesche_zwischenstand()   # 18.11.: bewusst verlassen – kein „Fortsetzen“ mehr
 	naechster_start = ""
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
@@ -665,6 +802,149 @@ func _speichere_protokoll() -> void:
 			datei.store_string(text)
 			datei.close()
 			return
+
+
+# -------------------------------------------------------------- Zwischenstand (18.11.)
+## Am Handy verwirft der Browser manchmal die Seite (Tab im Hintergrund, Speicher voll). Zu Beginn jeder Bauphase
+## (ab Runde 2) wird der Stand gesichert; das Startmenü bietet dann „Fortsetzen“ an. Nur normales Spiel und
+## Phantom-Verteidigung – nicht Sandbox, Tutorial oder Phantom-Angriff. Gelöscht bei Sieg, Niederlage, Hauptmenü, Neustart.
+## Der Bau kommt live von der Karte (das Protokoll kennt keine Sprengungen). Nicht gesichert: Werte je Bauwerk
+## (Schaden/Kills), Lage der Schleudern (ziehen ohnehin jede Runde um).
+const ZWISCHENSTAND := "user://zwischenstand.json"
+
+
+static func lies_zwischenstand() -> Dictionary:
+	if not FileAccess.file_exists(ZWISCHENSTAND):
+		return {}
+	var daten: Variant = JSON.parse_string(FileAccess.get_file_as_string(ZWISCHENSTAND))
+	if daten is Dictionary:
+		return daten
+	return {}
+
+
+## Runde des Zwischenstands, 0 = keiner (oder er passt nicht zur Kartengröße).
+static func zwischenstand_runde() -> int:
+	var d := lies_zwischenstand()
+	if int(d.get("spalten", 0)) != Werte.SPALTEN or int(d.get("zeilen", 0)) != Werte.ZEILEN:
+		return 0
+	return int(d.get("welle", 0))
+
+
+static func loesche_zwischenstand() -> void:
+	if FileAccess.file_exists(ZWISCHENSTAND):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(ZWISCHENSTAND))
+
+
+func _speichere_zwischenstand() -> void:
+	if sandbox or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
+		return
+	if tutorial != null and is_instance_valid(tutorial):
+		return
+	var cps: Array = []
+	for z in karte.checkpoints:
+		cps.append([z.x, z.y])
+	var d := {
+		"version": 1, "gespeichert": Time.get_datetime_string_from_system(),
+		"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN,
+		"welle": welle, "leben": leben, "budget": budget, "freie_waelle": freie_waelle, "variante": variante,
+		"basis": [karte.basis.x, karte.basis.y], "checkpoints": cps, "cp_feind": Array(karte.cp_feind),
+		"stand": Phantom._stand(_zellen_jetzt(), _schilde_jetzt()),
+		"kommandant": [kommandant.aufstellung.x, kommandant.aufstellung.y] if kommandant != null else [],
+		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad,
+		"protokoll": _protokoll, "protokoll_datei": _protokoll_datei, "kills": _profil_kills,
+	}
+	# erst in eine Zwischendatei, dann umbenennen: ein Absturz beim Schreiben lässt den alten Stand heil
+	var tmp := ZWISCHENSTAND + ".tmp"
+	var datei := FileAccess.open(tmp, FileAccess.WRITE)
+	if datei == null:
+		return
+	datei.store_string(JSON.stringify(d))
+	datei.close()
+	DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(ZWISCHENSTAND))
+
+
+## Der Bau, wie er gerade steht, im Format von Phantom._wende_an (Feld -> {"typ", ...}).
+func _zellen_jetzt() -> Dictionary:
+	var namen := {Karte.STELLUNG: "stellung", Karte.TURM: "turm", Karte.TOR: "tor", Karte.SPIEGEL: "spiegel", Karte.MAGNET: "magnet"}
+	var zellen := {}
+	for z: Vector2i in karte.feld:
+		var typ: int = karte.feld[z]
+		if typ == Karte.WALL:
+			var w := {"typ": "wall", "ausbau": str(namen.get(karte.ausbau.get(z, -1), "")), "panzer": karte.panzer.has(z),
+				"stufe": int(karte.turm_stufe.get(z, 1)), "faehigkeit": str(karte.turm_faehigkeit.get(z, ""))}
+			if karte.magnet_richtung.has(z):
+				var r: Vector2i = karte.magnet_richtung[z]
+				w["richtung"] = [r.x, r.y]
+			zellen[z] = w
+		elif typ == Karte.FABRIK and fabriken.has(z):
+			var f: Dictionary = fabriken[z]
+			var c := {"typ": "fabrik", "einheit": str(f["typ"]), "stufe": int(f.get("stufe", 0))}
+			if f.has("faehigkeit"):
+				c["faehigkeit"] = str(f["faehigkeit"])
+			if f.has("ziel"):
+				c["ziel"] = str(f["ziel"])
+			if f.has("stellungen"):
+				var liste: Array = []
+				for s: Vector2i in f["stellungen"]:
+					liste.append([s.x, s.y])
+				c["stellungen"] = liste
+			if karte.paar.has(z):
+				c["partner"] = karte.paar[z]
+			zellen[z] = c
+		elif typ == Karte.BATTERIE and karte.paar.has(z):
+			zellen[z] = {"typ": "batterie", "partner": karte.paar[z]}
+		elif typ == Karte.GENERATOR and karte.generator_paar.has(z):
+			var gp: Vector2i = karte.generator_paar[z]
+			var vorne: bool = z.x < gp.x or (z.x == gp.x and z.y <= gp.y)
+			zellen[z] = {"typ": "generator" if vorne else "generator_teil", "partner": gp}
+	return zellen
+
+
+## Schilde der Batterien im Format von Phantom._wende_an (Batterie -> [Erdwall, Erdwall]).
+func _schilde_jetzt() -> Dictionary:
+	var aus := {}
+	for b: Vector2i in schilde:
+		var s: Dictionary = schilde[b]
+		aus[b] = [s["a"], s["e"]]
+	return aus
+
+
+## Startmenü → „Fortsetzen“: den gesicherten Stand hinstellen. Passt er nicht, beginnt eine neue Partie.
+func _lade_zwischenstand() -> void:
+	var d := lies_zwischenstand()
+	var passt: bool = not d.is_empty() and int(d.get("spalten", 0)) == Werte.SPALTEN and int(d.get("zeilen", 0)) == Werte.ZEILEN
+	if passt and str(d.get("phantom_modus", "")) == "verteidigung":
+		passt = starte_phantom_verteidigung(str(d.get("angriff_pfad", "")))
+	if not passt:
+		loesche_zwischenstand()
+		_normales_spiel()
+		melde("Der Zwischenstand ließ sich nicht laden – eine neue Partie beginnt.", 6.0)
+		return
+	setze_checkpoints(d["checkpoints"])
+	var bz: Array = d["basis"]
+	setze_basis(Vector2i(int(bz[0]), int(bz[1])))
+	_protokoll = d["protokoll"]
+	_protokoll_datei = str(d["protokoll_datei"])
+	_profil_kills = d.get("kills", {})
+	_setze_stand(d["stand"])
+	var kz: Array = d.get("kommandant", [])
+	if kz.size() == 2:
+		_setze_kommandant(Vector2i(int(kz[0]), int(kz[1])))
+	# wie nach einer geschafften Runde: welle eins davor, dann die Bauphase regulär herrichten
+	welle = int(d["welle"]) - 1
+	_naechste_bauphase()
+	leben = int(d["leben"])
+	budget = int(d["budget"])
+	freie_waelle = int(d.get("freie_waelle", 0))
+	variante = int(d.get("variante", 0))
+	karte.cp_aktiv = welle >= Werte.CHECKPOINTS_AB_WELLE   # _naechste_bauphase schaltet sie nur genau in dieser Runde an
+	var feind: Array = d.get("cp_feind", [])
+	for i in mini(feind.size(), karte.cp_feind.size()):
+		karte.cp_feind[i] = bool(feind[i])
+	karte.aktualisiere_pfad()
+	karte.queue_redraw()
+	_speichere_zwischenstand()
+	melde("Partie fortgesetzt: Runde %d." % welle, 5.0)
 
 
 ## Für das Nachspielen: Checkpoints auf die Felder der aufgezeichneten Partie setzen.
@@ -963,6 +1243,7 @@ func _process(delta: float) -> void:
 	_zoomregler_nachziehen()
 	_aktualisiere_zuweisung()
 	schadensquelle = ""   # wer gerade Schaden macht, setzt sich selbst (Truppe, Turm, Batterie, Brandfeld)
+	schuetze = null
 	_aktualisiere_vorschau()
 	_aktualisiere_sichtanzeige()
 	_aktualisiere_hud(delta)
@@ -1316,6 +1597,7 @@ func _checkpoints_halten(delta: float) -> void:
 		karte.cp_fortschritt[i] += delta * cp_faktor
 		if karte.cp_fortschritt[i] >= Werte.RUECKEROBERUNG_SEK:
 			karte.cp_feind[i] = false
+			erfolg("zurueckgeholt")   # 18.11.
 			karte.cp_fortschritt[i] = 0.0
 			if OS.get_environment("TD_WURF_LOG") != "":
 				print("CP R%d t=%.1f  Checkpoint %d zurückerobert" % [welle, _kampf_sek, i + 1])
@@ -1358,6 +1640,7 @@ func _tuerme_feuern(delta: float) -> void:
 			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
 		schadensquelle = "turm:" + art_name
+		schuetze = null
 		schadensobjekt = z
 		var weite: float = float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
 		var farbe := Color(art["farbe"])
@@ -1460,6 +1743,13 @@ func _lanzenstrahl(von: Vector2, ende: Vector2, farbe: Color, breite: float, sch
 	for g: Gegner in betroffen:
 		if is_instance_valid(g):
 			g.nimm_schaden(schaden * float(deckung.get(g, 1.0)))
+	# 18.11.: Erfolg „Aufgespießt“ – vier Gegner mit einem Strahl
+	var tote := 0
+	for g: Gegner in betroffen:
+		if is_instance_valid(g) and g._tot:
+			tote += 1
+	if tote >= 4:
+		erfolg("aufgespiesst")
 
 
 ## Magnete: alle paar Sekunden die Gegner in ihrer Zuglinie heranziehen (höchstens bis vor den Magneten, nicht durch Wälle).
@@ -1627,6 +1917,7 @@ func lazarett_rettet(e: Einheit) -> bool:
 		if karte.turm_art[z] == "heil" and karte.turm_aktiv(z) and not _lazarett_genutzt.has(z) and karte.turm_wert(z, "lazarett", false) \
 				and karte.mitte(z).distance_to(e.position) <= float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE:
 			_lazarett_genutzt[z] = true
+			erfolg("feldlazarett")   # 18.11.
 			objekt_zaehle(z, "gerettet", 1.0)
 			e.leben = e.max_leben * 0.5
 			effekte.flaeche(e.position, Werte.ZELLE * 0.6, Color(Werte.TURMARTEN["heil"]["farbe"]))
@@ -1692,6 +1983,7 @@ func _batterie_einschlag(z: Vector2i, von: Vector2, punkt: Vector2, radius: floa
 		return
 	Ton.am_ort(self, "hit-pboom", punkt)
 	schadensquelle = "batterie:%d,%d" % [z.x, z.y]
+	schuetze = null
 	schuss_herkunft = von   # der Frontschild fängt auch die Batterie ab, wenn sie von vorn kommt
 	flaechenschaden(punkt, radius, schaden, Color("7fe0ff"), Werte.BATTERIE_RAND_FAKTOR, false)
 	schuss_herkunft = Vector2.INF
@@ -1784,6 +2076,7 @@ func _braende_wirken(delta: float) -> void:
 	for b: Array in _braende:
 		b[2] -= delta
 		schadensquelle = str(b[4]) if b.size() > 4 else ""
+		schuetze = null   # 18.11.: Brandfeld – keine Truppe schießt gerade
 		for g in gegner.duplicate():
 			if not _geschuetzt(g) and (b[0] as Vector2).distance_to(g.position) <= float(b[1]):
 				g.nimm_schaden(float(b[3]) * delta, true)
@@ -2113,6 +2406,8 @@ func _welle_geschafft() -> void:
 	var cp_bonus := gehalten * Werte.BONUS_JE_CHECKPOINT
 	# Zinsen auf das, was am Rundenende noch übrig ist
 	var zins := Werte.zinsen(budget)
+	if zins >= Werte.ZINS_STUFEN * Werte.ZINS_JE_SCHRITT:
+		erfolg("sparfuchs")   # 18.11.
 	budget += bonus + cp_bonus + zins
 	var text := "Runde %d überstanden: +%d Budget" % [welle, bonus]
 	if zins > 0:
@@ -2207,6 +2502,7 @@ func _naechste_bauphase() -> void:
 		karte.cp_fortschritt[i] = 0.0
 		karte.cp_tempo[i] = 0.0
 	effekte.leeren()
+	_speichere_zwischenstand()
 
 
 # ------------------------------------------------- Rückmeldungen der Figuren
@@ -2455,6 +2751,7 @@ func schalte_zuweisung(fabrik: Vector2i, stellung: Vector2i) -> void:
 			if f2 != fabrik:
 				(fabriken[f2].get("stellungen", []) as Array).erase(stellung)
 		liste.append(stellung)
+		erfolg("fester_platz")   # 18.11.
 		# Sitzt dort eine fremde Truppe, räumt sie den Platz
 		var inh: Variant = karte.posten.get(stellung)
 		if inh != null and is_instance_valid(inh) and inh.fabrik_zelle != fabrik:
@@ -2564,17 +2861,32 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 		_angriff_ende("hq")
 	elif b == hq:
 		phase = Phase.ENDE
+		if not sandbox:
+			loesche_zwischenstand()   # 18.11.
 		_schliesse_runde("sieg")
+		# 18.11.: Erfolge zum Sieg
+		erfolg("gegenangriff")
+		if leben >= _leben_vor_runde:
+			erfolg("unberuehrt")
+		if not _fabrik_gebaut():
+			erfolg("ohne_fabrik")
 		var text := "Sieg! Das gegnerische HQ ist zerstört."
 		var als_phantom := false
 		if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung"):
 			# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
 			var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
-			als_phantom = not daten.is_empty() and Phantom.speichere("verteidigung", daten) != ""
+			var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
+			als_phantom = vpfad != ""
 			if als_phantom:
 				_merke_export(daten, "verteidigung")
+				Profil.phantom_erstellt()
+				erfolg("spiegelbild")   # 18.11.
+				_verteidigung_online.call_deferred(vpfad, daten)
 		if als_phantom:
 			text += "\nDeine Partie ist gespeichert – dein Bau ist jetzt ein Phantom."
+		var vw := _partie_ins_profil(true)
+		if vw != "":
+			text += "\n" + vw
 		_zeige_ende(text, 36, als_phantom)
 	else:
 		melde("Schleuder zerstört!", 3.0)
@@ -2632,6 +2944,7 @@ func _prallt_ab(punkt: Vector2) -> bool:
 	for k: Array in karte.kuppeln:
 		if punkt.distance_to(k[0]) <= float(k[1]):
 			objekt_zaehle(k[2], "abgewehrt", 1.0)
+			erfolg("kuppelschlag")   # 18.11.
 			break
 	effekte.flaeche(punkt, 18.0, Color(0.6, 0.85, 1.0))
 	return true
@@ -2775,6 +3088,11 @@ func kuppel_abgefangen(punkt: Vector2, menge: float) -> void:
 func zaehle_schaden(menge: float, getoetet: bool) -> void:
 	if schadensquelle == "" or menge <= 0.0:
 		return
+	if getoetet:
+		_profil_kill(schadensquelle)
+		if schuetze is Einheit and is_instance_valid(schuetze) and schadensquelle.begins_with("fabrik:") \
+				and (schuetze as Einheit).in_stellung() and karte.ist_wachposten((schuetze as Einheit).posten_zelle):
+			erfolg("einsamer_posten")
 	if schadensquelle.begins_with("turm:") and schadensobjekt != Karte.KEINE:
 		objekt_zaehle(schadensobjekt, "schaden", menge)
 		if getoetet:
@@ -2884,6 +3202,7 @@ func stelle_klonmaschine(z: Vector2i) -> String:
 
 ## Klone aus der Klonmaschine: mit dem aktuellen Leben des Originals.
 func klone_gegner(g: Gegner) -> void:
+	erfolg("doppelgaenger")   # 18.11.
 	var c := _neuer_gegner(g.typ, karte.zelle_bei(g.position), g._ziel)
 	c.position = g.position + Vector2(randf_range(-8, 8), randf_range(-6, 6))
 	c.leben = g.leben
@@ -3113,6 +3432,7 @@ func sprengung(g: Gegner, wall: Vector2i) -> void:
 		# Gepanzert: Die Sprengung reißt nur die Panzerung weg, der Erdwall bleibt stehen.
 		gegner_entfernt(g)
 		karte.panzer.erase(wall)
+		erfolg("doppelt_haelt")   # 18.11.
 		karte.queue_redraw()
 		effekte.flaeche(mitte, 30.0, Color("d8dee9"))
 		melde("Die Panzerung hat einen Sprenger abgefangen – der Erdwall steht noch.", 3.0)
@@ -3214,8 +3534,13 @@ func gegner_am_ziel(g: Gegner) -> void:
 	elif leben <= 0:
 		leben = 0
 		phase = Phase.ENDE
+		if not sandbox:
+			loesche_zwischenstand()   # 18.11.
 		_schliesse_runde("niederlage")
-		_zeige_ende("Die Basis ist gefallen.")
+		var vw := _partie_ins_profil(false)
+		_zeige_ende("Die Basis ist gefallen." + ("\n" + vw if vw != "" else ""), 36 if vw == "" else 28)
+		if phantom_modus == "verteidigung":
+			_verteidigung_online.call_deferred("", {})
 
 
 func einheit_gefallen(e: Einheit) -> void:
@@ -3460,6 +3785,8 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		karte.magnet_richtung[z] = r
 	if _ist_ausbau(typ):
 		karte.baue_aus(z, typ)
+		if typ == Karte.TURM and karte.turm_art.has(z) and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.TURMARTEN.size():
+			erfolg("formenlehre")   # 18.11.
 		if typ == Karte.TURM and _hud:
 			_hud.formvorlage = ""   # 17.11.: gebaut – die Vorlage verschwindet wieder
 		if typ == Karte.TURM and not still:

@@ -121,6 +121,31 @@ static func wertung(runden: Array) -> Dictionary:
 	return {"gesamt": leben + geknackt + runde20, "leben": leben, "geknackt": geknackt, "runde20": runde20, "zeilen": zeilen}
 
 
+# --- Wertung einer Verteidigung gegen ein Angriffs-Phantom (18.11., Startwerte) ---
+const V_PUNKTE_JE_RUNDE: int = 100      # je überstandene Runde
+const V_PUNKTE_JE_LEBEN: int = 150      # je Leben, das am Ende noch steht
+const V_PUNKTE_SIEG: int = 1500         # das HQ des Angreifers zerstört
+
+
+## Wertung des Verteidigers: {"gesamt", "zeilen"}. `runden` = überstandene Runden, `leben` = am Ende übrig.
+static func verteidigungs_wertung(runden: int, leben: int, sieg: bool) -> Dictionary:
+	var r := maxi(0, runden) * V_PUNKTE_JE_RUNDE
+	var l := maxi(0, leben) * V_PUNKTE_JE_LEBEN if sieg else 0
+	var s := V_PUNKTE_SIEG if sieg else 0
+	var zeilen: PackedStringArray = ["%d Runden gehalten: %d" % [runden, r]]
+	if sieg:
+		zeilen.append("%d Leben übrig: %d" % [leben, l])
+		zeilen.append("Sieg: %d" % s)
+	return {"gesamt": r + l + s, "zeilen": zeilen}
+
+
+## Elo-Ergebnis für den Angreifer gegen eine Verteidigung: Anteil der genommenen Leben, geknackt = 1.
+static func duell_ergebnis(leben_genommen: int, geknackt: bool) -> float:
+	if geknackt:
+		return 1.0
+	return clampf(float(leben_genommen) / float(Werte.START_LEBEN), 0.0, 1.0)
+
+
 ## Alle Phantome einer Art ("verteidigung" oder "angriff"), neueste zuerst: [{"pfad", "titel"}].
 static func liste(art: String, alle_groessen: bool = false) -> Array:
 	var funde: Array = []
@@ -148,7 +173,10 @@ static func liste(art: String, alle_groessen: bool = false) -> Array:
 				titel += " · %s in Runde %d, %d Leben" % [str(e.get("ausgang", "?")), int(e.get("runde", 0)), int(e.get("leben", 0))]
 			else:
 				titel += " · %d Leben genommen" % int(e.get("leben_genommen", 0))
-			funde.append({"pfad": o + "/" + datei, "titel": titel, "datei": datei, "begonnen": str(daten.get("begonnen", "")), "spalten": spalten})
+			# Stärke für die Wahl „Stärkste“ ohne Verbindung: Angriff nach Wertung, Verteidigung nach übrigen Leben
+			var wert := int(e.get("wertung", 0)) if art == "angriff" else int(e.get("leben", 0)) * 100 + int(e.get("runde", 0))
+			funde.append({"pfad": o + "/" + datei, "titel": titel, "datei": datei, "begonnen": str(daten.get("begonnen", "")), "spalten": spalten,
+				"spieler": str(daten.get("spieler", "?")), "wert": wert})
 	funde.sort_custom(func(a, b): return str(a["begonnen"]) > str(b["begonnen"]))
 	return funde
 
@@ -203,7 +231,7 @@ static func aus_partie(partie: Dictionary, quelle: String = "") -> Dictionary:
 		return {}
 	var letzte: Dictionary = runden[runden.size() - 1]
 	return {
-		"format": 1, "phantom_version": PHANTOM_VERSION, "art": "verteidigung", "quelle": quelle, "begonnen": str(partie.get("begonnen", "")), "spieler": "Paul",
+		"format": 1, "phantom_version": PHANTOM_VERSION, "art": "verteidigung", "quelle": quelle, "begonnen": str(partie.get("begonnen", "")), "spieler": Profil.name(), "profil": Profil.id(),
 		"karte": {"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN, "checkpoints": partie.get("checkpoints", []), "basis": partie.get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])},
 		"ergebnis": {"ausgang": letzte["original"]["ausgang"], "runde": letzte["runde"], "leben": letzte["original"]["leben"]},
 		"runden": runden,

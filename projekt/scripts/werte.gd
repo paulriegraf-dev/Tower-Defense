@@ -450,6 +450,7 @@ static var vollbild := true        # Vollbild ([F11] oder Startmenü), gespeiche
 static var toene := 80              # Kampfgeräusche in Prozent (0 = aus), gespeichert
 static var musik := 40              # Musik in Prozent (0 = aus); 16.11.: Grundlautstärke 60 % leiser, gespeichert
 static var wand_stil := "tech"     # HD-2D-Mauern: "tech" (Stilprobe), "block" (schlicht) oder "energie" – Taste [M] im Spiel
+static var grafik_gefragt := false # 18.11.: Touchgerät – beim ersten Start einmal nach der Grafik gefragt (HD-2D braucht viel WebGL-Speicher)
 const EINSTELLUNGEN := "user://einstellungen.cfg"
 const NEU := "res://assets/neu/"
 
@@ -459,6 +460,7 @@ static func lade_einstellungen() -> void:
 	if c.load(EINSTELLUNGEN) == OK:
 		grafik = str(c.get_value("grafik", "modus", "hd"))
 		wand_stil = str(c.get_value("grafik", "wand", "tech"))
+		grafik_gefragt = bool(c.get_value("grafik", "touch_gefragt", false))
 		karte_gross = bool(c.get_value("karte", "gross", true))
 		vollbild = bool(c.get_value("grafik", "vollbild", true))
 		musik = clampi(int(c.get_value("ton", "musik_prozent", 40)), 0, 100)
@@ -490,6 +492,7 @@ static func speichere_einstellungen() -> void:
 	c.load(EINSTELLUNGEN)
 	c.set_value("grafik", "modus", grafik)
 	c.set_value("grafik", "wand", wand_stil)
+	c.set_value("grafik", "touch_gefragt", grafik_gefragt)
 	c.set_value("karte", "gross", karte_gross)
 	c.set_value("grafik", "vollbild", vollbild)
 	c.set_value("ton", "musik_prozent", musik)

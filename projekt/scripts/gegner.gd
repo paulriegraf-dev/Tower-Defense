@@ -556,10 +556,13 @@ func nimm_schaden(menge: float, dauer: bool = false) -> void:
 		menge *= Werte.MARKIERUNG_FAKTOR
 	if sproede > 0.0:
 		menge *= float(Werte.TURM_STUFE_3["frost"]["sproede"]["sproede"])
+	var von_hinten := false   # 18.11.: Erfolg „Von hinten“
 	if rolle == "schild" and spiel.schuss_herkunft != Vector2.INF:
 		var zu: Vector2 = spiel.schuss_herkunft - position
 		if zu.length() > 4.0 and absf(blick.angle_to(zu)) <= deg_to_rad(Werte.SCHILD_FRONT_WINKEL):
 			menge *= Werte.SCHILD_FRONT_FAKTOR
+		elif zu.length() > 4.0:
+			von_hinten = true
 	ohne_treffer = 0.0
 	var wirksam := minf(menge, maxf(leben, 0.0))
 	leben -= menge
@@ -568,6 +571,11 @@ func nimm_schaden(menge: float, dauer: bool = false) -> void:
 	spiel.zaehle_schaden(wirksam, leben <= 0.0)   # für die Schadensliste [Tab]
 	if leben <= 0.0:
 		_tot = true
+		# 18.11.: Erfolge – Sprenger während der Zündung, Schildträger von hinten (Klone zählen nicht)
+		if rolle == "sprenger" and _zuendung >= 0.0 and not klon:
+			spiel.erfolg("letzter_moment")
+		if von_hinten and not klon:
+			spiel.erfolg("von_hinten")
 		if Werte.grafik_neu:
 			spiel.effekte.fx("g_tod", position + Vector2(0, 22), 1.0 if rolle == "belagerung" else 0.6)
 		if rolle == "schwarm":

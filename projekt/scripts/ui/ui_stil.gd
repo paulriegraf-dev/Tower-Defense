@@ -57,19 +57,38 @@ static func skala() -> float:
 
 
 ## Schriftgröße in Bildschirmpixeln: das nächste Vielfache von 25 (mindestens 25).
+## 18.11.: Weicht das Raster mehr als 20 % ab (z. B. 720p/768p-Laptops, kleine Fenster, 1440p), lieber die echte Größe –
+## sonst läuft Text über seinen Platz hinaus.
 static func _roh(groesse: int) -> int:
-	return RASTER * maxi(1, roundi(groesse * skala() / RASTER))
+	var ideal := groesse * skala()
+	var raster := RASTER * maxi(1, roundi(ideal / RASTER))
+	if absf(raster - ideal) > ideal * 0.2:
+		return maxi(1, roundi(ideal))
+	return raster
+
+
+## 18.11.: Außerhalb des 25er-Rasters geglättet zeichnen – ungeglättet verlieren die Buchstaben Pixel („T“ wird zu „B“).
+static var _schrift_weich: Font = null
+static func schrift_fuer(roh: int) -> Font:
+	if roh % RASTER == 0 or not (schrift() is FontFile):
+		return schrift()
+	if _schrift_weich == null:
+		var ff := (schrift() as FontFile).duplicate() as FontFile
+		ff.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+		ff.oversampling = 0.0
+		_schrift_weich = ff
+	return _schrift_weich
 
 
 static func breite(text: String, groesse: int) -> float:
-	return schrift().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _roh(groesse)).x / skala()
+	return schrift_fuer(_roh(groesse)).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _roh(groesse)).x / skala()
 
 
 ## Text, dessen Großbuchstaben senkrecht um `links_mitte.y` stehen. Gibt die Breite zurück.
 static func schreibe(ci: CanvasItem, links_mitte: Vector2, text: String, groesse: int, farbe: Color) -> float:
-	var f := schrift()
-	var sk := skala()
 	var roh := _roh(groesse)
+	var f := schrift_fuer(roh)
+	var sk := skala()
 	var basis := Vector2(links_mitte.x, links_mitte.y + (f.get_ascent(roh) - f.get_descent(roh)) / 2.0 / sk)
 	basis = (basis * sk).round() / sk   # auf ganze Bildschirmpixel
 	ci.draw_set_transform(basis, 0.0, Vector2(1.0 / sk, 1.0 / sk))
@@ -84,9 +103,9 @@ static func schreibe_mittig(ci: CanvasItem, mitte: Vector2, text: String, groess
 
 ## Mehrzeiliger Text ab `oben_links` (obere Kante der ersten Zeile).
 static func absatz(ci: CanvasItem, oben_links: Vector2, text: String, weite: float, groesse: int, farbe: Color) -> void:
-	var f := schrift()
-	var sk := skala()
 	var roh := _roh(groesse)
+	var f := schrift_fuer(roh)
+	var sk := skala()
 	var start := ((oben_links + Vector2(0, f.get_ascent(roh) / sk)) * sk).round() / sk
 	ci.draw_set_transform(start, 0.0, Vector2(1.0 / sk, 1.0 / sk))
 	ci.draw_multiline_string(f, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, weite * sk, roh, -1, farbe)
@@ -95,7 +114,7 @@ static func absatz(ci: CanvasItem, oben_links: Vector2, text: String, weite: flo
 
 static func absatz_groesse(text: String, weite: float, groesse: int) -> Vector2:
 	var sk := skala()
-	return schrift().get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, weite * sk, _roh(groesse)) / sk
+	return schrift_fuer(_roh(groesse)).get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, weite * sk, _roh(groesse)) / sk
 
 
 ## Rechteck mit abgeschrägten Ecken (Fase `e`).

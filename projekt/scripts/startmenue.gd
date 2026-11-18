@@ -5,6 +5,7 @@ class_name Startmenue extends CanvasLayer
 ##   Phantom-Modus  → Angreifen / Verteidigen
 ##   Einstellungen  → Grafik, Vollbild, Mauern, Übersicht
 ##   Beenden
+## Oben rechts das Profil (18.11.): Spitzname und Statistiken. Im Phantom-Modus rechts die Rangliste (online, Elo).
 ## Maus oder Tasten (↑ ↓ wählen, Enter bestätigt, Esc zurück). Hintergrund: die Abendbühne (assets/neu/menue),
 ## rechts posieren die drei Technoclan-Truppen. Gezeichnet im UI-Raster 640×360 (zweifach skaliert).
 ## Frühere Fassungen (Knopfliste, Basislager, Basisstraße): _vor_startmenue/.
@@ -22,6 +23,8 @@ const LISTE_Y := 128.0
 const ZEILE_H := 24.0
 const BREITE := 300.0
 const LOGO_SKALA := 4.0 / 3.0     # 1 Logopixel = 4 Bildschirmpixel bei 1080p
+## 18.11.: Adresse von Terrain Conquester für das Emblem unten rechts. Leer = Emblem ausgeblendet (TC noch nicht öffentlich).
+const TC_ADRESSE := "https://paulriegraf-dev.github.io/Terrain-Conquester/"
 
 var spiel: Node                    # setzt main.gd
 var _welt: Flaeche
@@ -38,6 +41,13 @@ static var _titel_gesehen := false
 var _titel := false
 var _titel_zeit := 0.0
 var _sterne: Array = []
+# Profil und Rangliste (18.11.)
+const PROFIL_H := 18.0
+const TAFEL := Rect2(372, 60, 252, 276)
+var _eingabe: LineEdit              # unsichtbares Eingabefeld für den Spitznamen (gezeichnet wird selbst)
+var _erststart := false             # erster Start: nach dem Namen fragen
+var _laedt := false                 # ein Online-Phantom wird gerade geladen
+var _online_stand := -1
 
 
 class Flaeche extends Control:
@@ -67,6 +77,17 @@ func _init() -> void:
 	z.seed = 7
 	for i in 70:
 		_sterne.append([Vector2(z.randf() * 640.0, z.randf() * 200.0), z.randf() * TAU, z.randf()])
+	_eingabe = LineEdit.new()
+	_eingabe.max_length = Profil.NAME_MAX
+	_eingabe.modulate = Color(1, 1, 1, 0)
+	_eingabe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_eingabe.position = Vector2(-400, -400)
+	_eingabe.size = Vector2(200, 30)
+	_eingabe.context_menu_enabled = false
+	add_child(_eingabe)
+	Online.lade_listen()   # Phantom-Liste und Rangliste schon vorab holen
+	if not _titel:
+		_frage_namen_beim_ersten_mal()
 
 
 
@@ -79,6 +100,10 @@ func _bild(pfad: String) -> Texture2D:
 # ------------------------------------------------------------------ Seiten
 
 func _zeige(seite: String) -> void:
+	if _tippt():
+		_eingabe.release_focus()
+	if seite == "phantom":
+		Online.lade_listen()   # Rangliste auffrischen
 	_seite = seite
 	_wahl = 0
 	_meldung = ""
@@ -97,6 +122,11 @@ func _baue() -> void:
 				["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT],
 				["Beenden", _beenden, "", Stil.TEXT_BLASS],
 			]
+			# 18.11.: unterbrochene Partie (Seite neu geladen, Spiel geschlossen) ganz oben anbieten
+			var runde: int = spiel.zwischenstand_runde() if spiel != null else 0
+			if runde > 0:
+				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie", KUPFER_HELL])
+				_eintraege[1][3] = Stil.TEXT
 		"spielen":
 			_eintraege = [
 				["Los geht's", _los, "20 Runden gegen die Myriaden" + (" · mit Tutorial" if _tutorial else ""), LICHT],
@@ -104,13 +134,35 @@ func _baue() -> void:
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 		"phantom":
+			var on := Online.bereit()
+			var nv := (Online.listen["verteidigung"] as Array).size() if on else Phantom.liste("verteidigung", true).size()
+			var na := (Online.listen["angriff"] as Array).size() if on else Phantom.liste("angriff").size()
+			var wo := " online" if on else ""
+			var staerkste := str(Profil.einstellung("phantom_wahl", "zufall")) == "staerkste"
 			_eintraege = [
-				["Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · " + _anzahl(Phantom.liste("verteidigung", true).size(), "Phantom", "Phantome", "noch keine Phantome hinterlegt"), KUPFER_HELL],
-				["Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · " + _anzahl(Phantom.liste("angriff").size(), "Angriff", "Angriffe", "noch keine Angriffe hinterlegt"), LICHT],
+				["Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · " + _anzahl(nv, "Phantom" + wo, "Phantome" + wo, "noch keine Phantome hinterlegt"), KUPFER_HELL],
+				["Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · " + _anzahl(na, "Angriff" + wo, "Angriffe" + wo, "noch keine Angriffe hinterlegt"), LICHT],
+				["Gegner: " + ("Stärkste" if staerkste else "Zufall"), _wahl_umschalten, "die fünf Besten der Rangliste" if staerkste else "irgendein Phantom aus dem Pool", Stil.TEXT],
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
+		"profil":
+			if _erststart:
+				_eintraege = [
+					["Name: " + _name_text(), _starte_eingabe, "Enter bestätigt · bis 16 Zeichen", LICHT],
+					["Später", _spaeter, "geht auch jederzeit oben rechts", Stil.TEXT_BLASS],
+				]
+			else:
+				_eintraege = [
+					["Name: " + _name_text(), _starte_eingabe, "Enter bestätigt · bis 16 Zeichen" if _tippt() else "zum Ändern klicken", LICHT],
+					["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
+				]
+		"grafik":
+			_eintraege = [
+				["Vogelperspektive (empfohlen)", _grafik_antwort.bind("neu"), "läuft am Handy flüssig und braucht wenig Speicher", LICHT],
+				["HD-2D", _grafik_antwort.bind("hd"), "schöner, braucht aber viel Grafikspeicher – am Handy oft Abstürze", Stil.TEXT],
+			]
 		"einstellungen":
-			var namen := {"klassisch": "Klassisch", "neu": "Vogelperspektive", "hd": "HD-2D (empfohlen)"}
+			var namen :={"klassisch": "Klassisch", "neu": "Vogelperspektive", "hd": "HD-2D (empfohlen)"}
 			_eintraege = [
 				["Grafik: " + str(namen.get(Werte.grafik, "?")), _naechste_grafik, "gilt ab der nächsten Partie", Stil.TEXT],
 				["Vollbild: " + ("an" if Werte.vollbild else "aus"), _vollbild, "auch mit [F11]", Stil.TEXT],
@@ -157,6 +209,27 @@ func _starte(gross: bool, art: String) -> void:
 		phantom_gewaehlt.emit("angriff", art.trim_prefix("verteidigt:"))
 
 
+## 18.11.: `spiel` steht erst jetzt fest – Liste neu aufbauen (für „Fortsetzen“) und einmal pro Programmstart melden,
+## dass eine Partie ohne Ende lief (Diagnose für die Abstürze am Handy).
+static var _unterbrochen_gemeldet := false
+
+func _ready() -> void:
+	if _seite != "haupt":
+		return
+	_baue()
+	var runde: int = spiel.zwischenstand_runde() if spiel != null else 0
+	if runde > 0 and not _unterbrochen_gemeldet:
+		_unterbrochen_gemeldet = true
+		print("Zwischenstand gefunden: Partie in Runde %d lief ohne Ende." % runde)
+		_meldung = "Die Seite wurde neu geladen – deine Partie kannst du fortsetzen." if OS.has_feature("web") else "Deine letzte Partie ist nicht beendet – du kannst sie fortsetzen."
+
+
+## 18.11.: Zwischenstand laden – main.gd setzt ihn beim Neuaufbau der Szene hin.
+func _fortsetzen() -> void:
+	spiel.naechster_start = "fortsetzen"
+	Ladebild.lade(_welt.get_tree())
+
+
 func _tutorial_umschalten() -> void:
 	_tutorial = not _tutorial
 	_baue()
@@ -167,10 +240,41 @@ func _beenden() -> void:
 
 
 func _phantom(art: String) -> void:
+	if _laedt:
+		return
+	var wie := str(Profil.einstellung("phantom_wahl", "zufall"))
+	# 18.11.: zuerst online (der aktuelle Pool aller Spieler), sonst die eingebauten Phantome
+	if Online.bereit() and not (Online.listen[art] as Array).is_empty():
+		_laedt = true
+		_meldung = "Phantom wird geladen …"
+		var e := Online.waehle(art, wie)
+		var pfad := "" if e.is_empty() else await Online.hole(e)
+		if pfad != "" and art == "verteidigung":
+			var ersatz: Array = []
+			var ohne: Array = [str(e["id"])]
+			for i in 2:
+				var x := Online.waehle("verteidigung", "zufall", ohne)
+				if x.is_empty():
+					break
+				ohne.append(str(x["id"]))
+				var p := await Online.hole(x)
+				if p != "":
+					ersatz.append(p)
+			Online.ersatz_pfade = ersatz
+			_starte(int(e.get("spalten", 28)) == 28, "angriff:" + pfad)
+			return
+		if pfad != "":
+			_starte(true, "verteidigt:" + pfad)
+			return
+		_laedt = false
+		_meldung = ""
 	var funde := Phantom.liste(art, true)
 	if funde.is_empty():
 		_meldung = "Noch kein Phantom da: Gewinne eine Partie, dann wird dein Bau zum ersten Phantom." if art == "verteidigung" else "Noch kein Angriff da: Greife zuerst selbst einmal als Angreifer an."
 		return
+	if wie == "staerkste":
+		funde.sort_custom(func(a, b): return int(a["wert"]) > int(b["wert"]))
+		funde = funde.slice(0, 5)
 	var f: Dictionary = funde.pick_random()
 	if art == "verteidigung":
 		_starte(int(f.get("spalten", 20)) == 28, "angriff:" + str(f["pfad"]))   # der Bau bringt seine Kartengröße mit
@@ -182,6 +286,224 @@ func _phantom(art: String) -> void:
 func zeige_phantome(art: String) -> void:
 	_zeige("phantom")
 	_phantom(art)
+
+
+func _wahl_umschalten() -> void:
+	Profil.setze_einstellung("phantom_wahl", "zufall" if str(Profil.einstellung("phantom_wahl", "zufall")) == "staerkste" else "staerkste")
+	_baue()
+
+
+# ------------------------------------------------------------------ Profil (18.11.)
+
+func _tippt() -> bool:
+	return _eingabe != null and _eingabe.has_focus()
+
+
+func _name_text() -> String:
+	if _tippt():
+		return _eingabe.text + ("_" if fmod(_zeit, 1.0) < 0.55 else " ")
+	return Profil.name() if Profil.hat_namen() else "(noch keiner)"
+
+
+func _starte_eingabe() -> void:
+	if _tippt():
+		return
+	_eingabe.text = Profil.name() if Profil.hat_namen() else ""
+	_eingabe.grab_focus()
+	_eingabe.caret_column = _eingabe.text.length()
+	_wahl = 0
+	_meldung = ""
+	_baue()
+
+
+func _bestaetige_namen() -> void:
+	if Profil.setze_name(_eingabe.text):
+		_eingabe.release_focus()
+		if _erststart:
+			_erststart = false
+			_zeige("grafik" if _grafik_frage_offen() else "haupt")
+		else:
+			_baue()
+	else:
+		_meldung = "Bitte einen Namen mit Buchstaben oder Ziffern."
+
+
+func _spaeter() -> void:
+	Profil.setze_gefragt()
+	_erststart = false
+	_zeige("grafik" if _grafik_frage_offen() else "haupt")
+
+
+## 18.11.: Handy/Tablet beim allerersten Start: Vogelperspektive vorschlagen. HD-2D braucht viel WebGL-Speicher –
+## der wahrscheinlichste Grund für die Abstürze am Handy. Gefragt wird einmal (Werte.grafik_gefragt).
+func _grafik_frage_offen() -> bool:
+	Werte.lade_einstellungen()
+	return (Touch.noetig() or OS.get_environment("TD_TOUCH") != "") and not Werte.grafik_gefragt
+
+
+func _grafik_antwort(modus: String) -> void:
+	Werte.setze_grafik(modus)
+	Werte.grafik_gefragt = true
+	Werte.speichere_einstellungen()
+	_zeige("haupt")
+
+
+func _frage_namen_beim_ersten_mal() -> void:
+	if Profil.gefragt():
+		if _grafik_frage_offen():
+			_zeige("grafik")
+		return
+	_erststart = true
+	_zeige("profil")
+	_starte_eingabe()
+
+
+## Profil-Schild oben rechts: Brakk-Zeichen und Name.
+func _profil_rect() -> Rect2:
+	var w := Stil.breite(Profil.name(), Stil.NORMAL) + 30.0
+	return Rect2(640.0 - 12.0 - w, 10.0, w, PROFIL_H)
+
+
+func _male_profil_schild(ci: Control) -> void:
+	if _seite == "profil":
+		return
+	var r := _profil_rect()
+	var an := r.has_point(_maus)
+	Stil.platte(ci, r, 3.0, Color(LICHT, 0.14) if an else Stil.METALL_DUNKEL, LICHT if an else Stil.RAHMEN)
+	Stil.symbol(ci, "brakk", Vector2(r.position.x + 11.0, r.get_center().y), 1.0, LICHT)
+	Stil.schreibe(ci, Vector2(r.position.x + 21.0, r.get_center().y), Profil.name(), Stil.NORMAL, Color.WHITE if an else Stil.TEXT)
+
+
+## 18.11.: Emblem „Terrain Conquester“ unten rechts – Platzhalter aus Stil-Mitteln (Kupferschrift auf Metallplatte),
+## bis das Logo kommt. Leuchtet beim Überfahren, ein Klick öffnet die Seite.
+func _tc_rect() -> Rect2:
+	var w := Stil.breite("Terrain Conquester", Stil.NORMAL) + 22.0
+	return Rect2(640.0 - 12.0 - w, 341.0, w, 14.0)   # unter den Tafeln (enden bei 336)
+
+
+func _male_tc_emblem(ci: Control) -> void:
+	if TC_ADRESSE == "":
+		return
+	var r := _tc_rect()
+	var an := r.has_point(_maus)
+	Stil.platte(ci, r, 3.0, Color(KUPFER_HELL, 0.16) if an else Stil.METALL_DUNKEL, KUPFER_HELL if an else Stil.RAHMEN)
+	Stil.schreibe(ci, Vector2(r.position.x + 7.0, r.get_center().y), "Terrain Conquester", Stil.NORMAL, KUPFER_HELL if an else Stil.KUPFER)
+	# kleiner Pfeil nach rechts oben: führt aus dem Spiel hinaus
+	var p := Vector2(r.end.x - 9.0, r.get_center().y)
+	var farbe := KUPFER_HELL if an else Stil.KUPFER
+	ci.draw_line(p + Vector2(-3, 3), p + Vector2(3, -3), farbe, 1.0)
+	ci.draw_line(p + Vector2(0, -3), p + Vector2(3, -3), farbe, 1.0)
+	ci.draw_line(p + Vector2(3, -3), p + Vector2(3, 0), farbe, 1.0)
+
+
+func _oeffne_tc() -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.open(%s, '_blank')" % JSON.stringify(TC_ADRESSE))
+	else:
+		OS.shell_open(TC_ADRESSE)
+
+
+func _male_profil_tafel(ci: Control) -> void:
+	Stil.platte(ci, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	var x := TAFEL.position.x + 12.0
+	var y := TAFEL.position.y + 14.0
+	Stil.schreibe(ci, Vector2(x, y), "STATISTIK", Stil.NORMAL, LICHT)
+	y += 18.0
+	for z: Array in Profil.zeilen():
+		Stil.schreibe(ci, Vector2(x, y), str(z[0]), Stil.KLEIN, Stil.TEXT_BLASS)
+		var w := str(z[1])
+		Stil.schreibe(ci, Vector2(TAFEL.end.x - 12.0 - Stil.breite(w, Stil.NORMAL), y), w, Stil.NORMAL, Stil.TEXT)
+		y += 20.0
+	Stil.schreibe(ci, Vector2(x, TAFEL.end.y - 10.0), "gespeichert in diesem Browser", Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.6))
+	_male_erfolge(ci)
+
+
+## 18.11.: Zweite Tafel im Profil – Erfolge als Raster aus Symbolen. Nicht freigeschaltet grau, versteckte als „???“.
+## Maus über einem Symbol: Name und Bedingung unten in der Tafel.
+const ERFOLGE_TAFEL := Rect2(LISTE_X - 6.0, 200, 300, 136)
+const ERFOLGE_SPALTEN := 7
+
+func _erfolg_feld(i: int) -> Rect2:
+	var p := ERFOLGE_TAFEL.position + Vector2(12.0 + (i % ERFOLGE_SPALTEN) * 40.0, 26.0 + (i / ERFOLGE_SPALTEN) * 28.0)
+	return Rect2(p, Vector2(36, 24))
+
+
+func _male_erfolge(ci: Control) -> void:
+	var r := ERFOLGE_TAFEL
+	Stil.platte(ci, r, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	Stil.schreibe(ci, Vector2(r.position.x + 12.0, r.position.y + 13.0), "ERFOLGE %d/%d" % [Erfolge.freigeschaltet(), Erfolge.anzahl()], Stil.NORMAL, LICHT)
+	var info := "Zeig auf ein Symbol."
+	for i in Erfolge.LISTE.size():
+		var e: Dictionary = Erfolge.LISTE[i]
+		var an := Profil.hat_erfolg(str(e["id"]))
+		var f := _erfolg_feld(i)
+		var drueber := f.has_point(_maus)
+		Stil.platte(ci, f, 2.0, Color(Stil.GOLD, 0.12) if an else Stil.METALL_TIEF, Stil.GOLD if an else (LICHT if drueber else Stil.RAHMEN))
+		if an or not bool(e["versteckt"]):
+			Stil.symbol(ci, str(e["symbol"]), f.get_center(), 2.0, Stil.GOLD if an else Color(Stil.TEXT_BLASS, 0.45))
+		else:
+			Stil.schreibe_mittig(ci, f.get_center(), "???", Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.6))
+		if drueber:
+			if an or not bool(e["versteckt"]):
+				info = "%s – %s" % [e["name"], e["text"]]
+				if str(e.get("belohnung", "")) != "":
+					info += " · Belohnung: %s" % e["belohnung"]
+			else:
+				info = "??? – ein versteckter Erfolg."
+	Stil.absatz(ci, Vector2(r.position.x + 12.0, r.end.y - 22.0), info, r.size.x - 24.0, Stil.KLEIN, Stil.TEXT_BLASS)
+
+
+## Rangliste im Phantom-Menü: beste Angriffe und stärkste Verteidigungen (Elo). Ohne Verbindung der eingebaute Pool.
+func _male_rangliste(ci: Control) -> void:
+	Stil.platte(ci, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	var x := TAFEL.position.x + 12.0
+	var rechts := TAFEL.end.x - 12.0
+	var y := TAFEL.position.y + 14.0
+	Stil.schreibe(ci, Vector2(x, y), "RANGLISTE", Stil.NORMAL, LICHT)
+	var stand: String = {"laedt": "lädt …", "online": "online", "offline": "offline · eingebaut", "unbekannt": "…"}.get(Online.zustand, "")
+	if Online.zustand == "online" and not Online.bereit():
+		stand = "online · noch leer"
+	Stil.schreibe(ci, Vector2(rechts - Stil.breite(stand, Stil.KLEIN), y), stand, Stil.KLEIN, Stil.TEXT_BLASS if Online.zustand != "online" else Color("8fe39a"))
+	y += 22.0
+	var mein := Profil.id()
+	for art: String in ["angriff", "verteidigung"]:
+		Stil.schreibe(ci, Vector2(x, y), "Beste Angriffe" if art == "angriff" else "Stärkste Verteidigungen", Stil.NORMAL, KUPFER_HELL if art == "angriff" else LICHT)
+		Stil.schreibe(ci, Vector2(rechts - Stil.breite("Elo", Stil.KLEIN), y), "Elo", Stil.KLEIN, Stil.TEXT_BLASS)
+		y += 16.0
+		var zeilen := _ranglisten_zeilen(art)
+		if zeilen.is_empty():
+			Stil.schreibe(ci, Vector2(x + 4.0, y), "noch niemand", Stil.KLEIN, Stil.TEXT_BLASS)
+			y += 14.0
+		for i in zeilen.size():
+			var z: Array = zeilen[i]
+			var farbe: Color = Color.WHITE if str(z[3]) == mein else Stil.TEXT
+			Stil.schreibe(ci, Vector2(x, y), "%d" % (i + 1), Stil.NORMAL, Stil.GOLD if i == 0 else Stil.TEXT_BLASS)
+			Stil.schreibe(ci, Vector2(x + 14.0, y), str(z[0]), Stil.NORMAL, farbe)
+			Stil.schreibe(ci, Vector2(x + 14.0 + 78.0, y), str(z[1]), Stil.KLEIN, Stil.TEXT_BLASS)
+			var elo := str(z[2])
+			Stil.schreibe(ci, Vector2(rechts - Stil.breite(elo, Stil.NORMAL), y), elo, Stil.NORMAL, farbe)
+			y += 14.0
+		y += 12.0
+
+
+## [Name, Zusatz, Elo-Text, Profil-ID] für die besten sechs einer Art.
+func _ranglisten_zeilen(art: String) -> Array:
+	var aus: Array = []
+	if Online.bereit():
+		for e: Dictionary in (Online.listen[art] as Array).slice(0, 6):
+			var zusatz := ""
+			if art == "angriff":
+				zusatz = "%d Pkt" % int(e.get("wertung", 0))
+			else:
+				var sp := int(e.get("spiele", 0))
+				zusatz = "%d/%d gehalten" % [int(e.get("siege", 0)), sp] if sp > 0 else "noch unberührt"
+			aus.append([str(e.get("spieler", "?")).left(12), zusatz, "%d" % roundi(float(e.get("elo", 1000))), str(e.get("profil", ""))])
+		return aus
+	var funde := Phantom.liste(art, true)
+	funde.sort_custom(func(a, b): return int(a["wert"]) > int(b["wert"]))
+	for f: Dictionary in funde.slice(0, 6):
+		aus.append([str(f.get("spieler", "?")).left(12), "%d Pkt" % int(f["wert"]) if art == "angriff" else "eingebaut", "–", ""])
+	return aus
 
 
 func _naechste_grafik() -> void:
@@ -237,6 +559,12 @@ func _process(delta: float) -> void:
 	_zeit += delta
 	_titel_zeit += delta
 	_maus = _welt.get_local_mouse_position()
+	if Online.geaendert != _online_stand:
+		_online_stand = Online.geaendert
+		if not _laedt:
+			_baue()
+	if _tippt() and _seite == "profil":
+		_eintraege[0][0] = "Name: " + _name_text()
 	# Übersicht offen: das Menü wartet unsichtbar
 	_welt.visible = not (spiel != null and spiel.get("_lexikon") != null and spiel._lexikon.visible)
 	_welt.queue_redraw()
@@ -253,9 +581,26 @@ func _input(event: InputEvent) -> void:
 		if not event.echo:
 			_klick()
 			_titel_weiter()
+			if not _titel:
+				_frage_namen_beim_ersten_mal()
 		get_viewport().set_input_as_handled()
 		return
 	var k: int = (event as InputEventKey).keycode
+	if _tippt():
+		if k in [KEY_ENTER, KEY_KP_ENTER]:
+			_bestaetige_namen()
+			get_viewport().set_input_as_handled()
+		elif k == KEY_ESCAPE:
+			_eingabe.release_focus()
+			if _erststart:
+				_spaeter()
+			else:
+				_baue()
+			get_viewport().set_input_as_handled()
+		return   # alles andere geht ins Eingabefeld
+	if _laedt:
+		get_viewport().set_input_as_handled()
+		return
 	match k:
 		KEY_UP, KEY_W:
 			_wahl = posmod(_wahl - 1, _eintraege.size())
@@ -287,6 +632,10 @@ func _maus_eingabe(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.pressed:
 			_klick()
 			_titel_weiter()
+			if not _titel:
+				_frage_namen_beim_ersten_mal()
+		return
+	if _laedt:
 		return
 	if event is InputEventMouseMotion:
 		for i in _eintraege.size():
@@ -295,6 +644,14 @@ func _maus_eingabe(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_klick()
+		if event.button_index == MOUSE_BUTTON_LEFT and _seite != "profil" and _profil_rect().has_point((event as InputEventMouseButton).position):
+			_zeige("profil")
+			return
+		if event.button_index == MOUSE_BUTTON_LEFT and TC_ADRESSE != "" and _tc_rect().has_point((event as InputEventMouseButton).position):
+			_oeffne_tc()
+			return
+		if _tippt() and event.button_index == MOUSE_BUTTON_LEFT and not _zeile(0).has_point((event as InputEventMouseButton).position):
+			_bestaetige_namen()   # Klick daneben übernimmt den Namen
 		if event.button_index == MOUSE_BUTTON_RIGHT and _seite != "haupt":
 			for i in _eintraege.size():
 				var e: Array = _eintraege[i]
@@ -331,7 +688,7 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
 	else:
 		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen"}[_seite]
+	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät"}[_seite]
 	if unter != "":
 		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
 	# Liste
@@ -351,7 +708,18 @@ func _male(ci: Control) -> void:
 		if mit_unter:
 			Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + 15.0), e[2], Stil.KLEIN, Stil.TEXT_BLASS)
 	if _meldung != "":
-		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, Stil.WARN)
+		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else Stil.WARN)
+	if _seite == "phantom":
+		_male_rangliste(ci)
+	elif _seite == "grafik":
+		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
+	elif _seite == "profil":
+		if _erststart:
+			Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Wie sollen dich andere Spieler sehen? Der Name steht an deinen Phantomen und in der Rangliste.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
+		else:
+			_male_profil_tafel(ci)
+	_male_profil_schild(ci)
+	_male_tc_emblem(ci)
 
 
 ## Die drei Technoclan-Truppen posieren rechts auf der Bühne (Standbilder, leicht atmend).
