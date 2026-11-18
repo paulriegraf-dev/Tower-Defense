@@ -188,6 +188,7 @@ const ZINS_STUFEN: int = 5         # höchstens so viele Schritte zählen (also 
 const BONUS_ZUWACHS: int = 5       # ... plus so viel je Wellennummer
 const BONUS_MITTE_AB: int = 6      # ab dieser Runde wächst der Bonus schneller (Geld für Fabriken UND Upgrades)
 const BONUS_MITTE_ZUWACHS: int = 0 # ... um so viel je Runde zusätzlich (0 = aus; war 8, am 14.11. gestrichen: zu viel Geld zum Sparen)
+const BONUS_EXTRA := {3: 2}       # 18.11.: Feinschliff je Runde – nach Runde 3 zwei mehr, damit Sparen (2 Fabriken, Stufe 1) in Runde 4 genau für Stufe 2 reicht
 
 # --- Gebäude -----------------------------------------------------------
 const LEBEN_WALL: float = 120.0
@@ -1428,4 +1429,4 @@ static func zinsen(budget: int) -> int:
 
 
 static func wellen_bonus(nr: int) -> int:
-	return BONUS_JE_WELLE + BONUS_ZUWACHS * nr + BONUS_MITTE_ZUWACHS * maxi(0, nr - BONUS_MITTE_AB + 1)
+	return BONUS_JE_WELLE + BONUS_ZUWACHS * nr + BONUS_MITTE_ZUWACHS * maxi(0, nr - BONUS_MITTE_AB + 1) + int(BONUS_EXTRA.get(nr, 0))
