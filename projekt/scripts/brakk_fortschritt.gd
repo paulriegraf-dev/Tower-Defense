@@ -8,7 +8,7 @@ const ERFAHRUNG_BIS := [0, 12, 30, 55, 90, 135, 190, 255, 330, 420]   # Gesamter
 const XP_KILL := 1
 const XP_WELLE := 10
 const XP_KILL_ANTEIL := 0.5          # 18.11. (Paul): Kills geben nur die halbe Erfahrung (dreimal so viele Gegner)
-const SCHADEN_START := 1.7             # 18.11. (Paul): Brakk ist die Hauptfigur – etwa 24 je Schuss, ein Hund fällt anfangs mit 2 Schüssen …
+const SCHADEN_START := 1.85            # 19.11. (Paul, Bot-Partien): Brakk ist die Hauptfigur – etwa 26 je Schuss, ein Hund fällt anfangs mit 2 Schüssen (vorher 1,7) …
 const SCHADEN_JE_STUFE := 0.10        # … und je Stufe 10 % stärker (Platz nach oben für Ringe und Stufen)
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
 ## Freischaltungen: Fähigkeit -> Stufe
@@ -21,19 +21,50 @@ const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klo
 ##   (Stufe 1: spezialisiert, 2: Wertepaket, 3: die Fähigkeit). Im Kampf liegen die Felder fest.
 ##   Aktiver Ring (Mausrad, jederzeit): gibt Brakks Pistolen seinen Effekt – immer nur einer.
 ## Farben = Abzeichen der Fähigkeit.
+## 19.11. (Paul): `brakk_stufen` – was der Ring Brakk auf Ringstufe 1 / 2 / 3 gibt (Stufe 3 = früherer Vollwert).
+## Ring und Feld passen zusammen: der Ring gibt Brakk dieselbe Wirkung, die das Feld als Truppe baut.
 const RINGE := {
-	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "brakk": "Schüsse gehen durch 2 weitere Gegner (halber Schaden)"},
-	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "brakk": "+40 % Schaden"},
-	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "brakk": "feuert 25 % schneller, heizt weniger, kühlt schneller"},
-	"minigun": {"name": "Wirbelring", "truppe": "technogunner", "brakk": "Dauerfeuer läuft an (bis 1,6×), heizt weniger"},
-	"abpraller": {"name": "Sprungring", "truppe": "plasmawerfer", "brakk": "Treffer springen zu weiteren Gegnern"},
-	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "brakk": "Treffer setzen den Boden in Brand (alle 1,5 s)"},
-	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "brakk": "Treffer bremsen 2 s, gebremste nehmen +40 %"},
+	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "brakk_stufen": [
+		{"weitere": [0.5], "text": "durch 1 weiteren Gegner (halber Schaden)"},
+		{"weitere": [0.5, 0.5], "text": "durch 2 weitere Gegner (halber Schaden)"},
+		{"weitere": [1.0, 0.5], "text": "durch 2 weitere (der erste voll, dann halb)"}]},
+	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "brakk_stufen": [
+		{"schaden": 1.2, "text": "+20 % Schaden"},
+		{"schaden": 1.3, "text": "+30 % Schaden"},
+		{"schaden": 1.4, "text": "+40 % Schaden"}]},
+	"markierung": {"name": "Zielring", "truppe": "scharfschuetze", "brakk_stufen": [   # 19.11. (Paul): neu
+		{"mark_bonus": 1.15, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +15 % Schaden"},
+		{"mark_bonus": 1.25, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +25 % Schaden"},
+		{"mark_bonus": 1.35, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +35 % Schaden"}]},
+	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "brakk_stufen": [
+		{"takt": 1.0 / 1.15, "text": "15 % schneller, heizt weniger"},
+		{"takt": 1.0 / 1.2, "text": "20 % schneller, heizt weniger"},
+		{"takt": 1.0 / 1.25, "text": "25 % schneller, heizt weniger"}]},
+	"minigun": {"name": "Wirbelring", "truppe": "technogunner", "brakk_stufen": [
+		{"anlauf": 1.3, "text": "Dauerfeuer läuft an bis 1,3×"},
+		{"anlauf": 1.45, "text": "Dauerfeuer läuft an bis 1,45×"},
+		{"anlauf": 1.6, "text": "Dauerfeuer läuft an bis 1,6×"}]},
+	"bollwerk": {"name": "Wallring", "truppe": "technogunner", "brakk_stufen": [   # 19.11. (Paul): neu
+		{"schutz": 0.10, "text": "Brakk nimmt 10 % weniger Schaden"},
+		{"schutz": 0.15, "text": "Brakk nimmt 15 % weniger Schaden"},
+		{"schutz": 0.20, "text": "Brakk nimmt 20 % weniger Schaden"}]},
+	"abpraller": {"name": "Sprungring", "truppe": "plasmawerfer", "brakk_stufen": [
+		{"spruenge": 1, "sprung_anteil": 0.4, "text": "1 Sprung mit 40 % Schaden"},
+		{"spruenge": 1, "sprung_anteil": 0.6, "text": "1 Sprung mit 60 % Schaden"},
+		{"spruenge": 2, "sprung_anteil": 0.6, "text": "2 Sprünge mit 60 % Schaden"}]},
+	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "brakk_stufen": [
+		{"brand_takt": 2.5, "text": "Treffer setzen alle 2,5 s den Boden in Brand"},
+		{"brand_takt": 2.0, "text": "Treffer setzen alle 2 s den Boden in Brand"},
+		{"brand_takt": 1.5, "text": "Treffer setzen alle 1,5 s den Boden in Brand"}]},
+	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "brakk_stufen": [
+		{"bremse": 1.0, "gel_bonus": 1.2, "text": "bremst 1 s, Gebremste nehmen +20 %"},
+		{"bremse": 1.5, "gel_bonus": 1.3, "text": "bremst 1,5 s, Gebremste nehmen +30 %"},
+		{"bremse": 2.0, "gel_bonus": 1.4, "text": "bremst 2 s, Gebremste nehmen +40 %"}]},
 }
-const RING_PREISE := [200, 250, 500]   # Kauf (Stufe 1), Stufe 2, Stufe 3
+const RING_PREISE := [175, 300, 450]   # Kauf (Stufe 1), Stufe 2, Stufe 3 – 19.11. (Paul): vorher 200 / 250 / 500
 const RING_ZURUECK := 0.75           # Verkaufen: so viel vom Bezahlten zurück (in derselben Bauphase gekauft: alles)
 const FINGER_AB := [1, 3, 5, 7, 9]    # ab diesen Stufen ist je ein Finger mehr frei
-const FELD_RADIUS := 2.0               # Ringfeld: Radius in Feldern (ein Haufen aus 4 Fabriken passt hinein)
+const FELD_GROESSE := 2               # 19.11. (Paul): Ringfeld = festes 2×2-Felder-Rechteck (höchstens 4 Fabriken), für alle Ringe gleich
 const WECHSEL_SEK := 0.6               # Ring wechseln: so lange schüttelt Brakk die Hand, erst dann wirkt der neue Ring
 
 var erfahrung := 0
@@ -48,7 +79,7 @@ var ringe: Array[String] = []          # getragene Ringe (je Finger einer)
 var ring_stufen := {}                  # Ring -> Stufe 1..3
 var _bezahlt := {}                     # Ring -> insgesamt bezahlt (für das Verkaufen)
 var _gekauft_in := {}                  # Ring -> Runde des Kaufs (volle Erstattung in derselben Bauphase)
-var felder := {}                       # Ring -> Mitte seines Felds (2D-Welt), in der Bauphase gesetzt
+var felder := {}                       # Ring -> linke obere Zelle seines 2×2-Felds (Vector2i), in der Bauphase gesetzt
 var gewaehlt := 0                      # Index des aktiven Rings (Mausrad)
 var wechsel_rest := 0.0                # Ring wird gerade gewechselt: so lange wirkt keiner
 
@@ -189,18 +220,37 @@ func verkaufe(ring: String, spiel: Node) -> void:
 
 
 ## Ringfeld setzen (nur in der Bauphase); das zuletzt gesetzte gilt, wo sich Felder überlappen.
-func setze_feld(ring: String, p: Vector2) -> void:
+func setze_feld(ring: String, ecke: Vector2i) -> void:
 	felder.erase(ring)
-	felder[ring] = p
+	felder[ring] = ecke
+
+
+## Liegt die Zelle `z` im 2×2-Feld mit der linken oberen Zelle `ecke`?
+static func im_feld(z: Vector2i, ecke: Vector2i) -> bool:
+	return z.x >= ecke.x and z.x < ecke.x + FELD_GROESSE and z.y >= ecke.y and z.y < ecke.y + FELD_GROESSE
+
+
+## 19.11.: Wert des aktiven Rings auf seiner Stufe (Tabelle `brakk_stufen` in RINGE) – `std`, wenn der Ring ihn nicht hat.
+func brakk_wert(schluessel: String, std: Variant) -> Variant:
+	var r := aktiv()
+	if r == "":
+		return std
+	var st := clampi(ring_stufe(r), 1, 3)
+	return (RINGE[r]["brakk_stufen"][st - 1] as Dictionary).get(schluessel, std)
+
+
+## Was der Ring Brakk auf Stufe `st` gibt (für das Terminal).
+static func brakk_text(ring: String, st: int) -> String:
+	return str(RINGE[ring]["brakk_stufen"][clampi(st, 1, 3) - 1]["text"])
 
 
 ## Faktoren für Brakks Pistolen aus dem aktiven Ring.
 func schuss_schaden() -> float:
-	return schaden_faktor() * (1.4 if aktiv() == "laser" else 1.0)   # 18.11. (Paul, Schießstand): vorher 1,3
+	return schaden_faktor() * float(brakk_wert("schaden", 1.0))
 
 
 func schuss_takt() -> float:
-	return 0.8 if aktiv() == "feuerteam" else 1.0
+	return float(brakk_wert("takt", 1.0))
 
 
 ## Überhitzen (ego_modus.gd): Wirbelring – Schüsse heizen weniger; Taktring – kühlt schneller.
@@ -220,7 +270,6 @@ func kuehl_faktor() -> float:
 func wirke(spiel: Node) -> void:
 	if int(spiel.phase) != 0:
 		return
-	var weite := FELD_RADIUS * Werte.ZELLE
 	var k: Karte = spiel.karte
 	for z: Vector2i in spiel.fabriken:
 		if k.paar.has(z):
@@ -228,7 +277,7 @@ func wirke(spiel: Node) -> void:
 		var fab: Dictionary = spiel.fabriken[z]
 		var ziel := ""
 		for ring: String in felder:
-			if k.mitte(z).distance_to(felder[ring] as Vector2) <= weite:
+			if im_feld(z, felder[ring] as Vector2i):
 				ziel = ring   # das zuletzt gesetzte Feld gewinnt
 		var jetzt := str(fab.get("ring", ""))
 		var st := ring_stufe(ziel)

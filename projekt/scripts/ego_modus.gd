@@ -1,13 +1,12 @@
 class_name EgoModus
 extends Node
-## Ego-Sicht mit Brakk (18.11.2026, Prototyp) – [G] an/aus, nur in HD-2D.
-## Die Kamera sitzt in Brakks Kopf; die Spiellogik bleibt die alte 2D-Logik, diese Datei steuert Brakk nur anders:
-##   WASD gehen, Maus schauen, Linksklick schießen (zwei Pistolen im Wechsel), [Leertaste] springen,
-##   zweimal [Leertaste] vor einem Erdwall: der Ring an der linken Hand wirft eine Lichttreppe, Brakk steigt hinauf.
-##   Vom Wall herunter: über die Kante gehen oder zweimal [Leertaste] (18.11.). [Enter] startet die Welle.
-##   Bauen wie immer über [1]–[8]: dann projiziert der Ring die Vorschau auf das Feld unter dem Fadenkreuz –
-##   gebaut wird nur in Reichweite (BAU_REICHWEITE Felder um Brakk). Rechtsklick legt das Werkzeug weg.
-##   [Alt] gedrückt halten gibt die Maus frei (für die Bauleiste).
+## Ego-Sicht mit Brakk (Brakk-Mode, 18.11.2026; Kopf 19.11. erneuert). Die Kamera sitzt in Brakks Kopf, die Spiellogik
+## bleibt die 2D-Logik – diese Datei steuert Brakk nur anders. Tasten (Maus und Tastatur; am Handy: ego_touch.gd):
+##   WASD gehen, Maus schauen, Linksklick schießen (zwei Pistolen im Wechsel, jede überhitzt), Rechtsklick halten:
+##   Doppellanze, [Leertaste] springen, [Shift] Tumble, [E] Lichttreppe (auf dem Wall: Lichtbrücke), [Q] Lichtanker,
+##   [X] Lichtsäule (zielen, Linksklick setzt), [R] Klonmaschine (Ulti), [V] Zeitlupe, Mausrad aktiver Ring,
+##   [C] Ringfeld (Bauphase), [F] ausbauen bzw. an der Basis das Lichtterminal, [1]–[7] bauen (BAU_REICHWEITE Felder),
+##   [Enter] Welle jetzt. Fähigkeiten werden über Brakks Stufe frei (brakk_fortschritt.gd).
 ## Die Mauern werden in diesem Modus höher (WAND_HOCH), damit man nicht über sie hinwegschaut.
 
 const WAND_HOCH := 1.6          # Wandhöhe in Feldern während der Ego-Sicht (sonst 0,8)
@@ -104,8 +103,6 @@ var _tumble_rest := 0.0
 var _lanze := -1.0              # lädt: Sekunden seit Beginn (-1 = nein)
 var _lanze_rest := 0.0
 var _wirbel := 0.0               # 18.11.: Wirbelring – Anlauf des Dauerfeuers 0..1
-const DURCHSCHLAG_WEITERE := 0.5   # 18.11. (Paul, Schießstand): Durchschlagring – weitere Gegner in der Linie nehmen so viel
-const BRAND_TAKT := 1.5           # Brandring: höchstens ein neues Brandfeld je so viele Sekunden
 var _brand_ab := 0                # ab dieser Zeit (ms) darf das nächste Brandfeld
 var _terminal: Control = null    # 18.11.: Lichtterminal (Ringe kaufen)
 var _knoepfe: Array = []         # [Rect2, Callable] – Schaltflächen im Terminal
@@ -238,6 +235,8 @@ func beenden() -> void:
 		k.queue_free()
 	if _vorschau != null:
 		_vorschau.queue_free()
+	for m: Node in _feld_marken:
+		m.queue_free()
 	if _ebene != null:
 		_ebene.queue_free()
 	if is_instance_valid(spiel):
@@ -323,6 +322,14 @@ func _input(event: InputEvent) -> void:
 		var b := event as InputEventMouseButton
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			return
+		if _feld_zielt and b.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			if b.pressed:
+				if b.button_index == MOUSE_BUTTON_LEFT:
+					_feld_bestaetigen()   # 19.11.: Ringfeld setzen
+				else:
+					_feld_abbrechen()
+			get_viewport().set_input_as_handled()
+			return
 		if b.button_index == MOUSE_BUTTON_LEFT:
 			if _saeule_zielt:
 				if b.pressed:
@@ -354,6 +361,10 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if _feld_zielt and (event as InputEventKey).keycode == KEY_ESCAPE:
+			_feld_abbrechen()   # 19.11.: Ringfeld nicht setzen
+			get_viewport().set_input_as_handled()
+			return
 		match (event as InputEventKey).keycode:
 			KEY_B:
 				if spiel.brakk_modus:
@@ -528,7 +539,7 @@ func _process(delta: float) -> void:
 	else:
 		_gehen(echt if frei else 0.0)
 		_fallen(echt)
-	if _feuer and frei and _takt <= 0.0 and _klettern < 0.0 and _lanze < 0.0 and not _saeule_zielt:
+	if _feuer and frei and _takt <= 0.0 and _klettern < 0.0 and _lanze < 0.0 and not _saeule_zielt and not _feld_zielt:
 		_schiess()
 	_kamera()
 	_brakk_verstecken()
@@ -781,8 +792,9 @@ func _schiess() -> void:
 			linie.append([t, g])
 	linie.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 	var f := brakk.fortschritt
-	var durch := f != null and f.aktiv() == "durchschuss"
-	var getroffen: Array = linie.slice(0, 3 if durch else 1)
+	var weitere: Array = f.brakk_wert("weitere", []) if f != null else []   # 19.11.: je Ringstufe (RINGE.brakk_stufen)
+	var durch := not weitere.is_empty()
+	var getroffen: Array = linie.slice(0, 1 + weitere.size())
 	var ende := von + r * (bis if durch or getroffen.is_empty() else float(getroffen[0][0]))
 	var muendung := von + _blick() * 0.5 + _rechts() * (0.16 if seite == 1 else -0.16) - Vector3(0, 0.14, 0)
 	_strahl(muendung, ende, LASER_LINKS if seite == 0 else SCHUSS)
@@ -799,7 +811,7 @@ func _schiess() -> void:
 	var nr := 0
 	for e: Array in getroffen:
 		var g: Gegner = e[1]
-		var durch_anteil := 1.0 if nr == 0 else DURCHSCHLAG_WEITERE   # 18.11.: Schießstand – weitere Gegner nur halb
+		var durch_anteil := 1.0 if nr == 0 else float(weitere[nr - 1])   # 19.11.: Anteil je weiterem Gegner aus der Tabelle
 		nr += 1
 		if not is_instance_valid(g) or g._tot:
 			continue
@@ -1391,6 +1403,9 @@ func _muendungsblitz(p: Vector2, px: float, farbe: Color = SCHUSS) -> void:
 
 func _fadenkreuz(g: Vector2, px: float) -> void:
 	var m := (g / 2.0).round()
+	if _feld_zielt and brakk.fortschritt != null and not brakk.fortschritt.ringe.is_empty():
+		var fr := brakk.fortschritt.ringe[clampi(brakk.fortschritt.gewaehlt, 0, brakk.fortschritt.ringe.size() - 1)]
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 26.0 * px), "%s-Feld: %d/4 Fabriken · [C] / Linksklick setzen · Rechtsklick / Esc abbrechen" % [str(BrakkFortschritt.RINGE[fr]["name"]), _feld_fabriken(_feld_ecke).size()], 18, _ring_farbe(fr))   # 19.11.
 	if _saeule_zielt:
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 26.0 * px), "Linksklick: Lichtsäule setzen · [X] / Rechtsklick: abbrechen", 18, _saeule_farbe)   # 18.11.
 	if spiel.werkzeug != Karte.FREI:
@@ -1576,7 +1591,7 @@ func _takt_faktor() -> float:
 	var f := brakk.fortschritt
 	if f == null:
 		return 1.0
-	return f.schuss_takt() * (lerpf(1.0, 0.625, _wirbel) if f.aktiv() == "minigun" else 1.0)
+	return f.schuss_takt() * lerpf(1.0, 1.0 / float(f.brakk_wert("anlauf", 1.0)), _wirbel)
 
 
 ## Wirkung der Ringe auf einen Treffer von Brakk (Abpraller, Brand, Gel).
@@ -1584,14 +1599,23 @@ func _ring_treffer(g: Gegner, schaden: float) -> void:
 	var f := brakk.fortschritt
 	if f == null or not is_instance_valid(g):
 		return
-	if f.aktiv() == "plasmagel" and not g._tot:
-		g.gebremst = maxf(g.gebremst, 2.0)
-	if f.aktiv() == "brandfeld" and Time.get_ticks_msec() >= _brand_ab:
-		# 18.11. (Paul, Schießstand): höchstens ein neues Brandfeld je BRAND_TAKT – sonst stapeln sie sich und der Ring verdrängt alle anderen
-		_brand_ab = Time.get_ticks_msec() + int(BRAND_TAKT * 1000.0)
+	var mark_sek := float(f.brakk_wert("mark_sek", 0.0))
+	if mark_sek > 0.0 and not g._tot and (g.markiert <= 0.0 or g.markiert_brakk):
+		# 19.11. (Paul): Zielring – Treffer markieren, alle anderen Quellen richten mehr Schaden an
+		g.markiert = maxf(g.markiert, mark_sek)
+		g.markier_faktor = float(f.brakk_wert("mark_bonus", 1.0))
+		g.markiert_brakk = true
+	var bremse := float(f.brakk_wert("bremse", 0.0))
+	if bremse > 0.0 and not g._tot:
+		g.gebremst = maxf(g.gebremst, bremse)
+	var brand_takt := float(f.brakk_wert("brand_takt", 0.0))
+	if brand_takt > 0.0 and Time.get_ticks_msec() >= _brand_ab:
+		# 18.11. (Paul, Schießstand): höchstens ein neues Brandfeld je brand_takt – sonst stapeln sie sich
+		_brand_ab = Time.get_ticks_msec() + int(brand_takt * 1000.0)
 		spiel.lege_brand(g.position, Werte.ZELLE * 0.5, schaden * 0.3)
-	if f.aktiv() == "abpraller":
-		spiel.abpraller(g, Werte.ZELLE * 0.5, schaden * 0.6, Einheit.ABZEICHEN["abpraller"])
+	var spruenge := int(f.brakk_wert("spruenge", 0))
+	if spruenge > 0:
+		_brakk_sprung(g, spruenge, schaden * float(f.brakk_wert("sprung_anteil", 0.6)))
 
 
 ## Ein Gegner fällt durch Brakks Schuss: Erfahrung (große Gegner mehr).
@@ -2022,9 +2046,12 @@ func _male_terminal() -> void:
 		ci.draw_rect(r, Color(farbe, 0.07))
 		_male_ring(ci, Vector2(r.position.x + 26.0, r.get_center().y), minf(20.0, zh * 0.34), ring)
 		Stil.schreibe(ci, Vector2(r.position.x + 52.0, r.position.y + zh * 0.22), str(d["name"]), 18, farbe)
-		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.22), "Brakk: " + str(d["brakk"]), 14, Stil.TEXT)
 		var st := f.ring_stufe(ring)
-		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Fabriken: " + _ring_fabrik_text(ring, maxi(1, st)), 14, Stil.TEXT_BLASS)
+		# 19.11. (Paul): zeigt die Stufe, die man als Nächstes bekommt (gekauft: die nächste, auf Stufe 3 diese) – Brakk UND Feld
+		var zeig := mini(3, st + 1)
+		var vorsatz := ("St. %d – " % zeig) if st < 3 else ""
+		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.22), vorsatz + "Brakk: " + BrakkFortschritt.brakk_text(ring, zeig), 14, Stil.TEXT)
+		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Feld: " + _ring_fabrik_text(ring, zeig), 14, Stil.TEXT_BLASS)
 		var kb := Rect2(r.end.x - 130.0, r.get_center().y - 13.0, 122.0, 26.0)
 		if st >= BrakkFortschritt.RING_PREISE.size():
 			Stil.schreibe_mittig(ci, kb.get_center(), "Stufe 3", 16, farbe)
@@ -2074,8 +2101,18 @@ func _ring_waehlen(schritt: int) -> void:
 	Ton.spiele(spiel, "ui-klick", -6.0)
 
 
-## [C]: Der gewählte Ring wirft sein Feld auf den Boden unter dem Fadenkreuz (ein Feld je Ring, neu werfen versetzt es).
+## 19.11. (Paul): [C] in der Bauphase – das Ringfeld ist ein festes 2×2-Felder-Rechteck (höchstens 4 Fabriken).
+## Erstes [C]: Vorschau rastet auf das Feldraster ein, betroffene Fabriken leuchten, Anzeige „3/4 Fabriken“.
+## Zweites [C] oder Linksklick bestätigt, Rechtsklick oder Esc bricht ab. Solange wird nicht geschossen.
+var _feld_zielt := false
+var _feld_ecke := Vector2i.ZERO
+var _feld_marken: Array = []     # leuchtende Kästen über den betroffenen Fabriken (Vorschau)
+
+
 func _wirf_feld() -> void:
+	if _feld_zielt:
+		_feld_bestaetigen()
+		return
 	var f := brakk.fortschritt
 	if f == null:
 		return
@@ -2086,17 +2123,60 @@ func _wirf_feld() -> void:
 		spiel.melde("Ringfelder setzt du in der Bauphase – in der Welle liegen sie fest.", 2.0)
 		return
 	f.gewaehlt = clampi(f.gewaehlt, 0, f.ringe.size() - 1)
-	var ring := f.ringe[f.gewaehlt]
+	_feld_zielt = true
+	_feuer = false
+	Ton.spiele(spiel, "ui-klick", -4.0)
+
+
+func _feld_abbrechen() -> void:
+	_feld_zielt = false
+	if _vorschau != null:
+		_vorschau.visible = false
+	for m: Node3D in _feld_marken:
+		m.visible = false
+
+
+## Linke obere Zelle des 2×2-Rechtecks, dessen Mitte (eine Rasterecke) dem Fadenkreuz am nächsten liegt.
+func _feld_ecke_im_blick() -> Vector2i:
 	var p := ziel_welt(true)
-	if p.x < -9000.0 or p.distance_to(_fuss2d()) > FELD_WEITE * Werte.ZELLE or not karte.in_karte(karte.zelle_bei(p)):
+	if p.x < -9000.0:
+		return Vector2i(-99, -99)
+	var gx := p.x / Werte.ZELLE
+	var gy := (p.y - Werte.KARTE_OBEN) / Werte.ZELLE
+	var halb := float(BrakkFortschritt.FELD_GROESSE) / 2.0
+	return Vector2i(roundi(gx - halb), roundi(gy - halb))
+
+
+func _feld_mitte(ecke: Vector2i) -> Vector2:
+	var halb := float(BrakkFortschritt.FELD_GROESSE) / 2.0
+	return Vector2((float(ecke.x) + halb) * Werte.ZELLE, (float(ecke.y) + halb) * Werte.ZELLE + Werte.KARTE_OBEN)
+
+
+func _feld_fabriken(ecke: Vector2i) -> Array:
+	var liste: Array = []
+	for z: Vector2i in spiel.fabriken:
+		if not karte.paar.has(z) and BrakkFortschritt.im_feld(z, ecke):
+			liste.append(z)
+	return liste
+
+
+func _feld_bestaetigen() -> void:
+	var f := brakk.fortschritt
+	if f == null or f.ringe.is_empty() or spiel.phase != 0:
+		_feld_abbrechen()
+		return
+	var ecke := _feld_ecke_im_blick()
+	if ecke.x < -90 or _feld_mitte(ecke).distance_to(_fuss2d()) > FELD_WEITE * Werte.ZELLE:
 		spiel.melde("Zu weit – das Ringfeld reicht höchstens %d Felder weit." % int(FELD_WEITE), 2.0)
 		return
-	f.setze_feld(ring, p)
+	var ring := f.ringe[clampi(f.gewaehlt, 0, f.ringe.size() - 1)]
+	f.setze_feld(ring, ecke)
+	_feld_abbrechen()
 	_hand_zeigen = 1.0
 	_trauma = minf(1.0, _trauma + 0.12)
-	spiel.effekte.flaeche(p, BrakkFortschritt.FELD_RADIUS * Werte.ZELLE, _ring_farbe(ring))
+	spiel.effekte.flaeche(_feld_mitte(ecke), Werte.ZELLE * 1.1, _ring_farbe(ring))
 	Ton.spiele(spiel, "tc-arc", -4.0)
-	spiel.melde("%s: Fabriken im Feld bauen %s." % [str(BrakkFortschritt.RINGE[ring]["name"]), _ring_fabrik_text(ring, f.ring_stufe(ring))], 3.0)
+	spiel.melde("%s: %d/4 Fabriken im Feld bauen %s." % [str(BrakkFortschritt.RINGE[ring]["name"]), _feld_fabriken(ecke).size(), _ring_fabrik_text(ring, f.ring_stufe(ring))], 3.0)
 
 
 func _leucht_mat(farbe: Color, alpha: float) -> StandardMaterial3D:
@@ -2110,42 +2190,34 @@ func _leucht_mat(farbe: Color, alpha: float) -> StandardMaterial3D:
 	return m
 
 
-## Ringfeld in 3D: leuchtender Rand am Boden, zarte Fläche, darüber schwebt groß der Ring selbst und dreht sich.
+func _kasten(groesse: Vector3, mat: StandardMaterial3D, pos: Vector3, eltern: Node3D) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = groesse
+	m.mesh = box
+	m.material_override = mat
+	m.position = pos
+	eltern.add_child(m)
+	return m
+
+
+## Ringfeld in 3D: leuchtender Rand eines 2×2-Rechtecks, zarte Fläche, dunkler Plattformrand; darüber (gesetzt)
+## der Holo-Bogen mit dem Ring.
 func _baue_feld(ring: String, farbe: Color, vorschau: bool) -> Node3D:
 	var k := Node3D.new()
-	var rad := BrakkFortschritt.FELD_RADIUS
-	var rand := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = rad - 0.07
-	torus.outer_radius = rad
-	torus.rings = 48
-	rand.mesh = torus
-	rand.material_override = _leucht_mat(farbe, 0.45 if vorschau else 0.9)
-	rand.position.y = 0.04
-	k.add_child(rand)
-	var flaeche := MeshInstance3D.new()
-	var scheibe := CylinderMesh.new()
-	scheibe.top_radius = rad
-	scheibe.bottom_radius = rad
-	scheibe.height = 0.01
-	scheibe.radial_segments = 48
-	flaeche.mesh = scheibe
-	flaeche.material_override = _leucht_mat(farbe, 0.08 if vorschau else 0.16)
-	flaeche.position.y = 0.03
-	k.add_child(flaeche)
+	var s := float(BrakkFortschritt.FELD_GROESSE)
+	var rand := _leucht_mat(farbe, 0.45 if vorschau else 0.9)
+	var h := s / 2.0
+	for seite: Array in [[Vector3(s, 0.04, 0.07), Vector3(0, 0.04, -h)], [Vector3(s, 0.04, 0.07), Vector3(0, 0.04, h)],
+			[Vector3(0.07, 0.04, s), Vector3(-h, 0.04, 0)], [Vector3(0.07, 0.04, s), Vector3(h, 0.04, 0)]]:
+		_kasten(seite[0], rand, seite[1], k)
+	_kasten(Vector3(s, 0.01, s), _leucht_mat(farbe, 0.08 if vorschau else 0.16), Vector3(0, 0.03, 0), k)
 	if not vorschau:
-		# 18.11.: wie Pauls Holo-Entwurf – dunkler Plattformrand, darüber ein Lichtbogen aus Segmenten, darin schwebt der Ring
-		var platte := MeshInstance3D.new()
-		var pt := TorusMesh.new()
-		pt.inner_radius = rad
-		pt.outer_radius = rad + 0.12
-		pt.rings = 48
-		platte.mesh = pt
 		var pm := StandardMaterial3D.new()
 		pm.albedo_color = Color("23262e")
-		platte.material_override = pm
-		platte.position.y = 0.05
-		k.add_child(platte)
+		for seite: Array in [[Vector3(s + 0.24, 0.05, 0.12), Vector3(0, 0.025, -h - 0.1)], [Vector3(s + 0.24, 0.05, 0.12), Vector3(0, 0.025, h + 0.1)],
+				[Vector3(0.12, 0.05, s), Vector3(-h - 0.1, 0.025, 0)], [Vector3(0.12, 0.05, s), Vector3(h + 0.1, 0.025, 0)]]:
+			_kasten(seite[0], pm, seite[1], k)
 		var schwebe := Node3D.new()
 		schwebe.name = "Ring"
 		schwebe.position.y = 0.2
@@ -2156,14 +2228,8 @@ func _baue_feld(ring: String, farbe: Color, vorschau: bool) -> Node3D:
 			if i % 4 == 3:
 				continue   # Lücken im Bogen
 			var w := PI * 1.25 * (float(i) + 0.5) / float(segmente) - PI * 0.125
-			var seg := MeshInstance3D.new()
-			var box := BoxMesh.new()
-			box.size = Vector3(0.16, 0.05, 0.07)
-			seg.mesh = box
-			seg.material_override = _leucht_mat(farbe, 0.85)
-			seg.position = Vector3(cos(w) * bogen, 0.9 + sin(w) * bogen, 0.0)
+			var seg := _kasten(Vector3(0.16, 0.05, 0.07), _leucht_mat(farbe, 0.85), Vector3(cos(w) * bogen, 0.9 + sin(w) * bogen, 0.0), schwebe)
 			seg.rotation.z = w + PI / 2.0
-			schwebe.add_child(seg)
 		var bild := Sprite3D.new()
 		bild.texture = RingBilder.bild(ring, farbe)
 		bild.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -2172,21 +2238,11 @@ func _baue_feld(ring: String, farbe: Color, vorschau: bool) -> Node3D:
 		bild.shaded = false
 		bild.position.y = 0.95
 		schwebe.add_child(bild)
-		var licht := MeshInstance3D.new()
-		var zyl := CylinderMesh.new()
-		zyl.top_radius = rad * 0.7
-		zyl.bottom_radius = rad * 0.9
-		zyl.height = 0.5
-		zyl.radial_segments = 32
-		licht.mesh = zyl
-		licht.material_override = _leucht_mat(farbe, 0.07)
-		licht.position.y = 0.25
-		k.add_child(licht)
 	hd.add_child(k)
 	return k
 
 
-## Jedes Bild: 3D-Felder mit den gesetzten Feldern abgleichen, Ringe drehen, Vorschau unter dem Fadenkreuz.
+## Jedes Bild: 3D-Felder mit den gesetzten Feldern abgleichen, Ringe drehen; beim Zielen die Vorschau mit leuchtenden Fabriken.
 func _felder_weiter(dt: float) -> void:
 	var f := brakk.fortschritt
 	if f == null:
@@ -2200,26 +2256,50 @@ func _felder_weiter(dt: float) -> void:
 		if k == null:
 			k = _baue_feld(ring, _ring_farbe(ring), false)
 			_feld_knoten[ring] = k
-		var p: Vector2 = f.felder[ring]
-		k.position = _zu3d(p, hd.H if hd.ist_hoch(karte.zelle_bei(p)) else 0.0)
+		k.position = _zu3d(_feld_mitte(f.felder[ring] as Vector2i), 0.0)
 		var s := k.get_node_or_null("Ring") as Node3D
 		if s != null:
 			s.rotation.y += dt * 0.8
 			s.position.y = 0.2 + 0.06 * sin(Time.get_ticks_msec() / 400.0)
-	var zeigen := _hand_zeigen > 0.0 and not f.ringe.is_empty() and _frei()
-	if zeigen:
-		var ring := f.ringe[clampi(f.gewaehlt, 0, f.ringe.size() - 1)]
-		if _vorschau == null or _vorschau.get_meta("ring", "") != ring:
-			if _vorschau != null:
-				_vorschau.queue_free()
-			_vorschau = _baue_feld(ring, _ring_farbe(ring), true)
-			_vorschau.set_meta("ring", ring)
-		var p := ziel_welt(true)
-		_vorschau.visible = p.x > -9000.0
-		if _vorschau.visible:
-			_vorschau.position = _zu3d(p, 0.0)
-	elif _vorschau != null:
-		_vorschau.visible = false
+	if _feld_zielt and (spiel.phase != 0 or f.ringe.is_empty()):
+		_feld_abbrechen()
+	if not _feld_zielt or not _frei():
+		if _vorschau != null:
+			_vorschau.visible = false
+		for m: Node3D in _feld_marken:
+			m.visible = false
+		return
+	_hand_zeigen = maxf(_hand_zeigen, 0.3)
+	var ring := f.ringe[clampi(f.gewaehlt, 0, f.ringe.size() - 1)]
+	var farbe := _ring_farbe(ring)
+	if _vorschau == null or _vorschau.get_meta("ring", "") != ring:
+		if _vorschau != null:
+			_vorschau.queue_free()
+		_vorschau = _baue_feld(ring, farbe, true)
+		_vorschau.set_meta("ring", ring)
+	_feld_ecke = _feld_ecke_im_blick()
+	_vorschau.visible = _feld_ecke.x > -90
+	if not _vorschau.visible:
+		return
+	_vorschau.position = _zu3d(_feld_mitte(_feld_ecke), 0.0)
+	var fabriken := _feld_fabriken(_feld_ecke)
+	while _feld_marken.size() < 4:
+		var m := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.96, 1.3, 0.96)
+		m.mesh = box
+		m.material_override = _leucht_mat(farbe, 0.22)
+		hd.add_child(m)
+		_feld_marken.append(m)
+	var puls := 0.15 + 0.12 * sin(Time.get_ticks_msec() / 160.0)
+	for i in 4:
+		var m: MeshInstance3D = _feld_marken[i]
+		m.visible = i < fabriken.size()
+		if m.visible:
+			m.position = _zu3d(karte.mitte(fabriken[i] as Vector2i), 0.65)
+			var mm := m.material_override as StandardMaterial3D
+			mm.albedo_color = Color(farbe, puls)
+			mm.emission = farbe
 
 
 ## 18.11. (Paul): Ringplätze auf der Ringhand (ringhand.png, 48×72, Faust mit erhobenem Zeigefinger), in Bildpunkten:
@@ -2227,7 +2307,7 @@ func _felder_weiter(dt: float) -> void:
 ## Finger frei werden: Mittelfinger, Ringfinger, Zeigefinger (über dem Projektorring), kleiner Finger, Daumen.
 const FINGER_BAENDER := [[18, 24, 23], [11, 17, 25], [32, 38, 15], [4, 9, 28], [39, 45, 41]]
 ## Material des Bands je Ring (wie in ring_bilder.gd): Silber, Schwarz, Gold, dunkles Metall.
-const BAND_FARBE := {"durchschuss": "8a93a6", "laser": "2b2830", "feuerteam": "c4ccd8", "minigun": "4a505e",
+const BAND_FARBE := {"durchschuss": "8a93a6", "laser": "2b2830", "feuerteam": "c4ccd8", "minigun": "4a505e", "markierung": "8a93a6", "bollwerk": "4a505e",
 	"abpraller": "4a505e", "brandfeld": "c9952e", "plasmagel": "8a93a6"}
 
 
@@ -2441,10 +2521,10 @@ func _hitze_anzeige(m: Vector2, px: float) -> void:
 ## Was Fabriken im Feld eines Rings auf Stufe `st` bauen, kurz (für Terminal und Meldung).
 func _ring_fabrik_text(ring: String, st: int) -> String:
 	var truppe := str(BrakkFortschritt.RINGE[ring]["truppe"])
-	var name := str(Werte.EINHEITEN[truppe]["name"])
+	var name := str(Werte.EINHEITEN[truppe]["name"]) + (" −25 % Schaden" if ring == "plasmagel" else "")   # 19.11. (Paul): Gel-Feld gedämpft
 	match st:
 		1:
-			return "%s (St. 1)" % name
+			return "%s (St. 1: +20 %% Leben)" % name
 		2:
 			return "%s (St. 2: stärker)" % name
 		_:
@@ -2737,7 +2817,6 @@ const SAEULE_RADIUS := 1.5       # Felder
 const SAEULE_SCHADEN := 150.0
 const SAEULE_VORLAUF := 1.5      # Sekunden zwischen Bestätigen und Einschlag
 const SAEULE_ABKLING := 25.0
-const GEL_BONUS := 1.4           # 18.11. (Paul): Gelring aktiv – gebremste Gegner nehmen so viel Schaden von Brakk
 const ZEITLUPE_SEK := 4.0        # in Echtzeit
 const ZEITLUPE_TEMPO := 0.5
 const ZEITLUPE_ABKLING := 60.0
@@ -2984,10 +3063,31 @@ func _saeulen_weiter(dt: float) -> void:
 	_saeulen = _saeulen.filter(func(s: Array) -> bool: return float(s[1]) < float(s[2]))
 
 
+## 19.11.: Sprungring – vom Treffer aus springt ein Blitz auf die nächsten Gegner (Anzahl und Anteil aus der Tabelle).
+func _brakk_sprung(erstes: Gegner, spruenge: int, schaden: float) -> void:
+	var getroffen: Array = [erstes]
+	var punkt := erstes.position
+	for i in spruenge:
+		var bester: Gegner = null
+		var beste := Werte.ABPRALLER_WEITE * Werte.ZELLE
+		for g: Gegner in spiel.gegner:
+			if is_instance_valid(g) and not g._tot and not getroffen.has(g) and not spiel._geschuetzt(g) and punkt.distance_to(g.position) < beste:
+				beste = punkt.distance_to(g.position)
+				bester = g
+		if bester == null:
+			return
+		spiel.effekte.strahl(punkt, bester.position, Einheit.ABZEICHEN["abpraller"], 2.0)
+		spiel.flaechenschaden(bester.position, Werte.ZELLE * 0.4, schaden, Einheit.ABZEICHEN["abpraller"])
+		if bester._tot:
+			_kill(bester)
+		getroffen.append(bester)
+		punkt = bester.position
+
+
 ## Gelring aktiv: gebremste Gegner (von Brakk, Gel-Fabriken oder der Gel-Säule) nehmen mehr Schaden von Brakk.
 func _gel_bonus(g: Gegner) -> float:
 	var f := brakk.fortschritt
-	return GEL_BONUS if f != null and f.aktiv() == "plasmagel" and g.gebremst > 0.0 else 1.0
+	return float(f.brakk_wert("gel_bonus", 1.0)) if f != null and g.gebremst > 0.0 else 1.0
 
 
 ## [V]: Zeitlupe – die Welt läuft halb so schnell, Brakk (Echtzeit) nicht. Lange Abklingzeit.

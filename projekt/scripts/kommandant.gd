@@ -263,6 +263,8 @@ func _runter(gestuerzt: bool) -> bool:
 func nimm_schaden(menge: float) -> void:
 	if gefallen or unverwundbar > 0.0:
 		return
+	if fortschritt != null:
+		menge *= 1.0 - float(fortschritt.brakk_wert("schutz", 0.0))   # 19.11.: Wallring
 	var f: float = spiel.schild_faktor(position)
 	if f < 1.0:
 		spiel.kuppel_abgefangen(position, menge * (1.0 - f))

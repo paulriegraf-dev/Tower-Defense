@@ -50,6 +50,8 @@ var _leerlauf := 0.0                # Myr-Drohne: Sekunden ohne Ziel auf dem Wal
 var _brut: Array = []               # Belagerungsturm: seine abgesetzten Myr-Drohnen
 var geworfen := false               # von der Wurf-Schleuder hinter die vordere Front geworfen
 var markiert := 0.0                 # Sekunden: von einem Scharfschützen markiert, nimmt mehr Schaden
+var markier_faktor := Werte.MARKIERUNG_FAKTOR   # 19.11.: so viel mehr Schaden nimmt er markiert (Brakks Zielring: weniger)
+var markiert_brakk := false          # 19.11.: die Markierung kommt von Brakks Zielring – Brakks eigene Treffer zählen dann nicht mit
 var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
 var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schwächer als Plasmagel)
 var eingefroren := 0.0              # Sekunden: Schockfrost – steht ganz still
@@ -562,8 +564,8 @@ func nimm_schaden(menge: float, dauer: bool = false) -> void:
 	if panzer > 0.0 and not dauer:
 		menge = maxf(menge - panzer, menge * Werte.PANZERUNG_MIN_ANTEIL)
 		_panzer_blitz = 0.12
-	if markiert > 0.0:
-		menge *= Werte.MARKIERUNG_FAKTOR
+	if markiert > 0.0 and not (markiert_brakk and spiel.schadensquelle == "fabrik:-1,-1"):
+		menge *= markier_faktor
 	if sproede > 0.0:
 		menge *= float(Werte.TURM_STUFE_3["frost"]["sproede"]["sproede"])
 	var von_hinten := false   # 18.11.: Erfolg „Von hinten“

@@ -548,6 +548,8 @@ func _feuere_auf(ziel: Node2D) -> void:
 	if faehigkeit == "markierung" and oben and ziel is Gegner:
 		spiel.strahl(muendung, ziel.position, Color(1.0, 0.25, 0.3), 2.0)
 		(ziel as Gegner).markiert = Werte.MARKIERUNG_SEK
+		(ziel as Gegner).markier_faktor = Werte.MARKIERUNG_FAKTOR   # 19.11.: die Markierung der Scharfschützen geht vor
+		(ziel as Gegner).markiert_brakk = false
 		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) * Werte.MARKIERUNG_EIGENER_SCHADEN)
 		return
 	if faehigkeit == "durchschuss" and ziel is Gegner:

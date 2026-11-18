@@ -58,6 +58,8 @@ const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel m
 const BRAKK_ABSTAND_MAL := 0.5             # 18.11. (Paul): Gegner eines Trupps starten dichter …
 const BRAKK_PAUSE_MAL := 0.6               # … und zwischen zwei Trupps vergeht weniger Zeit
 const BRAKK_FABRIK_PROZENT := 10.0         # 18.11. (Paul): Brakk-Mode – jede weitere Fabrik nur 10 % teurer (sonst 25 %), für mehrere Ring-Standorte
+const BRAKK_STUFE1_LEBEN := 1.2           # 19.11. (Paul): Brakk-Mode – Truppen ab Fabrik-Stufe 1 mit +20 % Leben (statt dritter Truppe)
+const BRAKK_GEL_FELD_SCHADEN := 0.75      # 19.11. (Paul): Truppen im Gel-Feld machen 25 % weniger Schaden
 var _brakk_praemie := 0.0                # Bruchteile der gedrittelten Prämie
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var gegner: Array[Gegner] = []
@@ -1318,6 +1320,8 @@ func stelle_basis(art: String) -> void:
 					continue
 				if art == "ueberall" and Vector2(z - Werte.START_ZELLE).length() < BASIS_ABSTAND_HQ * Werte.KARTE_FAKTOR:
 					continue
+				if art == "ueberall" and not sandbox and (x - 1) * 2 < Werte.SPALTEN:
+					continue   # 19.11. (Paul): im Spiel steht die Basis ganz in der rechten Kartenhälfte (alle 3 Spalten); Sandbox bleibt frei
 				var nah := false
 				for cp in karte.checkpoints:
 					if Vector2(z - cp).length() < BASIS_ABSTAND_CP:
@@ -1714,6 +1718,11 @@ func _process(delta: float) -> void:
 			var e := Einheit.new()
 			figuren.add_child(e)
 			e.start(self, karte, f["typ"], z, int(f.get("stufe", 0)), str(f.get("faehigkeit", "")))
+			if brakk_modus and int(f.get("stufe", 0)) >= 1:
+				e.max_leben *= BRAKK_STUFE1_LEBEN   # 19.11. (Paul): statt der dritten Truppe
+				e.leben = e.max_leben
+			if brakk_modus and str(f.get("ring", "")) == "plasmagel":
+				e.daten["schaden"] = float(e.daten["schaden"]) * BRAKK_GEL_FELD_SCHADEN   # 19.11. (Paul, Bot-Partien): Gel-Feld war am stärksten
 			einheiten.append(e)
 			(f["einheiten"] as Array).append(e)
 
@@ -4218,7 +4227,7 @@ func truppen_limit(z: Vector2i) -> int:
 		return int(Werte.BATTERIE["plaetze"]) + (1 if stufe >= 1 else 0)
 	var n := (Werte.MAX_JE_FABRIK_ENDKAMPF if endkampf else Werte.MAX_JE_FABRIK) + sandbox_truppen + int(Werte.mod("fabrik_truppen"))   # 18.11.: Werte-Mod
 	n = maxi(n, 1)
-	if stufe >= 1:
+	if stufe >= 1 and not brakk_modus:   # 19.11. (Paul): Brakk-Mode – Stufe 1 gibt keine dritte Truppe (dafür +20 % Leben)
 		n += Werte.STUFE_1_TRUPPEN
 	return n
 
