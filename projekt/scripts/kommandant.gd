@@ -75,6 +75,8 @@ func _process(delta: float) -> void:
 		_sprite.bewegt(r != Vector2.ZERO)
 	if r != Vector2.ZERO:
 		var schritt := r.normalized() * float(daten["tempo"]) * Werte.ZELLE * delta
+		if not oben:
+			schritt *= karte.boden_tempo(position)   # 18.11.: Sumpf bremst, Eis beschleunigt (eigene Karten)
 		if absf(r.x) > 0.0:
 			_sprite.flip_h = r.x < 0.0
 		_versuche(Vector2(schritt.x, 0.0))
@@ -164,7 +166,7 @@ func _versuche(schritt: Vector2) -> void:
 
 
 func reichweite_jetzt() -> float:
-	return float(daten["reichweite"]) + (float(daten["wall_bonus"]) if oben else 0.0)
+	return float(daten["reichweite"]) + (float(daten["wall_bonus"]) if oben else 0.0) + _hoehe()   # 18.11.: Anhöhe
 
 
 func am_boden() -> bool:

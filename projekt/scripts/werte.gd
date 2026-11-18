@@ -564,7 +564,7 @@ static var MAUERN: Array[Vector2i] = []     # vorgebaute Erdwälle: ausbaubar, n
 static var MAUERN_FEST: Array[Vector2i] = []   # fertige Mauer für die Herausforderung „Mauern fest“
 
 ## 18.11. (Etappe 2): Gelände mit Wirkung – begehbar, aber mit Regeln (nur auf eigenen Karten aus dem Szenario-Editor).
-## In der Karten-Datei je Art eine Liste von Feldern (Schlüssel wie in BODEN_ARTEN). Brakk ist (noch) ausgenommen.
+## In der Karten-Datei je Art eine Liste von Feldern (Schlüssel wie in BODEN_ARTEN). Gilt auch für Brakk (18.11.).
 const BODEN_ARTEN: Array[String] = ["anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz", "eis", "minen"]
 const BODEN_NAMEN := {"anhoehe": "Anhöhe", "sumpf": "Sumpf", "bruecke": "Brücke", "ruine": "Ruine", "wald": "Wald", "erz": "Erzader", "eis": "Eis", "minen": "Minenfeld"}
 const BODEN_UNBEBAUBAR: Array[String] = ["sumpf", "bruecke", "wald", "minen"]   # dort steht nichts; auf der Ruine nur Erdwälle

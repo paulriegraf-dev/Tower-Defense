@@ -736,8 +736,7 @@ func _gehe(delta: float) -> bool:
 	if _punkte.is_empty():
 		return true
 	var schritt: float = daten["tempo"] * Werte.ZELLE * delta * (float(Werte.KOMMANDANT["sturm_tempo"]) if sturm_bis > 0.0 else 1.0)
-	if not (self is Kommandant):
-		schritt *= karte.boden_tempo(position)   # 18.11.: Sumpf bremst, Eis beschleunigt (Brakk vorerst ausgenommen)
+	schritt *= karte.boden_tempo(position)   # 18.11.: Sumpf bremst, Eis beschleunigt (auch Brakk)
 	var ziel := _punkte[0]
 	if absf(ziel.x - position.x) > 1.0:
 		_sprite.flip_h = ziel.x < position.x
@@ -773,9 +772,9 @@ func posten_verloren() -> void:
 
 
 ## 18.11. (Etappe 2): Schuss oder Wurf aus der Ferne (Battlesphäre, Schleuder, Laser) – auf einer Ruine gibt es Deckung.
-## (Brakk vorerst ausgenommen.)
+## (Gilt auch für Brakk: nimm_schaden ruft dann seine eigene Fassung.)
 func nimm_fernschaden(menge: float) -> void:
-	if not (self is Kommandant) and karte.boden_bei(position) == "ruine":
+	if karte.boden_bei(position) == "ruine":
 		menge *= 1.0 - Werte.RUINE_DECKUNG
 	nimm_schaden(menge)
 
@@ -800,9 +799,9 @@ func reichweite_jetzt() -> float:
 	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else _hoehe())
 
 
-## 18.11.: Anhöhe – mehr Reichweite am Boden (in der Stellung rechnet posten_bonus sie ein). Brakk vorerst ausgenommen.
+## 18.11.: Anhöhe – mehr Reichweite am Boden (in der Stellung rechnet posten_bonus sie ein). Auch für Brakk.
 func _hoehe() -> float:
-	return 0.0 if self is Kommandant else karte.anhoehe_bonus(karte.zelle_bei(position))
+	return karte.anhoehe_bonus(karte.zelle_bei(position))
 
 
 func _draw() -> void:

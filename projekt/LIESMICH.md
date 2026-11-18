@@ -211,7 +211,7 @@ Startmenü → **Sandbox** → „Sandbox spielen“ (wie bisher) oder **„Szen
 
 ### Gelände mit Wirkung (18.11., Etappe 2)
 
-Im Editor unter „Gelände mit Wirkung“ (Reiter Karte), nur auf eigenen Karten. Alles ist begehbar; die Wege der Gegner ändern sich dadurch nicht (Sumpf kostet nur Zeit). Brakk ist vorerst ausgenommen. Werte in `werte.gd`, Abschnitt nach `MAUERN_FEST` (`ANHOEHE_BONUS`, `SUMPF_TEMPO` …), in der Karten-Datei je Art eine Felderliste (`anhoehe`, `sumpf`, `bruecke`, `ruine`, `wald`, `erz`). In der Übersicht [I] → Regeln → „Gelände“.
+Im Editor unter „Gelände mit Wirkung“ (Reiter Karte), nur auf eigenen Karten. Alles ist begehbar; die Wege der Gegner ändern sich dadurch nicht (Sumpf kostet nur Zeit). Das gilt auch für Kommandant Brakk: Anhöhe (+1 Reichweite), Sumpf und Eis (Tempo beim Gehen, auch per WASD), Ruine (Deckung gegen Fernschaden). Werte in `werte.gd`, Abschnitt nach `MAUERN_FEST` (`ANHOEHE_BONUS`, `SUMPF_TEMPO` …), in der Karten-Datei je Art eine Felderliste (`anhoehe`, `sumpf`, `bruecke`, `ruine`, `wald`, `erz`). In der Übersicht [I] → Regeln → „Gelände“.
 - **Anhöhe:** +1 Reichweite für Truppen am Boden, Stellungen und Türme darauf (auch Funk- und Heilumkreis) – und für Gegner. Batterien nicht. Bebaubar.
 - **Sumpf:** Gegner und eigene Truppen laufen mit 70 % Tempo; zusammen mit Frost oder Plasmagel nie unter 45 % (Langsameres bleibt). Nicht bebaubar.
 - **Brücke:** nur auf Wasser malbar, begehbar, nicht bebaubar – ein Durchgang, den niemand zumauert.
