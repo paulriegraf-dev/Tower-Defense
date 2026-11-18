@@ -459,7 +459,7 @@ func _aktualisiere_tipps() -> void:
 	_monitor_typ = unter if unter != Karte.FREI else int(spiel.werkzeug)
 	if _drueber(tempo) and spiel._meldung_zeit <= 0.0:
 		_tipp_titel = "Tempo  [F]"
-		_tipp_text = "Im Brakk-Mode fest auf ×2." if spiel.brakk_modus else "Spielgeschwindigkeit: ×1 › ×2 › ×3 › ×1."
+		_tipp_text = "Spielgeschwindigkeit: ×1 › ×2 › ×3 › ×1."
 		_tipp_warnung = false
 		return
 	var h: Array = spiel.hinweis_text(unter)

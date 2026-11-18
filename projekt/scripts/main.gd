@@ -3638,9 +3638,6 @@ func kommandant_steuerbar() -> bool:
 ## Kein Zwischenstand, keine Phantome, keine Rangliste.
 func _brakk_modus_gewaehlt() -> void:
 	brakk_modus = true
-	# 18.11.: festes Tempo – Brakk selbst läuft in Echtzeit, ein wählbares Tempo würde ihn mal stark, mal schwach machen
-	_tempo_faktor = Werte.BRAKK_TEMPO
-	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 	Werte.setze_grafik("hd")   # nicht gespeichert
 	_normales_spiel()
 	_menue_weg()
@@ -4805,9 +4802,6 @@ func waehle(typ: int) -> void:
 
 
 func _tempo_umschalten() -> void:
-	if brakk_modus:
-		melde("Im Brakk-Mode ist das Tempo fest (×%d)." % roundi(Werte.BRAKK_TEMPO), 2.5)   # 18.11.
-		return
 	_tempo_faktor = _tempo_faktor + 1.0 if _tempo_faktor < 2.5 else 1.0   # ×1 → ×2 → ×3 → ×1
 	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 
