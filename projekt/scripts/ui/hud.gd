@@ -996,6 +996,9 @@ func pause_an() -> void:
 	get_tree().paused = true
 	if spiel.get("_zoom_grund") != null:
 		spiel._zoom_grund.visible = false   # das Spiel steht: main blendet ihn erst danach wieder ein
+	if spiel.get("_laufband") != null and spiel._laufband.visible:
+		spiel._laufband.visible = false   # 18.11.: Taktikplaner nicht über dem Pause-Menü; main holt ihn danach zurück
+		spiel._laufband_vor_pause = true
 	_hauptseite()
 
 

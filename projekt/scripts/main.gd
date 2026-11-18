@@ -901,18 +901,30 @@ func _zoom_gestellt(anteil: float) -> void:
 		kamera_2d.setze_zoom_anteil(anteil)
 
 
+var _laufband_vor_pause := false
+
+
 func _zoomregler_nachziehen() -> void:
 	if _zoomregler == null:
 		return
 	# solange ein Fenster offen ist (Ankerfenster, Übersicht, Formationen, Pause), stört der Regler nur (16.11.)
 	_ansicht_knopf.visible = hd != null
+	# 18.11. (Paul): Pause-Menü oder Startmenü offen – der Taktikplaner verschwindet und kommt danach wieder
+	if _laufband != null:
+		var verdeckt: bool = _hud.pausiert() or _menue != null
+		if verdeckt and _laufband.visible:
+			_laufband.visible = false
+			_laufband_vor_pause = true
+		elif not verdeckt and _laufband_vor_pause:
+			_laufband_vor_pause = false
+			_laufband.visible = true
 	_zoom_grund.visible = not (_fabrikmenue.visible or _lexikon.visible or _nachschlag.visible or _hud.pausiert() \
 		or (_ende != null and _ende.visible) or (_laufband != null and _laufband.visible))
 	# rechts am Rand – neben der Sandbox-Leiste, wenn die offen ist
 	var x := 1236.0
-	if is_instance_valid(_sandbox_leiste) and _sandbox_leiste.is_visible_in_tree():
-		x = minf(x, _sandbox_leiste.position.x - 42.0)
-	_zoom_grund.position.x = x
+	if is_instance_valid(_sandbox_leiste) and _sandbox_leiste.is_visible_in_tree() and _sandbox_leiste._offen:
+		x = minf(x, _sandbox_leiste.position.x - 42.0)   # 18.11.: eingeklappt liegt nur der Kopf oben – dann ganz an den Rand
+	_zoom_grund.position.x = x if absf(_zoom_grund.position.x - x) < 1.0 else lerpf(_zoom_grund.position.x, x, 0.25)
 	var a := -1.0
 	if hd != null:
 		a = hd.zoom_anteil()
