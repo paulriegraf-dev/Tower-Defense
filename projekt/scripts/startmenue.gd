@@ -260,11 +260,8 @@ func _los() -> void:
 	_starte(true, "tutorial" if _tutorial else "normal")
 
 
-## 18.11.: Brakk-Mode – braucht Maus und Tastatur (die Ego-Sicht fängt die Maus).
+## 18.11.: Brakk-Mode – am PC mit Maus und Tastatur, am Handy mit Touch-Steuerung (ego_touch.gd).
 func _brakk_mode() -> void:
-	if Touch.noetig():
-		_meldung = "Der Brakk-Mode braucht Maus und Tastatur – am Handy geht er noch nicht."
-		return
 	_starte(true, "brakk")
 
 

@@ -42,6 +42,17 @@ static func noetig() -> bool:
 	return DisplayServer.is_touchscreen_available() or OS.has_feature("web_ios") or OS.has_feature("web_android")
 
 
+## 18.11.: Handy/Tablet ohne Maus und Tastatur (nicht ein Laptop mit Touchscreen) – dann bekommt der Brakk-Mode die
+## Touch-Steuerung (ego_touch.gd). TD_TOUCH simuliert das am PC.
+static func ohne_maus() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios") or OS.get_environment("TD_TOUCH") != ""
+
+
+## 18.11.: Läuft die Ego-Sicht mit eigener Touch-Steuerung? Dann hält sich diese Ebene raus.
+func _ego_an() -> bool:
+	return spiel != null and spiel.get("ego") != null
+
+
 func _ready() -> void:
 	layer = 120
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -75,6 +86,8 @@ func _in_steuerung(p: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	if _ego_an():
+		return   # 18.11.: Brakk-Mode am Handy – ego_touch.gd steuert
 	# Brakk-Steuerung: Berührungen auf Joystick und Knöpfen gehen nicht ans Spiel (auch nicht als Klick)
 	if _brakk_an():
 		if event is InputEventScreenTouch:
@@ -151,6 +164,8 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	var echt := delta / maxf(Engine.time_scale, 0.01)
+	if _ego_an():
+		_lang_zeit = -1.0   # 18.11.: kein langes Drücken = Rechtsklick in der Ego-Sicht
 	if _lang_zeit >= 0.0:
 		_lang_zeit += echt
 		if _lang_zeit >= LANG_SEK:
@@ -171,6 +186,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _ego_an():
+		return
 	if spiel == null or not (event is InputEventMouseButton or event is InputEventMouseMotion):
 		return
 	if event.device != InputEvent.DEVICE_ID_EMULATION:

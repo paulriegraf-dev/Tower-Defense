@@ -108,6 +108,11 @@ var _terminal: Control = null    # 18.11.: Lichtterminal (Ringe kaufen)
 var _knoepfe: Array = []         # [Rect2, Callable] – Schaltflächen im Terminal
 var _hand_zeigen := 0.0           # 18.11.: so lange (s) hebt Brakk die Ringhand (Mausrad, [C])
 var _ring_blitz := 0.0            # 18.11.: kurzes Aufblitzen des neu gewählten Rings
+# 18.11.: Touchpad – ein Wisch mit zwei Fingern schickt viele kleine Mausrad-Meldungen; erst eine volle Raste
+# (Summe der Anteile) wechselt den Ring, und höchstens alle RAD_PAUSE Sekunden.
+const RAD_PAUSE := 0.25
+var _rad_summe := 0.0
+var _rad_zuletzt := -10.0
 const COUNTDOWN := 30.0            # 18.11. (Paul): Brakk-Mode – so lange (Spielsekunden) dauert die Bauphase, dann kommt die Welle von selbst
 const COUNTDOWN_ERSTE := 45.0      # in Runde 1 etwas mehr Zeit
 var _countdown := -1.0           # läuft: Restzeit (-1 = keine Bauphase)
@@ -122,6 +127,12 @@ var _seit_schuss := [9.0, 9.0]
 var _feld_knoten := {}           # Ring -> Node3D seines Ringfelds
 var _vorschau: Node3D = null     # Vorschau des Ringfelds unter dem Fadenkreuz
 const FELD_WEITE := 12.0         # so weit (Felder) wirft der Ring sein Feld
+# 18.11.: Handy – Touch-Steuerung (ego_touch.gd). Liegt das Fadenkreuz auf einem Gegner, drückt Brakk selbst ab (Paul: zielen musst du), ohne Hitze.
+var touch: EgoTouch = null
+var _auto_ziel: Gegner = null
+var _auto_r := Vector3.ZERO
+const AUTO_RADIUS := 0.45        # so nah (Felder) muss die Blicklinie an der Gegnermitte vorbeigehen – etwas großzügiger als ein Schuss (0,34)
+const LANZE_TOUCH := 1.5         # am Handy ohne Hitze: feste Verstärkung der Doppellanze
 
 
 func starten(p_spiel: Node) -> void:
@@ -162,6 +173,11 @@ func starten(p_spiel: Node) -> void:
 	# Die Bauleiste unten verdeckt die Sicht (Paul 18.11.): einklappen, links steht stattdessen eine schmale Liste
 	_hud_klapp = spiel._hud.eingeklappt
 	spiel._hud.eingeklappt = true
+	if Touch.ohne_maus():
+		touch = EgoTouch.new(self)   # 18.11.: Handy – Stick, Wischen, Knöpfe
+		add_child(touch)
+		spiel.melde("Brakk-Mode: links laufen · rechts wischen zum Zielen · Fadenkreuz auf dem Gegner: Brakk schießt · Fähigkeit tippen oder halten und ziehen", 10.0)
+		return
 	spiel.melde("Brakk-Mode: WASD + Maus · Klick schießt · Leertaste springt · [E] Lichttreppe · [F] ausbauen, an der Basis Ringe · Enter: Welle" + ("" if spiel.brakk_modus else " · [G] zurück"), 10.0)
 
 
@@ -286,6 +302,8 @@ func _input(event: InputEvent) -> void:
 		return
 	if not _frei():
 		return
+	if touch != null and (event is InputEventMouseMotion or event is InputEventMouseButton):
+		return   # 18.11.: am Handy steuert ego_touch.gd – die nachgemachte Maus der Finger zählt hier nicht
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var m := event as InputEventMouseMotion
 		gier -= m.relative.x * BLICK
@@ -310,7 +328,7 @@ func _input(event: InputEvent) -> void:
 			_feuer = b.pressed
 			get_viewport().set_input_as_handled()
 		elif b.pressed and (b.button_index == MOUSE_BUTTON_WHEEL_UP or b.button_index == MOUSE_BUTTON_WHEEL_DOWN):
-			_ring_waehlen(-1 if b.button_index == MOUSE_BUTTON_WHEEL_UP else 1)   # 18.11.
+			_rad(-1 if b.button_index == MOUSE_BUTTON_WHEEL_UP else 1, b.factor if b.factor > 0.0 else 1.0)   # 18.11.
 			get_viewport().set_input_as_handled()
 		elif b.button_index == MOUSE_BUTTON_RIGHT:
 			if _saeule_zielt:
@@ -455,7 +473,10 @@ func _process(delta: float) -> void:
 	var echt := clampf((uhr - _uhr_vorher) / 1000000.0, 0.0, 0.1) if _uhr_vorher > 0 else delta
 	_uhr_vorher = uhr
 	var frei := _frei()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if frei else Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if frei and touch == null else Input.MOUSE_MODE_VISIBLE
+	if touch != null:
+		_auto_zielen()   # 18.11.: Handy – Brakk schießt selbst
+		_feuer = frei and _auto_ziel != null and spiel.werkzeug == Karte.FREI and not _saeule_zielt
 	_takt -= echt
 	# 18.11.: Schussgefühl abklingen lassen (Echtzeit)
 	_trauma = maxf(0.0, _trauma - TRAUMA_ABBAU * echt)
@@ -521,11 +542,13 @@ func _gehen(dt: float) -> void:
 		r.x += 1.0
 	if Input.is_physical_key_pressed(KEY_A):
 		r.x -= 1.0
+	if touch != null:
+		r += touch.stick()   # 18.11.: Handy-Stick (stufenlos)
 	_geht = r != Vector2.ZERO and dt > 0.0
 	brakk._sprite.bewegt(_geht)
 	if not _geht:
 		return
-	r = r.normalized()
+	r = r.limit_length(1.0) if touch != null else r.normalized()
 	var v := (_vorne() * r.y + _rechts() * r.x) * TEMPO * dt
 	var schritt := Vector2(v.x, v.z) * Werte.ZELLE
 	_schritt(Vector2(schritt.x, 0.0))
@@ -679,6 +702,40 @@ func _in_reichweite(z: Vector2i) -> bool:
 
 # ------------------------------------------------------------------ Schießen
 
+## 18.11.: Handy – der vorderste sichtbare Gegner in Schussweite, auf dem das Fadenkreuz liegt (Blicklinie höchstens AUTO_RADIUS neben seiner Mitte).
+func _auto_zielen() -> void:
+	_auto_ziel = null
+	if _liegt or not _frei():
+		return
+	var von := hd.kamera.global_position
+	var blick := _blick()
+	var bester := INF
+	for g: Gegner in spiel.gegner:
+		if not is_instance_valid(g) or g._tot:
+			continue
+		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
+		var d := c - von
+		var weite := d.length()
+		if weite > SCHUSS_WEITE or weite < 0.1:
+			continue
+		var t := d.dot(blick)
+		if t <= 0.0 or (von + blick * t).distance_to(c) > AUTO_RADIUS or t >= bester:
+			continue   # nicht unter dem Fadenkreuz (oder ein näherer liegt davor)
+		var r := d / weite
+		if _strahl_bis(von, r, weite) < weite - 0.35:
+			continue   # Mauer oder Schild dazwischen
+		bester = t
+		_auto_ziel = g
+		_auto_r = r
+
+
+## Richtung der Schüsse: am Handy auf das selbst gewählte Ziel, sonst durchs Fadenkreuz.
+func _schuss_blick() -> Vector3:
+	if touch != null and _auto_ziel != null and is_instance_valid(_auto_ziel):
+		return _auto_r
+	return _blick()
+
+
 func _schiess() -> void:
 	_takt = SCHUSS_TAKT * _takt_faktor()
 	_wirbel = minf(1.0, _wirbel + 0.08)   # 18.11.: Wirbelring – Dauerfeuer läuft an
@@ -695,7 +752,7 @@ func _schiess() -> void:
 	_rueckstoss[seite] = 1.0
 	_blitz[seite] = 0.06
 	var von := hd.kamera.global_position
-	var r := _blick()
+	var r := _schuss_blick()
 	var bis := _strahl_bis(von, r, SCHUSS_WEITE)
 	# 18.11.: alle Gegner auf der Linie, nach Abstand – der Durchschlagring trifft bis zu drei davon
 	var linie: Array = []
@@ -1219,7 +1276,8 @@ func _male_bild() -> void:
 		_finger_wirbel(rp, wpx, auf)   # 18.11.: Lichtsäule
 	if _frei():   # 18.11.: bei offenem Menü kein Fadenkreuz und kein Hinweis darüber
 		_fadenkreuz(g, px)
-	_bauliste(g)
+	if touch == null or touch.bau_offen:
+		_bauliste(g)
 	# Zustandszeile unten in der Mitte
 	if _klettern >= 0.0:
 		Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, g.y * 0.62), "Lichttreppe", 18, LICHT)
@@ -1229,6 +1287,9 @@ func _male_bild() -> void:
 	if brakk.fortschritt != null:
 		_wurf_warnung()   # 18.11.: Steine auf Brakk
 		_gefahr_bild(g)
+	if touch != null:
+		touch.male(_bild)   # 18.11.: Handy – Stick und Knöpfe statt Leisten
+		return
 	_faehigkeiten(g)   # 18.11.: Symbole mit Abklingzeit
 	_ringleiste(g)   # 18.11.: getragene Ringe
 
@@ -1301,7 +1362,7 @@ func _bauliste(g: Vector2) -> void:
 			p = "×%d" % spiel.freie_waelle
 		var pf := Stil.GOLD if spiel.budget >= preis else Stil.WARN
 		Stil.schreibe(_bild, Vector2(r.end.x - 8.0 - Stil.breite(p, 18), m), p, 18, pf if geht else Stil.TEXT_BLASS)
-	Stil.schreibe(_bild, Vector2(x, hinter.end.y + 14.0), "Rechtsklick: weglegen", 16, Stil.TEXT_BLASS)
+	Stil.schreibe(_bild, Vector2(x, hinter.end.y + 14.0), "Rechtsklick: weglegen" if touch == null else "nochmal tippen: weglegen", 16, Stil.TEXT_BLASS)
 
 
 func _muendungsblitz(p: Vector2, px: float, farbe: Color = SCHUSS) -> void:
@@ -1327,14 +1388,14 @@ func _fadenkreuz(g: Vector2, px: float) -> void:
 	_hitze_anzeige(m, px)   # 18.11.
 	var gb := gebaeude_im_blick()   # 18.11.: Hinweis zum Ausbauen
 	if gb != Karte.KEINE:
-		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), "[F] %s ausbauen" % _gebaeude_name(gb), 18, LICHT)
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[F] %s ausbauen" % _gebaeude_name(gb)), 18, LICHT)
 	elif not brakk.oben and _klettern < 0.0 and brakk.e_rest <= 0.0 and not _treppe_ziel().is_empty():
-		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), "[E] Lichttreppe", 18, LICHT)   # 18.11.
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[E] Lichttreppe"), 18, LICHT)   # 18.11.
 	elif brakk.oben and _klettern < 0.0 and _bruecke == null and not _bruecke_ziel().is_empty():
 		var bt := "[E] Lichtbrücke" if _bruecke_cd <= 0.0 else "Lichtbrücke in %.0f s" % ceilf(_bruecke_cd)
-		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), bt, 18, LICHT if _bruecke_cd <= 0.0 else Stil.TEXT_BLASS)   # 18.11.
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t(bt), 18, LICHT if _bruecke_cd <= 0.0 else Stil.TEXT_BLASS)   # 18.11.
 	elif _am_terminal():
-		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), "[F] Lichtterminal – Ringe kaufen", 18, LICHT)
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[F] Lichtterminal – Ringe kaufen"), 18, LICHT)
 	var l := 3.0 * px
 	var lucke := 2.0 * px
 	var d := px * 0.6
@@ -1566,7 +1627,7 @@ func _brakk_leiste(g: Vector2) -> void:
 		var zeile := "+%d %% Schaden · +%d Leben" % [roundi(BrakkFortschritt.SCHADEN_JE_STUFE * 100.0), roundi(BrakkFortschritt.LEBEN_JE_STUFE)]
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 34), zeile, 18, Color(Stil.TEXT, a))
 		for i in f.neu_frei.size():
-			Stil.schreibe_mittig(_bild, m + Vector2(0, 58 + 22 * i), "Neu: " + str(BrakkFortschritt.NAMEN[f.neu_frei[i]]), 20, Color(LICHT, a))
+			Stil.schreibe_mittig(_bild, m + Vector2(0, 58 + 22 * i), _t("Neu: " + str(BrakkFortschritt.NAMEN[f.neu_frei[i]])), 20, Color(LICHT, a))
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Tumble und Doppellanze (18.11.)
@@ -1576,7 +1637,7 @@ func _darf(was: String) -> bool:
 	var f := brakk.fortschritt
 	if f == null or f.frei(was):
 		return true
-	spiel.melde("%s gibt es ab Stufe %d." % [BrakkFortschritt.NAMEN[was], int(BrakkFortschritt.AB[was])], 2.5)
+	spiel.melde(_t("%s gibt es ab Stufe %d." % [BrakkFortschritt.NAMEN[was], int(BrakkFortschritt.AB[was])]), 2.5)
 	return false
 
 
@@ -1595,7 +1656,9 @@ func _tumble_start() -> void:
 		r.x += 1.0
 	if Input.is_physical_key_pressed(KEY_A):
 		r.x -= 1.0
-	if r == Vector2.ZERO:
+	if touch != null:
+		r += touch.stick()
+	if r.length() < 0.2:
 		r = Vector2(0, 1)
 	r = r.normalized()
 	_tumble_seite = r.x
@@ -1651,9 +1714,11 @@ func _lanze_feuer() -> void:
 	_lanze_rest = LANZE_ABKLING
 	# 18.11.: die Lanze lässt die angestaute Hitze ab – je heißer, desto stärker (bis doppelt), danach sind beide kalt
 	var lanze_hitze := 1.0 + (float(_hitze[0]) + float(_hitze[1])) / 2.0
+	if touch != null:
+		lanze_hitze = LANZE_TOUCH   # 18.11.: am Handy gibt es keine Hitze
 	_hitze = [0.0, 0.0]
 	var von := hd.kamera.global_position
-	var r := _blick()
+	var r := _schuss_blick()
 	var weite := _strahl_bis(von, r, LANZE_WEITE)
 	var ende := von + r * weite
 	var kills := 0
@@ -1962,6 +2027,21 @@ func _male_terminal() -> void:
 
 
 ## Mausrad: nächster / vorheriger Ring; die Hand hebt sich und zeigt ihn.
+## 18.11.: Mausrad und Touchpad – Anteile sammeln, eine volle Raste wechselt den Ring (Maus: jede Raste).
+func _rad(richtung: int, anteil: float) -> void:
+	var jetzt := Time.get_ticks_msec() / 1000.0
+	if jetzt - _rad_zuletzt < RAD_PAUSE:
+		_rad_summe = 0.0
+		return
+	if signf(_rad_summe) != float(richtung):
+		_rad_summe = 0.0
+	_rad_summe += anteil * richtung
+	if absf(_rad_summe) >= 1.0:
+		_rad_summe = 0.0
+		_rad_zuletzt = jetzt
+		_ring_waehlen(richtung)
+
+
 func _ring_waehlen(schritt: int) -> void:
 	var f := brakk.fortschritt
 	if f == null or f.ringe.is_empty():
@@ -2260,12 +2340,14 @@ func _countdown_anzeige(g: Vector2) -> void:
 	Stil.schreibe_mittig(_bild, m + Vector2(0, -2), "Nächste Welle in %d s" % rest, 20, farbe)
 	var anteil := clampf(_countdown / (COUNTDOWN_ERSTE if int(spiel.welle) <= 1 else COUNTDOWN), 0.0, 1.0)
 	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * anteil, 3)), farbe)
-	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "[Enter] jetzt", 14, Stil.TEXT_BLASS)
+	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "[Enter] jetzt" if touch == null else "antippen: jetzt", 14, Stil.TEXT_BLASS)
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Überhitzen (18.11.)
 
 func _heize(seite: int) -> void:
+	if touch != null:
+		return   # 18.11. (Paul): am Handy schießt Brakk selbst – kein Überhitzen
 	var f := brakk.fortschritt
 	var mal := f.hitze_faktor() if f != null else 1.0
 	_hitze[seite] = float(_hitze[seite]) + HITZE_JE_SCHUSS * mal
@@ -3062,3 +3144,10 @@ func _wurf_warnung() -> void:
 		_bild.draw_circle(s, 16.0, Color(1.0, 0.15, 0.1, 0.25 * puls))
 		_bild.draw_arc(s, 16.0, 0.0, TAU, 20, Color(1.0, 0.25, 0.2, 0.95), 2.5)
 		Stil.schreibe_mittig(_bild, s + Vector2(0, -28), "!", 26, Color(1.0, 0.3, 0.25, puls))
+
+
+## 18.11.: Am Handy keine Tastennamen in Hinweisen – „[F] Lichtterminal“ wird „Lichtterminal“.
+func _t(s: String) -> String:
+	if touch == null:
+		return s
+	return RegEx.create_from_string("\\s*\\[[^\\]]*\\]\\s*").sub(s, " ", true).strip_edges()

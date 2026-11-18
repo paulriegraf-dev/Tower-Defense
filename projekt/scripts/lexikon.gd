@@ -71,6 +71,10 @@ func _process(delta: float) -> void:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_maus = event.position
+		## 18.11.: Ziehen mit gedrückter Taste scrollt den Text – am Handy (Finger) und Touchpad ohne Mausrad.
+		var mm := event as InputEventMouseMotion
+		if mm.button_mask & MOUSE_BUTTON_MASK_LEFT and TAFEL_R.has_point(mm.position):
+			_scroll -= mm.relative.y
 	elif event is InputEventMouseButton and event.pressed:
 		var p: Vector2 = event.position
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN or event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -151,7 +155,7 @@ func _draw() -> void:
 	# Kopf
 	Stil.symbol(self, "buch", Vector2(23, 21), 1.5, Stil.LEUCHT)
 	Stil.schreibe(self, Vector2(34, 21), "Übersicht", Stil.GROSS, Stil.TEXT)
-	var tipp := "Karte und Stufen anklicken · Mausrad scrollt · [I] schließt"
+	var tipp := "Karte und Stufen anklicken · Mausrad oder Ziehen scrollt · [I] schließt"
 	Stil.schreibe(self, Vector2(SCHLIESSEN.position.x - 8.0 - Stil.breite(tipp, Stil.KLEIN), 21), tipp, Stil.KLEIN, Stil.TEXT_BLASS)
 	var zu_an := SCHLIESSEN.has_point(_maus)
 	Stil.platte(self, SCHLIESSEN, 2.0, Stil.METALL_DUNKEL, Stil.LEUCHT if zu_an else Stil.RAHMEN)

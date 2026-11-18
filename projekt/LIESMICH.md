@@ -191,6 +191,13 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 - **Ringfeld:** [C] in der Bauphase wirft das Feld des aktiven Rings (2 Felder Radius). Fabriken darin bauen die Truppe des Rings auf seiner Stufe (1 spezialisiert, 2 Wertepaket, 3 die Fähigkeit); im Kampf liegen die Felder fest. Batterien und Türme wie immer.
 - **Aktiver Ring:** das Mausrad wechselt (die Hand schüttelt sich kurz, solange schießt nur rechts); nur er wirkt auf Brakks Pistolen: Durchschlag (durch 2 Gegner), Glutstrahl (+30 % Schaden), Takt (schneller, kühlt schneller), Wirbel (Dauerfeuer läuft an, heizt weniger), Sprung (Abpraller), Brand (Brandfeld), Gel (bremst; gebremste Gegner nehmen 30 % mehr Schaden von Brakk).
 
+**Am Handy** (Handy/Tablet ohne Maus; am PC ausprobieren mit `TD_TOUCH=1`, die Maus ist dann ein Finger) – Steuerung wie in Mobil-Shootern:
+- Links: schwebender Stick (erscheint, wo der Daumen aufsetzt) zum Laufen. Rechts: auf freier Fläche wischen dreht Blick und Fadenkreuz.
+- **Schießen von selbst:** liegt das Fadenkreuz auf einem Gegner (Klammern zeigen „erfasst“), drückt Brakk ab – zielen musst du selbst; auf dem Gegner dreht der Blick etwas langsamer (Zielbremse). Kein Überhitzen; die Doppellanze hat dafür fest ×1,5.
+- Knöpfe im Bogen rechts unten: Lanze (halten = laden, loslassen = feuern), Rolle, Treppe/Brücke, Anker, Säule, Zeitlupe, Klon, Ring (wechselt), Feld (Bauphase). Kein Sprung. Abklingzeit als dunkler Bogen mit Sekunden, gesperrte Knöpfe grau mit Stufe.
+- Fähigkeiten mit Ziel (Treppe/Brücke, Anker, Säule): **kurz tippen** = dort, wohin das Fadenkreuz zeigt; **halten und ziehen** = zielen mit Vorschau am Ziel (Raute, rotes Kreuz mit Grund, wenn nichts passt), loslassen = auslösen, auf „✕“ ziehen = abbrechen.
+- „Bauen“ oben links klappt die Bauliste auf (Eintrag tippen = wählen, nochmal = weglegen), der goldene Knopf baut am Fadenkreuz; derselbe Knopf heißt „Ausbauen“ vor einem Gebäude und „Ringe“ am Lichtterminal. Countdown antippen = Welle jetzt.
+
 ## Karten (18.11.)
 
 Karten sind Daten: `karten/<name>.json` (Größe, HQ, Zonenbauten, Schleuderplätze, Ausgänge für den Phantom-Modus, Basis fest/zufällig, Checkpoint-Bereiche oder feste Checkpoints, Gelände `fels`/`wasser`, vorgebaute Erdwälle `mauern`, dazu `mauern_fest` für die Herausforderung „Mauern fest“). Geladen in `Werte.lade_karte()`.
