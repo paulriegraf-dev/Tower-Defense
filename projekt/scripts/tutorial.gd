@@ -321,6 +321,23 @@ func _feld(z: Vector2i, r: float = 0.5) -> Rect2:
 	return Rect2(m - Vector2(h, h), Vector2(h, h) * 2.0)
 
 
+## Knöpfe oben rechts (18.11.): 0 = Schadensliste [Tab], 1 = Formationen [H], 2 = Übersicht [I].
+func _oben(i: int) -> Rect2:
+	var hud = spiel.get("_hud")
+	if hud == null or i >= (hud._oben_rechts as Array).size():
+		return Rect2()
+	var b: Control = hud._oben_rechts[i]
+	return b.get_global_rect() if b.is_visible_in_tree() else Rect2()
+
+
+## Die Turmformen über der Bauleiste (nur sichtbar, solange das Turm-Werkzeug gewählt ist).
+func _formen_rect() -> Rect2:
+	var hud = spiel.get("_hud")
+	if hud == null or hud._formen == null or not (hud._formen as Control).is_visible_in_tree():
+		return _knopf_von(Karte.TURM)
+	return (hud._formen as Control).get_global_rect()
+
+
 func _knopf_von(typ: int) -> Rect2:
 	var b: Button = spiel._knoepfe.get(typ)
 	return b.get_global_rect() if b != null else Rect2()
@@ -493,10 +510,20 @@ func _baue_schritte() -> Array:
 			"hinweis": "Linksklick auf eine Truppe",
 			"fertig": func(): return p.phase == BAU and p.welle >= 3},
 		# --- Formtürme
-		{"text": "Türme entstehen aus der Form deiner Erdwälle. Welche Form welchen Turm trägt, zeigt die Nachschlagekarte. Öffne sie.",
+		# 18.11. (Paul): Die Turmformen zeigt das Turm-Werkzeug [4], nicht die Formationen [H].
+		{"text": "Türme entstehen aus der Form deiner Erdwälle. Welche Form welchen Turm trägt, siehst du, sobald du das Turm-Werkzeug wählst. Drück 4.",
+			"hinweis": "Taste 4 · Turm",
+			"ziel": func(): return _knopf_von(Karte.TURM),
+			"fertig": func(): return p.werkzeug == Karte.TURM},
+		{"text": "T-Stück = Geschütz, Kreuzung = Funkturm, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilturm. Klickst du eine Form an, hängt sie als Vorlage an der Maus. Alle Erdwälle der Form sind Stützen: Fällt einer, schweigt der Turm. Leg das Werkzeug mit Rechtsklick wieder ab.",
+			"hinweis": "Rechtsklick · Werkzeug ablegen",
+			"ziel": func(): return _formen_rect(),
+			"fertig": func(): return p.werkzeug == Karte.FREI},
+		{"text": "Ganze Aufstellungen für die Karte – lange Schläuche, Kämme, Zitadellen – zeigt dir die Formationen-Karte oben rechts. Öffne sie.",
 			"hinweis": "Taste H · Formationen",
+			"ziel": func(): return _oben(1),
 			"fertig": func(): return p._nachschlag.visible},
-		{"text": "T-Stück = Geschütz, Kreuzung = Funkturm, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilturm. Alle Erdwälle der Form sind Stützen: Fällt einer, schweigt der Turm. Schließ die Karte wieder mit H.",
+		{"text": "Links wählst du eine Formation, rechts siehst du sie auf deiner Karte – mit Stärken und Schwächen. Schließ sie wieder mit H.",
 			"hinweis": "Taste H · schließen",
 			"fertig": func(): return not p._nachschlag.visible},
 		{"text": "Bau einen Turm: Setz Erdwälle zu einem T – ein Wall mit drei Nachbarn – und dann den Turm auf den mittleren. Komische Wallformen sind hier ausdrücklich erwünscht.",
@@ -531,11 +558,13 @@ func _baue_schritte() -> Array:
 			"ziel": func(): return _feld(p.karte.checkpoints[1], 0.6)},
 		{"text": "Oben steht immer, was als Nächstes kommt. Bevor eine neue Gegnerart auftaucht, kündige ich sie an. Alles über Gegner, Truppen und Bauten steht in der Übersicht. Öffne sie.",
 			"hinweis": "Taste I · Übersicht",
+			"ziel": func(): return _oben(2),
 			"fertig": func(): return p._lexikon.visible},
 		{"text": "Hier findest du jederzeit alle Werte und was gegen wen hilft. Schließ die Übersicht wieder mit I.",
 			"hinweis": "Taste I · schließen",
 			"fertig": func(): return not p._lexikon.visible},
-		{"text": "Halte während einer Welle [Tab] gedrückt: Die Schadensliste zeigt, welche Fabrik, welcher Turm und welche Batterie wie viel geleistet hat. Ein Klick auf einen Turm oder eine Batterie zeigt ihre Werte über die ganze Partie."},
+		{"text": "Drück [Tab] oder den Knopf oben rechts: Die Schadensliste zeigt, welche Fabrik, welcher Turm und welche Batterie wie viel geleistet hat. Nochmal [Tab] schließt sie. Ein Klick auf einen Turm oder eine Batterie zeigt ihre Werte über die ganze Partie.",
+			"ziel": func(): return _oben(0)},
 		# --- Abschluss
 		{"text": "Das war's. Abreißen geht mit Rechtsklick – was du in derselben Bauphase gebaut hast, gibt es voll zurück. Den Rest lernst du im Gefecht. Viel Erfolg, Kommandant. Sonde 7 Ende."},
 	]

@@ -22,3 +22,5 @@ verteidigung-20261117-160413.json
 # 17.11.2026, 18:00 (Hauptseite, mit Spiel-Update):
 angriff-20261117-175444.json
 verteidigung-20261117-173053.json
+# 18.11.2026, 15:10 (Hauptseite, mit Spiel-Update; Pool war seit 17.11. abends versehentlich nicht im Spiel):
+verteidigung-20261118-142823.json
