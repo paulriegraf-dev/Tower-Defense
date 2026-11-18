@@ -233,6 +233,10 @@ class Tafel extends CanvasLayer:
 					return
 
 	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			get_viewport().set_input_as_handled()   # 18.11.: Esc schließt das Fenster (wie „Abbrechen“)
+			queue_free()
+			return
 		if event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_KP_ENTER] and not knoepfe.is_empty():
 			get_viewport().set_input_as_handled()
 			queue_free()

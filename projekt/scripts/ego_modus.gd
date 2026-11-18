@@ -3253,6 +3253,19 @@ func _einflug_kamera(k: Camera3D) -> void:
 	k.rotation.x -= 0.75 * rest
 
 
+## 18.11. (Paul: „nicht so blockartig“): Einsatz-Tafel in drei Teilen – Kopf mit Warnstreifen, Tasten als
+## Tastenkappen (statt Fließtext), unten meldet sich Sonde 7 im Funkfenster und tippt den Ablauf.
+const BRIEFING_SONDE := "res://assets/sprites/tutorial/sonde7.png"
+const BRIEFING_HOLO := Color("6ee6ff")
+const BRIEFING_HOLO_TEXT := Color("c8f4ff")
+const BRIEFING_TIPPEN := 55.0   # Zeichen je Sekunde
+const BRIEFING_FUNK := "Kommandant, Sonde 7 hier. Heute gehst du selbst raus. Die Welle rollt nach dem Countdown an – [Enter] holt sie früher. Es werden viele, und Steine mit rotem Kreis fliegen auf dich: ausweichen! Fabriken bauen hier nicht aus, deine Ringe machen sie stark. Viel Glück. Sonde 7 Ende."
+const BRIEFING_FUNK_TOUCH := "Kommandant, Sonde 7 hier. Heute gehst du selbst raus. Die Welle rollt nach dem Countdown an. Es werden viele, und Steine mit rotem Kreis fliegen auf dich: ausweichen! Fabriken bauen hier nicht aus, deine Ringe machen sie stark. Viel Glück. Sonde 7 Ende."
+const BRIEFING_LICHTER := [[35, 40, 6, Color("6cecfe")], [49, 50, 6, Color("ff4a5e")], [18, 43, 4, Color("ff4a5e")]]
+var _briefing_t0 := -1
+var _sonde_bild: Texture2D = null
+
+
 func _male_briefing() -> void:
 	var ci := _briefing
 	var g := ci.get_viewport_rect().size
@@ -3261,47 +3274,106 @@ func _male_briefing() -> void:
 		var a := clampf(1.0 - _einflug / (EINFLUG_SEK * 0.6), 0.0, 1.0)
 		ci.draw_rect(Rect2(Vector2.ZERO, g), Color(0, 0, 0, a))
 		return
+	if _briefing_t0 < 0:
+		_briefing_t0 = Time.get_ticks_msec()
+	var zeit := (Time.get_ticks_msec() - _briefing_t0) / 1000.0
 	ci.draw_rect(Rect2(Vector2.ZERO, g), Color(0.02, 0.03, 0.05, 0.97))
-	var w := minf(920.0, g.x - 40.0)
-	var h := minf(440.0, g.y - 40.0)
+	for sy in range(0, int(g.y), 4):   # feine Bildzeilen
+		ci.draw_rect(Rect2(0, sy, g.x, 1), Color(LICHT, 0.025))
+	var w := minf(1040.0, g.x - 40.0)
+	var h := minf(580.0, g.y - 40.0)
 	var o := ((g - Vector2(w, h)) / 2.0).round()
-	ci.draw_rect(Rect2(o, Vector2(w, h)), Color(0.05, 0.06, 0.1, 1.0))
-	ci.draw_rect(Rect2(o, Vector2(w, h)), LICHT, false, 2.0)
-	Stil.schreibe(ci, o + Vector2(24, 34), "BRAKK-MODE", 34, LICHT)
-	Stil.schreibe(ci, o + Vector2(24, 66), "Kommandant Brakk hält die Front – diesmal bist du Brakk.", 18, Stil.TEXT_BLASS)
+	var ein := 1.0 - pow(1.0 - clampf(zeit / 0.35, 0.0, 1.0), 3.0)
+	o.y += roundf(14.0 * (1.0 - ein))
+	Stil.platte(ci, Rect2(o, Vector2(w, h)), 12.0, Color(0.04, 0.05, 0.08, 0.98), LICHT.darkened(0.35))
+	# Kopf: Titel, Unterzeile, Warnstreifen rechts, Trennlinie mit hellem Anfang
+	Stil.schreibe(ci, o + Vector2(32, 42), "BRAKK-MODE", 40, LICHT)
+	Stil.schreibe(ci, o + Vector2(32, 76), "Kommandant Brakk hält die Front – diesmal bist du Brakk.", 18, Stil.TEXT_BLASS)
+	for i in 7:
+		var sx := o.x + w - 60.0 - i * 18.0
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(sx, o.y + 26), Vector2(sx + 9, o.y + 26), Vector2(sx + 1, o.y + 50), Vector2(sx - 8, o.y + 50)]),
+			Color(Stil.GOLD, 0.55 - i * 0.07))
+	Stil.schreibe(ci, Vector2(o.x + w - 186.0 - Stil.breite("EINSATZ", 16), o.y + 38), "EINSATZ", 16, Color(Stil.GOLD, 0.8))
+	ci.draw_rect(Rect2(o.x + 32, o.y + 100, w - 64, 1), Color(LICHT, 0.3))
+	ci.draw_rect(Rect2(o.x + 32, o.y + 99, 120, 3), LICHT)
+	# Steuerung als Tastenkappen in zwei Spalten
 	var touch_an := Touch.ohne_maus()
-	var links: Array[String] = [
-		"WASD laufen, Maus zielen, Klick schießt – zwei Pistolen im Wechsel, jede überhitzt bei Dauerfeuer.",
-		"Shift Rolle · Leertaste Sprung · [E] Lichttreppe auf den Wall, oben Lichtbrücke.",
-		"[1]–[7] bauen (5 Felder Reichweite), [F] ausbauen. An der Basis: [F] Lichtterminal für Ringe.",
-		"Mausrad: aktiver Ring · [C] in der Bauphase: Ringfeld – Fabriken darin bauen seine Truppe.",
+	var tasten: Array = [
+		[["W", "A", "S", "D"], "laufen"],
+		[["Maus", "Klick"], "zielen, schießen – Pistolen im Wechsel"],
+		[["Shift", "Leer"], "Rolle · Sprung"],
+		[["E"], "Lichttreppe, oben Lichtbrücke"],
+		[["1–7"], "bauen (5 Felder Reichweite)"],
+		[["F"], "ausbauen · an der Basis: Lichtterminal"],
+		[["Rad"], "aktiver Ring"],
+		[["C"], "Ringfeld: Fabriken bauen seine Truppe"],
 	]
 	if touch_an:
-		links = [
-			"Links laufen, rechts wischen zum Zielen. Liegt das Fadenkreuz auf einem Gegner, schießt Brakk selbst.",
-			"Fähigkeiten tippen – oder halten und ziehen, um zu zielen.",
-			"Bauen, Ausbauen und Ringe über die Knöpfe am Rand.",
+		tasten = [
+			[["links"], "laufen"],
+			[["rechts"], "wischen zum Zielen – Brakk schießt selbst"],
+			[["tippen"], "Fähigkeiten auslösen"],
+			[["halten"], "und ziehen: Fähigkeit zielen"],
+			[["Rand"], "bauen, ausbauen, Ringe"],
 		]
-	var rechts: Array[String] = [
-		"Die Welle kommt nach dem Countdown von selbst – [Enter] holt sie früher.",
-		"Viele Gegner! Steine mit rotem Kreis fliegen auf dich: ausweichen.",
-		"Stufen schalten frei: Anker [Q], Doppellanze (Rechtsklick), Lichtsäule [X], Klonmaschine [R], Zeitlupe [V].",
-		"Fabriken haben hier keine Ausbauten – die Ringe machen sie stark.",
-	]
-	var sw := (w - 72.0) / 2.0
-	_briefing_spalte(ci, o + Vector2(24, 100), sw, "STEUERUNG", links)
-	_briefing_spalte(ci, o + Vector2(48 + sw, 100), sw, "ABLAUF", rechts)
-	_los_knopf = Rect2(Vector2(o.x + w / 2.0 - 130.0, o.y + h - 70.0), Vector2(260, 46))
+	Stil.schreibe(ci, o + Vector2(32, 126), "STEUERUNG", 18, Stil.GOLD)
+	var spalte := (w - 64.0) / 2.0
+	for i in tasten.size():
+		var reihe: Array = tasten[i]
+		var p := o + Vector2(32.0 + (i % 2) * spalte, 162.0 + (i / 2) * 44.0)
+		var sichtbar := clampf((zeit - 0.15 - i * 0.05) / 0.25, 0.0, 1.0)
+		if sichtbar <= 0.0:
+			continue
+		var x := p.x
+		for t: String in reihe[0]:
+			x += _briefing_taste(ci, Vector2(x, p.y), t, true, sichtbar) + 4.0
+		Stil.schreibe(ci, Vector2(x + 8.0, p.y), str(reihe[1]), 18, Color(Stil.TEXT, sichtbar))
+	# Freischaltbar mit den Stufen: gedimmte Kappen mit Namen
+	if not touch_an:
+		var y := o.y + 162.0 + 4 * 44.0 + 4.0
+		Stil.schreibe(ci, Vector2(o.x + 32, y), "MIT DEN STUFEN", 16, Stil.TEXT_BLASS)
+		var x := o.x + 32.0 + Stil.breite("MIT DEN STUFEN", 16) + 16.0
+		for f: Array in [["Q", "Anker"], ["RK", "Doppellanze"], ["X", "Lichtsäule"], ["R", "Klon"], ["V", "Zeitlupe"]]:
+			x += _briefing_taste(ci, Vector2(x, y), str(f[0]), false, 1.0) + 6.0
+			Stil.schreibe(ci, Vector2(x, y), str(f[1]), 16, Stil.TEXT_BLASS)
+			x += Stil.breite(str(f[1]), 16) + 18.0
+	# Funkfenster: Sonde 7 tippt den Ablauf
+	var funk := Rect2(o.x + 32, o.y + 386, w - 64, 112)
+	Stil.platte(ci, funk, 6.0, Color(0.03, 0.10, 0.16, 0.92), BRIEFING_HOLO.darkened(0.25))
+	if _sonde_bild == null:
+		_sonde_bild = load(BRIEFING_SONDE)
+	var bild := Rect2(funk.position + Vector2(8, 8), Vector2(96, 96))
+	ci.draw_rect(bild, Color(0.01, 0.04, 0.07))
+	if _sonde_bild != null:
+		ci.draw_texture_rect(_sonde_bild, bild, false)
+	var text := BRIEFING_FUNK_TOUCH if touch_an else BRIEFING_FUNK
+	var gezeigt := int(maxf(zeit - 0.5, 0.0) * BRIEFING_TIPPEN)
+	var spricht := gezeigt < text.length()
+	for l: Array in BRIEFING_LICHTER:
+		var staerke := (0.35 + 0.65 * absf(sin(zeit * 11.0 + float(l[0])))) if spricht else 0.25
+		var lp := bild.position + Vector2(float(l[0]), float(l[1]))
+		ci.draw_circle(lp, float(l[2]) * 1.6, Color(l[3], 0.22 * staerke))
+		ci.draw_circle(lp, float(l[2]) * 0.8, Color(l[3], 0.55 * staerke))
+	ci.draw_rect(bild, BRIEFING_HOLO.darkened(0.3), false, 1.0)
+	var tx := bild.end.x + 16.0
+	Stil.schreibe(ci, Vector2(tx, funk.position.y + 18.0), "SONDE 7 · LEITSTELLE", 16, BRIEFING_HOLO)
+	if spricht and fmod(zeit, 0.5) < 0.25:
+		ci.draw_circle(Vector2(tx + Stil.breite("SONDE 7 · LEITSTELLE", 16) + 10.0, funk.position.y + 18.0), 3.0, Stil.ROT)
+	Stil.absatz(ci, Vector2(tx, funk.position.y + 30.0), text.left(gezeigt), funk.end.x - tx - 14.0, 18, BRIEFING_HOLO_TEXT)
+	# Los-Knopf mit abgeschrägten Ecken
+	_los_knopf = Rect2(Vector2(o.x + w / 2.0 - 140.0, o.y + h - 66.0), Vector2(280, 44))
 	var puls := 0.75 + 0.25 * sin(Time.get_ticks_msec() / 220.0)
-	ci.draw_rect(_los_knopf, Color(LICHT, 0.18 * puls))
-	ci.draw_rect(_los_knopf, LICHT, false, 2.0)
+	Stil.platte(ci, _los_knopf, 8.0, Color(LICHT.darkened(0.6), 0.6 + 0.3 * puls), LICHT)
 	Stil.schreibe_mittig(ci, _los_knopf.get_center(), "Los geht's" + ("" if touch_an else "  [Enter]"), 22, Color.WHITE)
 
 
-func _briefing_spalte(ci: CanvasItem, o: Vector2, breite: float, titel: String, zeilen: Array[String]) -> void:
-	Stil.schreibe(ci, o, titel, 18, Stil.GOLD)
-	var y := o.y + 22.0
-	for z: String in zeilen:
-		ci.draw_rect(Rect2(o.x, y + 6.0, 6.0, 6.0), LICHT)
-		Stil.absatz(ci, Vector2(o.x + 14.0, y), z, breite - 14.0, 16, Stil.TEXT)
-		y += Stil.absatz_groesse(z, breite - 14.0, 16).y + 12.0
+## Eine Tastenkappe mit linker Mitte `p`; gibt ihre Breite zurück. `aktiv = false`: gedimmt (noch gesperrt).
+func _briefing_taste(ci: CanvasItem, p: Vector2, t: String, aktiv: bool, a: float) -> float:
+	var groesse := 18 if aktiv else 16
+	var bw := maxf(28.0 if aktiv else 24.0, Stil.breite(t, groesse) + 14.0)
+	var hh := 28.0 if aktiv else 22.0
+	var r := Rect2(p.x, p.y - hh / 2.0, bw, hh)
+	ci.draw_rect(Rect2(r.position + Vector2(0, 3), r.size), Color(0, 0, 0, 0.5 * a))   # Kappe steht etwas hoch
+	Stil.platte(ci, r, 3.0, Color(Stil.METALL_TIEF, a), Color(LICHT if aktiv else Stil.RAHMEN, a))
+	Stil.schreibe_mittig(ci, r.get_center(), t, groesse, Color(Color.WHITE if aktiv else Stil.TEXT_BLASS, a))
+	return bw

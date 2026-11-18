@@ -614,36 +614,76 @@ func _male_erfolge(ci: Control) -> void:
 
 
 ## Rangliste im Phantom-Menü: beste Angriffe und stärkste Verteidigungen (Elo). Ohne Verbindung der eingebaute Pool.
+## 18.11. (Paul): wie ein Leaderboard – Platzabzeichen (Gold, Silber, Bronze), jede Zeile eine eigene Leiste,
+## die eigene Zeile leuchtet, der Verbindungsstand als Pille oben rechts.
+const SILBER := Color("c9d4e0")
+const RANG_ZEILE := 17.0
+
 func _male_rangliste(ci: Control) -> void:
-	Stil.platte(ci, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	Stil.platte(ci, TAFEL, 6.0, Color(0.05, 0.06, 0.09, 0.9), Stil.RAHMEN)
 	var x := TAFEL.position.x + 12.0
 	var rechts := TAFEL.end.x - 12.0
 	var y := TAFEL.position.y + 14.0
-	Stil.schreibe(ci, Vector2(x, y), "RANGLISTE", Stil.NORMAL, LICHT)
-	var stand: String = {"laedt": "lädt …", "online": "online", "offline": "offline · eingebaut", "unbekannt": "…"}.get(Online.zustand, "")
+	ci.draw_rect(Rect2(TAFEL.position.x + 12.0, TAFEL.position.y + 3.0, 60.0, 1.0), LICHT)   # Lichtkante oben
+	Stil.schreibe(ci, Vector2(x, y), "RANGLISTE", Stil.GROSS, LICHT)
+	# Stand als Pille: grüner Punkt pulsiert, solange online
+	var stand: String = {"laedt": "lädt …", "online": "online", "offline": "offline", "unbekannt": "…"}.get(Online.zustand, "")
 	if Online.zustand == "online" and not Online.bereit():
-		stand = "online · noch leer"
-	Stil.schreibe(ci, Vector2(rechts - Stil.breite(stand, Stil.KLEIN), y), stand, Stil.KLEIN, Stil.TEXT_BLASS if Online.zustand != "online" else Color("8fe39a"))
-	y += 22.0
+		stand = "noch leer"
+	var gruen := Online.zustand == "online"
+	var sf: Color = Color("8fe39a") if gruen else Stil.TEXT_BLASS
+	var pw := Stil.breite(stand, Stil.KLEIN) + 18.0
+	var pille := Rect2(rechts - pw, y - 6.0, pw, 12.0)
+	Stil.platte(ci, pille, 3.0, Color(sf, 0.1), Color(sf, 0.6))
+	ci.draw_circle(pille.position + Vector2(7.0, 6.0), 2.0, Color(sf, 0.55 + 0.45 * absf(sin(_zeit * 3.0))) if gruen else Color(sf, 0.6))
+	Stil.schreibe(ci, pille.position + Vector2(12.0, 6.0), stand, Stil.KLEIN, sf)
+	y += 20.0
 	var mein := Profil.id()
 	for art: String in ["angriff", "verteidigung"]:
-		Stil.schreibe(ci, Vector2(x, y), "Beste Angriffe" if art == "angriff" else "Stärkste Verteidigungen", Stil.NORMAL, KUPFER_HELL if art == "angriff" else LICHT)
-		Stil.schreibe(ci, Vector2(rechts - Stil.breite("Elo", Stil.KLEIN), y), "Elo", Stil.KLEIN, Stil.TEXT_BLASS)
-		y += 16.0
+		var farbe: Color = KUPFER_HELL if art == "angriff" else LICHT
+		var titel := "BESTE ANGRIFFE" if art == "angriff" else "STÄRKSTE VERTEIDIGUNG"
+		# Abschnittskopf: Name, Linie, schräge Streifen, „ELO“
+		Stil.symbol(ci, "panzer" if art == "angriff" else "wall", Vector2(x + 5.0, y), 1.0, farbe)
+		Stil.schreibe(ci, Vector2(x + 13.0, y), titel, Stil.KLEIN, farbe)
+		var lx := x + 17.0 + Stil.breite(titel, Stil.KLEIN)
+		var ende := rechts - 40.0
+		ci.draw_rect(Rect2(lx, y, ende - lx, 1.0), Color(farbe, 0.3))
+		for s in 4:
+			var sx := ende + 4.0 + s * 4.0
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(sx, y + 3), Vector2(sx + 2, y + 3), Vector2(sx + 4, y - 3), Vector2(sx + 2, y - 3)]), Color(farbe, 0.6 - s * 0.12))
+		Stil.schreibe(ci, Vector2(rechts - Stil.breite("ELO", Stil.KLEIN), y), "ELO", Stil.KLEIN, Stil.TEXT_BLASS)
+		y += 11.0
 		var zeilen := _ranglisten_zeilen(art)
 		if zeilen.is_empty():
-			Stil.schreibe(ci, Vector2(x + 4.0, y), "noch niemand", Stil.KLEIN, Stil.TEXT_BLASS)
-			y += 14.0
+			Stil.platte(ci, Rect2(x, y, rechts - x, RANG_ZEILE - 2.0), 3.0, Stil.METALL_TIEF, Stil.RAHMEN)
+			Stil.schreibe(ci, Vector2(x + 8.0, y + 7.5), "noch niemand – sei der Erste", Stil.KLEIN, Stil.TEXT_BLASS)
+			y += RANG_ZEILE
 		for i in zeilen.size():
-			var z: Array = zeilen[i]
-			var farbe: Color = Color.WHITE if str(z[3]) == mein else Stil.TEXT
-			Stil.schreibe(ci, Vector2(x, y), "%d" % (i + 1), Stil.NORMAL, Stil.GOLD if i == 0 else Stil.TEXT_BLASS)
-			Stil.schreibe(ci, Vector2(x + 14.0, y), str(z[0]), Stil.NORMAL, farbe)
-			Stil.schreibe(ci, Vector2(x + 14.0 + 78.0, y), str(z[1]), Stil.KLEIN, Stil.TEXT_BLASS)
-			var elo := str(z[2])
-			Stil.schreibe(ci, Vector2(rechts - Stil.breite(elo, Stil.NORMAL), y), elo, Stil.NORMAL, farbe)
-			y += 14.0
-		y += 12.0
+			_rang_zeile(ci, Rect2(x, y, rechts - x, RANG_ZEILE - 2.0), i, zeilen[i], str(zeilen[i][3]) == mein and mein != "", farbe)
+			y += RANG_ZEILE
+		y += 10.0
+	Stil.absatz(ci, Vector2(x, TAFEL.end.y - 26.0), "Elo steigt mit jedem Sieg – ein Sieg gegen Stärkere bringt mehr.", rechts - x, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))
+
+
+## Eine Zeile: Platzabzeichen links, daneben die Leiste mit Name, Zusatz und Elo.
+func _rang_zeile(ci: Control, r: Rect2, i: int, z: Array, eigen: bool, farbe: Color) -> void:
+	var medaille: Color = [Stil.GOLD, SILBER, Stil.KUPFER][i] if i < 3 else Stil.RAHMEN
+	var abz := Rect2(r.position, Vector2(r.size.y, r.size.y))
+	Stil.platte(ci, abz, 3.0, Color(medaille, 0.18) if i < 3 else Stil.METALL_TIEF, medaille)
+	Stil.schreibe_mittig(ci, abz.get_center(), "%d" % (i + 1), Stil.NORMAL, medaille if i < 3 else Stil.TEXT_BLASS)
+	var leiste := Rect2(abz.end.x + 3.0, r.position.y, r.end.x - abz.end.x - 3.0, r.size.y)
+	var innen := Color(LICHT, 0.14) if eigen else (Color(medaille, 0.07) if i < 3 else Stil.METALL_TIEF)
+	Stil.platte(ci, leiste, 3.0, innen, LICHT if eigen else (Color(medaille, 0.55) if i == 0 else Stil.RAHMEN))
+	if i == 0:
+		ci.draw_rect(Rect2(leiste.position.x + 2.0, leiste.position.y + 2.0, 2.0, leiste.size.y - 4.0), Stil.GOLD)   # Spitzenreiter-Kante
+	var m := leiste.get_center().y
+	var name_farbe: Color = Color.WHITE if eigen or i == 0 else Stil.TEXT
+	Stil.schreibe(ci, Vector2(leiste.position.x + 7.0, m), str(z[0]), Stil.NORMAL, name_farbe)
+	if eigen:
+		Stil.schreibe(ci, Vector2(leiste.position.x + 9.0 + Stil.breite(str(z[0]), Stil.NORMAL), m), "du", Stil.KLEIN, LICHT)
+	Stil.schreibe(ci, Vector2(leiste.position.x + 92.0, m), str(z[1]), Stil.KLEIN, Stil.TEXT_BLASS)
+	var elo := str(z[2])
+	Stil.schreibe(ci, Vector2(leiste.end.x - 6.0 - Stil.breite(elo, Stil.NORMAL), m), elo, Stil.NORMAL, Stil.GOLD if i == 0 else farbe.lerp(Stil.TEXT, 0.5))
 
 
 ## [Name, Zusatz, Elo-Text, Profil-ID] für die besten sechs einer Art.
@@ -884,10 +924,14 @@ func _male(ci: Control) -> void:
 	_male_tc_emblem(ci)
 
 
-## 18.11.: Vorschaubild der gewählten Karte rechts neben der Liste (Gelände, Mauern, Basis, Checkpoints) und ihre Eckdaten.
+## 18.11.: Steckbrief der gewählten Karte rechts neben der Liste. (Paul 18.11.: statt des Minikarten-Bilds –
+## das sah grob aus.) Titel und Beschreibung, Eckdaten als Kacheln, Gelände als Farbmarken, Regeln, Herausforderung.
 const KARTENBILD := Rect2(372, 128, 252, 170)
 const BILD_FARBEN := {"fels": Color("7a7064"), "wasser": Color("2b5d8a"), "anhoehe": Color("b9ad6a"), "sumpf": Color("3d4a2c"),
-	"bruecke": Color("8a6239"), "ruine": Color("8d8a96"), "wald": Color("244a26"), "erz": Color("c98a3d"), "eis": Color("cfe9f5"), "minen": Color("6b3b3b")}
+	"bruecke": Color("8a6239"), "ruine": Color("8d8a96"), "wald": Color("244a26"), "erz": Color("c98a3d"), "eis": Color("cfe9f5"), "minen": Color("6b3b3b"),
+	"mauern": Color("c49b63")}
+const GELAENDE_NAMEN := {"fels": "Fels", "wasser": "Wasser", "anhoehe": "Anhöhe", "sumpf": "Sumpf", "bruecke": "Brücke", "ruine": "Ruine",
+	"wald": "Wald", "erz": "Erzader", "eis": "Eis", "minen": "Minen", "mauern": "Mauern"}
 
 var _kartenbild_daten := {}   # Kartenname -> Daten (nicht jedes Bild die Datei lesen)
 
@@ -897,50 +941,84 @@ func _male_kartenbild(ci: Control, kname: String) -> void:
 	var k: Dictionary = _kartenbild_daten[kname]
 	if k.is_empty():
 		return
-	var sp := int(k["spalten"])
-	var ze := int(k["zeilen"])
-	var c := floorf(minf((KARTENBILD.size.x - 8.0) / sp, (KARTENBILD.size.y - 26.0) / ze))
-	var feld_r := Rect2(KARTENBILD.position + Vector2((KARTENBILD.size.x - c * sp) / 2.0, 4.0), Vector2(c * sp, c * ze))
-	Stil.platte(ci, Rect2(KARTENBILD.position, Vector2(KARTENBILD.size.x, feld_r.size.y + 26.0)), 3.0, Stil.METALL_DUNKEL, Stil.RAHMEN)
-	ci.draw_rect(feld_r, Color("4f7d45"))
-	ci.draw_rect(Rect2(feld_r.position, Vector2(c * Werte.ZONE_SPALTEN, feld_r.size.y)), Color("6b4a2f"))
-	var zelle := func(p: Variant) -> Rect2:
-		return Rect2(feld_r.position + Vector2(float(p[0]), float(p[1])) * c, Vector2(c, c))
-	for art: String in BILD_FARBEN:
-		for p: Variant in k.get(art, []):
-			ci.draw_rect(zelle.call(p), BILD_FARBEN[art])
-	for p: Variant in k.get("mauern", []):
-		ci.draw_rect((zelle.call(p) as Rect2).grow(-c * 0.12), Color("c49b63"))
-	if _wahl_herausforderung == "mauern_fest":
-		for p: Variant in k.get("mauern_fest", []):
-			ci.draw_rect((zelle.call(p) as Rect2).grow(-c * 0.12), Color("b07cff"))
-	# Checkpoints: Bereiche als Rahmen (gewürfelt) oder feste Felder
-	var cp_farben := [Color("ffd34d"), Color("7fe0ff")]
-	for i in 2:
-		if bool(k.get("checkpoints_fest", false)):
-			var r: Rect2 = zelle.call(k["checkpoints"][i])
-			ci.draw_circle(r.get_center(), maxf(c * 0.45, 1.5), cp_farben[i])
-		else:
-			var b: Array = k["checkpoint_bereiche"][i]
-			ci.draw_rect(Rect2(feld_r.position + Vector2(float(b[0]), float(b[1])) * c, Vector2(float(b[2]), float(b[3])) * c).grow(-float(i)), cp_farben[i], false, 1.0)
-	# Basis (3×2) – zufällige Basis nur angedeutet
-	var bz: Array = k["basis"]
-	var basis_r := Rect2(feld_r.position + Vector2(float(bz[0]) - 1.0, float(bz[1]) - 1.0) * c, Vector2(3, 2) * c)
-	if bool(k.get("basis_fest", false)):
-		ci.draw_rect(basis_r, Color("6a5391"))
-	else:
-		ci.draw_rect(basis_r, Color("6a5391"), false, 1.0)
-	# Eckdaten
 	var r_: Variant = k.get("regeln", {})
 	var regeln: Dictionary = r_ if r_ is Dictionary else {}
-	var text := "%d×%d · %d Runden · Budget %d · %d Leben" % [sp, ze, int(regeln.get("runden", Werte.STANDARD_RUNDEN)),
-		int(regeln.get("start_budget", Werte.STANDARD_BUDGET)), int(regeln.get("start_leben", Werte.STANDARD_LEBEN))]
-	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 7.0), text, Stil.KLEIN, Stil.TEXT)
-	var basis_text := "Basis fest" if bool(k.get("basis_fest", false)) else "Basis zufällig"
-	var cp_text := "Checkpoints fest" if bool(k.get("checkpoints_fest", false)) else "Checkpoints gewürfelt"
+	var x := KARTENBILD.position.x + 12.0
+	var rechts := KARTENBILD.end.x - 12.0
+	var weite := rechts - x
+	var beschreibung := str(k.get("beschreibung", ""))
+	var h_text := Stil.absatz_groesse(beschreibung, weite, Stil.KLEIN).y if beschreibung != "" else 0.0
+	var hf := Werte.herausforderung_text(_wahl_herausforderung) if _wahl_herausforderung != "" else ""
+	var h_hf := Stil.absatz_groesse(hf, weite - 12.0, Stil.KLEIN).y + 22.0 if hf != "" else 0.0
+	# Gelände vorab in Zeilen legen (für die Höhe der Tafel)
+	var g0 := x + Stil.breite("GELÄNDE", Stil.KLEIN) + 8.0
+	var marken: Array = []   # [Art, Name, x, Zeile]
+	var mx := g0
+	var zeile := 0
+	for art: String in GELAENDE_NAMEN:
+		if (k.get(art, []) as Array).is_empty():
+			continue
+		var n: String = GELAENDE_NAMEN[art]
+		var bw := 9.0 + Stil.breite(n, Stil.KLEIN) + 8.0
+		if mx + bw > rechts + 8.0:
+			mx = g0
+			zeile += 1
+		marken.append([art, n, mx, zeile])
+		mx += bw
+	var hoehe := 30.0 + h_text + 6.0 + 40.0 + 18.0 + zeile * 12.0 + 16.0 + h_hf + 8.0
+	var rahmen := Rect2(KARTENBILD.position, Vector2(KARTENBILD.size.x, hoehe))
+	Stil.platte(ci, rahmen, 6.0, Color(0.05, 0.06, 0.09, 0.9), Stil.RAHMEN)
+	ci.draw_rect(Rect2(x, rahmen.position.y + 3.0, 60.0, 1.0), LICHT)
+	var y := rahmen.position.y + 13.0
+	Stil.schreibe(ci, Vector2(x, y), str(k.get("name", kname)).to_upper(), Stil.GROSS, LICHT)
+	if Werte.ist_eigene_karte(kname):
+		var ew := Stil.breite("EIGENE", Stil.KLEIN) + 8.0
+		Stil.platte(ci, Rect2(rechts - ew, y - 6.0, ew, 12.0), 2.0, Color(KUPFER_HELL, 0.12), KUPFER_HELL)
+		Stil.schreibe(ci, Vector2(rechts - ew + 4.0, y), "EIGENE", Stil.KLEIN, KUPFER_HELL)
+	y += 12.0
+	if beschreibung != "":
+		Stil.absatz(ci, Vector2(x, y), beschreibung, weite, Stil.KLEIN, Stil.TEXT_BLASS)
+		y += h_text
+	y += 6.0
+	# Eckdaten als Kacheln
+	var kacheln := [
+		["GRÖSSE", "%d×%d" % [int(k["spalten"]), int(k["zeilen"])], Stil.TEXT],
+		["RUNDEN", str(int(regeln.get("runden", Werte.STANDARD_RUNDEN))), LICHT],
+		["BUDGET", str(int(regeln.get("start_budget", Werte.STANDARD_BUDGET))), Stil.GOLD],
+		["LEBEN", str(int(regeln.get("start_leben", Werte.STANDARD_LEBEN))), Stil.ROT]]
+	var kb := (weite - 9.0) / 4.0
+	for i in kacheln.size():
+		var kr := Rect2(roundf(x + i * (kb + 3.0)), y, roundf(kb), 34.0)
+		Stil.platte(ci, kr, 2.0, Stil.METALL_TIEF, Stil.RAHMEN)
+		ci.draw_rect(Rect2(kr.position.x + 3.0, kr.position.y + 2.0, kr.size.x - 6.0, 1.0), Color(kacheln[i][2], 0.6))
+		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 13.0), kacheln[i][1], Stil.GROSS, kacheln[i][2])
+		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 26.0), kacheln[i][0], Stil.KLEIN, Stil.TEXT_BLASS)
+	y += 40.0
+	# Gelände: Farbmarken für alles, was auf der Karte liegt (bis zwei Zeilen)
+	Stil.schreibe(ci, Vector2(x, y + 4.0), "GELÄNDE", Stil.KLEIN, Stil.TEXT_BLASS)
+	for m: Array in marken:
+		var my := y + 4.0 + int(m[3]) * 12.0
+		ci.draw_rect(Rect2(float(m[2]), my - 3.0, 6.0, 6.0), BILD_FARBEN[m[0]])
+		ci.draw_rect(Rect2(float(m[2]), my - 3.0, 6.0, 6.0), Color(0, 0, 0, 0.5), false, 1.0)
+		Stil.schreibe(ci, Vector2(float(m[2]) + 9.0, my), str(m[1]), Stil.KLEIN, Stil.TEXT)
+	if marken.is_empty():
+		Stil.schreibe(ci, Vector2(g0, y + 4.0), "freies Feld", Stil.KLEIN, Stil.TEXT)
+	y += 18.0 + zeile * 12.0
+	# Regeln als Zeile
 	var ziel := str(regeln.get("ziel", "gegenangriff"))
-	var ziel_text := ("Ziel: " + Werte.ziel_name(ziel) + " · ") if ziel != "gegenangriff" else ""   # 18.11.: Spielziel
-	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 17.0), ziel_text + basis_text + " · " + cp_text, Stil.KLEIN, Stil.TEXT_BLASS)
+	var teile: Array[String] = []
+	if ziel != "gegenangriff":
+		teile.append("Ziel: " + Werte.ziel_name(ziel))
+	teile.append("Basis fest" if bool(k.get("basis_fest", false)) else "Basis zufällig")
+	teile.append("Checkpoints fest" if bool(k.get("checkpoints_fest", false)) else "Checkpoints gewürfelt")
+	Stil.schreibe(ci, Vector2(x, y), " · ".join(teile), Stil.KLEIN, Stil.TEXT_BLASS)
+	y += 12.0
+	# Gewählte Herausforderung als kupferner Kasten
+	if hf != "":
+		var hr := Rect2(x, y, weite, h_hf - 4.0)
+		Stil.platte(ci, hr, 3.0, Color(KUPFER_HELL, 0.08), Color(KUPFER_HELL, 0.7))
+		Stil.schreibe(ci, Vector2(x + 6.0, y + 8.0), Werte.herausforderung_name(_wahl_herausforderung).to_upper(), Stil.KLEIN, KUPFER_HELL)
+		Stil.absatz(ci, Vector2(x + 6.0, y + 14.0), hf, weite - 12.0, Stil.KLEIN, Stil.TEXT)
 
 
 ## Die drei Technoclan-Truppen posieren rechts auf der Bühne (Standbilder, leicht atmend).

@@ -442,7 +442,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_ESCAPE:
 		if spiel._laufband.visible:
 			spiel._laufband.visible = false
-			get_viewport().set_input_as_handled()
+		else:
+			_hauptmenue()   # 18.11. (Paul): Esc öffnet das Menü – leichter aus dem Editor heraus
+		get_viewport().set_input_as_handled()
 
 
 ## 18.11.: Beim schnellen Ziehen liegen zwischen zwei Mausmeldungen mehrere Felder – alle dazwischen mitmalen.
