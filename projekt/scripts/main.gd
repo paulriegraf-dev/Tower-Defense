@@ -57,6 +57,7 @@ const BRAKK_GEGNER_MAL := 2.2          # 18.11. (Paul): Brakk-Mode – so viele 
 const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel mehr Leben
 const BRAKK_ABSTAND_MAL := 0.5             # 18.11. (Paul): Gegner eines Trupps starten dichter …
 const BRAKK_PAUSE_MAL := 0.6               # … und zwischen zwei Trupps vergeht weniger Zeit
+const BRAKK_FABRIK_PROZENT := 10.0         # 18.11. (Paul): Brakk-Mode – jede weitere Fabrik nur 10 % teurer (sonst 25 %), für mehrere Ring-Standorte
 var _brakk_praemie := 0.0                # Bruchteile der gedrittelten Prämie
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var gegner: Array[Gegner] = []
@@ -701,6 +702,11 @@ func _verdoppelt(w: Dictionary, mal: int = 2) -> Dictionary:   # 18.11.: `mal` �
 				neu.append(e.duplicate(true) if e is Array else e)
 		d[schluessel] = neu
 	return d
+
+
+## 18.11.: um so viel Prozent wird jede weitere Fabrik teurer (Brakk-Mode weniger).
+func fabrik_prozent() -> float:
+	return BRAKK_FABRIK_PROZENT if brakk_modus else Werte.KOSTEN_FABRIK_PROZENT
 
 
 ## 18.11. (Paul): Brakk-Mode – jeder Trupp kommt mit `mal`-facher Stärke auf einmal (statt mehrerer Trupps nacheinander),
@@ -4166,7 +4172,7 @@ func kosten(typ: int) -> int:
 		Karte.BATTERIE:
 			return batterie_preis(_batterien())
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
-	return int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + Werte.KOSTEN_FABRIK_PROZENT / 100.0, _normale_fabriken()) / 5.0)) * 5
+	return int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + fabrik_prozent() / 100.0, _normale_fabriken()) / 5.0)) * 5
 
 
 ## 17.11.: Jede weitere Batterie kostet KOSTEN_BATTERIE_PROZENT mehr (gegen Batterie-Spam), auf 5 gerundet.
@@ -4404,7 +4410,7 @@ func erstattung(z: Vector2i) -> int:
 			pass   # aus dem Startpaket: gratis gebaut, gibt nichts zurück
 		elif war == Karte.FABRIK:
 			# der Preis, den die zuletzt gebaute Fabrik gekostet hat
-			alt += int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + Werte.KOSTEN_FABRIK_PROZENT / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
+			alt += int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + fabrik_prozent() / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
 		else:
 			alt += kosten_bei(z, war)   # 18.11.: auf der Ruine zählt der billigere Preis
 	var ausbau: int = karte.ausbau.get(z, Karte.FREI)

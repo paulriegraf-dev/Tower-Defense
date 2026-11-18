@@ -730,7 +730,7 @@ func _baue_daten() -> void:
 				["Ringe (Lichtterminal: [F] an der Basis)", Stil.GOLD, [
 				"Kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe 1, 3, 5, 7, 9.",
 				"[C] in der Bauphase wirft das Ringfeld: Fabriken darin bauen die Truppe des Rings auf seiner Stufe.",
-				"Mausrad wählt den aktiven Ring – er gibt Brakks Pistolen seinen Effekt und färbt Treppe, Brücke, Anker und Säule. Fabriken haben hier keine Ausbauten."]]]},
+				"Mausrad wählt den aktiven Ring – er gibt Brakks Pistolen seinen Effekt und färbt Treppe, Brücke, Anker und Säule. Fabriken haben hier keine Ausbauten und werden nur um 10 % teurer statt 25 %."]]]},
 		]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
 	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "marke_farbe": Stil.LEUCHT, "bild": _figur(pilot),
