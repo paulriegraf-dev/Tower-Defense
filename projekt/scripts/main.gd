@@ -1491,6 +1491,7 @@ func _process(delta: float) -> void:
 	_magnete_ziehen(delta)
 	_batterien_feuern(delta)
 	_checkpoints_halten(delta)
+	_minen_pruefen()
 
 	# Sprenger sichtbar machen: ihr Ziel blinkt während der Runde
 	var ziele: Array[Vector2i] = []
@@ -2328,6 +2329,10 @@ func starte_welle() -> void:
 	_trupp = []
 	_im_flug = 0
 	_wurf_schlange = []
+	_minen_scharf = {}   # 18.11.: jede Mine liegt zu Rundenbeginn wieder
+	for z: Vector2i in karte.boden:
+		if karte.boden[z] == "minen":
+			_minen_scharf[z] = true
 	_durchgang = 0
 	_abgesetzt.clear()
 	_ausfall_zeit.clear()
@@ -2577,6 +2582,22 @@ func _welle_geschafft() -> void:
 	melde(text + ".", 5.0)
 	_schliesse_runde("geschafft")
 	_naechste_bauphase()
+
+
+## 18.11.: Minenfeld – der erste Gegner am Boden auf einem scharfen Feld löst die Mine aus (einmal je Runde).
+var _minen_scharf: Dictionary = {}
+
+func _minen_pruefen() -> void:
+	if _minen_scharf.is_empty():
+		return
+	for g in gegner:
+		if not is_instance_valid(g) or g._auf_wall:
+			continue
+		var z := karte.zelle_bei(g.position)
+		if _minen_scharf.has(z):
+			_minen_scharf.erase(z)
+			effekte.fx("spreng", karte.mitte(z) + Vector2(0, 20), 0.4)
+			g.nimm_schaden(Werte.MINE_SCHADEN)
 
 
 ## 18.11. (Etappe 2): Erzadern – jede Fabrik oder jeder Turm auf einer Erzader bringt ERZ_BONUS je Runde.

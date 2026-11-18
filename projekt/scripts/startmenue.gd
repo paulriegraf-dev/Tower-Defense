@@ -108,6 +108,7 @@ func _zeige(seite: String) -> void:
 	if seite == "phantom":
 		Online.lade_listen()   # Rangliste auffrischen
 	_seite = seite
+	_kartenbild_daten.clear()   # 18.11.: Karten können sich geändert haben (Import, Editor)
 	_wahl = 0
 	_meldung = ""
 	_baue()
@@ -805,6 +806,8 @@ func _male(ci: Control) -> void:
 		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else Stil.WARN)
 	if _seite == "phantom":
 		_male_rangliste(ci)
+	elif _seite == "herausforderung":
+		_male_kartenbild(ci, _wahl_karte)
 	elif _seite == "grafik":
 		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
 	elif _seite == "profil":
@@ -814,6 +817,63 @@ func _male(ci: Control) -> void:
 			_male_profil_tafel(ci)
 	_male_profil_schild(ci)
 	_male_tc_emblem(ci)
+
+
+## 18.11.: Vorschaubild der gewählten Karte rechts neben der Liste (Gelände, Mauern, Basis, Checkpoints) und ihre Eckdaten.
+const KARTENBILD := Rect2(372, 128, 252, 170)
+const BILD_FARBEN := {"fels": Color("7a7064"), "wasser": Color("2b5d8a"), "anhoehe": Color("b9ad6a"), "sumpf": Color("3d4a2c"),
+	"bruecke": Color("8a6239"), "ruine": Color("8d8a96"), "wald": Color("244a26"), "erz": Color("c98a3d"), "eis": Color("cfe9f5"), "minen": Color("6b3b3b")}
+
+var _kartenbild_daten := {}   # Kartenname -> Daten (nicht jedes Bild die Datei lesen)
+
+func _male_kartenbild(ci: Control, kname: String) -> void:
+	if not _kartenbild_daten.has(kname):
+		_kartenbild_daten[kname] = Werte.karten_daten(kname)
+	var k: Dictionary = _kartenbild_daten[kname]
+	if k.is_empty():
+		return
+	var sp := int(k["spalten"])
+	var ze := int(k["zeilen"])
+	var c := floorf(minf((KARTENBILD.size.x - 8.0) / sp, (KARTENBILD.size.y - 26.0) / ze))
+	var feld_r := Rect2(KARTENBILD.position + Vector2((KARTENBILD.size.x - c * sp) / 2.0, 4.0), Vector2(c * sp, c * ze))
+	Stil.platte(ci, Rect2(KARTENBILD.position, Vector2(KARTENBILD.size.x, feld_r.size.y + 26.0)), 3.0, Stil.METALL_DUNKEL, Stil.RAHMEN)
+	ci.draw_rect(feld_r, Color("4f7d45"))
+	ci.draw_rect(Rect2(feld_r.position, Vector2(c * Werte.ZONE_SPALTEN, feld_r.size.y)), Color("6b4a2f"))
+	var zelle := func(p: Variant) -> Rect2:
+		return Rect2(feld_r.position + Vector2(float(p[0]), float(p[1])) * c, Vector2(c, c))
+	for art: String in BILD_FARBEN:
+		for p: Variant in k.get(art, []):
+			ci.draw_rect(zelle.call(p), BILD_FARBEN[art])
+	for p: Variant in k.get("mauern", []):
+		ci.draw_rect((zelle.call(p) as Rect2).grow(-c * 0.12), Color("c49b63"))
+	if _wahl_herausforderung == "mauern_fest":
+		for p: Variant in k.get("mauern_fest", []):
+			ci.draw_rect((zelle.call(p) as Rect2).grow(-c * 0.12), Color("b07cff"))
+	# Checkpoints: Bereiche als Rahmen (gewürfelt) oder feste Felder
+	var cp_farben := [Color("ffd34d"), Color("7fe0ff")]
+	for i in 2:
+		if bool(k.get("checkpoints_fest", false)):
+			var r: Rect2 = zelle.call(k["checkpoints"][i])
+			ci.draw_circle(r.get_center(), maxf(c * 0.45, 1.5), cp_farben[i])
+		else:
+			var b: Array = k["checkpoint_bereiche"][i]
+			ci.draw_rect(Rect2(feld_r.position + Vector2(float(b[0]), float(b[1])) * c, Vector2(float(b[2]), float(b[3])) * c).grow(-float(i)), cp_farben[i], false, 1.0)
+	# Basis (3×2) – zufällige Basis nur angedeutet
+	var bz: Array = k["basis"]
+	var basis_r := Rect2(feld_r.position + Vector2(float(bz[0]) - 1.0, float(bz[1]) - 1.0) * c, Vector2(3, 2) * c)
+	if bool(k.get("basis_fest", false)):
+		ci.draw_rect(basis_r, Color("6a5391"))
+	else:
+		ci.draw_rect(basis_r, Color("6a5391"), false, 1.0)
+	# Eckdaten
+	var r_: Variant = k.get("regeln", {})
+	var regeln: Dictionary = r_ if r_ is Dictionary else {}
+	var text := "%d×%d · %d Runden · Budget %d · %d Leben" % [sp, ze, int(regeln.get("runden", Werte.STANDARD_RUNDEN)),
+		int(regeln.get("start_budget", Werte.STANDARD_BUDGET)), int(regeln.get("start_leben", Werte.STANDARD_LEBEN))]
+	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 7.0), text, Stil.KLEIN, Stil.TEXT)
+	var basis_text := "Basis fest" if bool(k.get("basis_fest", false)) else "Basis zufällig"
+	var cp_text := "Checkpoints fest" if bool(k.get("checkpoints_fest", false)) else "Checkpoints gewürfelt"
+	Stil.schreibe(ci, Vector2(KARTENBILD.position.x + 6.0, feld_r.end.y + 17.0), basis_text + " · " + cp_text, Stil.KLEIN, Stil.TEXT_BLASS)
 
 
 ## Die drei Technoclan-Truppen posieren rechts auf der Bühne (Standbilder, leicht atmend).

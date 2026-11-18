@@ -235,9 +235,14 @@ func anhoehe_bonus(z: Vector2i) -> float:
 	return Werte.ANHOEHE_BONUS if boden.get(z, "") == "anhoehe" else 0.0
 
 
-## Sumpf: Tempo-Faktor an einem Punkt (1 = normal).
-func sumpf_faktor(punkt: Vector2) -> float:
-	return Werte.SUMPF_TEMPO if boden_bei(punkt) == "sumpf" else 1.0
+## Tempo-Faktor des Bodens an einem Punkt (1 = normal): Sumpf bremst, Eis beschleunigt.
+func boden_tempo(punkt: Vector2) -> float:
+	match boden_bei(punkt):
+		"sumpf":
+			return Werte.SUMPF_TEMPO
+		"eis":
+			return Werte.EIS_TEMPO
+	return 1.0
 
 
 ## Versperrt dieses Feld die Sicht? Fels immer, Wald auch (18.11.).
@@ -1971,6 +1976,7 @@ const HOLZ_HELL := Color("b58550")
 const WALD := Color("244a26")
 const WALD_HELL := Color("3f7a3a")
 const ERZ := Color("c98a3d")
+const EIS := Color("cfe9f5")
 
 func _zeichne_boden_wirkung() -> void:
 	for z: Vector2i in boden:
@@ -2014,6 +2020,19 @@ func _zeichne_boden_wirkung() -> void:
 					draw_circle(m + Vector2(2, 3), 15.0, Color(0, 0, 0, 0.3))
 					draw_circle(m, 15.0, WALD)
 					draw_circle(m + Vector2(-4, -4), 8.0, WALD_HELL)
+			"eis":
+				_r(z, 0, 0, 64, 64, Color(EIS, 0.75))
+				for i in 3:
+					var sx := 6 + ((h >> (i * 4)) % 4) * 12
+					_r(z, sx, 10 + i * 18, 22, 2, Color(1, 1, 1, 0.8))
+					_r(z, sx + 22, 12 + i * 18, 6, 2, Color(1, 1, 1, 0.5))
+			"minen":
+				var mo := Vector2(z) * Werte.ZELLE
+				_r(z, 0, 0, 64, 64, Color(ERDE_DUNKEL, 0.35))
+				for i in 3:
+					var mm := mo + Vector2(14 + (i % 2) * 30 + ((h >> (i * 3)) % 3) * 3, 14 + i * 17)
+					draw_circle(mm, 6.0, Color("3b3b3b"))
+					draw_circle(mm, 2.5, WARNUNG)
 			"erz":
 				for i in 3:
 					var ex := 6 + ((h >> (i * 4)) % 3) * 16

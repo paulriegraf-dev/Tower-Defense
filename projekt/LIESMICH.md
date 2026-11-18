@@ -218,8 +218,13 @@ Im Editor unter „Gelände mit Wirkung“ (Reiter Karte), nur auf eigenen Karte
 - **Ruine:** Truppen darauf nehmen 25 % weniger Schaden von Battlesphären, Schleudern und Lasern (Nahkampf voll). Nur Erdwälle, die kosten dort 5 (Abriss: 75 % davon).
 - **Wald:** versperrt die Sicht wie Fels; hineinschießen geht. Truppen im Wald sieht eine Battlesphäre erst aus 2 Feldern. Nicht bebaubar.
 - **Erzader:** eine Fabrik oder ein Turm darauf bringt +10 Budget je Runde (mit „Doppeltes Geld“ doppelt).
+- **Eis:** Gegner und eigene Truppen laufen mit 125 % Tempo. Bebaubar.
+- **Minenfeld:** Der erste Gegner am Boden darauf nimmt einmal 40 Schaden (`MINE_SCHADEN`); zur nächsten Runde liegt die Mine wieder. Nicht bebaubar.
 - **Rückgängig:** [Strg+Z] oder Knopf im Reiter Karte – jeder Pinselstrich und jeder Klick in der Leiste ist ein Schritt (bis 60). Änderungen im Taktikplaner zählen nicht.
-- Darstellung: schlicht gemalt in 2D; HD-2D zeigt denselben Boden (noch ohne eigene 3D-Formen für Hügel und Bäume).
+- **Symmetrie-Pinsel** (Reiter Karte): malt jedes Feld gespiegelt an der Mittelzeile mit (oben = unten), auch Radieren, Türme und Fabriken; Basis und Checkpoints nicht.
+- **Kartenbild:** In der Kartenwahl (Herausforderungen) steht rechts eine Vorschau der gewählten Karte – Gelände, Mauern, Basis, Checkpoint-Bereiche – mit Größe, Runden, Budget und Leben.
+- Schnelles Ziehen malt lückenlos (die Felder zwischen zwei Mauspositionen werden mitgemalt).
+- Darstellung: in 2D gemalt; in HD-2D zusätzlich die Anhöhe als flacher Hügel, Blockbäume im Wald und Mauerreste auf der Ruine.
 
 ## Erfolge (18.11.)
 

@@ -832,6 +832,8 @@ func _baue_daten() -> void:
 				"Brücke: Weg über Wasser, nicht bebaubar – niemand kann sie zumauern.",
 				"Ruine: Truppen darauf nehmen %d %% weniger Schaden von Sphären, Schleudern und Lasern. Nur Erdwälle, die kosten dort %d." % [roundi(W.RUINE_DECKUNG * 100.0), W.RUINE_KOSTEN_WALL],
 				"Wald: versperrt die Sicht wie Fels (hineinschießen geht). Truppen im Wald sieht eine Battlesphäre erst aus %s Feldern. Nicht bebaubar." % _z(W.WALD_SICHT),
-				"Erzader: Eine Fabrik oder ein Turm darauf bringt +%d Budget je Runde." % W.ERZ_BONUS]]]},
+				"Erzader: Eine Fabrik oder ein Turm darauf bringt +%d Budget je Runde." % W.ERZ_BONUS,
+				"Eis: Gegner und Truppen laufen mit %d %% Tempo. Bebaubar." % roundi(W.EIS_TEMPO * 100.0),
+				"Minenfeld: Der erste Gegner darauf nimmt einmal %d Schaden, zur nächsten Runde liegt die Mine wieder. Nicht bebaubar." % roundi(W.MINE_SCHADEN)]]]},
 	]
 	_daten = [gegner, truppen, bauten, regeln]

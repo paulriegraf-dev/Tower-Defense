@@ -737,7 +737,7 @@ func _gehe(delta: float) -> bool:
 		return true
 	var schritt: float = daten["tempo"] * Werte.ZELLE * delta * (float(Werte.KOMMANDANT["sturm_tempo"]) if sturm_bis > 0.0 else 1.0)
 	if not (self is Kommandant):
-		schritt *= karte.sumpf_faktor(position)   # 18.11.: Sumpf (Brakk vorerst ausgenommen)
+		schritt *= karte.boden_tempo(position)   # 18.11.: Sumpf bremst, Eis beschleunigt (Brakk vorerst ausgenommen)
 	var ziel := _punkte[0]
 	if absf(ziel.x - position.x) > 1.0:
 		_sprite.flip_h = ziel.x < position.x

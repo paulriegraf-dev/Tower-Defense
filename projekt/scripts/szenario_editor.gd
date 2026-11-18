@@ -16,8 +16,8 @@ const RUNDEN := [10, 15, 20]
 const WERKZEUGE := [["fels", "Fels"], ["wasser", "Wasser"], ["wall", "Erdwall"], ["fest", "Mauer fest"],
 	["turm", "Turm"], ["fabrik", "Fabrik"], ["basis", "Basis"], ["cp0", "Checkpoint 1"], ["cp1", "Checkpoint 2"]]
 ## 18.11. (Etappe 2): Gelände mit Wirkung – begehbar, mit Regeln (Werte, Abschnitt „Gelände mit Wirkung“)
-const BODEN_WERKZEUGE := [["anhoehe", "Anhöhe"], ["sumpf", "Sumpf"], ["bruecke", "Brücke"], ["ruine", "Ruine"], ["wald", "Wald"], ["erz", "Erzader"]]
-const ZIEHEN := ["fels", "wasser", "wall", "fest", "anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz"]   # diese Werkzeuge malen beim Ziehen weiter
+const BODEN_WERKZEUGE := [["anhoehe", "Anhöhe"], ["sumpf", "Sumpf"], ["bruecke", "Brücke"], ["ruine", "Ruine"], ["wald", "Wald"], ["erz", "Erzader"], ["eis", "Eis"], ["minen", "Minenfeld"]]
+const ZIEHEN := ["fels", "wasser", "wall", "fest", "anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz", "eis", "minen"]   # diese Werkzeuge malen beim Ziehen weiter
 const RUECKGAENGIG_MAX := 60
 const TIPPS := {
 	"fels": "Fels: für niemanden begehbar, nicht bebaubar, versperrt die Sicht.",
@@ -35,6 +35,8 @@ const TIPPS := {
 	"ruine": "Ruine: Truppen darauf nehmen 25 % weniger Fernschaden. Nur Erdwälle, die kosten dort 5.",
 	"wald": "Wald: versperrt die Sicht wie Fels (hinein geht). Truppen darin sieht eine Sphäre erst aus 2 Feldern. Nicht bebaubar.",
 	"erz": "Erzader: Fabrik oder Turm darauf bringt +10 Budget je Runde.",
+	"eis": "Eis: Gegner und Truppen laufen mit 125 % Tempo. Bebaubar.",
+	"minen": "Minenfeld: Der erste Gegner darauf nimmt einmal 40 Schaden; zur nächsten Runde liegt die Mine wieder. Nicht bebaubar.",
 }
 const FABRIK_TRUPPEN := ["technogunner", "scharfschuetze", "plasmawerfer"]
 const FEHLER_FARBE := Color("ff3b3b")
@@ -62,6 +64,7 @@ var _ok := false
 var _runde := 1
 var _plaene: Dictionary = {}             # Runde -> Trupps (der Taktikplaner bearbeitet diese Listen direkt)
 var _text_ebene: CanvasLayer = null
+var _symmetrie := false                  # 18.11.: Symmetrie-Pinsel – malt gespiegelt an der Mittelzeile mit
 var _rueckgaengig: Array[String] = []    # 18.11.: frühere Stände des Entwurfs (JSON), der letzte = vor dem letzten Schritt
 
 
@@ -236,6 +239,7 @@ func _leiste_karte(l: ModLeiste) -> void:
 	l.abschnitt("Gelände mit Wirkung")
 	l.chips(BODEN_WERKZEUGE, _werkzeug, func(w: String) -> void: _werkzeug = w)
 	l.text(str(TIPPS.get(_werkzeug, "")))
+	l.schalter("Symmetrie-Pinsel (oben = unten)", _symmetrie, func() -> void: _symmetrie = not _symmetrie)
 	l.knopf("Rückgängig [Strg+Z]" + ("" if not _rueckgaengig.is_empty() else " – nichts da"), _zuruck, Stil.TEXT if not _rueckgaengig.is_empty() else Stil.TEXT_BLASS)
 	l.trenner()
 	l.abschnitt("Basis")
@@ -410,11 +414,20 @@ func _male_linie(bis: Vector2i) -> void:
 		_male(Vector2i((Vector2(von).lerp(Vector2(bis), float(i) / n)).round()))
 
 
+## 18.11.: Ein Feld malen – mit Symmetrie-Pinsel auch das gespiegelte (nur die Malwerkzeuge, nicht Basis/Checkpoints).
 func _male(z: Vector2i) -> void:
-	var karte: Karte = spiel.karte
-	if z == _letzte or not karte.in_karte(z):
+	if z == _letzte or not spiel.karte.in_karte(z):
 		return
 	_letzte = z
+	_male_feld(z)
+	if _symmetrie and (_strich == -1 or ZIEHEN.has(_werkzeug) or _werkzeug in ["turm", "fabrik"]):
+		var s := Vector2i(z.x, Werte.ZEILEN - 1 - z.y)
+		if s != z:
+			_male_feld(s)
+
+
+func _male_feld(z: Vector2i) -> void:
+	var karte: Karte = spiel.karte
 	if z.x < Werte.ZONE_SPALTEN:
 		spiel.melde("In der Zone des Gegners (links) liegt nichts – dort stehen HQ und Schleudern.", 3.0)
 		return
@@ -436,7 +449,7 @@ func _male(z: Vector2i) -> void:
 			_mauern_fest.erase(z)
 			karte.setze_boden(z, "")
 			karte.setze_gelaende(z, _werkzeug)
-		"anhoehe", "sumpf", "ruine", "wald", "erz":
+		"anhoehe", "sumpf", "ruine", "wald", "erz", "eis", "minen":
 			if karte.ist_basis(z):
 				spiel.melde("Die Basis steht auf normalem Boden.", 2.5)
 				return

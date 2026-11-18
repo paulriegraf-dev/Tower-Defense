@@ -105,10 +105,13 @@ func tempo() -> float:
 		r = t * Werte.PLASMAGEL_TEMPO
 	elif gefroren > 0.0:
 		r = t * float(Werte.TURMARTEN["frost"]["bremse_tempo"])
-	# 18.11. (Etappe 2): Sumpf bremst zusätzlich, zusammen aber nie unter SUMPF_MIN_TEMPO (schon Langsameres bleibt)
-	var s: float = spiel.karte.sumpf_faktor(position) if not _auf_wall else 1.0
+	# 18.11. (Etappe 2): Sumpf bremst zusätzlich, zusammen aber nie unter SUMPF_MIN_TEMPO (schon Langsameres bleibt);
+	# Eis beschleunigt
+	var s: float = karte.boden_tempo(position) if not _auf_wall else 1.0
 	if s < 1.0:
 		r = minf(r, maxf(r * s, t * Werte.SUMPF_MIN_TEMPO))
+	elif s > 1.0:
+		r *= s
 	return r
 
 

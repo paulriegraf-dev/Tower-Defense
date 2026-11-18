@@ -565,9 +565,9 @@ static var MAUERN_FEST: Array[Vector2i] = []   # fertige Mauer für die Herausfo
 
 ## 18.11. (Etappe 2): Gelände mit Wirkung – begehbar, aber mit Regeln (nur auf eigenen Karten aus dem Szenario-Editor).
 ## In der Karten-Datei je Art eine Liste von Feldern (Schlüssel wie in BODEN_ARTEN). Brakk ist (noch) ausgenommen.
-const BODEN_ARTEN: Array[String] = ["anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz"]
-const BODEN_NAMEN := {"anhoehe": "Anhöhe", "sumpf": "Sumpf", "bruecke": "Brücke", "ruine": "Ruine", "wald": "Wald", "erz": "Erzader"}
-const BODEN_UNBEBAUBAR: Array[String] = ["sumpf", "bruecke", "wald"]   # dort steht nichts; auf der Ruine nur Erdwälle
+const BODEN_ARTEN: Array[String] = ["anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz", "eis", "minen"]
+const BODEN_NAMEN := {"anhoehe": "Anhöhe", "sumpf": "Sumpf", "bruecke": "Brücke", "ruine": "Ruine", "wald": "Wald", "erz": "Erzader", "eis": "Eis", "minen": "Minenfeld"}
+const BODEN_UNBEBAUBAR: Array[String] = ["sumpf", "bruecke", "wald", "minen"]   # dort steht nichts; auf der Ruine nur Erdwälle
 const ANHOEHE_BONUS: float = 1.0      # Anhöhe: +Reichweite (Felder) für Truppen, Stellungen, Türme und Gegner darauf (nicht Batterien)
 const SUMPF_TEMPO: float = 0.7        # Sumpf: Tempo für Gegner und eigene Truppen ...
 const SUMPF_MIN_TEMPO: float = 0.45   # ... zusammen mit Frost/Plasmagel nie unter diesen Anteil (schon Langsameres bleibt)
@@ -575,6 +575,8 @@ const RUINE_DECKUNG: float = 0.25     # Ruine: so viel weniger Schaden von Fernk
 const RUINE_KOSTEN_WALL: int = 5      # Ruine: ein Erdwall darauf kostet nur so viel (die Mauer steht schon halb)
 const WALD_SICHT: float = 2.0         # Wald: versperrt die Sicht wie Fels; Truppen darin sieht eine Battlesphäre erst so nah (Felder)
 const ERZ_BONUS: int = 10             # Erzader: eine Fabrik oder ein Turm darauf bringt so viel Budget je Runde
+const EIS_TEMPO: float = 1.25         # Eis: Gegner und eigene Truppen rutschen schneller
+const MINE_SCHADEN: float = 40.0      # Minenfeld: der erste Gegner darauf nimmt einmal so viel Schaden; zur nächsten Runde liegt die Mine wieder
 static var BODEN: Dictionary = {}     # Feld -> Art aus BODEN_ARTEN
 
 
