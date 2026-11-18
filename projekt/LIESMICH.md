@@ -170,7 +170,7 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 
 **Ablauf**
 - **Fließende Runden:** Die Bauphase hat einen Countdown (45 s in Runde 1, danach 30 s), dann kommt die Welle von selbst; [Enter] startet früher. Keine Fabrikpflicht, alles ist ab Runde 1 frei, jede Runde 5 Erdwälle gratis. Truppen verschwinden am Rundenende wie sonst.
-- **Schwierigkeit (zum Ausprobieren hoch):** dreimal so viele Gegner, je Runde +6 % Leben zusätzlich, Schleudern werfen doppelt so oft und zielen auch auf Brakk – der Stein fliegt auf einen Punkt (roter Landekreis, Warnzeichen), mit [Shift] ausweichen. Brakk startet mit 72 % Schaden, +8 % je Stufe.
+- **Schwierigkeit (zum Ausprobieren hoch):** dreimal so viele Gegner (je Gegner ein Drittel der Prämie – die Wirtschaft bleibt wie vorher), je Runde +6 % Leben zusätzlich, Schleudern werfen doppelt so oft und zielen auch auf Brakk – der Stein fliegt auf einen Punkt (roter Landekreis, Warnzeichen), mit [Shift] ausweichen. Brakk startet mit 72 % Schaden, +8 % je Stufe.
 - **Anzeige:** roter Bogen am Bildrand zeigt, woher ein Treffer kam; roter Rand bei Treffern und wenig Leben; Lebensleiste mit heller Verlust-Spur.
 - **Bauen:** [1]–[7] in 5 Feldern Reichweite (links die Liste), [F] baut das Gebäude im Blick aus. Keine Bauleiste [B].
 - Der Schild vor der Gegnerzone fängt Brakks Schüsse ab. Fällt Brakk, bleibt die Kamera bis zur nächsten Runde liegen.

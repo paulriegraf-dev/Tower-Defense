@@ -55,6 +55,7 @@ var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
 var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
 const BRAKK_GEGNER_MAL := 3            # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal …
 const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel mehr Leben
+var _brakk_praemie := 0.0                # Bruchteile der gedrittelten Prämie
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
@@ -3577,7 +3578,14 @@ func _quelle_info(quelle: String) -> Dictionary:
 
 func gegner_besiegt(g: Gegner) -> void:
 	Ton.am_ort(self, "death-myr", g.position)
-	if not g.klon:
+	if not g.klon and brakk_modus:
+		# 18.11. (Paul): Brakk-Mode – dreimal so viele Gegner, aber dieselbe Wirtschaft: je Gegner ein Drittel der Prämie
+		# (Bruchteile werden gesammelt, damit auch 2er-Prämien zählen)
+		_brakk_praemie += float(einkommen(int(g.daten["praemie"]))) / float(BRAKK_GEGNER_MAL)
+		var ganz := floori(_brakk_praemie)
+		budget += ganz
+		_brakk_praemie -= float(ganz)
+	elif not g.klon:
 		budget += einkommen(int(g.daten["praemie"]))   # 18.11.: „Doppeltes Geld“, Werte-Mod
 	gegner_entfernt(g)
 
