@@ -173,6 +173,8 @@ func starten(p_spiel: Node) -> void:
 	# Die Bauleiste unten verdeckt die Sicht (Paul 18.11.): einklappen, links steht stattdessen eine schmale Liste
 	_hud_klapp = spiel._hud.eingeklappt
 	spiel._hud.eingeklappt = true
+	if spiel.brakk_modus:
+		_briefing_zeigen()   # 18.11. (Paul): erst die Einsatz-Tafel, nicht abrupt hinein
 	if Touch.ohne_maus():
 		touch = EgoTouch.new(self)   # 18.11.: Handy – Stick, Wischen, Knöpfe
 		add_child(touch)
@@ -287,12 +289,19 @@ func _frei() -> bool:
 		return false
 	if spiel._lexikon != null and spiel._lexikon.visible:
 		return false
+	if _briefing_offen():
+		return false
 	if _terminal != null and _terminal.visible:
 		return false
 	return not Input.is_key_pressed(KEY_ALT)
 
 
 func _input(event: InputEvent) -> void:
+	if _briefing_offen():
+		if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+			_briefing_los()
+			get_viewport().set_input_as_handled()
+		return
 	if _terminal != null and _terminal.visible:
 		if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode in [KEY_ESCAPE, KEY_F]:
 			_terminal.visible = false   # 18.11.: Lichtterminal schließen
@@ -482,6 +491,9 @@ func _process(delta: float) -> void:
 	_kick = lerpf(_kick, 0.0, 1.0 - exp(-12.0 * echt))
 	_fov_puls = move_toward(_fov_puls, 0.0, echt * 30.0)
 	_kreuz = maxf(0.0, _kreuz - echt)
+	_einflug_weiter(echt)   # 18.11.
+	if _briefing != null and _briefing.visible:
+		_briefing.queue_redraw()
 	_fliessende_runden(delta)   # 18.11.
 	_kuehlen(echt)
 	_treppe_rest -= echt
@@ -626,6 +638,7 @@ func _kamera() -> void:
 	k.rotation = Vector3(nick + _kick - 0.35 * tw + WACKEL_WINKEL * w2 * sin(_wackel_t * 1.7), gier + WACKEL_WINKEL * w2 * sin(_wackel_t * 2.3),
 		WACKEL_WINKEL * 0.6 * w2 * sin(_wackel_t * 1.1) - 0.5 * tw * _tumble_seite)
 	k.fov = SICHTWINKEL - _fov_puls + _fov_weit
+	_einflug_kamera(k)   # 18.11.: Einflug nach der Einsatz-Tafel
 	var w: float = spiel.effekte.wackeln
 	if w > 0.0:
 		k.position += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), 0.0) * w / Werte.ZELLE * 0.4
@@ -2212,6 +2225,8 @@ const BAND_FARBE := {"durchschuss": "8a93a6", "laser": "2b2830", "feuerteam": "c
 
 ## 18.11.: Ist eine Tafel offen (Übersicht, Pause, Terminal, Fabrikmenü)? Dann zeichnet die Ego-Sicht nichts darüber.
 func _hud_aus() -> bool:
+	if _briefing_offen():
+		return true
 	if spiel._lexikon != null and spiel._lexikon.visible:
 		return true
 	if spiel._hud != null and spiel._hud.pausiert():
@@ -2331,6 +2346,8 @@ func _berge_zurueck() -> void:
 ## Bauphase mit Countdown: läuft er ab, startet die Welle von selbst ([Enter] startet früher). Die Zeit läuft auch,
 ## solange das Lichtterminal offen ist – Einkaufen gehört zum Zeitdruck.
 func _fliessende_runden(dt: float) -> void:
+	if _briefing != null and _briefing.visible:
+		return   # 18.11.: die Einsatz-Tafel ist noch offen – der Countdown wartet
 	if not spiel.brakk_modus or spiel.phase != 0:
 		_countdown = -1.0
 		return
@@ -3168,3 +3185,123 @@ func _t(s: String) -> String:
 	if touch == null:
 		return s
 	return RegEx.create_from_string("\\s*\\[[^\\]]*\\]\\s*").sub(s, " ", true).strip_edges()
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Einsatz-Tafel und Einflug (18.11.)
+
+## 18.11. (Paul): nicht abrupt in die Ego-Sicht – erst eine Einsatz-Tafel (Tasten, Ablauf), der Countdown wartet.
+## „Los“ (Klick, Enter, Leertaste): das Bild blendet aus dem Schwarzen auf, die Kamera senkt sich von oben in Brakks Augen.
+const EINFLUG_SEK := 1.8
+var _briefing: Control = null
+var _einflug := -1.0             # läuft: Sekunden seit „Los“ (-1 = nein)
+var _los_knopf := Rect2()
+
+
+func _briefing_zeigen() -> void:
+	_briefing = Control.new()
+	_briefing.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_briefing.mouse_filter = Control.MOUSE_FILTER_STOP
+	_briefing.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_briefing.draw.connect(_male_briefing)
+	_briefing.gui_input.connect(_briefing_klick)
+	_ebene.add_child(_briefing)
+
+
+func _briefing_offen() -> bool:
+	return _briefing != null and _briefing.visible and _einflug < 0.0
+
+
+func _briefing_klick(event: InputEvent) -> void:
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		if _los_knopf.has_point((event as InputEventMouseButton).position):
+			_briefing_los()
+
+
+func _briefing_los() -> void:
+	if not _briefing_offen():
+		return
+	_einflug = 0.0
+	_briefing.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	Ton.spiele(spiel, "ui-klick")
+	Ton.spiele(spiel, "tc-arc", -8.0)
+
+
+## Läuft jedes Bild (Echtzeit): Einflug weiterzählen, am Ende die Tafel weg.
+func _einflug_weiter(echt: float) -> void:
+	if _einflug < 0.0:
+		return
+	_einflug += echt
+	_briefing.queue_redraw()
+	if _einflug >= EINFLUG_SEK:
+		_einflug = -1.0
+		_briefing.visible = false
+		_trauma = minf(1.0, _trauma + 0.2)   # Brakk landet
+		_rueckstoss[0] = 0.8
+		_rueckstoss[1] = 0.8
+
+
+## Kamera während des Einflugs: von oben hinten herab, mit Blick nach unten, weich in Brakks Augen.
+func _einflug_kamera(k: Camera3D) -> void:
+	var t := 1.0 if _einflug < 0.0 else clampf(_einflug / EINFLUG_SEK, 0.0, 1.0)
+	if _briefing_offen():
+		t = 0.0
+	if t >= 1.0:
+		return
+	var e := 1.0 - pow(1.0 - t, 3.0)   # Ease-out
+	var rest := 1.0 - e
+	k.position += Vector3(0, 9.0 * rest, 0) - _vorne() * 7.0 * rest
+	k.rotation.x -= 0.75 * rest
+
+
+func _male_briefing() -> void:
+	var ci := _briefing
+	var g := ci.get_viewport_rect().size
+	if _einflug >= 0.0:
+		# Aufblenden aus dem Schwarzen
+		var a := clampf(1.0 - _einflug / (EINFLUG_SEK * 0.6), 0.0, 1.0)
+		ci.draw_rect(Rect2(Vector2.ZERO, g), Color(0, 0, 0, a))
+		return
+	ci.draw_rect(Rect2(Vector2.ZERO, g), Color(0.02, 0.03, 0.05, 0.97))
+	var w := minf(920.0, g.x - 40.0)
+	var h := minf(440.0, g.y - 40.0)
+	var o := ((g - Vector2(w, h)) / 2.0).round()
+	ci.draw_rect(Rect2(o, Vector2(w, h)), Color(0.05, 0.06, 0.1, 1.0))
+	ci.draw_rect(Rect2(o, Vector2(w, h)), LICHT, false, 2.0)
+	Stil.schreibe(ci, o + Vector2(24, 34), "BRAKK-MODE", 34, LICHT)
+	Stil.schreibe(ci, o + Vector2(24, 66), "Kommandant Brakk hält die Front – diesmal bist du Brakk.", 18, Stil.TEXT_BLASS)
+	var touch_an := Touch.ohne_maus()
+	var links: Array[String] = [
+		"WASD laufen, Maus zielen, Klick schießt – zwei Pistolen im Wechsel, jede überhitzt bei Dauerfeuer.",
+		"Shift Rolle · Leertaste Sprung · [E] Lichttreppe auf den Wall, oben Lichtbrücke.",
+		"[1]–[7] bauen (5 Felder Reichweite), [F] ausbauen. An der Basis: [F] Lichtterminal für Ringe.",
+		"Mausrad: aktiver Ring · [C] in der Bauphase: Ringfeld – Fabriken darin bauen seine Truppe.",
+	]
+	if touch_an:
+		links = [
+			"Links laufen, rechts wischen zum Zielen. Liegt das Fadenkreuz auf einem Gegner, schießt Brakk selbst.",
+			"Fähigkeiten tippen – oder halten und ziehen, um zu zielen.",
+			"Bauen, Ausbauen und Ringe über die Knöpfe am Rand.",
+		]
+	var rechts: Array[String] = [
+		"Die Welle kommt nach dem Countdown von selbst – [Enter] holt sie früher.",
+		"Viele Gegner! Steine mit rotem Kreis fliegen auf dich: ausweichen.",
+		"Stufen schalten frei: Anker [Q], Doppellanze (Rechtsklick), Lichtsäule [X], Klonmaschine [R], Zeitlupe [V].",
+		"Fabriken haben hier keine Ausbauten – die Ringe machen sie stark.",
+	]
+	var sw := (w - 72.0) / 2.0
+	_briefing_spalte(ci, o + Vector2(24, 100), sw, "STEUERUNG", links)
+	_briefing_spalte(ci, o + Vector2(48 + sw, 100), sw, "ABLAUF", rechts)
+	_los_knopf = Rect2(Vector2(o.x + w / 2.0 - 130.0, o.y + h - 70.0), Vector2(260, 46))
+	var puls := 0.75 + 0.25 * sin(Time.get_ticks_msec() / 220.0)
+	ci.draw_rect(_los_knopf, Color(LICHT, 0.18 * puls))
+	ci.draw_rect(_los_knopf, LICHT, false, 2.0)
+	Stil.schreibe_mittig(ci, _los_knopf.get_center(), "Los geht's" + ("" if touch_an else "  [Enter]"), 22, Color.WHITE)
+
+
+func _briefing_spalte(ci: CanvasItem, o: Vector2, breite: float, titel: String, zeilen: Array[String]) -> void:
+	Stil.schreibe(ci, o, titel, 18, Stil.GOLD)
+	var y := o.y + 22.0
+	for z: String in zeilen:
+		ci.draw_rect(Rect2(o.x, y + 6.0, 6.0, 6.0), LICHT)
+		Stil.absatz(ci, Vector2(o.x + 14.0, y), z, breite - 14.0, 16, Stil.TEXT)
+		y += Stil.absatz_groesse(z, breite - 14.0, 16).y + 12.0
