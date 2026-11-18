@@ -4989,12 +4989,15 @@ func _schliesse_fabrikmenue() -> void:
 
 
 func _aktualisiere_vorschau() -> void:
-	var z := karte.zelle_bei(maus_welt())
-	karte.vorschau_partner = partner_feld(z) if werkzeug == Karte.BATTERIE else Karte.KEINE
 	karte.vorschau_richtung = PAAR_RICHTUNGEN[_paar_richtung]
 	if phase != Phase.ENDE and werkzeug != Karte.FREI:
+		# 18.11.: Leistung – das Feld unter der Maus nur suchen, wenn eine Vorschau gezeigt wird (in der Ego-Sicht ist das
+		# ein Sichtstrahl, ~0,2 ms). vorschau_partner wird nur zur Vorschau von Batterie und Generator gelesen.
+		var z := karte.zelle_bei(maus_welt())
+		karte.vorschau_partner = partner_feld(z) if werkzeug == Karte.BATTERIE else Karte.KEINE
 		karte.setze_vorschau(z, bautyp(z, werkzeug), bau_hindernis(z, werkzeug) == "")
 	else:
+		karte.vorschau_partner = Karte.KEINE
 		karte.setze_vorschau(Karte.KEINE, Karte.FREI, false)
 
 

@@ -118,8 +118,9 @@ func einrichten(p_spiel: Node) -> void:
 	env.fog_depth_end = 110.0
 	env.fog_depth_curve = 1.0
 	env.fog_density = 1.0
-	# leichtes Glühen der hellen Lichter
-	env.glow_enabled = true
+	# leichtes Glühen der hellen Lichter – 18.11.: nicht am Handy/Tablet (Weichzeichnen übers ganze Bild in mehreren
+	# Stufen, am PC ~0,25 ms GPU bei 1080p; am Handy bei voller Pixeldichte ein Vielfaches)
+	env.glow_enabled = not Touch.ohne_maus()
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.85
@@ -324,36 +325,52 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 	b.visible = sichtbar
 	if not sichtbar:
 		return
-	b.texture = s.texture
-	b.region_enabled = s.region_enabled
-	b.region_rect = s.region_rect
-	b.flip_h = s.flip_h
+	# 18.11.: Leistung – jede Eigenschaft nur setzen, wenn sie sich ändert: Sprite3D baut bei flip_h, modulate, pixel_size,
+	# offset oder billboard sonst in jedem Bild sein Netz neu (bei allen Figuren). Ergebnis wie vorher.
+	if b.texture != s.texture:
+		b.texture = s.texture
+	if b.region_enabled != s.region_enabled:
+		b.region_enabled = s.region_enabled
+	if b.region_rect != s.region_rect:
+		b.region_rect = s.region_rect
+	if b.flip_h != s.flip_h:
+		b.flip_h = s.flip_h
 	var faerbung := s.modulate * s.self_modulate
 	var eltern := s.get_parent()
 	if eltern is CanvasItem:
 		faerbung *= (eltern as CanvasItem).modulate
-	b.modulate = faerbung
-	b.pixel_size = absf(s.global_scale.x) / float(Werte.ZELLE)
-	b.scale = Vector3(1.0, absf(s.global_scale.y / s.global_scale.x) if s.global_scale.x != 0.0 else 1.0, 1.0)   # Stauchen (Landung, Ruck)
+	if b.modulate != faerbung:
+		b.modulate = faerbung
+	var pixel := absf(s.global_scale.x) / float(Werte.ZELLE)
+	var stauch := Vector3(1.0, absf(s.global_scale.y / s.global_scale.x) if s.global_scale.x != 0.0 else 1.0, 1.0)   # Stauchen (Landung, Ruck)
+	if b.scale != stauch:
+		b.scale = stauch
 	if eltern is Gegner and (eltern as Gegner).typ not in ["belagerung", "schwarm"]:
-		b.pixel_size *= 0.85   # Gegner etwas kleiner: in den engen Gängen stehen viele dicht beieinander
+		pixel *= 0.85   # Gegner etwas kleiner: in den engen Gängen stehen viele dicht beieinander
+	if b.pixel_size != pixel:
+		b.pixel_size = pixel
 	var groesse: Vector2 = s.region_rect.size if s.region_enabled else s.texture.get_size()
 	var o := s.offset - (groesse / 2.0 if s.centered else Vector2.ZERO)
 	# 2D: das Bild reicht von o bis o + groesse (y nach unten). 3D: y nach oben, die Unterkante liegt am Fußpunkt.
-	b.offset = Vector2(o.x, -(o.y + groesse.y))
+	var versatz := Vector2(o.x, -(o.y + groesse.y))
 	var traeger: Node2D = eltern as Node2D if eltern is Node2D else s
 	var hoehe := H if ist_hoch(karte.zelle_bei(traeger.global_position)) else 0.0
-	b.position = _welt_3d(s.global_position, hoehe + 0.002)
+	var ort := _welt_3d(s.global_position, hoehe + 0.002)
 	# 18.11.: Ego-Sicht – aus Augenhöhe schwebten die Figuren: Das Bild drehte sich ganz zur Kamera, sein Fuß lag 22 px
 	# südlich (für die Schrägsicht) und unten sind oft leere Zeilen. Hier stehen sie aufrecht auf ihrem echten Fußpunkt
 	# (dort liegt auch der Schatten), ohne leere Zeilen. Die Draufsicht bleibt wie sie ist.
+	var billboard := BaseMaterial3D.BILLBOARD_ENABLED
 	if ego != null:
-		b.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+		billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 		if traeger is Gegner or traeger is Einheit:
-			b.position = _welt_3d(traeger.global_position, hoehe + 0.002)
-		b.offset.y -= _leer_unten(s.texture, s.region_rect if s.region_enabled else Rect2(Vector2.ZERO, s.texture.get_size()))
-	else:
-		b.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			ort = _welt_3d(traeger.global_position, hoehe + 0.002)
+		versatz.y -= _leer_unten(s.texture, s.region_rect if s.region_enabled else Rect2(Vector2.ZERO, s.texture.get_size()))
+	if b.offset != versatz:
+		b.offset = versatz
+	if b.position != ort:
+		b.position = ort
+	if b.billboard != billboard:
+		b.billboard = billboard
 	b.set_meta("turm", traeger is TurmBild)
 	_lebensbalken(id, traeger, b, groesse)
 	# Umriss durch Wände: Gegner rot, eigene Bodentruppen violett (nicht für Türme und Truppen oben auf dem Wall)
@@ -375,14 +392,23 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 		add_child(u)
 		_umrisse[id] = u
 	u.visible = true
-	u.texture = b.texture
-	u.region_enabled = b.region_enabled
-	u.region_rect = b.region_rect
-	u.flip_h = b.flip_h
-	u.pixel_size = b.pixel_size
-	u.offset = b.offset
-	u.position = b.position
-	u.material_override = _umriss_material(b.texture, farbe)
+	if u.texture != b.texture:
+		u.texture = b.texture
+	if u.region_enabled != b.region_enabled:
+		u.region_enabled = b.region_enabled
+	if u.region_rect != b.region_rect:
+		u.region_rect = b.region_rect
+	if u.flip_h != b.flip_h:
+		u.flip_h = b.flip_h
+	if u.pixel_size != b.pixel_size:
+		u.pixel_size = b.pixel_size
+	if u.offset != b.offset:
+		u.offset = b.offset
+	if u.position != b.position:
+		u.position = b.position
+	var mat := _umriss_material(b.texture, farbe)
+	if u.material_override != mat:
+		u.material_override = mat
 
 
 ## Steht direkt vor diesem Punkt (zur Kamera hin, ein oder zwei Felder) ein Mauerblock, der ihn verdecken kann?
@@ -429,14 +455,28 @@ func _lebensbalken(id: int, traeger: Node, b: Sprite3D, groesse: Vector2) -> voi
 	# Lesbarkeit (16.11.): kurze Balken – kleine Einheiten 16, große 26 Pixel breit (vorher 32: im Pulk ein Balkenteppich)
 	var gross: bool = traeger is Gegner and (traeger as Gegner).typ in ["belagerung", "schwarm", "schild", "sphaere"]
 	var breite := 26.0 if gross else 16.0
-	grund.region_rect = Rect2(0, 0, breite + 2.0, 4)
-	grund.modulate = Color(0, 0, 0, 0.7)
-	grund.offset = Vector2(-(breite + 2.0) / 2.0, hoehe_px)
-	grund.position = b.position
-	fuell.region_rect = Rect2(0, 0, maxf(1.0, breite * anteil), 2)
-	fuell.modulate = Color("ff5a4d") if traeger is Gegner else Color("7fe0ff")
-	fuell.offset = Vector2(-breite / 2.0, hoehe_px + 1.0)
-	fuell.position = b.position
+	# 18.11.: Leistung – nur bei Änderung setzen (Sprite3D baut sonst in jedem Bild sein Netz neu)
+	var rahmen := Rect2(0, 0, breite + 2.0, 4)
+	var fuellung := Rect2(0, 0, maxf(1.0, breite * anteil), 2)
+	var fuell_farbe := Color("ff5a4d") if traeger is Gegner else Color("7fe0ff")
+	var grund_versatz := Vector2(-(breite + 2.0) / 2.0, hoehe_px)
+	var fuell_versatz := Vector2(-breite / 2.0, hoehe_px + 1.0)
+	if grund.region_rect != rahmen:
+		grund.region_rect = rahmen
+	if grund.modulate != Color(0, 0, 0, 0.7):
+		grund.modulate = Color(0, 0, 0, 0.7)
+	if grund.offset != grund_versatz:
+		grund.offset = grund_versatz
+	if grund.position != b.position:
+		grund.position = b.position
+	if fuell.region_rect != fuellung:
+		fuell.region_rect = fuellung
+	if fuell.modulate != fuell_farbe:
+		fuell.modulate = fuell_farbe
+	if fuell.offset != fuell_versatz:
+		fuell.offset = fuell_versatz
+	if fuell.position != b.position:
+		fuell.position = b.position
 
 
 ## Material für den Umriss: zeichnet nur dort, wo etwas davor steht (umgekehrter Tiefentest), einfarbig und halb durchsichtig.
@@ -1447,6 +1487,19 @@ void fragment() {
 	float rand = smoothstep(0.32, 0.78, length(p));
 	c = mix(c * vec3(1.02, 1.0, 0.97), vec3(0.02, 0.05, 0.08), rand * rand * 0.62);
 	COLOR = vec4(c, 1.0);
+}
+"""
+	if Touch.ohne_maus():
+		# 18.11.: Leistung am Handy/Tablet – ohne Tilt-Shift und Farbstimmung. Die liest jedes Bild das ganze Bild zurück und
+		# zeichnet es weich (am PC ~0,3 ms GPU bei 1080p, am Handy bei voller Pixeldichte ein Vielfaches). Die Ränder werden
+		# weiter abgedunkelt – als einfache Überblendung, das ergibt dieselbe Mischung wie mix() oben.
+		sh.code = """
+shader_type canvas_item;
+void fragment() {
+	vec2 p = UV - vec2(0.5, 0.52);
+	p.x *= 1.35;
+	float rand = smoothstep(0.32, 0.78, length(p));
+	COLOR = vec4(0.02, 0.05, 0.08, rand * rand * 0.62);
 }
 """
 	var mat := ShaderMaterial.new()

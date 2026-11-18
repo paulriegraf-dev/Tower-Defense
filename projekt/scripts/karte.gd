@@ -91,11 +91,33 @@ var vorschau_pfad: Array[Vector2i] = []
 var _astar_gegner: Dictionary = {}  # Gegnertyp -> AStarGrid2D (Wälle = teuer)
 var _astar_einheiten: AStarGrid2D   # eigene Truppen (Wälle = gesperrt)
 var _zeit := 0.0
+## 18.11.: Leistung – der Boden (Gras/Fliesen, Bewuchs, Gelände, Bodenwirkung) ändert sich selten. Er liegt auf einer
+## eigenen Zeichenfläche direkt hinter der Karte und wird nur neu gezeichnet, wenn sich etwas ändert, wovon er abhängt
+## (_boden_stand). Vorher kostete er in jedem Bild rund 0,4 ms. `_ci` ist die Fläche, auf die _r und die Bodenteile zeichnen.
+## 18.11.: Ebenso der Gegnerweg (~0,45 ms): eigene Ebene, neu gezeichnet nur bei Änderung (_weg_stand) oder solange die
+## Pfeile laufen. Zone, Basis und Checkpoints liegen dazwischen (_mitte, jedes Bild), damit die Reihenfolge bleibt:
+## Boden – Zone/Basis/Checkpoints – Weg – Bauten und alles Weitere (die Karte selbst).
+var _untergrund: Ebene
+var _mitte: Ebene
+var _weg_ebene: Ebene
+var _boden_stand := 0
+var _weg_stand := 0
+var _ci: CanvasItem = self
+
+class Ebene extends Node2D:
+	var malen: Callable
+
+	func _draw() -> void:
+		malen.call(self)
 var _blaetter: Dictionary = {}      # Einheitentyp -> Textur (für das Bild an der Fabrik)
 
 
 func _ready() -> void:
 	position = Vector2(0, Werte.KARTE_OBEN)
+	# 18.11.: Ebenen hinter der Karte, in dieser Reihenfolge gezeichnet (siehe _boden_stand, _weg_stand)
+	_untergrund = _neue_ebene(_zeichne_untergrund)
+	_mitte = _neue_ebene(_zeichne_mitte)
+	_weg_ebene = _neue_ebene(_zeichne_wege)
 	gelaende = Werte.GELAENDE.duplicate()
 	boden = Werte.BODEN.duplicate()
 	_astar_einheiten = _neues_astar()
@@ -130,7 +152,27 @@ func _process(delta: float) -> void:
 		if _sicht_in <= 0.0:
 			_sicht_in = 0.25
 			_berechne_blinde_felder()
+	# 18.11.: Boden nur neu zeichnen, wenn sich etwas ändert, wovon er abhängt (Bewuchs meidet Weg, Bauten, Basis und Checkpoints;
+	# beim Bauen zeigt er das Raster)
+	var stand := [pfad, feld, basis, checkpoints, brut_cps, vorschau_typ != FREI, gelaende, boden, Werte.grafik_neu].hash()
+	if stand != _boden_stand:
+		_boden_stand = stand
+		_untergrund.queue_redraw()
+	# 18.11.: Weg nur bei Änderung neu – oder in jedem Bild, solange seine Pfeile laufen (kräftige Anzeige ohne Bauvorschau)
+	var weg_stand := [pfad, neben_pfade, angriffs_pfad, zeige_pfad_kraeftig, zeige_angriff, vorschau_pfad.is_empty(), Werte.grafik_neu].hash()
+	if weg_stand != _weg_stand or (zeige_pfad_kraeftig and vorschau_pfad.is_empty()):
+		_weg_stand = weg_stand
+		_weg_ebene.queue_redraw()
+	_mitte.queue_redraw()
 	queue_redraw()
+
+
+func _neue_ebene(malen: Callable) -> Ebene:
+	var e := Ebene.new()
+	e.malen = malen
+	e.show_behind_parent = true
+	add_child(e)
+	return e
 
 
 ## Für die angeklickte Truppe / den angeklickten Turm zeigen, welche Felder in Reichweite sie NICHT treffen kann.
@@ -1424,10 +1466,12 @@ const STEIN_DUNKEL := Color("5c5966")
 
 
 func _r(z: Vector2i, x: float, y: float, w: float, h: float, farbe: Color) -> void:
-	draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(x, y), Vector2(w, h)), farbe)
+	_ci.draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(x, y), Vector2(w, h)), farbe)
 
 
-func _draw() -> void:
+## 18.11.: Boden der Karte – zeichnet auf die Fläche `ci` (Untergrund), nicht in jedem Bild.
+func _zeichne_untergrund(ci: CanvasItem) -> void:
+	_ci = ci
 	var zg := float(Werte.ZELLE)
 	# Boden
 	if Werte.grafik_neu:
@@ -1442,11 +1486,22 @@ func _draw() -> void:
 
 	_zeichne_gelaende()
 	_zeichne_boden_wirkung()
+	_ci = self
+
+
+## 18.11.: Zone des Gegners, Basis und Checkpoints – eigene Ebene zwischen Boden und Weg (jedes Bild).
+func _zeichne_mitte(ci: CanvasItem) -> void:
+	_ci = ci
 	_zeichne_start()
 	_zeichne_basis()
 	for i in checkpoints.size():
 		_zeichne_checkpoint(i)
+	_ci = self
 
+
+## 18.11.: Gegnerweg – eigene Ebene, nur bei Änderung neu gezeichnet (siehe _weg_stand).
+func _zeichne_wege(ci: CanvasItem) -> void:
+	_ci = ci
 	# Weglinie unter den Gebäuden beginnen, Durchbrüche später darüber markieren
 	var zeige_neu := not vorschau_pfad.is_empty()
 	if zeige_pfad_kraeftig:
@@ -1458,6 +1513,12 @@ func _draw() -> void:
 		_zeichne_weg(pfad, Color(WEG, 0.85 if zeige_pfad_kraeftig else 0.3), zeige_pfad_kraeftig)
 	if zeige_angriff and zeige_pfad_kraeftig:
 		_zeichne_weg(angriffs_pfad, Color(TECH_LICHT, 0.9), false)
+	_ci = self
+
+
+func _draw() -> void:
+	var zg := float(Werte.ZELLE)
+	var zeige_neu := not vorschau_pfad.is_empty()
 
 	for z: Vector2i in feld:
 		if feld[z] == WALL:
@@ -1898,13 +1959,25 @@ func _zeichne_panzer(z: Vector2i, alpha: float) -> void:
 	_r(z, 0, 40, 64, 6, dunkel * a)
 	for x: int in [2, 30, 58]:
 		_r(z, x, 1, 4, 4, Color("d8dee9") * a)
-	var farben := {"A": Color("10141a"), "B": Color("7e8a98"), "L": Color("c9d2de"), "D": Color("545e6b"), "c": Color("7fe0ff")}
 	var o := Vector2(32 - 11, 21 - 13)   # Schild mittig, 2 Pixel je Bildpunkt
-	for y in PANZER_SCHILD.size():
-		var zeile: String = PANZER_SCHILD[y]
-		for x in zeile.length():
-			if zeile[x] != ".":
-				_r(z, o.x + x * 2, o.y + y * 2, 2, 2, Color(farben[zeile[x]]) * a)
+	_ci.draw_texture_rect(_panzer_schild(), Rect2(Vector2(z) * Werte.ZELLE + o, Vector2(22, 26)), false, a)
+
+
+## 18.11.: Leistung – das Schild als Bild (einmal erzeugt) statt rund 100 Rechtecken je Wallpanzer und Bild.
+## Die Bildpunkte überlappen sich nicht, mit Durchsichtigkeit `a` sieht es also genauso aus wie vorher.
+var _panzer_bild: ImageTexture
+
+func _panzer_schild() -> ImageTexture:
+	if _panzer_bild == null:
+		var farben := {"A": Color("10141a"), "B": Color("7e8a98"), "L": Color("c9d2de"), "D": Color("545e6b"), "c": Color("7fe0ff")}
+		var bild := Image.create(11, PANZER_SCHILD.size(), false, Image.FORMAT_RGBA8)
+		for y in PANZER_SCHILD.size():
+			var zeile: String = PANZER_SCHILD[y]
+			for x in zeile.length():
+				if zeile[x] != ".":
+					bild.set_pixel(x, y, farben[zeile[x]])
+		_panzer_bild = ImageTexture.create_from_image(bild)
+	return _panzer_bild
 
 
 ## Neue Grafik: Bild aus assets/neu (zwischengespeichert).
@@ -1916,6 +1989,8 @@ func neu_bild(pfad: String) -> Texture2D:
 
 ## Neue Grafik: Tech-Mauer im Stil der TC-Erdwälle – Metallplatte mit Fugen, helle Kante an offenen Seiten,
 ## sichtbare Vorderseite mit cyanem Lichtband, wenn darunter kein Wall anschließt.
+var _wand_oben: Array[Texture2D] = []   # 18.11.: Oberseiten der Tech-Mauer (top_0 … top_4)
+
 func _zeichne_wall_neu(z: Vector2i, alpha: float) -> void:
 	var a := Color(1, 1, 1, alpha)
 	var o := Vector2(z) * Werte.ZELLE
@@ -1924,7 +1999,10 @@ func _zeichne_wall_neu(z: Vector2i, alpha: float) -> void:
 	if Werte.grafik_hd:
 		unten = true   # HD-2D: die Seiten macht der 3D-Mauerblock, hier nur die Oberseite
 	var hoehe := 64.0 if unten else 46.0
-	draw_texture_rect_region(neu_bild("wand/top_%d.png" % v), Rect2(o, Vector2(64, hoehe)), Rect2(0, 0, 64, hoehe), a)
+	if _wand_oben.is_empty():
+		for i in 5:
+			_wand_oben.append(neu_bild("wand/top_%d.png" % i))   # 18.11.: Leistung – Pfad nicht je Mauer und Bild zusammensetzen
+	draw_texture_rect_region(_wand_oben[v], Rect2(o, Vector2(64, hoehe)), Rect2(0, 0, 64, hoehe), a)
 	if inhalt(z + Vector2i.UP) != WALL:
 		draw_rect(Rect2(o, Vector2(64, 3)), Color("b8c2cc") * a)
 	if inhalt(z + Vector2i.LEFT) != WALL:
@@ -2019,9 +2097,9 @@ func _zeichne_boden_wirkung() -> void:
 				var o := Vector2(z) * Werte.ZELLE
 				for i in 4:
 					var m := o + Vector2(18 + (i % 2) * 28 + ((h >> (i * 5)) % 3) * 2, 18 + int(i / 2.0) * 28)
-					draw_circle(m + Vector2(2, 3), 15.0, Color(0, 0, 0, 0.3))
-					draw_circle(m, 15.0, WALD)
-					draw_circle(m + Vector2(-4, -4), 8.0, WALD_HELL)
+					_ci.draw_circle(m + Vector2(2, 3), 15.0, Color(0, 0, 0, 0.3))
+					_ci.draw_circle(m, 15.0, WALD)
+					_ci.draw_circle(m + Vector2(-4, -4), 8.0, WALD_HELL)
 			"eis":
 				_r(z, 0, 0, 64, 64, Color(EIS, 0.75))
 				for i in 3:
@@ -2033,8 +2111,8 @@ func _zeichne_boden_wirkung() -> void:
 				_r(z, 0, 0, 64, 64, Color(ERDE_DUNKEL, 0.35))
 				for i in 3:
 					var mm := mo + Vector2(14 + (i % 2) * 30 + ((h >> (i * 3)) % 3) * 3, 14 + i * 17)
-					draw_circle(mm, 6.0, Color("3b3b3b"))
-					draw_circle(mm, 2.5, WARNUNG)
+					_ci.draw_circle(mm, 6.0, Color("3b3b3b"))
+					_ci.draw_circle(mm, 2.5, WARNUNG)
 			"erz":
 				for i in 3:
 					var ex := 6 + ((h >> (i * 4)) % 3) * 16
@@ -2042,7 +2120,7 @@ func _zeichne_boden_wirkung() -> void:
 					var spitze := PackedVector2Array([Vector2(ex, ey + 18), Vector2(ex + 8, ey), Vector2(ex + 16, ey + 18)])
 					for k in spitze.size():
 						spitze[k] += Vector2(z) * Werte.ZELLE
-					draw_colored_polygon(spitze, ERZ)
+					_ci.draw_colored_polygon(spitze, ERZ)
 					_r(z, ex + 7, ey + 5, 3, 9, Color(1, 0.9, 0.6, 0.85))
 
 
@@ -2061,20 +2139,20 @@ func _zeichne_boden_neu() -> void:
 			var h := hash(z * 7 + Vector2i(3, 11))
 			var mitte := (Vector2(z) + Vector2(0.5, 0.5)) * zg
 			if x < Werte.ZONE_SPALTEN:
-				draw_set_transform(mitte, (h % 4) * PI / 2.0, Vector2.ONE)
-				draw_texture_rect_region(fels, Rect2(-zg / 2, -zg / 2, zg, zg), Rect2(MYR_KACHELN[(h >> 3) % 2] * 32, 0, 32, 32))
-				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+				_ci.draw_set_transform(mitte, (h % 4) * PI / 2.0, Vector2.ONE)
+				_ci.draw_texture_rect_region(fels, Rect2(-zg / 2, -zg / 2, zg, zg), Rect2(MYR_KACHELN[(h >> 3) % 2] * 32, 0, 32, 32))
+				_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			else:
-				draw_texture_rect_region(blatt, Rect2(Vector2(z) * zg, Vector2(zg, zg)), Rect2(BODEN_GRAS[(h >> 3) % BODEN_GRAS.size()] * 32, 0, 32, 32))
+				_ci.draw_texture_rect_region(blatt, Rect2(Vector2(z) * zg, Vector2(zg, zg)), Rect2(BODEN_GRAS[(h >> 3) % BODEN_GRAS.size()] * 32, 0, 32, 32))
 	# große, weiche Flecken (helleres und dunkleres Gras über mehrere Felder) – so liest sich der Boden als Fläche, nicht als Kacheln
 	var links := float(Werte.ZONE_SPALTEN) * zg
 	var f := _flecken()
-	draw_texture_rect_region(f, Rect2(links, 0, Werte.SPALTEN * zg - links, Werte.ZEILEN * zg),
+	_ci.draw_texture_rect_region(f, Rect2(links, 0, Werte.SPALTEN * zg - links, Werte.ZEILEN * zg),
 		Rect2(Werte.ZONE_SPALTEN * 16, 0, (Werte.SPALTEN - Werte.ZONE_SPALTEN) * 16, Werte.ZEILEN * 16))
 	# Brut-Boden um Checkpoints, die zu Rundenbeginn dem Gegner gehören
 	for c: Vector2i in brut_cps:
 		var bb := _brut_bild(c)
-		draw_texture_rect(bb, Rect2((Vector2(c) + Vector2(0.5, 0.5)) * zg - bb.get_size(), bb.get_size() * 2.0), false)
+		_ci.draw_texture_rect(bb, Rect2((Vector2(c) + Vector2(0.5, 0.5)) * zg - bb.get_size(), bb.get_size() * 2.0), false)
 	# Bewuchs: höchstens einer je freiem Feld, nicht auf dem Gegnerweg
 	var auf_weg := {}
 	for p: Vector2i in pfad:
@@ -2088,13 +2166,13 @@ func _zeichne_boden_neu() -> void:
 			var i: int = BODEN_DEKO[(h >> 4) % BODEN_DEKO.size()]
 			var q := Rect2((i % 32) * 32, 96 + (i / 32) * 32, 32, 32)
 			var o := Vector2(z) * zg + Vector2(6 + (h >> 8) % 20, 4 + (h >> 13) % 22)
-			draw_texture_rect_region(blatt, Rect2(o, Vector2(32, 32)), q)
+			_ci.draw_texture_rect_region(blatt, Rect2(o, Vector2(32, 32)), q)
 	if vorschau_typ != FREI:
 		var linie := Color(0.04, 0.1, 0.04, 0.28)
 		for x in Werte.SPALTEN + 1:
-			draw_line(Vector2(x * zg, 0), Vector2(x * zg, Werte.ZEILEN * zg), linie, 1.0)
+			_ci.draw_line(Vector2(x * zg, 0), Vector2(x * zg, Werte.ZEILEN * zg), linie, 1.0)
 		for y in Werte.ZEILEN + 1:
-			draw_line(Vector2(0, y * zg), Vector2(Werte.SPALTEN * zg, y * zg), linie, 1.0)
+			_ci.draw_line(Vector2(0, y * zg), Vector2(Werte.SPALTEN * zg, y * zg), linie, 1.0)
 
 
 var _flecken_bild: ImageTexture
@@ -2203,11 +2281,13 @@ func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void
 	var punkte: PackedVector2Array = []
 	for z in weg:
 		punkte.append((Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE)
-	draw_polyline(punkte, band, 27.0)
+	_ci.draw_polyline(punkte, band, 27.0)
 	for p in punkte:
-		draw_circle(p, 13.5, band)
+		_ci.draw_circle(p, 13.5, band)
 	var abstand := 32.0
 	var rest := fmod(_zeit * 20.0, abstand) if laufend else 0.0
+	var orte: PackedVector2Array = []   # 18.11.: Pfeile erst sammeln, dann in zwei Durchgängen zeichnen (siehe _chevrons)
+	var winkel: PackedFloat32Array = []
 	for i in punkte.size() - 1:
 		var a := punkte[i]
 		var b := punkte[i + 1]
@@ -2215,19 +2295,35 @@ func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void
 		var richtung := (b - a) / laenge
 		var d := rest
 		while d < laenge:
-			_chevron(a + richtung * d, richtung.angle(), pfeil)
+			orte.append(a + richtung * d)
+			winkel.append(richtung.angle())
 			d += abstand
 		rest = d - laenge
+	_chevrons(orte, winkel, pfeil)
 
 
-func _chevron(p: Vector2, winkel: float, farbe: Color) -> void:
-	# das 16er-Pfeilmuster der Stilprobe, je Pixel 1,5 Bildpunkte
-	draw_set_transform(p.round(), winkel, Vector2(1.5, 1.5))
-	for i in 5:
-		draw_rect(Rect2(-4 + i, -5 + i, 3, 1), farbe)
-		draw_rect(Rect2(-4 + i, 4 - i, 3, 1), farbe)
-	draw_rect(Rect2(1, -1, 3, 2), farbe)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+## 18.11.: Leistung – das Pfeilmuster (das 16er-Muster der Stilprobe, je Pixel 1,5 Bildpunkte) liegt als kleines Bild vor;
+## vorher waren es 11 Rechtecke je Pfeil, bei langem Weg über 2000 Zeichenbefehle je Bild. Das 2×2-Feld an der Spitze war
+## doppelt gedeckt (halbtransparent dunkler) und wird darum ein zweites Mal gezeichnet – in einem eigenen Durchgang nach
+## allen Bildern, damit Bild und Rechteck sich nicht abwechseln (das bräche das Zusammenfassen der Zeichenaufrufe).
+## Die Pfeile überlappen sich nicht (Abstand 32), die Reihenfolge ändert am Bild also nichts.
+var _chevron_bild: ImageTexture
+
+func _chevrons(orte: PackedVector2Array, winkel: PackedFloat32Array, farbe: Color) -> void:
+	if _chevron_bild == null:
+		var bild := Image.create(8, 10, false, Image.FORMAT_RGBA8)   # Ursprung des Musters bei (4, 5)
+		for i in 5:
+			bild.fill_rect(Rect2i(i, i, 3, 1), Color.WHITE)
+			bild.fill_rect(Rect2i(i, 9 - i, 3, 1), Color.WHITE)
+		bild.fill_rect(Rect2i(5, 4, 3, 2), Color.WHITE)
+		_chevron_bild = ImageTexture.create_from_image(bild)
+	for i in orte.size():
+		_ci.draw_set_transform(orte[i].round(), winkel[i], Vector2(1.5, 1.5))
+		_ci.draw_texture(_chevron_bild, Vector2(-4, -5), farbe)
+	for i in orte.size():
+		_ci.draw_set_transform(orte[i].round(), winkel[i], Vector2(1.5, 1.5))
+		_ci.draw_rect(Rect2(1, -1, 2, 2), farbe)
+	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _zeichne_wall(z: Vector2i, alpha: float) -> void:
@@ -2356,17 +2452,17 @@ func _fabrik_beiwerk(z: Vector2i, alpha: float) -> void:
 func _zeichne_start() -> void:
 	var breite := float(Werte.ZONE_SPALTEN * Werte.ZELLE)
 	var hoehe := float(Werte.ZEILEN * Werte.ZELLE)
-	draw_rect(Rect2(0, 0, breite, hoehe), MYR_SCHLEIER if Werte.grafik_neu else Color(0.25, 0.05, 0.2, 0.35))
+	_ci.draw_rect(Rect2(0, 0, breite, hoehe), MYR_SCHLEIER if Werte.grafik_neu else Color(0.25, 0.05, 0.2, 0.35))
 	if schild:
 		# Schutzschild: durchgehende, pulsierende Wand
 		var puls := 0.5 + 0.5 * sin(_zeit * 2.0)
 		var sf := Color(1.0, 0.55, 0.2) if Werte.grafik_neu else Color(1.0, 0.35, 0.82)
-		draw_rect(Rect2(0, 0, breite, hoehe), Color(sf, 0.05 + 0.05 * puls))
-		draw_rect(Rect2(breite - 6, 0, 6, hoehe), Color(sf, 0.55 + 0.35 * puls))
+		_ci.draw_rect(Rect2(0, 0, breite, hoehe), Color(sf, 0.05 + 0.05 * puls))
+		_ci.draw_rect(Rect2(breite - 6, 0, 6, hoehe), Color(sf, 0.55 + 0.35 * puls))
 		return
 	var y := 0.0
 	while y < hoehe:
-		draw_rect(Rect2(breite - 4, y, 4, 16), Color(feind_farbe(), 0.7))
+		_ci.draw_rect(Rect2(breite - 4, y, 4, 16), Color(feind_farbe(), 0.7))
 		y += 32.0
 
 
@@ -2376,14 +2472,14 @@ func _zeichne_checkpoint(i: int) -> void:
 	var farbe := feind_farbe() if cp_feind[i] else TECH_LICHT
 	if not cp_aktiv:
 		# noch nicht im Spiel: nur der freigehaltene Platz
-		draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(10, 10), Vector2(44, 44)), Color(STEIN_HELL, 0.45), false, 4.0)
+		_ci.draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(10, 10), Vector2(44, 44)), Color(STEIN_HELL, 0.45), false, 4.0)
 		_cp_nummer(i, farbe)
 		return
 	if Werte.grafik_neu:
 		# Neue Grafik: schlichte Fahne, cyan = deiner, pink = vom Gegner (in HD-2D als Sprite3D)
 		if not Werte.grafik_hd:
 			var fuss := (Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE + Vector2(0, 22)
-			draw_texture_rect(neu_bild("gebaeude/checkpoint_feind.png" if cp_feind[i] else "gebaeude/checkpoint.png"), Rect2(fuss - Vector2(25, 44) * 2.0, Vector2(96, 96)), false)
+			_ci.draw_texture_rect(neu_bild("gebaeude/checkpoint_feind.png" if cp_feind[i] else "gebaeude/checkpoint.png"), Rect2(fuss - Vector2(25, 44) * 2.0, Vector2(96, 96)), false)
 	else:
 		_r(z, 8, 8, 48, 48, STEIN_DUNKEL)
 		_r(z, 12, 12, 40, 40, STEIN)
@@ -2396,7 +2492,7 @@ func _zeichne_checkpoint(i: int) -> void:
 	if cp_feind[i]:
 		if i == start_index():
 			var puls := 0.5 + 0.5 * sin(_zeit * 4.0)
-			draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(2, 2), Vector2(60, 60)), Color(farbe, 0.4 + 0.5 * puls), false, 4.0)
+			_ci.draw_rect(Rect2(Vector2(z) * Werte.ZELLE + Vector2(2, 2), Vector2(60, 60)), Color(farbe, 0.4 + 0.5 * puls), false, 4.0)
 		if cp_fortschritt[i] > 0.0:
 			_r(z, 8, 54, 48, 6, Color(0, 0, 0, 0.7))
 			_r(z, 10, 56, 44.0 * clampf(cp_fortschritt[i] / Werte.RUECKEROBERUNG_SEK, 0.0, 1.0), 2, TECH_LICHT)
@@ -2406,9 +2502,9 @@ func _zeichne_checkpoint(i: int) -> void:
 ## Nummer des Checkpoints (1 = der erste auf dem Weg der Gegner) als Plakette oben links.
 func _cp_nummer(i: int, farbe: Color) -> void:
 	var m := Vector2(checkpoints[i]) * Werte.ZELLE + Vector2(13, 14)
-	draw_circle(m, 10.0, Color(0.05, 0.05, 0.08, 0.9))
-	draw_arc(m, 10.0, 0.0, TAU, 20, farbe, 2.0)
-	draw_string(ThemeDB.fallback_font, m + Vector2(-10, 5), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, 20, 14, Color.WHITE)
+	_ci.draw_circle(m, 10.0, Color(0.05, 0.05, 0.08, 0.9))
+	_ci.draw_arc(m, 10.0, 0.0, TAU, 20, farbe, 2.0)
+	_ci.draw_string(ThemeDB.fallback_font, m + Vector2(-10, 5), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, 20, 14, Color.WHITE)
 
 
 func _zeichne_basis() -> void:
@@ -2417,7 +2513,7 @@ func _zeichne_basis() -> void:
 		# Neue Grafik: Technoclan-Hauptquartier (in HD-2D als Sprite3D, siehe hd_ansicht.gd)
 		if not Werte.grafik_hd:
 			var fuss := (Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE + Vector2(0, 26)
-			draw_texture_rect(neu_bild("gebaeude/basis_gross.png"), Rect2(fuss - Vector2(57, 110), Vector2(128, 128)), false)
+			_ci.draw_texture_rect(neu_bild("gebaeude/basis_gross.png"), Rect2(fuss - Vector2(57, 110), Vector2(128, 128)), false)
 		return
 	_r(z, 2, 6, 60, 56, TECH_DUNKEL)
 	_r(z, 6, 10, 52, 48, TECH)
@@ -2454,7 +2550,7 @@ func _zeichne_weg(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void:
 		var d := rest
 		while d < laenge:
 			var p := (a + richtung * d).round()
-			draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), farbe)
+			_ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), farbe)
 			d += abstand
 		rest = d - laenge
 

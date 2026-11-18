@@ -361,12 +361,30 @@ func aktualisiere(_delta: float) -> void:
 	_aktualisiere_oben_rechts()
 	_aktualisiere_tipps()
 	_ordne_an()
-	for f: Control in [_status, _welle, _konsole, _tipp, _tipp_oben, weg_grund, _zuweis, _warnung, _formen]:
+	# 18.11.: Leistung – neu gezeichnet wird nur, was sich geändert hat (vorher alles in jedem Bild, ~1 ms am PC).
+	# Überfahren mit der Maus und Größenwechsel zeichnen die Flächen selbst neu. In jedem Bild bleiben: die Konsole
+	# (Monitor flimmert, Radar läuft), das Start-Emblem, solange es pulsiert, und die Zeichnungen im Spielfeld (Kamera).
+	_bei_aenderung(_status, [_leben, _budget_text, _zins, _angreifer, _bauphase])
+	_bei_aenderung(_welle, [_runde_text, _welle_zeile, _gruppen, _welle_zusatz])
+	_bei_aenderung(_tipp, [_tipp_titel, _tipp_text, _tipp_warnung, s._meldung_art, s._meldung_zeit > 0.0, s._meldung])
+	_bei_aenderung(_tipp_oben, [_tipp_oben_text, _tipp_oben_x])
+	_bei_aenderung(weg_grund, [weg_text.text])
+	for f: Control in [_konsole, _zuweis, _warnung, _formen]:
 		f.queue_redraw()
-	for b: Control in [start, tempo, menue, _neu]:
-		b.queue_redraw()
-	for b: Emblem in _oben_rechts:
-		b.queue_redraw()
+	if not start.disabled and _start_bild != null:
+		start.queue_redraw()
+	else:
+		_bei_aenderung(start, [start.disabled, start.leuchtet, start.warnt, _angreifer])
+	_bei_aenderung(tempo, [tempo.disabled, tempo.leuchtet, tempo.warnt, s._tempo_faktor])
+	for b: Emblem in [menue, _neu] + _oben_rechts:
+		_bei_aenderung(b, [b.disabled, b.leuchtet, b.warnt])
+
+
+## 18.11.: Leistung – Fläche nur neu zeichnen, wenn sich geändert hat, was sie zeigt (`stand`).
+func _bei_aenderung(c: CanvasItem, stand: Array) -> void:
+	if not c.has_meta("stand") or c.get_meta("stand") != stand:
+		c.set_meta("stand", stand)
+		c.queue_redraw()
 
 
 func _aktualisiere_kacheln() -> void:
@@ -393,7 +411,7 @@ func _aktualisiere_kacheln() -> void:
 			k.preis_farbe = Stil.TEXT_BLASS   # noch nicht freigeschaltet
 		k.disabled = aus
 		k.gewaehlt = s.werkzeug == typ
-		k.queue_redraw()
+		_bei_aenderung(k, [k.preis, k.preis_farbe, k.disabled, k.gewaehlt])   # 18.11.: nur bei Änderung
 	start.disabled = phase != BAU
 	start.leuchtet = phase == BAU
 	start.visible = true
