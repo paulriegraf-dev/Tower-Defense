@@ -884,12 +884,19 @@ func _male_kabel(ci: Control, w: float, h: float, t: float) -> void:
 
 func _male_tipp(ci: Control) -> void:
 	var rand := Stil.ROT if _tipp_warnung else Stil.RAHMEN
-	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 3.0, Stil.METALL_DUNKEL, rand)
+	# 18.11.: Meldungen nach Art gefärbt – Geld gold, Ereignisse kupfern (Rand, leichter Schimmer, Leiste links)
+	var art := str(spiel._meldung_art) if spiel._meldung_zeit > 0.0 and _tipp_text == spiel._meldung and not _tipp_warnung else ""
+	var farbe := Stil.GOLD if art == "geld" else Stil.KUPFER
+	if art != "":
+		rand = farbe
+	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 3.0, Stil.METALL_DUNKEL.lerp(farbe, 0.1) if art != "" else Stil.METALL_DUNKEL, rand)
+	if art != "":
+		ci.draw_rect(Rect2(2, 3, 1, ci.size.y - 6.0), farbe)
 	var y := 4.0
 	if _tipp_titel != "":
 		Stil.schreibe(ci, Vector2(6, y + 4.0), _tipp_titel, Stil.NORMAL, Stil.LEUCHT)
 		y += 11.0
-	Stil.absatz(ci, Vector2(6, y), _tipp_text, 220.0, Stil.KLEIN, Stil.WARN if _tipp_warnung else Stil.TEXT)
+	Stil.absatz(ci, Vector2(6, y), _tipp_text, 220.0, Stil.KLEIN, Stil.WARN if _tipp_warnung else (Stil.TEXT.lerp(farbe, 0.35) if art != "" else Stil.TEXT))
 
 
 func _male_start(ci: Control) -> void:

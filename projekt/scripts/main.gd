@@ -126,6 +126,10 @@ var _hud: CanvasLayer                # neue Oberfläche (scripts/ui/hud.gd, 16.1
 var _auswahl: Einheit               # angeklickte Einheit (zeigt ihre Reichweite)
 var _ende: Control
 var _ende_text: Label
+var _tafel: EndTafel   # 18.11.: Sieg, Niederlage, Phantom-Ende (scripts/ui/end_tafel.gd)
+var _einblendung: Einblendung   # 18.11.: Rundenabrechnung und Banner (scripts/ui/einblendung.gd)
+var _meldung_art := ""   # 18.11.: "geld", "ereignis" oder "" – färbt die Meldung im HUD
+var _durch_typen: Dictionary = {}   # 18.11.: welche Gegnertypen in dieser Partie die Basis erreicht haben (Niederlage-Tafel)
 
 
 func _ready() -> void:
@@ -504,27 +508,27 @@ func _zeige_geknackt(neu: Dictionary) -> void:
 	_laufband.visible = false
 	var probe: Array = _angriff_log.duplicate(true)
 	var wertung := Phantom.wertung(probe)
-	var zeilen: PackedStringArray = []
-	zeilen.append("Verteidigung geknackt – in Runde %d!" % welle)
-	zeilen.append("Zwischenwertung: %d Punkte" % wertung["gesamt"])
-	zeilen.append("  ·  ".join(wertung["zeilen"]))
-	zeilen.append("Ein Ersatz-Phantom (%s) wartet: neue Karte, volle %d Leben." % [str(neu.get("spieler", "?")), Werte.START_LEBEN])
-	zeilen.append("Jede weitere geknackte Verteidigung bringt mehr Punkte.")
-	_ende_text.add_theme_font_size_override("font_size", 24)
-	_ende_text.text = "\n".join(zeilen)
-	for k in _ende_knoepfe.get_children():
-		k.queue_free()
-	for k in _export_knoepfe.get_children():
-		k.queue_free()
-	_export_hinweis.text = ""
-	var weiter := _ende_knopf("⚔  Weiter gegen %s" % str(neu.get("spieler", "das Ersatz-Phantom")), func():
-		_ende.visible = false
-		_ersatz_uebernimmt(neu))
-	weiter.add_theme_color_override("font_color", Color("ffe9a8"))
-	_ende_knopf("Angriff beenden · Wertung sichern", func():
-		_ende.visible = false
-		_angriff_ende("durchbruch", true))
-	_ende.visible = true
+	# 18.11.: Endtafel statt Textzeilen
+	var genommen := 0
+	for e: Dictionary in probe:
+		genommen += int(e["leben_genommen"])
+	var gegner_name := str(neu.get("spieler", "das Ersatz-Phantom"))
+	_zeige_tafel({
+		"kicker": "PHANTOM-ANGRIFF  ·  RUNDE %d" % welle, "titel": "GEKNACKT!", "titel_farbe": _F_KUPFER_HELL, "rahmen": _F_KUPFER_HELL,
+		"untertitel": "Die Verteidigung von %s ist gefallen." % str(_phantom.get("spieler", "?")), "effekt": "kupfer", "wackeln": true,
+		"kacheln": [
+			{"name": "ZWISCHENSTAND", "zahl": int(wertung["gesamt"]), "farbe": _F_GOLD},
+			{"name": "LEBEN GENOMMEN", "zahl": genommen, "farbe": _F_ROT, "symbol": "herz"},
+			{"name": "GEKNACKT", "zahl": _geknackt + 1, "farbe": _F_KUPFER}],
+		"kaesten": [{"titel": "NÄCHSTER GEGNER: %s" % gegner_name.to_upper(), "farbe": _F_KUPFER_HELL,
+			"text": "Neue Karte, volle %d Leben, eine Runde ohne Nebel. Jede weitere geknackte Verteidigung bringt mehr Punkte." % Werte.START_LEBEN}],
+		"zeilen": ["  ·  ".join(wertung["zeilen"])],
+		"knoepfe": [
+			["Weiter gegen %s" % gegner_name, func():
+				_tafel.visible = false
+				_ersatz_uebernimmt(neu), _F_KUPFER_HELL],
+			["Beenden · Wertung sichern", func(): _angriff_ende("durchbruch", true), _F_TEXT]],
+	})
 
 
 func _ersatz_uebernimmt(neu: Dictionary) -> void:
@@ -553,6 +557,7 @@ func _ersatz_uebernimmt(neu: Dictionary) -> void:
 	_naechste_bauphase()
 	_lade_phantom_stand()
 	_zeige_laufband()
+	_einblendung.banner("NEUER GEGNER", "%s übernimmt – volle %d Leben." % [str(_phantom.get("spieler", "?")), leben], _F_KUPFER_HELL)   # 18.11.
 	melde("Verteidigung geknackt! Ein Ersatz-Phantom (%s) übernimmt ab Runde %d – neue Karte, volle %d Leben." % [str(_phantom.get("spieler", "?")), welle, leben], 10.0)
 
 
@@ -582,21 +587,36 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 		erfolg("einbrecher")   # 18.11.
 	if pfad != "":
 		_angriff_online.call_deferred(pfad, daten, int(wertung["gesamt"]))
-	var zeilen: PackedStringArray = []
-	match grund:
-		"durchbruch":
-			zeilen.append("Durchbruch! Die Verteidigung ist in Runde %d gefallen." % welle if _geknackt == 0 else "Durchbruch! %d Verteidigungen geknackt, die letzte in Runde %d." % [_geknackt + 1, welle])
-		"hq":
-			zeilen.append("Dein HQ ist gefallen – das Phantom hat den Gegenangriff gewonnen.")
-		_:
-			zeilen.append("Das Phantom hat keine weiteren Runden.")
-	zeilen.append("Wertung: %d Punkte" % wertung["gesamt"])
-	zeilen.append("  ·  ".join(wertung["zeilen"]))
+	# 18.11.: Endtafel statt Textzeilen
+	var geknackt := _geknackt + (1 if grund == "durchbruch" else 0)
+	var titel := "DURCHBRUCH!"
+	var farbe := _F_KUPFER_HELL
+	var unter := "Die Verteidigung ist in Runde %d gefallen." % welle if geknackt <= 1 else "%d Verteidigungen geknackt, die letzte in Runde %d." % [geknackt, welle]
+	if grund == "hq":
+		titel = "HQ GEFALLEN"
+		farbe = _F_ROT
+		unter = "Das Phantom hat den Gegenangriff gewonnen – aber jede Sekunde zählt."
+	elif grund != "durchbruch":
+		titel = "ANGRIFF BEENDET"
+		farbe = _F_GOLD
+		unter = "Das Phantom hat keine weiteren Runden."
+	var zeilen: Array = ["  ·  ".join(wertung["zeilen"])]
 	if endkampf:
 		zeilen.append("Runde 20: %d Durchgänge, %d Sekunden" % [_durchgang, int(_kampf_sek)])
-	zeilen.append("Budget eingesetzt: %d" % punkte)
-	zeilen.append("Gespeichert als Angriffs-Phantom." if pfad != "" else "(Speichern hat nicht geklappt.)")
-	_zeige_ende("\n".join(zeilen), 26)
+	if pfad == "":
+		zeilen.append("(Speichern hat nicht geklappt.)")
+	_zeige_tafel({
+		"kicker": "PHANTOM-ANGRIFF  ·  GEGEN %s" % str(_phantom.get("spieler", "?")).to_upper(), "titel": titel, "titel_farbe": farbe, "rahmen": farbe,
+		"untertitel": unter, "effekt": "kupfer" if grund != "hq" else "asche", "glitch": grund == "hq",
+		"kacheln": [
+			{"name": "PUNKTE", "zahl": int(wertung["gesamt"]), "farbe": _F_GOLD},
+			{"name": "LEBEN GENOMMEN", "zahl": genommen, "farbe": _F_ROT, "symbol": "herz"},
+			{"name": "GEKNACKT", "zahl": geknackt, "farbe": _F_KUPFER},
+			{"name": "BUDGET", "zahl": punkte, "farbe": _F_TEXT, "symbol": "muenze"}],
+		"kaesten": [_protokoll_kasten("DEIN ANGRIFF IST JETZT EIN PHANTOM", "Andere Spieler verteidigen ab jetzt gegen deine Wellen.")] if pfad != "" else [],
+		"zeilen": zeilen,
+		"knoepfe": [["Nochmal angreifen", _neustart, _F_KUPFER_HELL], ["Startmenü", _zum_menue, _F_TEXT]],
+	})
 
 
 # ------------------------------------------------------------ Profil und Online-Pool (18.11.)
@@ -818,6 +838,120 @@ func _zeige_ende(text: String, schrift: int = 36, mit_angriff: bool = false) -> 
 	_ende.visible = true
 
 
+const _F_LEUCHT := Color("7fe0ff")
+const _F_TEXT := Color("e6edf3")
+const _F_GOLD := Color("ffd34d")
+const _F_ROT := Color("ff5a6e")
+const _F_KUPFER := Color("e08a4f")
+const _F_KUPFER_HELL := Color("ffb070")
+
+
+## Endtafel zeigen (18.11.): Spiel steht, das alte Schlussbild bleibt verborgen.
+func _zeige_tafel(conf: Dictionary) -> void:
+	phase = Phase.ENDE
+	_ende.visible = false
+	_tafel.gesperrt = func() -> bool: return _bestaetigung.visible
+	_tafel.zeige(conf)
+
+
+## Kasten „Phantom-Protokoll“ für die Endtafel: Hinweis zum Hochladen (ändert sich, sobald online fertig) und Knopf.
+func _protokoll_kasten(titel: String, sonst: String) -> Dictionary:
+	_export_hinweis.text = ("Wird online hochgeladen …" if Online.aktiv() else "Dein Lauf als Datei: herunterladen und an Paul schicken – dann wird er zum Phantom für andere Spieler.") if _export_text != "" else sonst
+	var k := {"titel": titel, "farbe": _F_LEUCHT, "text_fn": func() -> String: return _export_hinweis.text}
+	if _export_text != "":
+		k["knopf"] = ["Hochladen", _export_datei]
+	return k
+
+
+## 18.11.: Siegbildschirm statt Text auf schwarzem Grund.
+func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
+	var k: Array = []
+	if mit_angriff:
+		k.append(["In die Offensive", _frage_angriff, _F_KUPFER_HELL])
+	k.append(["Neustart", _neustart, _F_LEUCHT])
+	k.append(["Startmenü", _zum_menue, _F_TEXT])
+	var conf := {
+		"kicker": "RUNDE %d  ·  GEGENANGRIFF" % int(info["welle"]), "titel": "SIEG", "titel_farbe": _F_GOLD, "rahmen": _F_GOLD,
+		"untertitel": "Das HQ der Myriaden ist zerstört.", "effekt": "funken",
+		"kacheln": [
+			{"name": "RUNDEN", "zahl": info["welle"], "max": info["welle"], "farbe": _F_LEUCHT},
+			{"name": "LEBEN", "zahl": info["leben"], "max": info["max_leben"], "farbe": _F_ROT, "symbol": "herz"},
+			{"name": "BESIEGT", "zahl": info["besiegt"], "farbe": _F_KUPFER},
+			{"name": "KAMPFZEIT", "zahl": info["sekunden"], "zeit": true, "farbe": _F_TEXT}],
+		"kaesten": [_protokoll_kasten("DEIN BAU IST JETZT EIN PHANTOM", "")] if info["phantom"] else [],
+		"zeilen": [str(info["wertung"])] if str(info["wertung"]) != "" else [],
+		"knoepfe": k,
+	}
+	_zeige_tafel(conf)
+
+
+## Sprüche der Myriaden und Tipps von Sonde 7 zur Niederlage, je nach dem Gegnertyp, der am häufigsten durchkam.
+const _SPRUECHE := {
+	"hund": ["Wuff. Das heißt auf Myriadisch: Danke für die offene Tür.", "Die Hunde lassen ausrichten: Eure Basis riecht jetzt nach uns."],
+	"fahne": ["Unsere Fahne weht jetzt über eurer Basis. Steht ihr ausgezeichnet.", "Wir waren einfach schneller. Die Fahne hat's gemacht."],
+	"sphaere": ["Battlesphären melden: Ziel erreicht. Euer Kaffee war leider kalt.", "Wir haben aus sicherer Entfernung zugesehen. Sehr unterhaltsam."],
+	"sprenger": ["Eure Mauern waren wirklich hübsch. Waren.", "Kleiner Knall, große Wirkung. Danke fürs Zusammenstehen."],
+	"schild": ["Von vorn, wie immer. Ihr hättet es mal von der Seite versuchen sollen.", "Klopf, klopf. Wer ist da? Ein Schild. Ein sehr großer Schild."],
+	"schwarm": ["Erst waren wir einer. Dann drei. Dann waren wir überall.", "Ihr habt den Schwarmgeist besiegt. Seine Drohnen fanden das lustig."],
+	"enterer": ["Erst waren wir einer. Dann drei. Dann waren wir überall.", "Myr-Drohnen sind klein. Aber sie sind viele. Und sie haben Hunger."],
+	"belagerung": ["Danke für die schönen Wälle. Wir haben angedockt und es uns gemütlich gemacht.", "Ein Turm, ein Plan, eine offene Basis."],
+	"rauch": ["Habt ihr uns gesehen? Nein? Genau das war der Plan.", "Ein bisschen Nebel, und schon zielt keiner mehr."],
+	"sani": ["Wir sind zäher, als ihr dachtet. Unser Sanitäter auch.", "Jeder Kratzer geheilt. Jeder Durchbruch geschafft."],
+}
+const _SPRUCH_SONST := "Die Myriaden danken für eure Gastfreundschaft. Bis zur nächsten Partie!"
+const _TIPPS := {
+	"hund": "Rudel kommen schnell und in Massen: Plasmawerfer treffen die ganze Gruppe, ein Lanzenturm im langen Gang trifft alle in der Linie.",
+	"fahne": "Fahnenträger zuerst ausschalten: Fällt die Fahne, wird der Trupp wieder langsam. Ein Frostturm bremst den ganzen Sturm.",
+	"sphaere": "Battlesphären schießen auf Stellungen: Scharfschützen oder eine Batterie holen sie aus der Distanz.",
+	"sprenger": "Sprenger stehen 1,7 s still, bevor es knallt: Scharfschützen an die Abkürzungen. Panzerung fängt die erste Sprengung ab.",
+	"schild": "Schildträger halten nur von vorn: Knickt der Weg an deinen Schützen vorbei ab, trifft alles von der Seite voll.",
+	"schwarm": "Schwarmgeister zerfallen in drei Drohnen: Flächenschaden hinter der Stelle, wo sie fallen, etwa ein Brandfeld.",
+	"enterer": "Myr-Drohnen laufen auf Wällen: ein Heilturm mit Instandsetzung und Bodentruppen in der Nähe der Türme helfen.",
+	"belagerung": "Belagerungstürme docken am ersten Wall an: Dort lohnen Schwere Munition oder eine Lanze.",
+	"rauch": "Gegen Rauch: Peilsender am Funkturm oder Scharfschützen ab Stufe 2 (Klarsicht). Türme schießen sowieso weiter.",
+	"sani": "Sanitäter heilen alle um sich: Mit Zielmarkierung oder Durchschuss fällt er zuerst.",
+}
+const _TIPP_SONST := "Ein Blick in die Schadensliste [Tab] zeigt, welche Fabrik kaum getroffen hat. Dort lohnt sich ein Umbau."
+
+
+## 18.11.: Niederlage – mit Augenzwinkern: abgefangener Funkspruch der Myriaden und ein Tipp von Sonde 7.
+func _zeige_niederlage(vw: String, rekord_vorher: int, besiegt: int) -> void:
+	var meiste := ""
+	for typ: String in _durch_typen:
+		if meiste == "" or int(_durch_typen[typ]) > int(_durch_typen[meiste]):
+			meiste = typ
+	var sprueche: Array = _SPRUECHE.get(meiste, [_SPRUCH_SONST])
+	var spruch: String = sprueche[randi() % sprueche.size()]
+	if endkampf:
+		spruch = "So nah an unserem HQ. Wir haben gezittert. Kurz."
+	var sek := 0.0
+	for r: Dictionary in _protokoll.get("runden", []):
+		sek += float((r.get("ergebnis", {}) as Dictionary).get("sekunden", 0.0))
+	var durch := {"name": "MEISTE DURCH", "text": "–", "farbe": _F_KUPFER}
+	if meiste != "":
+		durch["text"] = "%s ×%d" % [str(Werte.GEGNER[meiste]["kurz"]), int(_durch_typen[meiste])]
+	var zeilen: Array = []
+	if welle > rekord_vorher and rekord_vorher > 0:
+		zeilen.append("Neuer Rekord: Runde %d (vorher %d)" % [welle, rekord_vorher])
+	if vw != "":
+		zeilen.append(vw)
+	var untertitel := ["Die Myriaden sind durch.", "Das war knapp. Also, für die Myriaden nicht.", "Die Basis macht jetzt eine kurze Pause.", "Zurück auf Anfang – diesmal mit Plan."]
+	_zeige_tafel({
+		"kicker": "RUNDE %d VON %d" % [welle, Werte.LETZTE_RUNDE], "titel": "BASIS GEFALLEN", "titel_farbe": _F_ROT, "rahmen": _F_ROT,
+		"untertitel": untertitel[randi() % untertitel.size()], "effekt": "asche", "glitch": true, "wackeln": true,
+		"kacheln": [
+			{"name": "ERREICHT", "zahl": welle, "max": Werte.LETZTE_RUNDE, "farbe": _F_ROT},
+			{"name": "BESIEGT", "zahl": besiegt, "farbe": _F_KUPFER},
+			durch,
+			{"name": "KAMPFZEIT", "zahl": sek, "zeit": true, "farbe": _F_TEXT}],
+		"kaesten": [
+			{"titel": "ABGEFANGENER FUNKSPRUCH DER MYRIADEN", "farbe": _F_KUPFER, "text": "„%s“" % spruch, "tippen": true},
+			{"titel": "SONDE 7 RÄT", "farbe": _F_LEUCHT, "text": str(_TIPPS.get(meiste, _TIPP_SONST))}],
+		"zeilen": zeilen,
+		"knoepfe": [["Revanche!", _neustart, _F_LEUCHT], ["Startmenü", _zum_menue, _F_TEXT]],
+	})
+
+
 ## Merkt sich die Datei dieser Partie fürs Schlussbild (Herunterladen im Browser).
 func _merke_export(daten: Dictionary, art: String) -> void:
 	_export_text = JSON.stringify(daten, "\t")
@@ -880,7 +1014,18 @@ func _zum_menue() -> void:
 
 ## Bestätigung vor dem Seitenwechsel: kurz sagen, was der Angriffsmodus ist und was jetzt passiert.
 func _frage_angriff() -> void:
-	_bestaetigung.visible = true
+	var zurueck := func(): _bestaetigung.visible = false
+	(_bestaetigung as EndTafel).zeige({
+		"kicker": "PHANTOM-MODUS", "titel": "IN DIE OFFENSIVE?", "titel_farbe": _F_KUPFER_HELL, "rahmen": _F_KUPFER_HELL,
+		"untertitel": "Du wechselst die Seite.",
+		"punkte": [
+			["wall", "Ein Phantom verteidigt: der Bau eines anderen Spielers, Runde für Runde so, wie er damals stand."],
+			["muenze", "Jede Runde ein festes Budget. Im Taktikplaner wählst du Einheiten, Reihenfolge, Pausen und Würfe."],
+			["herz", "Nimm dem Phantom alle %d Leben – oder halte Runde 20 so lange wie möglich. Am Ende gibt es Punkte." % Werte.START_LEBEN]],
+		"zeilen": ["Deine Partie ist gespeichert und steht ab jetzt selbst als Phantom im Pool."],
+		"knoepfe": [["Ja, angreifen", _angriff_bestaetigt, _F_KUPFER_HELL], ["Zurück", zurueck, _F_TEXT]],
+		"esc": zurueck,
+	})
 
 
 func _angriff_bestaetigt() -> void:
@@ -1272,9 +1417,12 @@ func _baue_zoomregler(ebene: CanvasLayer) -> void:
 	grund.size = Vector2(36, 210)
 	_zoom_grund = grund
 	grund.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 18.11.: im Stil des HUD (Metall, Leuchtblau) statt runder Standard-Box
 	var stil := StyleBoxFlat.new()
-	stil.bg_color = Color(0.07, 0.06, 0.09, 0.7)
-	stil.set_corner_radius_all(6)
+	stil.bg_color = Color(0.11, 0.125, 0.15, 0.88)
+	stil.border_color = Color("4a515e")
+	stil.set_border_width_all(2)
+	stil.set_content_margin_all(3)
 	grund.add_theme_stylebox_override("panel", stil)
 	ebene.add_child(grund)
 	var spalte := VBoxContainer.new()
@@ -1309,9 +1457,47 @@ func _baue_zoomregler(ebene: CanvasLayer) -> void:
 	minus.focus_mode = Control.FOCUS_NONE
 	minus.flat = true
 	spalte.add_child(minus)
+	for b: Button in [_ansicht_knopf, plus, minus]:
+		_hud_knopf_stil(b)
+	var spur := StyleBoxFlat.new()
+	spur.bg_color = Color("15171c")
+	spur.border_color = Color("4a515e")
+	spur.set_border_width_all(1)
+	spur.content_margin_left = 3
+	spur.content_margin_right = 3
+	var fuellung := StyleBoxFlat.new()
+	fuellung.bg_color = Color(_F_LEUCHT, 0.35)
+	_zoomregler.add_theme_stylebox_override("slider", spur)
+	_zoomregler.add_theme_stylebox_override("grabber_area", fuellung)
+	_zoomregler.add_theme_stylebox_override("grabber_area_highlight", fuellung)
+	var griff := Image.create(12, 6, false, Image.FORMAT_RGBA8)
+	griff.fill(_F_LEUCHT)
+	griff.fill_rect(Rect2i(1, 1, 10, 4), Color("2a2f38"))
+	griff.fill_rect(Rect2i(3, 2, 6, 2), _F_LEUCHT)
+	var griff_tex := ImageTexture.create_from_image(griff)
+	for name in ["grabber", "grabber_highlight", "grabber_disabled"]:
+		_zoomregler.add_theme_icon_override(name, griff_tex)
 	_zoomregler.value_changed.connect(_zoom_gestellt)
 	plus.pressed.connect(func(): _zoomregler.value = minf(1.0, _zoomregler.value + 0.2))
 	minus.pressed.connect(func(): _zoomregler.value = maxf(0.0, _zoomregler.value - 0.2))
+
+
+## 18.11.: kleiner HUD-Knopf (Zoom-Leiste): Metallfläche, Leuchtrand beim Darüberfahren, Pixelschrift.
+func _hud_knopf_stil(b: Button) -> void:
+	b.flat = false
+	b.custom_minimum_size = Vector2(26, 22)
+	var flaechen := {"normal": [Color("2a2f38"), Color("4a515e")], "hover": [Color(_F_LEUCHT, 0.18), _F_LEUCHT], "pressed": [Color(_F_LEUCHT, 0.32), _F_LEUCHT]}
+	for zustand: String in flaechen:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = flaechen[zustand][0]
+		sb.border_color = flaechen[zustand][1]
+		sb.set_border_width_all(1)
+		b.add_theme_stylebox_override(zustand, sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_font_override("font", preload("res://scripts/ui/ui_stil.gd").schrift_fuer(25))
+	b.add_theme_font_size_override("font_size", 17)
+	b.add_theme_color_override("font_color", _F_LEUCHT)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
 
 
 ## 0 = ganz heraus, 1 = ganz nah (für die Kampfgeräusche).
@@ -2572,14 +2758,9 @@ func _welle_geschafft() -> void:
 		erfolg("sparfuchs")   # 18.11.
 	var erz := erz_ertrag()
 	budget += bonus + cp_bonus + zins + erz
-	var text := "Runde %d überstanden: +%d Budget" % [welle, bonus]
-	if zins > 0:
-		text += ", +%d Zinsen" % zins
-	if erz > 0:
-		text += ", +%d aus Erzadern" % erz
-	if cp_bonus > 0:
-		text += ", +%d für gehaltene Checkpoints (%d von %d)" % [cp_bonus, gehalten, karte.checkpoints.size()]
-	melde(text + ".", 5.0)
+	# 18.11.: Abrechnungskarte statt Meldezeile
+	_einblendung.abrechnung("RUNDE %d ÜBERSTANDEN" % welle, [["Rundenbonus", bonus], ["Zinsen", zins],
+		["Checkpoints %d/%d" % [gehalten, karte.checkpoints.size()], cp_bonus], ["Erzadern", erz]])
 	_schliesse_runde("geschafft")
 	_naechste_bauphase()
 
@@ -2635,6 +2816,7 @@ func _starte_gegenangriff() -> void:
 		if karte.posten.get(e.posten_zelle) == e:
 			karte.posten.erase(e.posten_zelle)
 		e.posten_verloren()
+	_einblendung.banner("GEGENANGRIFF!", "Der Schild ist gefallen – zerstört das HQ der Myriaden.", _F_ROT)   # 18.11.
 	melde("Welle abgewehrt: +%d Budget. Der Schild ist gefallen – GEGENANGRIFF! Zerstört das HQ. Gebt euren Truppen einen Fußweg (blaue Linie)." % (bonus + zins), 12.0)
 	Ton.spiele(self, "alert")
 
@@ -3066,7 +3248,6 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 			erfolg("unberuehrt")
 		if not _fabrik_gebaut():
 			erfolg("ohne_fabrik")
-		var text := "Sieg! Das gegnerische HQ ist zerstört."
 		var als_phantom := false
 		if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "":   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen
 			# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
@@ -3078,12 +3259,15 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 				Profil.phantom_erstellt()
 				erfolg("spiegelbild")   # 18.11.
 				_verteidigung_online.call_deferred(vpfad, daten)
-		if als_phantom:
-			text += "\nDeine Partie ist gespeichert – dein Bau ist jetzt ein Phantom."
+		var besiegt := 0
+		for n: int in _profil_kills.values():
+			besiegt += n
+		var sek := 0.0
+		for r: Dictionary in _protokoll.get("runden", []):
+			sek += float((r.get("ergebnis", {}) as Dictionary).get("sekunden", 0.0))
 		var vw := _partie_ins_profil(true)
-		if vw != "":
-			text += "\n" + vw
-		_zeige_ende(text, 36, als_phantom)
+		_zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
+			"sekunden": sek, "phantom": als_phantom, "wertung": vw}, als_phantom)
 	else:
 		melde("Schleuder zerstört!", 3.0)
 
@@ -3781,6 +3965,7 @@ func gegner_am_ziel(g: Gegner) -> void:
 	g.trupp.erase(g)
 	gegner.erase(g)
 	g.queue_free()
+	_durch_typen[g.typ] = int(_durch_typen.get(g.typ, 0)) + 1   # 18.11.: für die Niederlage-Tafel
 	leben -= 1
 	if leben <= 0 and phantom_modus == "angriff":
 		leben = 0
@@ -3791,8 +3976,12 @@ func gegner_am_ziel(g: Gegner) -> void:
 		if not sandbox:
 			loesche_zwischenstand()   # 18.11.
 		_schliesse_runde("niederlage")
+		var rekord := Profil.stat("beste_runde")
+		var besiegt := 0
+		for n: int in _profil_kills.values():
+			besiegt += n
 		var vw := _partie_ins_profil(false)
-		_zeige_ende("Die Basis ist gefallen." + ("\n" + vw if vw != "" else ""), 36 if vw == "" else 28)
+		_zeige_niederlage(vw, rekord, besiegt)
 		if phantom_modus == "verteidigung":
 			_verteidigung_online.call_deferred("", {})
 
@@ -4737,9 +4926,13 @@ func _aktualisiere_vorschau() -> void:
 
 # ------------------------------------------------------------------ Anzeige
 
-func melde(text: String, dauer: float = 2.5) -> void:
+## 18.11.: `art` färbt die Meldung im HUD ("geld" gold, "ereignis" kupfern); ohne Angabe aus dem Text erraten.
+func melde(text: String, dauer: float = 2.5, art: String = "?") -> void:
 	_meldung = text
 	_meldung_zeit = dauer
+	if art == "?":
+		art = "geld" if ("Budget" in text or "Zinsen" in text) and not text.begins_with("Nicht genug") else ("ereignis" if text.ends_with("!") or "!" in text.left(40) else "")
+	_meldung_art = art
 
 
 func _noch_offen() -> int:
@@ -4889,6 +5082,10 @@ func _baue_hud() -> void:
 	var text := _label(_ende, Vector2.ZERO, 40, Color("ffe9a8"))
 	_ende_text = text
 	text.text = "Die Basis ist gefallen."
+	_einblendung = Einblendung.new()
+	_einblendung.visible = false
+	ebene.add_child(_einblendung)
+	ebene.move_child(_einblendung, _ende.get_index())   # unter den Endtafeln
 	text.size = Vector2(breite, 440)
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
@@ -4909,50 +5106,12 @@ func _baue_hud() -> void:
 	_export_hinweis = _label(_ende, Vector2(0, 628), 15, Color("a79fb3"))
 	_export_hinweis.size = Vector2(breite, 24)
 	_export_hinweis.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tafel = EndTafel.new()   # 18.11.: Endtafel, unter der Bestätigung zum Angriffsmodus
+	ebene.add_child(_tafel)
 
-	# Bestätigung vor dem Wechsel in den Angriffsmodus
-	_bestaetigung = ColorRect.new()
-	(_bestaetigung as ColorRect).color = Color(0, 0, 0, 0.85)
-	_bestaetigung.size = Vector2(breite, 720)
-	_bestaetigung.visible = false
+	# Bestätigung vor dem Wechsel in den Angriffsmodus (18.11.: als Endtafel über der Siegtafel)
+	_bestaetigung = EndTafel.new()
 	ebene.add_child(_bestaetigung)
-	var tafel := PanelContainer.new()
-	var rahmen2 := StyleBoxFlat.new()
-	rahmen2.bg_color = Color("1b1722")
-	rahmen2.border_color = Color("ffb347")
-	rahmen2.set_border_width_all(3)
-	rahmen2.set_content_margin_all(28)
-	tafel.add_theme_stylebox_override("panel", rahmen2)
-	tafel.position = Vector2(240, 96)
-	tafel.custom_minimum_size = Vector2(800, 0)
-	_bestaetigung.add_child(tafel)
-	var spalte := VBoxContainer.new()
-	spalte.add_theme_constant_override("separation", 16)
-	tafel.add_child(spalte)
-	var kopf := Label.new()
-	kopf.text = "In die Offensive?"
-	kopf.add_theme_font_size_override("font_size", 34)
-	kopf.add_theme_color_override("font_color", Color("ffe9a8"))
-	kopf.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	spalte.add_child(kopf)
-	var was := Label.new()
-	was.text = "Du wechselst die Seite.\n\nEin Phantom geht gegen dich in die Defensive: der Bau aus einer anderen Verteidigerrunde, Runde für Runde so nachgebaut, wie er damals stand.\n\nJede Runde steht dir ein festes Budget zur Verfügung. Im Taktikplaner stellst du daraus deine Angriffswelle zusammen – du bestimmst die Einheiten, ihre Reihenfolge, die Pausen dazwischen und was über die Mauer geworfen wird.\n\nDein Ziel: Besiege das Phantom, indem du ihm alle 15 Leben nimmst – oder halte in Runde 20 so lange durch wie möglich. Aus deiner Leistung wird am Ende ein Score.\n\nDeine eben gespielte Partie ist gespeichert und steht ab jetzt selbst als Verteidiger-Phantom im Pool."
-	was.add_theme_font_size_override("font_size", 18)
-	was.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	was.custom_minimum_size = Vector2(740, 0)
-	spalte.add_child(was)
-	var wahl := HBoxContainer.new()
-	wahl.alignment = BoxContainer.ALIGNMENT_CENTER
-	wahl.add_theme_constant_override("separation", 24)
-	spalte.add_child(wahl)
-	for eintrag: Array in [["Ja, angreifen", _angriff_bestaetigt], ["Zurück", func(): _bestaetigung.visible = false]]:
-		var b := Button.new()
-		b.text = eintrag[0]
-		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(230, 52)
-		b.add_theme_font_size_override("font_size", 20)
-		b.pressed.connect(eintrag[1])
-		wahl.add_child(b)
 
 
 func _label(eltern: Control, pos: Vector2, groesse: int, farbe: Color) -> Label:

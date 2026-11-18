@@ -498,19 +498,87 @@ func _oeffne_tc() -> void:
 		OS.shell_open(TC_ADRESSE)
 
 
+## 18.11.: Profil-Statistik neu gegliedert – Dienstgrad, drei Kacheln (Partien, Siege, beste Runde mit Balken),
+## darunter die Abschnitte Verteidigung (Leuchtblau) und Phantom-Modus (Kupfer).
+const DIENSTGRADE := [[0, "Rekrut"], [1, "Gefreiter"], [3, "Feldwebel"], [5, "Leutnant"], [10, "Hauptmann"], [20, "Oberst"], [40, "General"]]
+
 func _male_profil_tafel(ci: Control) -> void:
 	Stil.platte(ci, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
 	var x := TAFEL.position.x + 12.0
+	var rechts := TAFEL.end.x - 12.0
 	var y := TAFEL.position.y + 14.0
+	var siege := Profil.stat("siege")
+	var grad := "Rekrut"
+	for d: Array in DIENSTGRADE:
+		if siege >= int(d[0]):
+			grad = str(d[1])
 	Stil.schreibe(ci, Vector2(x, y), "STATISTIK", Stil.NORMAL, LICHT)
+	var gw := Stil.breite(grad.to_upper(), Stil.KLEIN)
+	Stil.platte(ci, Rect2(rechts - gw - 8.0, y - 6.0, gw + 8.0, 12.0), 2.0, Color(Stil.GOLD, 0.12), Stil.GOLD)
+	Stil.schreibe(ci, Vector2(rechts - gw - 4.0, y), grad.to_upper(), Stil.KLEIN, Stil.GOLD)
+	y += 14.0
+	# Kacheln
+	var partien := Profil.stat("partien")
+	var beste := Profil.stat("beste_runde")
+	var kacheln := [
+		["PARTIEN", str(partien), Stil.TEXT],
+		["SIEGE", "%d" % siege, Stil.GOLD],
+		["BESTE RUNDE", ("%d" % beste) if beste > 0 else "–", LICHT]]
+	var kb := (TAFEL.size.x - 24.0 - 8.0) / 3.0
+	for i in kacheln.size():
+		var kr := Rect2(roundf(x + i * (kb + 4.0)), y, roundf(kb), 34.0)
+		Stil.platte(ci, kr, 2.0, Stil.METALL_TIEF, Stil.RAHMEN)
+		ci.draw_rect(Rect2(kr.position.x + 3.0, kr.position.y + 2.0, kr.size.x - 6.0, 1.0), Color(kacheln[i][2], 0.6))
+		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 13.0), kacheln[i][1], Stil.GROSS, kacheln[i][2])
+		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 26.0), kacheln[i][0], Stil.KLEIN, Stil.TEXT_BLASS)
+	y += 40.0
+	# Siegquote und Fortschritt zur Runde 20 als schmale Balken
+	var quote := float(siege) / float(partien) if partien > 0 else 0.0
+	_balken(ci, Vector2(x, y), rechts - x, quote, Stil.GOLD, "Siegquote", "%d %%" % roundi(quote * 100.0))
+	y += 13.0
+	_balken(ci, Vector2(x, y), rechts - x, beste / float(Werte.STANDARD_RUNDEN), LICHT, "Weg bis Runde %d" % Werte.STANDARD_RUNDEN, "%d/%d" % [beste, Werte.STANDARD_RUNDEN])
 	y += 18.0
-	for z: Array in Profil.zeilen():
-		Stil.schreibe(ci, Vector2(x, y), str(z[0]), Stil.KLEIN, Stil.TEXT_BLASS)
-		var w := str(z[1])
-		Stil.schreibe(ci, Vector2(TAFEL.end.x - 12.0 - Stil.breite(w, Stil.NORMAL), y), w, Stil.NORMAL, Stil.TEXT)
-		y += 20.0
+	# Abschnitt Verteidigung
+	var e := Profil.liebling("einheit:")
+	var t := Profil.liebling("turm:")
+	y = _abschnitt(ci, x, rechts, y, "VERTEIDIGUNG", LICHT, [
+		["Gegner besiegt", str(Profil.stat("kills"))],
+		["Lieblingseinheit", "%s · %d" % [str(Werte.EINHEITEN.get(e[0], {}).get("name", e[0])), e[1]] if not e.is_empty() else "–"],
+		["Lieblingsturm", "%s · %d" % [str(Werte.TURMARTEN.get(t[0], {}).get("name", t[0])), t[1]] if not t.is_empty() else "–"],
+		["Brakk", "%d Gegner" % Profil.kills("brakk")]])
+	y += 4.0
+	# Abschnitt Phantom-Modus
+	var ba := Profil.stat("beste_angriffswertung")
+	var bv := Profil.stat("beste_verteidigung")
+	_abschnitt(ci, x, rechts, y, "PHANTOM-MODUS", KUPFER_HELL, [
+		["Angriffe", "%d · %d geknackt" % [Profil.stat("angriffe"), Profil.stat("geknackt")]],
+		["Beste Angriffswertung", str(ba) if ba > 0 else "–"],
+		["Beste Verteidigung", str(bv) if bv > 0 else "–"],
+		["Eigene Phantome", str(Profil.stat("phantome"))]])
 	Stil.schreibe(ci, Vector2(x, TAFEL.end.y - 10.0), "gespeichert in diesem Browser", Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.6))
 	_male_erfolge(ci)
+
+
+func _balken(ci: Control, p: Vector2, breite: float, anteil: float, farbe: Color, name: String, wert: String) -> void:
+	Stil.schreibe(ci, Vector2(p.x, p.y), name, Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.schreibe(ci, Vector2(p.x + breite - Stil.breite(wert, Stil.KLEIN), p.y), wert, Stil.KLEIN, farbe)
+	var bx := p.x + 82.0
+	var bw := breite - 82.0 - 34.0
+	ci.draw_rect(Rect2(bx, p.y - 2.0, bw, 4.0), Stil.METALL_TIEF)
+	ci.draw_rect(Rect2(bx, p.y - 2.0, roundf(bw * clampf(anteil, 0.0, 1.0)), 4.0), Color(farbe, 0.8))
+
+
+## Abschnitt mit farbiger Überschrift und Zeilen [Bezeichnung, Wert]; gibt das y danach zurück.
+func _abschnitt(ci: Control, x: float, rechts: float, y: float, titel: String, farbe: Color, zeilen: Array) -> float:
+	Stil.schreibe(ci, Vector2(x, y), titel, Stil.KLEIN, farbe)
+	ci.draw_rect(Rect2(x + Stil.breite(titel, Stil.KLEIN) + 5.0, y, rechts - x - Stil.breite(titel, Stil.KLEIN) - 5.0, 1.0), Color(farbe, 0.35))
+	y += 12.0
+	for z: Array in zeilen:
+		Stil.schreibe(ci, Vector2(x + 4.0, y), str(z[0]), Stil.KLEIN, Stil.TEXT_BLASS)
+		var w := str(z[1])
+		Stil.schreibe(ci, Vector2(rechts - Stil.breite(w, Stil.NORMAL), y), w, Stil.NORMAL, Stil.TEXT)
+		y += 13.0
+	return y
 
 
 ## 18.11.: Zweite Tafel im Profil – Erfolge als Raster aus Symbolen. Nicht freigeschaltet grau, versteckte als „???“.

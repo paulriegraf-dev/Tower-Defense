@@ -13,6 +13,7 @@ const HOLO := Color("6ee6ff")
 const HOLO_TEXT := Color("c8f4ff")
 const GRUND := Color(0.03, 0.10, 0.16, 0.9)
 const SONDE := "res://assets/sprites/tutorial/sonde7.png"
+const Stil := preload("res://scripts/ui/ui_stil.gd")
 # Lichter im 96er-Porträt (wie in Terrain-Conquester): leuchten, solange Sonde 7 spricht
 const LICHTER := [[35, 40, 6, Color("6cecfe")], [49, 50, 6, Color("ff4a5e")], [18, 43, 4, Color("ff4a5e")]]
 # Feste Karte fürs Tutorial, damit die gezeigten Felder immer passen
@@ -56,7 +57,7 @@ func _ready() -> void:
 	_wurzel.add_child(_zeichner)
 
 	_hinweis = Label.new()
-	_hinweis.add_theme_font_size_override("font_size", 13)
+	_schrift(_hinweis, 18)
 	_hinweis.add_theme_color_override("font_color", Color("ffe9a8"))
 	_hinweis.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	_hinweis.add_theme_constant_override("outline_size", 4)
@@ -100,13 +101,13 @@ func _ready() -> void:
 	reihe.add_child(rechts)
 	_name = Label.new()
 	_name.text = "SONDE 7 · LEITSTELLE"
-	_name.add_theme_font_size_override("font_size", 12)
+	_schrift(_name, 17)
 	_name.add_theme_color_override("font_color", Color("9be9ff"))
 	rechts.add_child(_name)
 	_text = Label.new()
 	_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_text.custom_minimum_size = Vector2(500, 66)
-	_text.add_theme_font_size_override("font_size", 15)
+	_schrift(_text, 19)
 	_text.add_theme_color_override("font_color", HOLO_TEXT)
 	_text.add_theme_color_override("font_shadow_color", Color(0.43, 0.9, 1.0, 0.45))
 	_text.add_theme_constant_override("shadow_offset_x", 0)
@@ -117,7 +118,7 @@ func _ready() -> void:
 	knoepfe.add_theme_constant_override("separation", 8)
 	rechts.add_child(knoepfe)
 	_fortschritt = Label.new()
-	_fortschritt.add_theme_font_size_override("font_size", 12)
+	_schrift(_fortschritt, 17)
 	_fortschritt.add_theme_color_override("font_color", Color("7f98a6"))
 	_fortschritt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	knoepfe.add_child(_fortschritt)
@@ -134,11 +135,19 @@ func _ready() -> void:
 	_zeige_frage()
 
 
+## Pixelschrift (VT323) für ein Label/einen Knopf. `einheiten` = Größe im 1280×720-Raum; auf dem 25er-Raster scharf.
+## Pixelschrift VT323 für Labels und Knöpfe. Immer die geglättete Fassung: Godot streckt Labels mit dem Fenster
+## (z. B. ×1,5 bei 1080p), ungeglättet verlören die Buchstaben dabei Pixel („S“ wird zu „B“).
+func _schrift(c: Control, einheiten: int) -> void:
+	c.add_theme_font_override("font", Stil.schrift_fuer(1))   # 1 liegt nie im 25er-Raster: geglättete Fassung
+	c.add_theme_font_size_override("font_size", einheiten)
+
+
 func _knopf(eltern: Control, text: String, hell: bool) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 13)
+	_schrift(b, 18)
 	var s := StyleBoxFlat.new()
 	s.bg_color = HOLO if hell else Color(0.43, 0.9, 1.0, 0.08)
 	s.border_color = HOLO
