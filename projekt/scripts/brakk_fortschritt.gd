@@ -7,6 +7,7 @@ const STUFE_HOECHST := 10
 const ERFAHRUNG_BIS := [0, 12, 30, 55, 90, 135, 190, 255, 330, 420]   # Gesamterfahrung, ab der Stufe 1..10 gilt
 const XP_KILL := 1
 const XP_WELLE := 10
+const XP_KILL_ANTEIL := 0.5          # 18.11. (Paul): Kills geben nur die halbe Erfahrung (dreimal so viele Gegner)
 const SCHADEN_START := 0.72            # 18.11. (Paul): Brakk startet schwächer (etwa 10 statt 14 je Schuss) …
 const SCHADEN_JE_STUFE := 0.08        # … und wird je Stufe um 8 % stärker
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
@@ -41,6 +42,7 @@ var basis_leben := 0.0
 var aufstieg_zeit := -1.0             # für das Banner: Sekunden seit dem letzten Aufstieg (-1 = keins)
 var neu_frei: Array[String] = []      # was beim letzten Aufstieg freigeschaltet wurde (für das Banner)
 var ulti_ladung := 0                  # eigene Kills seit der letzten Ulti
+var kill_xp := 0.0                    # gesammelte Bruchteile der Kill-Erfahrung
 var ulti_ab_welle := 0                # vorher geht die Ulti nicht (nach einem Einsatz: eine ganze Runde Pause)
 var ringe: Array[String] = []          # getragene Ringe (je Finger einer)
 var ring_stufen := {}                  # Ring -> Stufe 1..3

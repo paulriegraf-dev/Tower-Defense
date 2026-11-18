@@ -1521,7 +1521,11 @@ func _kill(g: Gegner) -> void:
 		return
 	if f.frei("ulti") and spiel.welle >= f.ulti_ab_welle:
 		f.ulti_ladung = mini(f.ulti_ladung + 1, BrakkFortschritt.ULTI_KILLS)   # Kills vor der Freischaltung zählen nicht
-	if f.gib(BrakkFortschritt.XP_KILL + int(g.daten.get("praemie", 0)) / 5, brakk) > 0:
+	# 18.11. (Paul): bei dreifacher Gegnerzahl nur die halbe Erfahrung je Kill (Bruchteile werden gesammelt)
+	f.kill_xp += float(BrakkFortschritt.XP_KILL + int(g.daten.get("praemie", 0)) / 5) * BrakkFortschritt.XP_KILL_ANTEIL
+	var xp := floori(f.kill_xp)
+	f.kill_xp -= float(xp)
+	if xp > 0 and f.gib(xp, brakk) > 0:
 		Ton.spiele(spiel, "ui-klick", 4.0)
 		Ton.spiele(spiel, "alert", -6.0)
 

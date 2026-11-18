@@ -181,7 +181,7 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 - **Doppellanze** (Rechtsklick halten, loslassen): Strahl durch alle Gegner in der Linie; lässt die Hitze ab – je heißer, desto stärker (bis doppelt).
 
 **Stufen und Fähigkeiten**
-- Erfahrung aus eigenen Kills und abgewehrten Wellen, Stufe 1–10, je Stufe +5 % Schaden und +30 Leben. Unten in der Mitte: Fähigkeiten mit Abklingzeit, Leben, Erfahrung.
+- Erfahrung aus eigenen Kills (halbe Menge, weil es dreimal so viele Gegner gibt) und abgewehrten Wellen, Stufe 1–10, je Stufe +5 % Schaden und +30 Leben. Unten in der Mitte: Fähigkeiten mit Abklingzeit, Leben, Erfahrung.
 - [E] **Lichttreppe**: auf den Erdwall im Blick (bis 5 Felder), steht 8 s, hinauf durch Hinlaufen. Oben auf dem Wall: [E] **Lichtbrücke** zum nächsten Wall im Blick (bis 5 Felder, 10 s, begehbar, 12 s Abklingzeit; eine blasse Bahn zeigt vorher, wohin) – sonst Treppe hinunter. Treppe, Brücke und Anker leuchten in der Farbe des aktiven Rings.
 - St. 2 [Shift] **Tumble** · St. 3 [Q] **Lichtanker** (Seil an Mauerkrone/Boden, zieht Brakk hin) · St. 4 **Doppellanze** · St. 6 [X] **Lichtsäule** ([X] zielen, Linksklick setzen – solange kein Schuss; Finger wirbelt, nach 1,5 s Einschlag; je aktivem Ring anders: ohne Ring Fläche, Durchschlag Linie aus 5 Säulen, Glutstrahl klein und doppelt, Takt drei Einschläge, Wirbel 3 s stehend, Sprung springt auf 3 Gegner, Brand Brandfeld, Gel bremst 4 s) · St. 7 [R] **Klonmaschine** (lädt durch 30 eigene Kills, danach eine Runde Pause) · St. 8 [V] **Zeitlupe** (4 s, 60 s Abklingzeit).
 
