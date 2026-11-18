@@ -8,8 +8,8 @@ const ERFAHRUNG_BIS := [0, 12, 30, 55, 90, 135, 190, 255, 330, 420]   # Gesamter
 const XP_KILL := 1
 const XP_WELLE := 10
 const XP_KILL_ANTEIL := 0.5          # 18.11. (Paul): Kills geben nur die halbe Erfahrung (dreimal so viele Gegner)
-const SCHADEN_START := 0.72            # 18.11. (Paul): Brakk startet schwächer (etwa 10 statt 14 je Schuss) …
-const SCHADEN_JE_STUFE := 0.08        # … und wird je Stufe um 8 % stärker
+const SCHADEN_START := 1.7             # 18.11. (Paul): Brakk ist die Hauptfigur – etwa 24 je Schuss, ein Hund fällt anfangs mit 2 Schüssen …
+const SCHADEN_JE_STUFE := 0.10        # … und je Stufe 10 % stärker (Platz nach oben für Ringe und Stufen)
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
 ## Freischaltungen: Fähigkeit -> Stufe
 const AB := {"tumble": 2, "anker": 3, "lanze": 4, "saeule": 6, "ulti": 7, "zeitlupe": 8}

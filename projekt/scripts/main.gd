@@ -53,7 +53,7 @@ var turmbilder := {}               # neue Grafik: Turm-Zelle -> TurmBild (y-sort
 var hd: HdAnsicht = null           # HD-2D-Ansicht (Grafik „HD-2D“)
 var ego: EgoModus = null           # 18.11.: Ego-Sicht mit Brakk [G] (Prototyp)
 var brakk_modus := false            # 18.11.: Brakk-Mode – Extra-Modus aus dem Startmenü: Ego-Sicht mit Brakk ab Runde 1
-const BRAKK_GEGNER_MAL := 3            # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal …
+const BRAKK_GEGNER_MAL := 2.2          # 18.11. (Paul): Brakk-Mode – so viele Gegner wie sonst mal … (vorher 3)
 const BRAKK_LEBEN_JE_RUNDE := 0.06      # … und je Runde zusätzlich so viel mehr Leben
 const BRAKK_ABSTAND_MAL := 0.5             # 18.11. (Paul): Gegner eines Trupps starten dichter …
 const BRAKK_PAUSE_MAL := 0.6               # … und zwischen zwei Trupps vergeht weniger Zeit
@@ -703,18 +703,24 @@ func _verdoppelt(w: Dictionary, mal: int = 2) -> Dictionary:   # 18.11.: `mal` �
 	return d
 
 
-## 18.11. (Paul): Brakk-Mode – jeder Trupp kommt mit `mal`-facher Stärke auf einmal (statt `mal` Trupps nacheinander),
+## 18.11. (Paul): Brakk-Mode – jeder Trupp kommt mit `mal`-facher Stärke auf einmal (statt mehrerer Trupps nacheinander),
 ## seine Gegner starten in halbem Abstand: weniger Einzelgänger, mehr Druck, kürzere Runden.
-func _gebuendelt(w: Dictionary, mal: int) -> Dictionary:
+func _gebuendelt(w: Dictionary, mal: float) -> Dictionary:
 	var d: Dictionary = w.duplicate(true)
-	for g: Dictionary in d.get("gruppen", []):
-		g["anzahl"] = int(g["anzahl"]) * mal
 	var neu: Array = []
 	for t: Variant in d.get("trupps", []):
+		# 18.11.: auch krumme Faktoren (2,2): die Gegner des Trupps reihum wiederholen, bis die neue Größe erreicht ist
+		var alt := t as Array
 		var groesser: Array = []
-		for i in mal:
-			groesser.append_array(t as Array)
+		for i in roundi(alt.size() * mal):
+			groesser.append(alt[i % alt.size()])
 		neu.append(groesser)
+	# die Vorschau zählt dieselben Gegner, die wirklich kommen
+	for g: Dictionary in d.get("gruppen", []):
+		var anzahl := 0
+		for t2: Variant in neu:
+			anzahl += (t2 as Array).count(g["typ"])
+		g["anzahl"] = anzahl
 	d["trupps"] = neu
 	d["abstand"] = float(d.get("abstand", 1.0)) * BRAKK_ABSTAND_MAL
 	return d
@@ -2692,7 +2698,7 @@ func naechste_welle() -> Dictionary:
 		w = _verdoppelt(w)   # 18.11.: jeder Trupp kommt zweimal (Vorschau und Welle)
 	if brakk_modus:
 		# 18.11. (Paul): Brakk-Mode – erst einmal deutlich schwerer: dreimal so viele Gegner, je Runde zusätzlich zäher
-		w = _gebuendelt(w, BRAKK_GEGNER_MAL)   # 18.11. (Paul): gebündelt – jeder Trupp in dreifacher Stärke auf einmal
+		w = _gebuendelt(w, BRAKK_GEGNER_MAL)   # 18.11. (Paul): gebündelt – jeder Trupp in 2,2-facher Stärke auf einmal
 		w["leben_faktor"] = float(w.get("leben_faktor", 1.0)) * (1.0 + BRAKK_LEBEN_JE_RUNDE * float(welle - 1))
 	if not sandbox or sandbox_gegner.is_empty():
 		return w
@@ -3604,7 +3610,7 @@ func gegner_besiegt(g: Gegner) -> void:
 	if not g.klon and brakk_modus:
 		# 18.11. (Paul): Brakk-Mode – dreimal so viele Gegner, aber dieselbe Wirtschaft: je Gegner ein Drittel der Prämie
 		# (Bruchteile werden gesammelt, damit auch 2er-Prämien zählen)
-		_brakk_praemie += float(einkommen(int(g.daten["praemie"]))) / float(BRAKK_GEGNER_MAL)
+		_brakk_praemie += float(einkommen(int(g.daten["praemie"]))) / BRAKK_GEGNER_MAL
 		var ganz := floori(_brakk_praemie)
 		budget += ganz
 		_brakk_praemie -= float(ganz)
@@ -3638,6 +3644,9 @@ func kommandant_steuerbar() -> bool:
 ## Kein Zwischenstand, keine Phantome, keine Rangliste.
 func _brakk_modus_gewaehlt() -> void:
 	brakk_modus = true
+	# 18.11.: festes Tempo – Brakk selbst läuft in Echtzeit, ein wählbares Tempo würde ihn mal stark, mal schwach machen
+	_tempo_faktor = Werte.BRAKK_TEMPO
+	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 	Werte.setze_grafik("hd")   # nicht gespeichert
 	_normales_spiel()
 	_menue_weg()
@@ -4802,6 +4811,9 @@ func waehle(typ: int) -> void:
 
 
 func _tempo_umschalten() -> void:
+	if brakk_modus:
+		melde("Im Brakk-Mode ist das Tempo fest (×%d)." % roundi(Werte.BRAKK_TEMPO), 2.5)   # 18.11.
+		return
 	_tempo_faktor = _tempo_faktor + 1.0 if _tempo_faktor < 2.5 else 1.0   # ×1 → ×2 → ×3 → ×1
 	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 

@@ -2225,6 +2225,8 @@ const BAND_FARBE := {"durchschuss": "8a93a6", "laser": "2b2830", "feuerteam": "c
 
 ## 18.11.: Ist eine Tafel offen (Übersicht, Pause, Terminal, Fabrikmenü)? Dann zeichnet die Ego-Sicht nichts darüber.
 func _hud_aus() -> bool:
+	if spiel.phase == 2:
+		return true   # 18.11. (Paul): Endtafel (Sieg/Niederlage) – keine Waffen und Leisten darüber
 	if _briefing_offen():
 		return true
 	if spiel._lexikon != null and spiel._lexikon.visible:

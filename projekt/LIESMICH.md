@@ -171,7 +171,7 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 **Ablauf**
 - **Einstieg:** Erst eine Einsatz-Tafel mit Tasten und Ablauf (der Countdown wartet), „Los“ (Klick, Enter, Leertaste) blendet auf und senkt die Kamera von oben in Brakks Augen.
 - **Fließende Runden:** Die Bauphase hat einen Countdown (45 s in Runde 1, danach 30 s), dann kommt die Welle von selbst; [Enter] startet früher. Keine Fabrikpflicht, alles ist ab Runde 1 frei, jede Runde 5 Erdwälle gratis. Truppen verschwinden am Rundenende wie sonst.
-- **Schwierigkeit (zum Ausprobieren hoch):** dreimal so viele Gegner, gebündelt (jeder Trupp in dreifacher Stärke auf einmal, dichter und mit kürzeren Pausen; je Gegner ein Drittel der Prämie – die Wirtschaft bleibt wie vorher), je Runde +6 % Leben zusätzlich, Schleudern werfen doppelt so oft und zielen auch auf Brakk – der Stein fliegt auf einen Punkt (roter Landekreis, Warnzeichen), mit [Shift] ausweichen. Brakk startet mit 72 % Schaden, +8 % je Stufe.
+- **Schwierigkeit (zum Ausprobieren hoch):** 2,2-mal so viele Gegner, gebündelt (jeder Trupp in 2,2-facher Stärke auf einmal, dichter und mit kürzeren Pausen; die Prämie je Gegner entsprechend kleiner – die Wirtschaft bleibt wie vorher), je Runde +6 % Leben zusätzlich, Schleudern werfen doppelt so oft und zielen auch auf Brakk – der Stein fliegt auf einen Punkt (roter Landekreis, Warnzeichen), mit [Shift] ausweichen. Brakk ist die Hauptfigur: etwa 24 Schaden je Schuss (ein Hund fällt anfangs mit 2 Schüssen), +10 % je Stufe.
 - **Anzeige:** roter Bogen am Bildrand zeigt, woher ein Treffer kam; roter Rand bei Treffern und wenig Leben; Lebensleiste mit heller Verlust-Spur.
 - **Bauen:** [1]–[7] in 5 Feldern Reichweite (links die Liste), [F] baut das Gebäude im Blick aus. Keine Bauleiste [B].
 - Der Schild vor der Gegnerzone fängt Brakks Schüsse ab. Fällt Brakk, bleibt die Kamera bis zur nächsten Runde liegen.
@@ -182,7 +182,7 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 - **Doppellanze** (Rechtsklick halten, loslassen): Strahl durch alle Gegner in der Linie; lässt die Hitze ab – je heißer, desto stärker (bis doppelt).
 
 **Stufen und Fähigkeiten**
-- Erfahrung aus eigenen Kills (halbe Menge, weil es dreimal so viele Gegner gibt) und abgewehrten Wellen, Stufe 1–10, je Stufe +5 % Schaden und +30 Leben. Unten in der Mitte: Fähigkeiten mit Abklingzeit, Leben, Erfahrung.
+- Erfahrung aus eigenen Kills (halbe Menge, weil es mehr Gegner gibt) und abgewehrten Wellen, Stufe 1–10, je Stufe +10 % Schaden und +30 Leben. Unten in der Mitte: Fähigkeiten mit Abklingzeit, Leben, Erfahrung.
 - [E] **Lichttreppe**: auf den Erdwall im Blick (bis 5 Felder), steht 8 s, hinauf durch Hinlaufen. Oben auf dem Wall: [E] **Lichtbrücke** zum nächsten Wall im Blick (bis 5 Felder, 10 s, begehbar, 12 s Abklingzeit; eine blasse Bahn zeigt vorher, wohin) – sonst Treppe hinunter. Treppe, Brücke und Anker leuchten in der Farbe des aktiven Rings.
 - St. 2 [Shift] **Tumble** · St. 3 [Q] **Lichtanker** (Seil an Mauerkrone/Boden, zieht Brakk hin) · St. 4 **Doppellanze** · St. 6 [X] **Lichtsäule** ([X] zielen, Linksklick setzen – solange kein Schuss; Finger wirbelt, nach 1,5 s Einschlag; je aktivem Ring anders: ohne Ring Fläche, Durchschlag Linie aus 5 Säulen, Glutstrahl klein und doppelt, Takt drei Einschläge, Wirbel 3 s stehend, Sprung springt auf 3 Gegner, Brand Brandfeld, Gel bremst 4 s) · St. 7 [R] **Klonmaschine** (lädt durch 30 eigene Kills, danach eine Runde Pause) · St. 8 [V] **Zeitlupe** (4 s, 60 s Abklingzeit).
 
