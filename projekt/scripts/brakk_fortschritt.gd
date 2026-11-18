@@ -22,13 +22,13 @@ const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klo
 ##   Aktiver Ring (Mausrad, jederzeit): gibt Brakks Pistolen seinen Effekt – immer nur einer.
 ## Farben = Abzeichen der Fähigkeit.
 const RINGE := {
-	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "brakk": "Schüsse gehen durch bis zu 2 Gegner"},
-	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "brakk": "+30 % Schaden"},
-	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "brakk": "feuert 25 % schneller, kühlt schneller"},
+	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "brakk": "Schüsse gehen durch 2 weitere Gegner (halber Schaden)"},
+	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "brakk": "+40 % Schaden"},
+	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "brakk": "feuert 25 % schneller, heizt weniger, kühlt schneller"},
 	"minigun": {"name": "Wirbelring", "truppe": "technogunner", "brakk": "Dauerfeuer läuft an (bis 1,6×), heizt weniger"},
 	"abpraller": {"name": "Sprungring", "truppe": "plasmawerfer", "brakk": "Treffer springen zu weiteren Gegnern"},
-	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "brakk": "Treffer setzen den Boden in Brand"},
-	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "brakk": "Treffer bremsen 2 Sekunden"},
+	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "brakk": "Treffer setzen den Boden in Brand (alle 1,5 s)"},
+	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "brakk": "Treffer bremsen 2 s, gebremste nehmen +40 %"},
 }
 const RING_PREISE := [200, 250, 500]   # Kauf (Stufe 1), Stufe 2, Stufe 3
 const RING_ZURUECK := 0.75           # Verkaufen: so viel vom Bezahlten zurück (in derselben Bauphase gekauft: alles)
@@ -196,7 +196,7 @@ func setze_feld(ring: String, p: Vector2) -> void:
 
 ## Faktoren für Brakks Pistolen aus dem aktiven Ring.
 func schuss_schaden() -> float:
-	return schaden_faktor() * (1.3 if aktiv() == "laser" else 1.0)
+	return schaden_faktor() * (1.4 if aktiv() == "laser" else 1.0)   # 18.11. (Paul, Schießstand): vorher 1,3
 
 
 func schuss_takt() -> float:
@@ -205,11 +205,13 @@ func schuss_takt() -> float:
 
 ## Überhitzen (ego_modus.gd): Wirbelring – Schüsse heizen weniger; Taktring – kühlt schneller.
 func hitze_faktor() -> float:
+	if aktiv() == "feuerteam":
+		return 0.6   # 18.11. (Paul, Schießstand): Taktring – heizt weniger, sonst überhitzt er sein Tempo weg
 	return 0.7 if aktiv() == "minigun" else 1.0
 
 
 func kuehl_faktor() -> float:
-	return 1.5 if aktiv() == "feuerteam" else 1.0
+	return 1.8 if aktiv() == "feuerteam" else 1.0   # 18.11. (Schießstand): vorher 1,5
 
 
 ## Jedes Bild (vom Kommandanten): in der Bauphase bauen Fabriken in einem Ringfeld die Truppe des Rings auf seiner Stufe.

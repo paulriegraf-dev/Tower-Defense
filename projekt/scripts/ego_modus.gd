@@ -104,6 +104,9 @@ var _tumble_rest := 0.0
 var _lanze := -1.0              # lädt: Sekunden seit Beginn (-1 = nein)
 var _lanze_rest := 0.0
 var _wirbel := 0.0               # 18.11.: Wirbelring – Anlauf des Dauerfeuers 0..1
+const DURCHSCHLAG_WEITERE := 0.5   # 18.11. (Paul, Schießstand): Durchschlagring – weitere Gegner in der Linie nehmen so viel
+const BRAND_TAKT := 1.5           # Brandring: höchstens ein neues Brandfeld je so viele Sekunden
+var _brand_ab := 0                # ab dieser Zeit (ms) darf das nächste Brandfeld
 var _terminal: Control = null    # 18.11.: Lichtterminal (Ringe kaufen)
 var _knoepfe: Array = []         # [Rect2, Callable] – Schaltflächen im Terminal
 var _hand_zeigen := 0.0           # 18.11.: so lange (s) hebt Brakk die Ringhand (Mausrad, [C])
@@ -793,11 +796,14 @@ func _schiess() -> void:
 	spiel.schadensquelle = "fabrik:-1,-1"
 	spiel.schuss_herkunft = brakk.position
 	var kill := false
+	var nr := 0
 	for e: Array in getroffen:
 		var g: Gegner = e[1]
+		var durch_anteil := 1.0 if nr == 0 else DURCHSCHLAG_WEITERE   # 18.11.: Schießstand – weitere Gegner nur halb
+		nr += 1
 		if not is_instance_valid(g) or g._tot:
 			continue
-		var schaden := SCHUSS_SCHADEN * _schaden_faktor() * _gel_bonus(g)
+		var schaden := SCHUSS_SCHADEN * _schaden_faktor() * _gel_bonus(g) * durch_anteil
 		g.nimm_schaden(schaden)
 		treffer_zahl += 1
 		_ring_treffer(g, schaden)
@@ -1580,10 +1586,12 @@ func _ring_treffer(g: Gegner, schaden: float) -> void:
 		return
 	if f.aktiv() == "plasmagel" and not g._tot:
 		g.gebremst = maxf(g.gebremst, 2.0)
-	if f.aktiv() == "brandfeld":
-		spiel.lege_brand(g.position, Werte.ZELLE * 0.45, schaden * 0.4)
+	if f.aktiv() == "brandfeld" and Time.get_ticks_msec() >= _brand_ab:
+		# 18.11. (Paul, Schießstand): höchstens ein neues Brandfeld je BRAND_TAKT – sonst stapeln sie sich und der Ring verdrängt alle anderen
+		_brand_ab = Time.get_ticks_msec() + int(BRAND_TAKT * 1000.0)
+		spiel.lege_brand(g.position, Werte.ZELLE * 0.5, schaden * 0.3)
 	if f.aktiv() == "abpraller":
-		spiel.abpraller(g, Werte.ZELLE * 0.5, schaden * 0.8, Einheit.ABZEICHEN["abpraller"])
+		spiel.abpraller(g, Werte.ZELLE * 0.5, schaden * 0.6, Einheit.ABZEICHEN["abpraller"])
 
 
 ## Ein Gegner fällt durch Brakks Schuss: Erfahrung (große Gegner mehr).
@@ -2729,7 +2737,7 @@ const SAEULE_RADIUS := 1.5       # Felder
 const SAEULE_SCHADEN := 150.0
 const SAEULE_VORLAUF := 1.5      # Sekunden zwischen Bestätigen und Einschlag
 const SAEULE_ABKLING := 25.0
-const GEL_BONUS := 1.3           # 18.11. (Paul): Gelring aktiv – gebremste Gegner nehmen so viel Schaden von Brakk
+const GEL_BONUS := 1.4           # 18.11. (Paul): Gelring aktiv – gebremste Gegner nehmen so viel Schaden von Brakk
 const ZEITLUPE_SEK := 4.0        # in Echtzeit
 const ZEITLUPE_TEMPO := 0.5
 const ZEITLUPE_ABKLING := 60.0
