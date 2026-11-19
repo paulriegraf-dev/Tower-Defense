@@ -693,6 +693,8 @@ func _draw() -> void:
 # --- Neue Grafik: PixelFX-Effekte als Bildfolgen (16.11.) -------------------------------------
 # Name -> [Datei, Bildbreite, Bildhöhe, Bilder, Spalten, Anker x, Anker y, Bilder je Sekunde, Schleife, höchstens Bilder]
 # Ein Pixel im Blatt = 2 Bildpunkte im Spiel (wie die Truppen); `groesse` skaliert zusätzlich.
+# 19.11.: Optional [10] = Teiler – das Blatt liegt in 1/Teiler Auflösung vor und wird so viel größer gezeichnet (Maße und
+# Anker in Blattpixeln). Rauch, Sprengung und Gegner-Tod sind halbiert: zusammen ~23 MB weniger Grafikspeicher (Handy).
 const FX := {
 	"muendung": ["muendung", 96, 72, 55, 7, 44, 40, 30, false, 18],
 	"treffer_c": ["treffer_c", 136, 80, 16, 4, 44, 44, 30, false, 0],
@@ -702,10 +704,10 @@ const FX := {
 	"plasma": ["plasma", 144, 60, 24, 4, 108, 30, 30, true, 0],
 	"sph": ["sph", 128, 32, 15, 2, 108, 16, 30, true, 0],
 	"g_tod": ["g_tod", 112, 92, 33, 6, 56, 80, 20, false, 0],
-	"v_tod": ["v_tod", 224, 200, 35, 6, 112, 100, 20, false, 0],
-	"spreng": ["spreng", 260, 240, 55, 8, 130, 206, 15, false, 0],
+	"v_tod": ["v_tod", 112, 100, 35, 6, 56, 50, 20, false, 0, 2],
+	"spreng": ["spreng", 130, 120, 55, 8, 65, 103, 15, false, 0, 2],
 	"heil": ["heil", 256, 136, 45, 5, 128, 104, 15, false, 0],
-	"rauch": ["rauch", 260, 176, 61, 7, 130, 156, 12, false, 0],
+	"rauch": ["rauch", 130, 88, 61, 7, 65, 78, 12, false, 0, 2],
 }
 var _fx_blaetter := {}
 var _fx: Array = []        # {"n", "pos", "t", "gr", "flip", "rot"} – einmalige Effekte
@@ -771,7 +773,8 @@ func _fx_bild(n: String, bild: int, pos: Vector2, gr: float, spiegeln: bool, win
 	var w := float(d[1])
 	var h := float(d[2])
 	var quelle := Rect2((b % int(d[4])) * w, (b / int(d[4])) * h, w, h)
-	draw_set_transform(pos, winkel, Vector2(2.0 * gr * (-1.0 if spiegeln else 1.0), 2.0 * gr))
+	var s := 2.0 * gr * (float(d[10]) if d.size() > 10 else 1.0)
+	draw_set_transform(pos, winkel, Vector2(s * (-1.0 if spiegeln else 1.0), s))
 	draw_texture_rect_region(_fx_blatt(n), Rect2(-float(d[5]), -float(d[6]), w, h), quelle)
 
 

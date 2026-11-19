@@ -317,6 +317,73 @@ func _ready() -> void:
 		_meldung = ("Die letzte Partie brach ohne Ende ab: %s – die Seite wurde neu geladen." if OS.has_feature("web") else "Die letzte Partie brach ohne Ende ab: %s.") % wo
 		if runde > 0:
 			_meldung += " Fortsetzen ganz oben."
+		# 19.11.: Abbruch und passender Zwischenstand – gleich fortsetzen (ein Tipp, am Handy ohnehin für den Ton nötig).
+		# Schutz vor einer Absturzschleife: brach es schon zweimal kurz nach dem Fortsetzen ab, normal ins Startmenü.
+		if runde > 0:
+			if _auto_folge() >= 2:
+				_auto_folge_loeschen()
+				_meldung = "Die Partie brach zweimal kurz nach dem Fortsetzen ab – bitte selbst wählen (Fortsetzen ganz oben)."
+			else:
+				_auto = runde
+				_auto_modus = str(ab.get("modus", ""))
+				_titel = false
+
+
+# ------------------------------------------------------------------ Automatisch fortsetzen (19.11.)
+
+## Brach die letzte Sitzung ab (am Handy lädt der Browser die Seite neu) und gibt es einen Zwischenstand, zeigt das Menü
+## statt Titelbild und Liste ein Bild „Partie wird fortgesetzt“ – ein Tipp setzt fort, „Zum Hauptmenü“ nicht.
+## In user://auto_fortsetzen.json zählt „folge“ die Fortsetzungen, die innerhalb von AUTO_HALTEN Sekunden wieder
+## abbrachen; ab 2 geht es normal ins Startmenü. Läuft die Partie länger, löscht ein Zeitgeber den Zähler.
+const AUTO_DATEI := "user://auto_fortsetzen.json"
+const AUTO_HALTEN := 60.0
+const AUTO_KNOPF := Rect2(255, 300, 130, 22)
+var _auto := 0                    # Runde, die gleich fortgesetzt wird (0 = nein)
+var _auto_modus := ""
+
+
+static func _auto_folge() -> int:
+	if not FileAccess.file_exists(AUTO_DATEI):
+		return 0
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(AUTO_DATEI))
+	return int((d as Dictionary).get("folge", 0)) if d is Dictionary else 0
+
+
+static func _auto_folge_loeschen() -> void:
+	if FileAccess.file_exists(AUTO_DATEI):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(AUTO_DATEI))
+
+
+func _auto_los() -> void:
+	var folge := _auto_folge() + 1   # vor dem Öffnen lesen – WRITE leert die Datei
+	var datei := FileAccess.open(AUTO_DATEI, FileAccess.WRITE)
+	if datei != null:
+		datei.store_string(JSON.stringify({"folge": folge}))
+		datei.close()
+	# Läuft die Partie länger als AUTO_HALTEN (dazu die Ladezeit), war es keine Absturzschleife. Der Zeitgeber gehört dem
+	# SceneTree und überlebt den Szenenwechsel; Echtzeit, auch in der Pause.
+	_welt.get_tree().create_timer(AUTO_HALTEN + 15.0, true, false, true).timeout.connect(Startmenue._auto_folge_loeschen)
+	_auto = 0
+	_fortsetzen()
+
+
+func _auto_abbrechen() -> void:
+	_auto = 0
+	_auto_folge_loeschen()
+	_frage_namen_beim_ersten_mal()
+
+
+func _male_auto(ci: Control) -> void:
+	ci.draw_rect(Rect2(0, 0, 640, 360), Color("0b0e14"))
+	var hg := _bild("res://assets/neu/menue/kaserne.png")
+	if hg != null:
+		ci.draw_texture_rect(hg, Rect2(0, 0, 640, 360), false, Color(1, 1, 1, 0.35))
+	Stil.schreibe_mittig(ci, Vector2(320, 140), "Partie wird fortgesetzt", 24, Stil.TEXT)
+	Stil.schreibe_mittig(ci, Vector2(320, 172), ("Runde %d" % _auto) + (" · " + _auto_modus if _auto_modus != "" else ""), Stil.GROSS, Color("e8b77a"))
+	var puls := 0.55 + 0.45 * sin(_zeit * 3.0)
+	Stil.schreibe_mittig(ci, Vector2(320, 230), "Tippen zum Weiterspielen", Stil.GROSS, Color(1, 1, 1, puls))
+	Stil.platte(ci, AUTO_KNOPF, 2.0)
+	Stil.schreibe_mittig(ci, AUTO_KNOPF.get_center(), "Zum Hauptmenü", Stil.KLEIN, Stil.TEXT)
 
 
 ## 18.11.: Zwischenstand laden – main.gd setzt ihn beim Neuaufbau der Szene hin.
@@ -794,6 +861,14 @@ func _zeile(i: int) -> Rect2:
 func _input(event: InputEvent) -> void:
 	if not _welt.visible or not (event is InputEventKey and event.pressed):
 		return
+	if _auto > 0:
+		if not event.echo:
+			if (event as InputEventKey).keycode == KEY_ESCAPE:
+				_auto_abbrechen()
+			else:
+				_auto_los()
+		get_viewport().set_input_as_handled()
+		return
 	if _titel:
 		if not event.echo:
 			_klick()
@@ -845,6 +920,14 @@ func _klick() -> void:
 
 
 func _maus_eingabe(event: InputEvent) -> void:
+	if _auto > 0:
+		if event is InputEventMouseButton and event.pressed:
+			_klick()
+			if AUTO_KNOPF.has_point((event as InputEventMouseButton).position):
+				_auto_abbrechen()
+			else:
+				_auto_los()
+		return
 	if _titel:
 		if event is InputEventMouseButton and event.pressed:
 			_klick()
@@ -887,6 +970,9 @@ func _maus_eingabe(event: InputEvent) -> void:
 # ------------------------------------------------------------------ Zeichnen
 
 func _male(ci: Control) -> void:
+	if _auto > 0:
+		_male_auto(ci)   # 19.11.
+		return
 	if _titel:
 		_male_titel(ci)
 		return

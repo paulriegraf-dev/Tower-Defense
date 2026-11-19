@@ -159,6 +159,10 @@ Zu Beginn jeder Bauphase ab Runde 2 sichert das Spiel den Stand in `user://zwisc
 
 **Diagnose (19.11.):** Zu jeder Welle und Bauphase schreibt das Spiel einen Merker `user://sitzung.json` (Modus, Runde, Welle/Bauphase, Zeit), gelöscht bei Sieg, Niederlage, Neustart und Hauptmenü. Findet das Startmenü beim Start einen Merker, brach die letzte Sitzung ohne reguläres Ende ab (am Handy: der Browser hat die Seite neu geladen) – es meldet das einmal mit Modus und Runde (auch in der Konsole) und löscht den Merker.
 
+**Automatisch fortsetzen (19.11.):** Meldet die Diagnose einen Abbruch und gibt es einen passenden Zwischenstand, überspringt das Startmenü Titelbild und Liste und zeigt „Partie wird fortgesetzt · Runde N“ – ein Tipp (oder eine Taste) setzt fort, auch im Brakk-Mode; „Zum Hauptmenü“ (oder Esc) nicht. Schutz vor einer Absturzschleife: `user://auto_fortsetzen.json` zählt Fortsetzungen, die innerhalb von 60 s (plus Ladezeit) wieder abbrachen; nach zweimal geht es normal ins Startmenü (Fortsetzen steht dort weiter oben). Code: `startmenue.gd` → „Automatisch fortsetzen“.
+
+**Speicher (19.11.):** Über 8 Runden gemessen wächst die Spiellogik nicht (Knoten, Objekte, Töne, Protokoll gleichbleibend); der Grafikspeicher in HD-2D steigt, weil große Effektblätter erst beim ersten Auftreten geladen werden. Rauch, Sprengung und Gegner-Tod liegen deshalb in halber Auflösung vor (je 2×2-Block der deckendste Pixel, gezeichnet doppelt so groß – `effekte.gd` FX[10] = Teiler): zusammen rund 30 MB weniger Grafikspeicher.
+
 ## Herausforderungen (18.11.)
 
 Startmenü → **Herausforderungen** → „Herausforderung: …“ (zusammen mit der Kartenwahl). Zählen nicht für Rangliste und Phantome; Erfolge zählen; der Zwischenstand merkt sich die Herausforderung, „Neustart“ behält sie. Die gewählte steht oben in der Rundenanzeige. Liste: `Werte.HERAUSFORDERUNGEN`, Regeln: `main.gd` → Abschnitt „Herausforderungen“.
