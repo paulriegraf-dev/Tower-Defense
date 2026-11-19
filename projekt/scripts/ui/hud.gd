@@ -416,6 +416,7 @@ func _aktualisiere_kacheln() -> void:
 	start.disabled = phase != BAU
 	start.leuchtet = phase == BAU
 	start.visible = true
+	tempo.visible = not bool(s.get("brakk_modus"))   # 19.11. (Paul): der Brakk-Mode läuft fest auf ×2 – der Knopf bringt dort nichts
 	_konsole_tief = move_toward(_konsole_tief, 3.0 if phase == KAMPF and not s.endkampf else 0.0, 1.0)
 	_klapp_anteil = move_toward(_klapp_anteil, 1.0 if eingeklappt else 0.0, 0.12)
 	if phase == KAMPF and not _war_kampf:

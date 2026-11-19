@@ -3,7 +3,7 @@ extends Node
 ## Ego-Sicht mit Brakk (Brakk-Mode, 18.11.2026; Kopf 19.11. erneuert). Die Kamera sitzt in Brakks Kopf, die Spiellogik
 ## bleibt die 2D-Logik – diese Datei steuert Brakk nur anders. Tasten (Maus und Tastatur; am Handy: ego_touch.gd):
 ##   WASD gehen, Maus schauen, Linksklick schießen (zwei Pistolen im Wechsel, jede überhitzt), Rechtsklick halten:
-##   Doppellanze, [Leertaste] springen, [Shift] Tumble, [E] Lichttreppe (auf dem Wall: Lichtbrücke), [Q] Lichtanker,
+##   Ladestrahl, [Leertaste] springen, [Shift] Tumble, [E] Lichttreppe (auf dem Wall: Lichtbrücke), [Q] Lichtanker,
 ##   [X] Lichtsäule (zielen, Linksklick setzt), [R] Klonmaschine (Ulti), [V] Zeitlupe, Mausrad aktiver Ring,
 ##   [C] Ringfeld (Bauphase), [F] ausbauen bzw. an der Basis das Lichtterminal, [1]–[7] bauen (BAU_REICHWEITE Felder),
 ##   [Enter] Welle jetzt. Fähigkeiten werden über Brakks Stufe frei (brakk_fortschritt.gd).
@@ -89,7 +89,7 @@ var _tex_ring: Texture2D
 var _strahlen: Array = []       # [MeshInstance3D, Rest]
 var _strahl_mat: StandardMaterial3D
 var _bau_strahl: MeshInstance3D
-# 18.11.: Brakk-Mode – Tumble und Doppellanze
+# 18.11.: Brakk-Mode – Tumble und Ladestrahl
 const TUMBLE_FELDER := 3.0
 const TUMBLE_DAUER := 0.3
 const TUMBLE_ABKLING := 4.0
@@ -115,6 +115,7 @@ var _delle := 0.0                # Landungsdelle 0..1
 var _doppelt_genutzt := false    # Doppelsprung schon verbraucht (bis zur Landung)
 var _plattformen: Array = []     # Lichtplattformen des Doppelsprungs: [Node3D, Alter]
 var _lanze := -1.0              # lädt: Sekunden seit Beginn (-1 = nein)
+var _lade_voll_ms := -100000       # 19.11.: wann der Ladestrahl voll geladen war (Aufblitzen am Fadenkreuz)
 var _lanze_rest := 0.0
 var _wirbel := 0.0               # 18.11.: Wirbelring – Anlauf des Dauerfeuers 0..1
 var _brand_ab := 0                # ab dieser Zeit (ms) darf das nächste Brandfeld
@@ -146,7 +147,7 @@ var touch: EgoTouch = null
 var _auto_ziel: Gegner = null
 var _auto_r := Vector3.ZERO
 const AUTO_RADIUS := 0.45        # so nah (Felder) muss die Blicklinie an der Gegnermitte vorbeigehen – etwas großzügiger als ein Schuss (0,34)
-const LANZE_TOUCH := 1.5         # am Handy ohne Hitze: feste Verstärkung der Doppellanze
+const LANZE_TOUCH := 1.5         # am Handy ohne Hitze: feste Verstärkung des Ladestrahls
 
 
 func starten(p_spiel: Node) -> void:
@@ -373,7 +374,7 @@ func _input(event: InputEvent) -> void:
 				if b.pressed:
 					spiel.werkzeug = Karte.FREI   # Werkzeug weglegen (kein Abriss in der Ego-Sicht)
 			else:
-				_lanze_taste(b.pressed)   # 18.11.: Doppellanze laden / abfeuern
+				_lanze_taste(b.pressed)   # 18.11.: Ladestrahl laden / abfeuern
 			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -571,7 +572,18 @@ func _process(delta: float) -> void:
 	if not _feuer:
 		_wirbel = maxf(0.0, _wirbel - echt * 1.5)
 	if _lanze >= 0.0:
+		# 19.11. (Paul): Aufladen spürbarer – das Bild zieht sich zusammen, zittert leicht, die Pistolen ziehen zurück;
+		# voll geladen: Klick und Aufblitzen (der Ladering am Fadenkreuz steht in _fadenkreuz)
+		var war_voll := _lanze >= LANZE_LADEN
 		_lanze += echt
+		var ladung := _glut()
+		_fov_puls = maxf(_fov_puls, 5.0 * ladung)
+		_trauma = maxf(_trauma, 0.12 * ladung)
+		_rueckstoss[0] = maxf(float(_rueckstoss[0]), 0.3 * ladung)
+		_rueckstoss[1] = maxf(float(_rueckstoss[1]), 0.3 * ladung)
+		if not war_voll and _lanze >= LANZE_LADEN:
+			_lade_voll_ms = Time.get_ticks_msec()
+			Ton.spiele(spiel, "ui-klick", 3.0)
 		if not frei:
 			_lanze = -1.0   # Menü auf: Laden abbrechen
 	if _klettern >= 0.0:
@@ -1435,8 +1447,11 @@ func _male_bild() -> void:
 	if _frei():   # 18.11.: bei offenem Menü kein Fadenkreuz und kein Hinweis darüber
 		_fadenkreuz(g, px)
 	_rand_an()   # 19.11.: Leisten in die sichere Fläche (iPhone: Notch, Home-Balken) – Fadenkreuz und Waffen nicht
-	if (touch == null or touch.bau_offen) and not (spiel._hud != null and spiel._hud.schadensliste != null and spiel._hud.schadensliste.visible):
-		_bauliste(g)   # 19.11.: bei offener Schadensliste [Tab] nicht darüber
+	# 19.11.: Die [Tab]-Liste ist im Brakk-Mode klein und darf offen bleiben – am PC rückt die Bauliste darunter,
+	# am Handy (wenig Platz) bleibt sie solange weg.
+	var liste_offen: bool = spiel._hud != null and spiel._hud.schadensliste != null and spiel._hud.schadensliste.visible
+	if touch == null or (touch.bau_offen and not liste_offen):
+		_bauliste(g, liste_offen)
 	# Zustandszeile unten in der Mitte
 	if _klettern >= 0.0:
 		Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, g.y * 0.62), "Lichttreppe", 18, LICHT)
@@ -1496,17 +1511,24 @@ func _waffe(tex: Texture2D, pos: Vector2, ts: Vector2, winkel: float, blitz: boo
 			var a := fmod(t * 1.3 + k * 0.25, 1.0)
 			_bild.draw_rect(Rect2(ph + Vector2(sin(t * 3.0 + k) * 3.0, -a * 18.0) * px, Vector2(2, 2) * px), Color(0.85, 0.85, 0.9, 0.5 * (1.0 - a)))
 	if glut > 0.0:
-		# 18.11.: Doppellanze lädt – die Mündung glüht an, voll geladen flackert sie weiß
+		# 18.11.: Ladestrahl lädt – die Mündung glüht an, voll geladen flackert sie weiß
 		var mg := mund if mund.x >= 0.0 else Vector2(ts.x / 2.0 / px - 1.0, 1.0)
 		var p := Vector2(-ts.x / 2.0, -ts.y) + mg * px
 		var voll := glut >= 1.0
 		_bild.draw_circle(p, (3.0 + 6.0 * glut) * px, Color(SCHUSS, 0.25 * glut))
 		_bild.draw_circle(p, (1.5 + 3.0 * glut) * px, Color.WHITE if voll and Time.get_ticks_msec() % 160 < 80 else Color(SCHUSS, 0.8))
+		# 19.11.: Lichtfunken strömen zur Mündung, je voller, desto dichter
+		var tt := Time.get_ticks_msec() / 1000.0
+		for k in 6:
+			var a := fmod(tt * 2.2 + k / 6.0, 1.0)
+			var w := k * TAU / 6.0 + tt * 1.5
+			var q := p + Vector2(cos(w), sin(w)) * (1.0 - a) * 16.0 * px * (0.4 + 0.6 * glut)
+			_bild.draw_rect(Rect2(q - Vector2(px, px) * 0.5, Vector2(px, px)), Color(SCHUSS.lightened(0.4), 0.9 * a))
 	_bild.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Schmale Bauliste am linken Rand (statt der Leiste unten): Taste, Name, Preis; das gewählte Werkzeug leuchtet.
-func _bauliste(g: Vector2) -> void:
+func _bauliste(g: Vector2, unter_liste: bool = false) -> void:
 	if spiel.phase != 0 and spiel.werkzeug == Karte.FREI:
 		return   # im Kampf freie Sicht
 	var zeile := 34.0
@@ -1516,6 +1538,8 @@ func _bauliste(g: Vector2) -> void:
 		if int(k[0]) != Karte.KOMMANDANT:
 			eintraege.append(k)
 	var oben := (g.y - zeile * eintraege.size()) / 2.0
+	if unter_liste:
+		oben = maxf(oben, 282.0)   # unter der [Tab]-Liste (links oben)
 	var x := 14.0
 	var hinter := Rect2(x - 6.0, oben - 8.0, breite + 12.0, zeile * eintraege.size() + 16.0)
 	_bild.draw_rect(hinter, Color(0.04, 0.05, 0.08, 0.55))
@@ -1553,6 +1577,18 @@ func _muendungsblitz(p: Vector2, px: float, farbe: Color = SCHUSS) -> void:
 
 func _fadenkreuz(g: Vector2, px: float) -> void:
 	var m := (g / 2.0).round()
+	# 19.11. (Paul): Ladering um das Fadenkreuz – füllt sich beim Aufladen, voll geladen blitzt er auf und pulsiert weiß
+	var ladung := _glut()
+	if ladung > 0.0:
+		var rr := 13.0 * px
+		var seit := Time.get_ticks_msec() - _lade_voll_ms
+		var voll := ladung >= 1.0
+		_bild.draw_arc(m, rr, 0.0, TAU, 48, Color(1, 1, 1, 0.14), px)
+		_bild.draw_arc(m, rr, -PI / 2.0, -PI / 2.0 + TAU * ladung, 48, Color.WHITE if voll and Time.get_ticks_msec() % 240 < 120 else SCHUSS, 1.5 * px)
+		if voll and seit < 300:
+			_bild.draw_arc(m, rr + seit / 300.0 * 12.0 * px, 0.0, TAU, 48, Color(1, 1, 1, 1.0 - seit / 300.0), px)
+		if voll:
+			Stil.schreibe_mittig(_bild, m - Vector2(0, rr + 6.0 * px), "loslassen", 16, Color.WHITE)
 	if _feld_zielt and brakk.fortschritt != null and not brakk.fortschritt.ringe.is_empty():
 		var fr := brakk.fortschritt.ringe[clampi(brakk.fortschritt.gewaehlt, 0, brakk.fortschritt.ringe.size() - 1)]
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 26.0 * px), ("%s-Feld: %d/4 Fabriken · „Setzen“ tippen · „Abbruch“" if touch != null else "%s-Feld: %d/4 Fabriken · [C] / Linksklick setzen · Rechtsklick / Esc abbrechen") % [str(BrakkFortschritt.RINGE[fr]["name"]), _feld_fabriken(_feld_ecke).size()], 18, _ring_farbe(fr))   # 19.11.
@@ -1738,7 +1774,7 @@ func _schaden_faktor() -> float:
 	return brakk.fortschritt.schuss_schaden() if brakk.fortschritt != null else 1.0
 
 
-## 19.11. (Paul): Fähigkeiten (Lichtsäule, Doppellanze) – nur der aktive Ring zählt, die Ringe stapeln sich nur für die Schüsse.
+## 19.11. (Paul): Fähigkeiten (Lichtsäule, Ladestrahl) – nur der aktive Ring zählt, die Ringe stapeln sich nur für die Schüsse.
 func _faehigkeit_faktor() -> float:
 	return brakk.fortschritt.faehigkeit_schaden() if brakk.fortschritt != null else 1.0
 
@@ -1834,7 +1870,7 @@ func _brakk_leiste(g: Vector2) -> void:
 			Stil.schreibe_mittig(_bild, m + Vector2(0, 58 + 22 * i), _t("Neu: " + str(BrakkFortschritt.NAMEN[f.neu_frei[i]])), 20, Color(LICHT, a))
 
 
-# ------------------------------------------------------------------ Brakk-Mode: Tumble und Doppellanze (18.11.)
+# ------------------------------------------------------------------ Brakk-Mode: Tumble und Ladestrahl (18.11.)
 
 ## Darf Brakk das schon? Außerhalb des Brakk-Mode gibt es keine Stufen: alles frei. Sonst Hinweis, ab welcher Stufe.
 func _darf(was: String) -> bool:
@@ -1894,16 +1930,16 @@ func _glut() -> float:
 	return clampf(_lanze / LANZE_LADEN, 0.0, 1.0) if _lanze >= 0.0 else 0.0
 
 
-## Rechtsklick ohne Werkzeug: gedrückt halten lädt die Doppellanze, Loslassen feuert (nur voll geladen).
+## Rechtsklick ohne Werkzeug: gedrückt halten lädt den Ladestrahl, Loslassen feuert (nur voll geladen).
 func _lanze_taste(gedrueckt: bool) -> void:
 	if gedrueckt:
 		if _lanze >= 0.0 or _klettern >= 0.0 or not _darf("lanze"):
 			return
 		if _lanze_rest > 0.0:
-			spiel.melde("Doppellanze wieder in %.0f s." % ceilf(_lanze_rest), 1.5)
+			spiel.melde("Ladestrahl wieder in %.0f s." % ceilf(_lanze_rest), 1.5)
 			return
 		if float(_gesperrt[0]) > 0.0 or float(_gesperrt[1]) > 0.0:
-			spiel.melde("Überhitzt – die Doppellanze braucht beide Pistolen.", 1.5)
+			spiel.melde("Überhitzt – der Ladestrahl braucht beide Pistolen.", 1.5)
 			return
 		_lanze = 0.0
 		Ton.spiele(spiel, "tc-arc", -8.0)
@@ -3592,7 +3628,7 @@ func _male_briefing() -> void:
 		var y := o.y + 162.0 + 4 * 44.0 + 4.0
 		Stil.schreibe(ci, Vector2(o.x + 32, y), "MIT DEN STUFEN", 16, Stil.TEXT_BLASS)
 		var x := o.x + 32.0 + Stil.breite("MIT DEN STUFEN", 16) + 16.0
-		for f: Array in [["Q", "Anker"], ["RK", "Doppellanze"], ["X", "Lichtsäule"], ["R", "Klon"], ["V", "Zeitlupe"]]:
+		for f: Array in [["Q", "Anker"], ["RK", "Ladestrahl"], ["X", "Lichtsäule"], ["R", "Klon"], ["V", "Zeitlupe"]]:
 			x += _briefing_taste(ci, Vector2(x, y), str(f[0]), false, 1.0) + 6.0
 			Stil.schreibe(ci, Vector2(x, y), str(f[1]), 16, Stil.TEXT_BLASS)
 			x += Stil.breite(str(f[1]), 16) + 18.0
@@ -3910,9 +3946,11 @@ func _seil_zeichnen(ziel: Vector3, t: float) -> void:
 
 # ------------------------------------------------------------------ Brakk-Mode: Werte-Fenster (19.11.)
 
-## 19.11. (Paul): Klein und immer sichtbar neben der Lebensleiste: Schaden je Schuss, Schüsse je Sekunde, Schaden je
-## Sekunde (gerechnet), Schaden der letzten 5 s (gemessen), Ring-Zusätze – hinter jedem Wert, woher der Bonus kommt.
-## Ändert sich ein Wert (Ringwechsel, Aufstieg), blinkt er kurz grün. Am Handy drei Zeilen.
+## 19.11. (Paul): Klein und immer sichtbar unten links, als Werteliste wie in anderen Spielen (Name links, Zahl rechts):
+## Schaden, Schüsse/s, Schaden/s. Darunter klein in der Ringfarbe, was die Ringe dazugeben. Schmal genug, dass es links
+## neben Brakks linker Waffe bleibt.
+## Ändert sich ein Wert (Ringwechsel, Aufstieg), blinkt er kurz grün. Am Handy (unten links liegt der Stick) eine
+## kurze Zeile über der Lebensleiste.
 const WERTE_BLINK_MS := 700
 var _werte_alt := {}
 var _werte_blink := {}
@@ -3927,91 +3965,100 @@ func _prozent(faktor: float) -> String:
 	return "%+d %%" % roundi((faktor - 1.0) * 100.0)
 
 
-## [Schlüssel, Wert, Herkunft] je Zeile.
-func _werte_zeilen() -> Array:
+## {"zeilen": [[Schlüssel, Name, Zahl, [[Bonus, Farbe], …]], …], "zusatz": [[Text, Farbe], …]}
+func _werte_zeilen() -> Dictionary:
 	var f := brakk.fortschritt
-	var st := f.schaden_faktor()
 	var schuss := SCHUSS_SCHADEN * f.schuss_schaden()
-	var her: Array[String] = ["%s Stufe" % _prozent(st)]
-	var takt_her: Array[String] = []
-	var zusatz: Array[String] = []
+	var her: Array = []
+	var takt_her: Array = []
+	var zusatz: Array = []
 	for r: String in f.ringe:
 		var d: Dictionary = BrakkFortschritt.RINGE[r]["brakk_stufen"][clampi(f.ring_stufe(r), 1, 3) - 1]
-		var k := ring_kurz(r)
+		var farbe := _ring_farbe(r)
 		if d.has("schaden"):
-			her.append("%s %s" % [_prozent(float(d["schaden"])), k])
+			zusatz.append(["Schaden " + _prozent(float(d["schaden"])), farbe])
 		if d.has("takt"):
-			takt_her.append("%s %s" % [_prozent(1.0 / float(d["takt"])), k])
+			zusatz.append(["Tempo " + _prozent(1.0 / float(d["takt"])), farbe])
 		if d.has("anlauf"):
-			takt_her.append("bis %s %s" % [_prozent(float(d["anlauf"])), k])
+			zusatz.append(["Anlauf bis " + _prozent(float(d["anlauf"])), farbe])
 		if d.has("weitere"):
-			zusatz.append("Durchschlag %d" % (d["weitere"] as Array).size())
+			zusatz.append(["Durchschlag %d" % (d["weitere"] as Array).size(), farbe])
 		if d.has("mark_bonus"):
-			zusatz.append("Ziel %s" % _prozent(float(d["mark_bonus"])))
+			zusatz.append(["Ziel %s" % _prozent(float(d["mark_bonus"])), farbe])
 		if d.has("gel_bonus"):
-			zusatz.append("Gel %s gg. Gebremste" % _prozent(float(d["gel_bonus"])))
+			zusatz.append(["Gebremste " + _prozent(float(d["gel_bonus"])), farbe])
 		if d.has("brand_takt"):
-			zusatz.append("Brand alle %s s" % str(d["brand_takt"]).replace(".", ","))
+			zusatz.append(["Brand je %s s" % str(d["brand_takt"]).replace(".", ","), farbe])
 		if d.has("spruenge"):
-			zusatz.append("Abpraller %d× %d %%" % [int(d["spruenge"]), roundi(float(d["sprung_anteil"]) * 100.0)])
+			zusatz.append(["Sprung %d× %d %%" % [int(d["spruenge"]), roundi(float(d["sprung_anteil"]) * 100.0)], farbe])
 		if d.has("schutz"):
-			zusatz.append("Schutz %d %%" % roundi(float(d["schutz"]) * 100.0))
+			zusatz.append(["Schutz %d %%" % roundi(float(d["schutz"]) * 100.0), farbe])
 	var pro_sek := 1.0 / maxf(0.01, SCHUSS_TAKT * _takt_faktor())
-	return [
-		["schuss", "Schuss %.0f" % schuss, ", ".join(her)],
-		["takt", "%.1f Schüsse/s" % pro_sek, ", ".join(takt_her)],
-		["dps", "Schaden/s %.0f" % (schuss * pro_sek), "gerechnet"],
-		["gemessen", "letzte 5 s %.0f/s" % f.dps_gemessen(), "gemessen"],
-		["ringe", "Ringe: " + (" · ".join(zusatz) if not zusatz.is_empty() else "keine Zusätze"), ""],
-	]
+	return {"zeilen": [
+		["schaden", "Schaden", "%.0f" % schuss, her],
+		["takt", "Schüsse/s", ("%.1f" % pro_sek).replace(".", ","), takt_her],
+		["dps", "Schaden/s", "%.0f" % (schuss * pro_sek), []],
+	], "zusatz": zusatz}
 
 
 func _werte_fenster(g: Vector2) -> void:
 	var f := brakk.fortschritt
 	if f == null:
 		return
-	var zeilen := _werte_zeilen()
+	var werte := _werte_zeilen()
+	var zeilen: Array = werte["zeilen"]
+	var zusatz: Array = werte["zusatz"]
 	var jetzt := Time.get_ticks_msec()
 	for z: Array in zeilen:
 		var k: String = z[0]
-		if k == "gemessen":
-			continue   # ändert sich laufend – blinkt nicht
-		var text := str(z[1]) + str(z[2])
-		if _werte_alt.has(k) and _werte_alt[k] != text:
+		if _werte_alt.has(k) and _werte_alt[k] != z[2]:
 			_werte_blink[k] = jetzt + WERTE_BLINK_MS
-		_werte_alt[k] = text
-	var breite := clampf(g.x * 0.26, 260.0, 460.0)
-	var bx := (g.x - breite) / 2.0
-	var by := roundf(g.y * 0.86) - 34.0
-	var texte: Array = []   # [Text, Schlüssel]
+		_werte_alt[k] = z[2]
+	var gruen := Color("7dffa0")
 	if touch != null:
-		# Handy: drei kurze Zeilen über der Lebensleiste (links, neben den Bau-Knöpfen ist kein Platz)
-		texte = [[str(zeilen[0][1]) + " · " + str(zeilen[1][1]), "schuss"], [str(zeilen[2][1]) + " · " + str(zeilen[3][1]), "dps"], [str(zeilen[4][1]), "ringe"]]
-	else:
+		# Handy: eine Zeile über der Lebensleiste (unten links liegt der Stick)
+		var breite := clampf(g.x * 0.26, 260.0, 460.0)
+		var bx := (g.x - breite) / 2.0
+		var by := roundf(g.y * 0.86) - 34.0
+		var text := "Schaden %s · %s/s · %s Schaden/s" % [zeilen[0][2], zeilen[1][2], zeilen[2][2]]
+		var tw := Stil.breite(text, 16) + 16.0
+		var o2 := Vector2(bx, by - 12.0 - 24.0)
+		_bild.draw_rect(Rect2(o2, Vector2(tw, 24.0)), Color(0.04, 0.05, 0.08, 0.62))
+		var blinkt := false
 		for z: Array in zeilen:
-			texte.append([str(z[1]) + ("   (" + str(z[2]) + ")" if str(z[2]) != "" else ""), z[0]])
-	var gr := 16 if touch != null else 18
-	var zh := 20.0
-	var w := 0.0
-	for t: Array in texte:
-		w = maxf(w, Stil.breite(str(t[0]), gr))
-	w = minf(w + 16.0, 300.0 if touch != null else 440.0)
-	var h := zh * texte.size() + 8.0
-	var o := Vector2(bx, by - 12.0 - h) if touch != null else Vector2(bx + breite + 24.0, by + 30.0 - h)
-	_bild.draw_rect(Rect2(o, Vector2(w, h)), Color(0.04, 0.05, 0.08, 0.62))
-	_bild.draw_rect(Rect2(o, Vector2(w, h)), Color(1, 1, 1, 0.12), false, 1.0)
-	for i in texte.size():
-		var k: String = texte[i][1]
-		var blink := int(_werte_blink.get(k, 0)) > jetzt
-		var farbe := Color("7dffa0") if blink else (Stil.TEXT_BLASS if k == "ringe" else Stil.TEXT)
-		var text: String = texte[i][0]
-		var gekuerzt := false
-		while Stil.breite(text + ("…" if gekuerzt else ""), gr) > w - 12.0 and text.length() > 4:
-			text = text.substr(0, text.length() - 1)   # zu lang (Handy): kürzen
-			gekuerzt = true
-		if gekuerzt:
-			text += "…"
-		Stil.schreibe(_bild, o + Vector2(8.0, 4.0 + zh * (i + 0.5)), text, gr, farbe)
+			blinkt = blinkt or int(_werte_blink.get(z[0], 0)) > jetzt
+		Stil.schreibe(_bild, o2 + Vector2(8.0, 12.0), text, 16, gruen if blinkt else Stil.TEXT)
+		return
+	var w := 146.0   # die linke Waffe beginnt bei etwa 160
+	var zh := 23.0
+	var kh := 16.0
+	var n := mini(zusatz.size(), 5)
+	var h := 6.0 + zh * zeilen.size() + (5.0 + kh * n if n > 0 else 0.0) + 4.0
+	var o := Vector2(10.0, g.y - 10.0 - h)
+	_bild.draw_rect(Rect2(o, Vector2(w, h)), Color(0.04, 0.05, 0.08, 0.72))
+	_bild.draw_rect(Rect2(o, Vector2(w, h)), Color(1, 1, 1, 0.14), false, 1.0)
+	_bild.draw_rect(Rect2(o, Vector2(2.0, h)), Color(Stil.GOLD, 0.8))
+	for i in zeilen.size():
+		var z: Array = zeilen[i]
+		var my := o.y + 6.0 + zh * (i + 0.5)
+		if i > 0:
+			_bild.draw_rect(Rect2(o.x + 8.0, o.y + 6.0 + zh * i, w - 16.0, 1.0), Color(1, 1, 1, 0.07))
+		var x := o.x + 11.0
+		x += Stil.schreibe(_bild, Vector2(x, my), str(z[1]), 16, Stil.TEXT_BLASS) + 7.0
+		for b: Array in (z[3] as Array):
+			x += Stil.schreibe(_bild, Vector2(x, my), str(b[0]), 13, b[1]) + 5.0
+		var blink := int(_werte_blink.get(z[0], 0)) > jetzt
+		var zahl := str(z[2])
+		Stil.schreibe(_bild, Vector2(o.x + w - 9.0 - Stil.breite(zahl, 20), my), zahl, 20, gruen if blink else Stil.GOLD)
+	if n > 0:
+		var y0 := o.y + 6.0 + zh * zeilen.size() + 3.0
+		_bild.draw_rect(Rect2(o.x + 8.0, y0 - 2.0, w - 16.0, 1.0), Color(1, 1, 1, 0.14))
+		for i in n:
+			var e: Array = zusatz[i]
+			var my2 := y0 + 2.0 + kh * (i + 0.5)
+			_bild.draw_rect(Rect2(o.x + 11.0, my2 - 3.0, 6.0, 6.0), e[1])
+			var t := str(e[0]) if i < 4 or zusatz.size() <= 5 else "+ %d weitere" % (zusatz.size() - 4)
+			Stil.schreibe(_bild, Vector2(o.x + 23.0, my2), t, 14, Stil.TEXT)
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Tumble-Schuss (19.11.)
@@ -4071,7 +4118,7 @@ func _zl_beginn() -> void:
 	match _zl_ring:
 		"abpraller":
 			_zl_bereit()
-			spiel.melde("Zeitlupe · Sprungring: Anker, Rolle und Treppe ohne Abklingzeit.", 2.5)
+			spiel.melde("Zeitlupe · Sprungring: Anker, Rolle und Treppe ohne Cooldown.", 2.5)
 		"brandfeld":
 			# Rauch im Umkreis löst sich auf, Gegner darin können eine Weile nicht geheilt werden
 			var r := _zl_wert("brandfeld", "radius") * Werte.ZELLE

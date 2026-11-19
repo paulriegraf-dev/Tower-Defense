@@ -14,12 +14,12 @@ const SCHADEN_JE_STUFE := 0.10        # … und je Stufe 10 % stärker (Platz na
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
 ## Freischaltungen: Fähigkeit -> Stufe
 const AB := {"tumble": 2, "doppelsprung": 2, "anker": 3, "lanze": 4, "saeule": 6, "ulti": 7, "zeitlupe": 8}
-const NAMEN := {"doppelsprung": "Doppelsprung [2× Leertaste]", "saeule": "Lichtsäule [X]", "zeitlupe": "Zeitlupe [V]", "tumble": "Tumble [Shift]", "anker": "Lichtanker [Q]", "lanze": "Doppellanze [Rechtsklick]", "ulti": "Klonmaschine [R]"}
+const NAMEN := {"doppelsprung": "Doppelsprung [2× Leertaste]", "saeule": "Lichtsäule [X]", "zeitlupe": "Zeitlupe [V]", "tumble": "Tumble [Shift]", "anker": "Lichtanker [Q]", "lanze": "Ladestrahl [Rechtsklick]", "ulti": "Klonmaschine [R]"}
 const FREIE_WAELLE := 5               # 18.11. (Paul): so viele Erdwälle bekommt Brakk jede Runde geschenkt
 const FREIE_STELLUNGEN := 1           # 19.11. (Paul): … und so viele Stellungen
 const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klonmaschine) auf
 ## 19.11. (Paul): Brakks Schaden nach Quelle (Werte-Fenster, [Tab], Sieg-Übersicht). Reihenfolge = Anzeige.
-const QUELLEN := {"pistole": "Pistolen", "tumble": "Tumble-Schuss", "lanze": "Doppellanze", "saeule": "Lichtsäule", "ring": "Ringeffekte",
+const QUELLEN := {"pistole": "Pistolen", "tumble": "Tumble-Schuss", "lanze": "Ladestrahl", "saeule": "Lichtsäule", "ring": "Ringeffekte",
 	"zeitlupe": "Zeitlupe", "klinge": "Ringklinge", "absprung": "Absprung", "sonst": "Sonstiges"}
 const GEMESSEN_SEK := 5.0             # „Schaden der letzten 5 Sekunden“ im Werte-Fenster
 ## 19.11. (Paul): Der erste Schuss nach der Rolle (innerhalb „fenster“ Sekunden) ist verstärkt; tötet er einen großen
@@ -27,7 +27,7 @@ const GEMESSEN_SEK := 5.0             # „Schaden der letzten 5 Sekunden“ im 
 ## 19.11. (Paul): Fällt Brakk, steht er nach so vielen Sekunden (Echtzeit) an der Basis wieder auf – nicht erst zur nächsten Runde.
 const RESPAWN_SEK := 10.0
 const TUMBLE_SCHUSS := {"fenster": 2.0, "mal": 2.0, "mal_gross": 3.0}
-## 19.11. (Paul): Doppellanze fürs späte Spiel – zusätzlich zum Schaden nimmt sie jedem Getroffenen diesen Anteil seines
+## 19.11. (Paul): Ladestrahl fürs späte Spiel – zusätzlich zum Schaden nimmt sie jedem Getroffenen diesen Anteil seines
 ## maximalen Lebens (große Gegner weniger). Ohne Ringeffekte.
 const LANZE_ANTEIL := {"normal": 0.10, "gross": 0.05}
 ## 19.11. (Paul): Zeitlupe [V] – Zusatz je aktivem Ring (beim Auslösen festgelegt). Felder in Feldern, Zeiten in Sekunden.
@@ -54,39 +54,39 @@ static func gross(g: Gegner) -> bool:
 ## 19.11. (Paul): `brakk_stufen` – was der Ring Brakk auf Ringstufe 1 / 2 / 3 gibt (Stufe 3 = früherer Vollwert).
 ## Ring und Feld passen zusammen: der Ring gibt Brakk dieselbe Wirkung, die das Feld als Truppe baut.
 const RINGE := {
-	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "saeule": "fünf schmale Säulen in einer Linie quer durch 5 Felder", "brakk_stufen": [
+	"durchschuss": {"saeule_kurz": "5er-Linie", "name": "Durchschlagring", "truppe": "scharfschuetze", "saeule": "fünf schmale Säulen in einer Linie quer durch 5 Felder", "brakk_stufen": [
 		{"weitere": [0.5], "text": "durch 1 weiteren Gegner (halber Schaden)"},
 		{"weitere": [0.5, 0.5], "text": "durch 2 weitere Gegner (halber Schaden)"},
 		{"weitere": [1.0, 0.5], "text": "durch 2 weitere (der erste voll, dann halb)"}]},
-	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "saeule": "kleiner Einschlag mit doppeltem Schaden", "brakk_stufen": [
+	"laser": {"saeule_kurz": "2× Schaden", "name": "Glutstrahlring", "truppe": "scharfschuetze", "saeule": "kleiner Einschlag mit doppeltem Schaden", "brakk_stufen": [
 		{"schaden": 1.2, "text": "+20 % Schaden"},
 		{"schaden": 1.3, "text": "+30 % Schaden"},
 		{"schaden": 1.4, "text": "+40 % Schaden"}]},
-	"markierung": {"name": "Zielring", "truppe": "scharfschuetze", "saeule": "normaler Einschlag", "brakk_stufen": [   # 19.11. (Paul): neu
+	"markierung": {"saeule_kurz": "normal", "name": "Zielring", "truppe": "scharfschuetze", "saeule": "normaler Einschlag", "brakk_stufen": [   # 19.11. (Paul): neu
 		{"mark_bonus": 1.15, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +15 % Schaden"},
 		{"mark_bonus": 1.25, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +25 % Schaden"},
 		{"mark_bonus": 1.35, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +35 % Schaden"}]},
-	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "saeule": "drei kleinere Einschläge kurz nacheinander rund um die Marke", "brakk_stufen": [
+	"feuerteam": {"saeule_kurz": "3 Einschläge", "name": "Taktring", "truppe": "technogunner", "saeule": "drei kleinere Einschläge kurz nacheinander rund um die Marke", "brakk_stufen": [
 		{"takt": 1.0 / 1.15, "text": "15 % schneller, heizt weniger"},
 		{"takt": 1.0 / 1.2, "text": "20 % schneller, heizt weniger"},
 		{"takt": 1.0 / 1.25, "text": "25 % schneller, heizt weniger"}]},
-	"minigun": {"name": "Wirbelring", "truppe": "technogunner", "saeule": "die Säule bleibt 3 s stehen, dreht sich und schadet laufend", "brakk_stufen": [
+	"minigun": {"saeule_kurz": "steht 3 s", "name": "Wirbelring", "truppe": "technogunner", "saeule": "die Säule bleibt 3 s stehen, dreht sich und schadet laufend", "brakk_stufen": [
 		{"anlauf": 1.3, "text": "Dauerfeuer läuft an bis 1,3×"},
 		{"anlauf": 1.45, "text": "Dauerfeuer läuft an bis 1,45×"},
 		{"anlauf": 1.6, "text": "Dauerfeuer läuft an bis 1,6×"}]},
-	"bollwerk": {"name": "Wallring", "truppe": "technogunner", "saeule": "normaler Einschlag", "brakk_stufen": [   # 19.11. (Paul): neu
+	"bollwerk": {"saeule_kurz": "normal", "name": "Wallring", "truppe": "technogunner", "saeule": "normaler Einschlag", "brakk_stufen": [   # 19.11. (Paul): neu
 		{"schutz": 0.10, "text": "Brakk nimmt 10 % weniger Schaden"},
 		{"schutz": 0.15, "text": "Brakk nimmt 15 % weniger Schaden"},
 		{"schutz": 0.20, "text": "Brakk nimmt 20 % weniger Schaden"}]},
-	"abpraller": {"name": "Sprungring", "truppe": "plasmawerfer", "saeule": "Einschlag, dann springt ein Blitz auf bis zu 3 Gegner in der Nähe", "brakk_stufen": [
+	"abpraller": {"saeule_kurz": "springt auf 3", "name": "Sprungring", "truppe": "plasmawerfer", "saeule": "Einschlag, dann springt ein Blitz auf bis zu 3 Gegner in der Nähe", "brakk_stufen": [
 		{"spruenge": 1, "sprung_anteil": 0.4, "text": "1 Sprung mit 40 % Schaden"},
 		{"spruenge": 1, "sprung_anteil": 0.6, "text": "1 Sprung mit 60 % Schaden"},
 		{"spruenge": 2, "sprung_anteil": 0.6, "text": "2 Sprünge mit 60 % Schaden"}]},
-	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "saeule": "Einschlag und ein großes Brandfeld", "brakk_stufen": [
+	"brandfeld": {"saeule_kurz": "+ Brandfeld", "name": "Brandring", "truppe": "plasmawerfer", "saeule": "Einschlag und ein großes Brandfeld", "brakk_stufen": [
 		{"brand_takt": 2.5, "text": "Treffer setzen alle 2,5 s den Boden in Brand"},
 		{"brand_takt": 2.0, "text": "Treffer setzen alle 2 s den Boden in Brand"},
 		{"brand_takt": 1.5, "text": "Treffer setzen alle 1,5 s den Boden in Brand"}]},
-	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "saeule": "wenig Schaden, aber alle im Feld 4 s stark gebremst", "brakk_stufen": [
+	"plasmagel": {"saeule_kurz": "bremst 4 s", "name": "Gelring", "truppe": "plasmawerfer", "saeule": "wenig Schaden, aber alle im Feld 4 s stark gebremst", "brakk_stufen": [
 		{"bremse": 1.0, "gel_bonus": 1.2, "text": "bremst 1 s, Gebremste nehmen +20 %"},
 		{"bremse": 1.5, "gel_bonus": 1.3, "text": "bremst 1,5 s, Gebremste nehmen +30 %"},
 		{"bremse": 2.0, "gel_bonus": 1.4, "text": "bremst 2 s, Gebremste nehmen +40 %"}]},
@@ -280,7 +280,7 @@ func brakk_wert(schluessel: String, std: Variant) -> Variant:
 	return std
 
 
-## Nur der aktive Ring (für Fähigkeiten wie Lichtsäule und Doppellanze) – "" während des Ringwechsels.
+## Nur der aktive Ring (für Fähigkeiten wie Lichtsäule und Ladestrahl) – "" während des Ringwechsels.
 func brakk_wert_aktiv(schluessel: String, std: Variant) -> Variant:
 	var r := aktiv()
 	if r == "":
@@ -299,7 +299,7 @@ func schuss_schaden() -> float:
 	return schaden_faktor() * float(brakk_wert("schaden", 1.0))
 
 
-## Fähigkeiten (Lichtsäule, Doppellanze): Stufenschaden mal nur dem Schadensbonus des aktiven Rings.
+## Fähigkeiten (Lichtsäule, Ladestrahl): Stufenschaden mal nur dem Schadensbonus des aktiven Rings.
 func faehigkeit_schaden() -> float:
 	return schaden_faktor() * float(brakk_wert_aktiv("schaden", 1.0))
 
@@ -448,7 +448,7 @@ static func zeitlupe_text(ring: String) -> String:
 		"laser":
 			return "Brakks Waffen überhitzen währenddessen nicht (am Handy, ohne Hitze: %d %% schnellere Schüsse)." % roundi((float(z["touch_takt"]) - 1.0) * 100.0)
 		"abpraller":
-			return "Anker, Rolle und Treppe sind sofort bereit und währenddessen ohne Abklingzeit."
+			return "Anker, Rolle und Treppe sind sofort bereit und währenddessen ohne Cooldown."
 		"minigun":
 			return "Am Ende zieht ein Sog Gegner im Umkreis von %s Feldern um den Punkt unter dem Fadenkreuz bis zu %s Felder zusammen (nicht durch Mauern, große Gegner nicht)." % [_zahl(z["radius"]), _zahl(z["zug"])]
 		"brandfeld":

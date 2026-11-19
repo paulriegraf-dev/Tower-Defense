@@ -4,7 +4,7 @@ extends Node
 ##   Links: schwebender Stick (erscheint, wo der Daumen aufsetzt) – laufen.
 ##   Rechts: Wischen auf freier Fläche dreht den Blick.
 ##   Brakk schießt selbst, sobald das Fadenkreuz auf einem Gegner liegt (EgoModus._auto_zielen) – zielen musst du; kein Überhitzen.
-##   Knöpfe im Bogen rechts unten: Doppellanze (halten = laden, loslassen = feuern), Rolle, Treppe/Brücke,
+##   Knöpfe im Bogen rechts unten: Ladestrahl (halten = laden, loslassen = feuern), Rolle, Treppe/Brücke,
 ##   Anker, Lichtsäule, Zeitlupe, Klonmaschine, Ring wechseln, Ringfeld.
 ##   Fähigkeiten mit Ziel: kurz tippen = dort auslösen, wohin das Fadenkreuz zeigt;
 ##   halten und ziehen = zielen mit Vorschau am Ziel, loslassen = auslösen, auf „✕“ ziehen = abbrechen. (Paul: kein Sprung am Handy.)
@@ -26,7 +26,7 @@ const ABBRUCH_R := 46.0
 
 ## Knöpfe: id, Mitte, Radius, Glyphe (aus EgoModus.GLYPHEN, "" = eigenes Zeichen), Beschriftung
 const KNOEPFE := [
-	["lanze", Vector2(1150, 480), 62.0, "lanze", "Lanze"],
+	["lanze", Vector2(1150, 480), 62.0, "lanze", "Strahl"],
 	["tumble", Vector2(1010, 560), 42.0, "tumble", "Rolle"],
 	["treppe", Vector2(1052, 330), 42.0, "treppe", "Treppe"],
 	["anker", Vector2(1165, 318), 42.0, "anker", "Anker"],

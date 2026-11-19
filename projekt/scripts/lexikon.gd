@@ -62,6 +62,8 @@ func umschalten() -> void:
 var _pausiert_von_mir := false
 
 func _sichtbar_geaendert() -> void:
+	if visible:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE   # Ego-Sicht: Maus frei, solange die Übersicht offen ist (danach fängt die Ego-Sicht sie wieder)
 	if visible and not get_tree().paused:
 		get_tree().paused = true
 		_pausiert_von_mir = true
@@ -81,6 +83,21 @@ func _process(delta: float) -> void:
 
 
 # ------------------------------------------------------------------ Eingabe
+
+## 19.11. (Paul): Esc, [I] und Rechtsklick schließen die Übersicht. Hier statt in main.gd, weil das Spiel steht, solange
+## sie offen ist (main bekommt dann keine Tasten), und weil in der Ego-Sicht die Maus gefangen ist.
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	var zu := false
+	if event is InputEventKey and event.pressed and not event.echo:
+		zu = (event as InputEventKey).keycode in [KEY_ESCAPE, KEY_I]
+	elif event is InputEventMouseButton and event.pressed:
+		zu = (event as InputEventMouseButton).button_index == MOUSE_BUTTON_RIGHT
+	if zu:
+		visible = false
+		get_viewport().set_input_as_handled()
+
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -192,6 +209,8 @@ func _zeichne_karte(r: Rect2, e: Dictionary, gewaehlt: bool) -> void:
 	var bildbox := Vector2(r.size.x - 10.0, r.size.y - 18.0)
 	_male_bild(self, e["bild"], Vector2(r.get_center().x, r.position.y + 4.0 + bildbox.y), bildbox, drueber, true)
 	Stil.schreibe_mittig(self, Vector2(r.get_center().x, r.end.y - 7.0), e["name"], Stil.KLEIN, Stil.TEXT if gewaehlt or drueber else Stil.TEXT_BLASS)
+	if e.has("kachel_oben"):
+		Stil.schreibe_mittig(self, Vector2(r.get_center().x, r.position.y + 8.0), str(e["kachel_oben"]), Stil.KLEIN, e.get("marke_farbe", Stil.TEXT_BLASS) if gewaehlt or drueber else Stil.TEXT_BLASS)
 
 
 func _zeichne_reiter(i: int) -> void:
@@ -749,14 +768,14 @@ func _baue_daten() -> void:
 				"Bauen mit [1]–[7] (5 Felder Reichweite), [F] baut aus. Der Schild der Gegnerzone fängt Schüsse ab."]],
 				["Fähigkeiten (frei mit der Stufe)", Stil.GOLD, [
 				"[E] Lichttreppe auf den Wall im Blick (bis 5 Felder, steht 8 s) – oben auf dem Wall [E] Lichtbrücke zum nächsten Wall.",
-				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (werfen, nochmal [Q] zieht dich hin, dazwischen schwingen) · St. 4 Rechtsklick halten: Doppellanze (lässt die Hitze ab).",
+				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (werfen, nochmal [Q] zieht dich hin, dazwischen schwingen) · St. 4 Rechtsklick halten: Ladestrahl (lässt die Hitze ab).",
 				"St. 6 [X] Lichtsäule (zielen, Linksklick setzt; Art je aktivem Ring) · St. 7 [R] Klonmaschine (lädt durch 30 Kills) · St. 8 [V] Zeitlupe.",
 				"Stufen: Erfahrung aus eigenen Kills und Wellen; jede Stufe +5 % Schaden, +30 Leben."]],
 				["Ringe (Lichtterminal: [F] an der Basis)", Stil.GOLD, [
 				"Kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe 1, 3, 5, 7, 9.",
 				"Neun Ringe, je einer für jede Stufe-3-Fähigkeit: Durchschlag, Glutstrahl, Ziel (Scharfschützen) · Takt, Wirbel, Wall (Technogunner) · Sprung, Brand, Gel (Plasmawerfer). Brakks Ringeffekt wächst mit der Ringstufe.",
 				"[C] in der Bauphase: Ringfeld (2×2 Felder, höchstens 4 Fabriken) – Vorschau, [C] oder Linksklick setzt. Fabriken darin bauen die Truppe des Rings auf seiner Stufe.",
-				"Alle getragenen Ringe wirken zusammen auf Brakks Schüsse. Das Mausrad wählt den aktiven Ring – er bestimmt Lichtsäule, Doppellanze, die Farben und welches Feld [C] setzt. Fabriken haben hier keine Ausbauten und werden nur um 10 % teurer statt 25 %."]]]},
+				"Alle getragenen Ringe wirken zusammen auf Brakks Schüsse. Das Mausrad wählt den aktiven Ring – er bestimmt Lichtsäule, Ladestrahl, die Farben und welches Feld [C] setzt. Fabriken haben hier keine Ausbauten und werden nur um 10 % teurer statt 25 %."]]]},
 		]})
 	var pilot: Dictionary = W.EINHEITEN["pilot"]
 	truppen.append({"name": "Pilot", "unter": "bemannt Batterien", "marke": "Pilotenfabrik", "marke_farbe": Stil.LEUCHT, "bild": _figur(pilot),
@@ -892,7 +911,8 @@ func _baue_daten() -> void:
 
 ## Eine Karte im Reiter „Brakk“: ab welcher Stufe, Taste am PC, Knopf am Handy, was sie tut. Zahlen aus den Tabellen.
 func _faehigkeit(name: String, unter: String, bild: Dictionary, ab: int, pc: String, handy: String, werte: Array, abschnitte: Array) -> Dictionary:
-	var w: Array = [["ab Stufe", str(ab)], ["PC", pc], ["Handy", handy]]
+	# 19.11. (Paul): am PC nur die Taste, am Handy nur der Knopf
+	var w: Array = [["ab Stufe", str(ab)], ["Knopf", handy] if Touch.noetig() else ["Taste", pc]]
 	w.append_array(werte)
 	return {"name": name, "unter": unter, "marke": "ab St. %d" % ab if ab > 1 else "von Anfang an", "marke_farbe": Stil.GOLD if ab > 1 else Stil.LEUCHT,
 		"bild": bild, "werte": w, "abschnitte": abschnitte}
@@ -923,46 +943,46 @@ func _brakk_karten() -> Array:
 				"Wer in der Luft höher als die Mauerkrone ist, landet beim Hinüberfliegen oben auf dem Wall."]],
 			["Absprung vom Wall", Stil.GOLD, [
 				"Oben auf dem Wall zweimal springen: Brakk fliegt in Laufrichtung (sonst Blickrichtung) hinunter und schlägt mit einer Druckwelle ein – %s × Fähigkeitsschaden im Umkreis von %s Feldern." % [_z(E.DRUCK_SCHADEN), _z(E.DRUCK_RADIUS)]]]]),
-		_faehigkeit("Lichttreppe", "auf den Wall · Lichtbrücke", {"glyphe": "treppe", "farbe": Stil.LEUCHT}, 1, "E", "Treppe", [["Weite", _z(E.TREPPE_WEITE) + " F."], ["steht", _z(E.TREPPE_HALTEN) + " s"], ["Brücke", _z(E.BRUECKE_ABKLING) + " s"]], [
+		_faehigkeit("Lichttreppe", "auf den Wall · Lichtbrücke", {"glyphe": "treppe", "farbe": Stil.LEUCHT}, 1, "E", "Treppe", [["Weite", _z(E.TREPPE_WEITE) + " Felder"], ["steht", _z(E.TREPPE_HALTEN) + " s"], ["Brücke", _z(E.BRUECKE_ABKLING) + " s"]], [
 			["Hinauf", Stil.LEUCHT, [
 				"[E] mit Blick auf einen Erdwall (bis %s Felder): eine Lichttreppe baut sich auf, hinlaufen = hinauf. Aus der Ferne gesetzt wird sie bis zu %d Felder länger. Oben: mehr Reichweite." % [_z(E.TREPPE_WEITE), E.TREPPE_LAENGER]]],
 			["Oben auf dem Wall", Stil.GOLD, [
-				"[E] mit Blick auf einen anderen Wall (bis %s Felder): Lichtbrücke hinüber, %s s begehbar, %s s Abklingzeit. Am Fadenkreuz steht, was [E] gerade tut." % [_z(E.BRUECKE_WEITE), _z(E.BRUECKE_HALTEN), _z(E.BRUECKE_ABKLING)],
+				"[E] mit Blick auf einen anderen Wall (bis %s Felder): Lichtbrücke hinüber, %s s begehbar, %s s Cooldown. Am Fadenkreuz steht, was [E] gerade tut." % [_z(E.BRUECKE_WEITE), _z(E.BRUECKE_HALTEN), _z(E.BRUECKE_ABKLING)],
 				"Sonst führt [E] eine Treppe hinunter – oder zweimal springen für den Absprung."]]]),
-		_faehigkeit("Tumble", "Hechtrolle", {"glyphe": "tumble", "farbe": Stil.LEUCHT}, int(ab["tumble"]), "Shift", "Rolle", [["Weite", _z(E.TUMBLE_FELDER) + " F."], ["Abklingen", _z(E.TUMBLE_ABKLING) + " s"]], [
+		_faehigkeit("Tumble", "Hechtrolle", {"glyphe": "tumble", "farbe": Stil.LEUCHT}, int(ab["tumble"]), "Shift", "Rolle", [["Weite", _z(E.TUMBLE_FELDER) + " Felder"], ["Cooldown", _z(E.TUMBLE_ABKLING) + " s"]], [
 			["Ausweichen", Stil.LEUCHT, [
 				"Rolle in Laufrichtung (ohne Taste nach vorn), %s Felder, kurz unverwundbar – gegen Steine der Schleudern (roter Landekreis)." % _z(E.TUMBLE_FELDER),
 				"Danach läuft Brakk %s s lang %s-mal so schnell (Nachschwung)." % [_z(E.SCHWUNG_SEK), _z(E.SCHWUNG_MAL)]]],
 			["Tumble-Schuss", Stil.GOLD, [
 				"Der erste Schuss nach der Rolle (innerhalb %s s) macht ×%s Schaden, gegen große Gegner (%s) ×%s – mit goldenem Strahl." % [_z(B.TUMBLE_SCHUSS["fenster"]), _z(B.TUMBLE_SCHUSS["mal"]), _gross_namen(), _z(B.TUMBLE_SCHUSS["mal_gross"])],
 				"Tötet er einen großen Gegner, ist die Rolle sofort wieder bereit."]]]),
-		_faehigkeit("Lichtanker", "werfen, ziehen, schwingen", {"glyphe": "anker", "farbe": Stil.LEUCHT}, int(ab["anker"]), "Q", "Anker", [["Weite", _z(E.ANKER_WEITE) + " F."], ["hängt", _z(E.HAKEN_HALTEN) + " s"], ["Abklingen", _z(E.ANKER_ABKLING) + " s"]], [
+		_faehigkeit("Lichtanker", "werfen, ziehen, schwingen", {"glyphe": "anker", "farbe": Stil.LEUCHT}, int(ab["anker"]), "Q", "Anker", [["Weite", _z(E.ANKER_WEITE) + " Felder"], ["hängt", _z(E.HAKEN_HALTEN) + " s"], ["Cooldown", _z(E.ANKER_ABKLING) + " s"]], [
 			["Zwei Stufen", Stil.LEUCHT, [
 				"Erstes [Q]: der Haken fliegt an Mauerkrone oder Boden unter dem Fadenkreuz (bis %s Felder) und hängt %s s – das Seil hält Brakk wie eine Leine." % [_z(E.ANKER_WEITE), _z(E.HAKEN_HALTEN)],
 				"Zweites [Q]: Brakk wird hingezogen, an einer Mauer landet er oben.",
 				"Dazwischen: laufen und springen = um den Haken schwingen. In der Luft nochmal springen löst das Seil – Brakk schnellt mit dem Schwung weiter.",
-				"Die Abklingzeit läuft ab dem Lösen."]]]),
-		_faehigkeit("Doppellanze", "geladener Durchschuss", {"glyphe": "lanze", "farbe": Stil.LEUCHT}, int(ab["lanze"]), "RMB halten", "Lanze", [["Schaden", _z(E.LANZE_SCHADEN)], ["+ max. Leben", "%d %%" % roundi(float(B.LANZE_ANTEIL["normal"]) * 100.0)], ["Abklingen", _z(E.LANZE_ABKLING) + " s"]], [
+				"Der Cooldown läuft ab dem Lösen."]]]),
+		_faehigkeit("Ladestrahl", "geladener Durchschuss", {"glyphe": "lanze", "farbe": Stil.LEUCHT}, int(ab["lanze"]), "RMB halten", "Strahl", [["Schaden", _z(E.LANZE_SCHADEN)], ["+ max. Leben", "%d %%" % roundi(float(B.LANZE_ANTEIL["normal"]) * 100.0)], ["Cooldown", _z(E.LANZE_ABKLING) + " s"]], [
 			["Laden und loslassen", Stil.LEUCHT, [
-				"Rechtsklick halten lädt (%s s), loslassen feuert eine Lanze durch alle Gegner auf der Linie (bis %s Felder). Sie lässt die Hitze der Pistolen ab – je heißer, desto stärker. Am Handy ohne Hitze: fest ×%s." % [_z(E.LANZE_LADEN), _z(E.LANZE_WEITE), _z(E.LANZE_TOUCH)]]],
+				"Rechtsklick halten lädt (%s s), loslassen feuert einen Strahl durch alle Gegner auf der Linie (bis %s Felder). Er lässt die Hitze der Pistolen ab – je heißer, desto stärker. Am Handy ohne Hitze: fest ×%s." % [_z(E.LANZE_LADEN), _z(E.LANZE_WEITE), _z(E.LANZE_TOUCH)]]],
 			["Fürs späte Spiel", Stil.GOLD, [
-				"Zusätzlich nimmt sie jedem getroffenen Gegner %d %% seines maximalen Lebens, großen Gegnern (%s) %d %% – so bleibt sie auch gegen zähe Gegner in späten Runden stark." % [roundi(float(B.LANZE_ANTEIL["normal"]) * 100.0), _gross_namen(), roundi(float(B.LANZE_ANTEIL["gross"]) * 100.0)]]],
+				"Zusätzlich nimmt er jedem getroffenen Gegner %d %% seines maximalen Lebens, großen Gegnern (%s) %d %% – so bleibt er auch gegen zähe Gegner in späten Runden stark." % [roundi(float(B.LANZE_ANTEIL["normal"]) * 100.0), _gross_namen(), roundi(float(B.LANZE_ANTEIL["gross"]) * 100.0)]]],
 			["Ringe", Stil.GOLD, [
 				"Ein reiner Schadensschuss: Von den Ringen wirken nur der Glutstrahlring (mehr Schaden) und der Gelring (Bonus gegen Gebremste) – und nur, wenn er der aktive Ring ist."]]]),
-		_faehigkeit("Lichtsäule", "Einschlag von oben", {"glyphe": "saeule", "farbe": Stil.LEUCHT}, int(ab["saeule"]), "X + Klick", "Säule", [["Schaden", _z(E.SAEULE_SCHADEN)], ["Weite", _z(E.SAEULE_WEITE) + " F."], ["Abklingen", _z(E.SAEULE_ABKLING) + " s"]], [
+		_faehigkeit("Lichtsäule", "Einschlag von oben", {"glyphe": "saeule", "farbe": Stil.LEUCHT}, int(ab["saeule"]), "X + Klick", "Säule", [["Schaden", _z(E.SAEULE_SCHADEN)], ["Weite", _z(E.SAEULE_WEITE) + " Felder"], ["Cooldown", _z(E.SAEULE_ABKLING) + " s"]], [
 			["Zielen und setzen", Stil.LEUCHT, [
 				"[X] zielt (Marke am Boden), Linksklick setzt, Rechtsklick bricht ab. Nach %s s schlägt die Säule ein: %s × Fähigkeitsschaden im Umkreis von %s Feldern." % [_z(E.SAEULE_VORLAUF), _z(E.SAEULE_SCHADEN), _z(E.SAEULE_RADIUS)],
 				"Die Art hängt vom aktiven Ring ab – siehe Reiter Ringe."]]]),
 		_faehigkeit("Klonmaschine", "Ultimative", {"glyphe": "ulti", "farbe": Stil.GOLD}, int(ab["ulti"]), "R", "Klon", [["lädt durch", "%d Kills" % B.ULTI_KILLS]], [
 			["Klonen", Stil.LEUCHT, [
 				"Lädt durch %d eigene Kills. [R] setzt die Klonmaschine auf das Feld im Blick: Wer hindurchgeht, wird einmal geklont – auch Gegner. Danach eine ganze Runde Pause." % B.ULTI_KILLS]]]),
-		_faehigkeit("Zeitlupe", "die Welt wird langsam", {"glyphe": "zeitlupe", "farbe": Stil.LEUCHT}, int(ab["zeitlupe"]), "V", "Zeitlupe", [["Dauer", _z(E.ZEITLUPE_SEK) + " s"], ["Tempo", "×" + _z(E.ZEITLUPE_TEMPO)], ["Abklingen", _z(E.ZEITLUPE_ABKLING) + " s"]], [
+		_faehigkeit("Zeitlupe", "die Welt wird langsam", {"glyphe": "zeitlupe", "farbe": Stil.LEUCHT}, int(ab["zeitlupe"]), "V", "Zeitlupe", [["Dauer", _z(E.ZEITLUPE_SEK) + " s"], ["Tempo", "×" + _z(E.ZEITLUPE_TEMPO)], ["Cooldown", _z(E.ZEITLUPE_ABKLING) + " s"]], [
 			["Langsam", Stil.LEUCHT, [
 				"%s s lang läuft alles außer Brakk mit %d %% Tempo – Brakk selbst bleibt schnell." % [_z(E.ZEITLUPE_SEK), roundi(E.ZEITLUPE_TEMPO * 100.0)]]]]),
 		_faehigkeit("Ringe", "Lichtterminal · Ringfeld", {"tex": RingBilder.bild("laser", Einheit.ABZEICHEN.get("laser", Stil.GOLD)), "zelle": Vector2(16, 16), "reihe": 0, "n": 1}, 1, "F · C", "Ringe · Feld", [["Preise", _liste(B.RING_PREISE).replace(", ", "/")]], [
 			["Kaufen", Stil.LEUCHT, [
 				"[F] an der Basis in der Bauphase öffnet das Lichtterminal. Ring kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe %s." % _liste(B.FINGER_AB),
-				"Alle getragenen Ringe wirken zusammen auf Brakks Schüsse. Das Mausrad wählt den aktiven Ring: er bestimmt Lichtsäule, Doppellanze, Zeitlupe, die Farben und das Feld."]],
+				"Alle getragenen Ringe wirken zusammen auf Brakks Schüsse. Das Mausrad wählt den aktiven Ring: er bestimmt Lichtsäule, Ladestrahl, Zeitlupe, die Farben und das Feld."]],
 			["Ringfeld [C]", Stil.GOLD, [
 				"In der Bauphase setzt [C] das Feld des aktiven Rings: 2×2 Felder, höchstens 4 Fabriken. Fabriken darin bauen die Truppe des Rings auf seiner Stufe."]]]),
 	]
@@ -977,7 +997,7 @@ static func _gross_namen() -> String:
 	return ", ".join(n)
 
 
-## Reiter „Ringe“: je Ring Brakks Schuss auf Stufe 1–3, die Truppe im Feld, die Lichtsäule, die Doppellanze und die Zeitlupe –
+## Reiter „Ringe“: je Ring Brakks Schuss auf Stufe 1–3, die Truppe im Feld, die Lichtsäule, den Ladestrahl und die Zeitlupe –
 ## alles aus BrakkFortschritt.RINGE erzeugt.
 func _ring_karten() -> Array:
 	var B := BrakkFortschritt
@@ -999,14 +1019,17 @@ func _ring_karten() -> Array:
 		var schuss: Array = []
 		for i in 3:
 			schuss.append("St. %d: %s" % [i + 1, str(stufen[i]["text"])])
+		var s3: Dictionary = (Werte.STUFE_3[truppe] as Dictionary).get(r, {})
 		karten.append({"name": str(d["name"]).trim_suffix("ring"), "unter": str(d["name"]), "marke": tname, "marke_farbe": farbe,
+			"kachel_oben": "Säule: " + str(d.get("saeule_kurz", "normal")),
 			"bild": {"tex": RingBilder.bild(r, farbe), "zelle": Vector2(16, 16), "reihe": 0, "n": 1},
-			"werte": [["Kauf", str(B.RING_PREISE[0])], ["St. 2", "+%d" % B.RING_PREISE[1]], ["St. 3", "+%d" % B.RING_PREISE[2]]],
+			"werte": [["Kauf", str(B.RING_PREISE[0])], ["St. 2", "+%d" % B.RING_PREISE[1]], ["St. 3", "+%d" % B.RING_PREISE[2]], ["Lichtsäule", str(d.get("saeule_kurz", "normal"))]],
 			"abschnitte": [
 				["Brakks Schuss", Stil.LEUCHT, schuss],
 				["Truppe im Ringfeld", Stil.GOLD, ["Fabriken im Feld bauen %s auf der Ringstufe, auf Stufe 3 mit %s." % [tname, f3]]],
+				["Wann stark", Stil.LEUCHT, ["Stark: %s" % str(s3.get("stark", "–")), "Schwach: %s" % str(s3.get("schwach", "–"))]],
 				["Lichtsäule (aktiver Ring)", Stil.GOLD, [str(d.get("saeule", "normaler Einschlag"))]],
-				["Doppellanze (aktiver Ring)", Stil.GOLD, ["; ".join(lanze) if not lanze.is_empty() else "keine Wirkung"]],
+				["Ladestrahl (aktiver Ring)", Stil.GOLD, ["; ".join(lanze) if not lanze.is_empty() else "keine Wirkung"]],
 				["Zeitlupe (aktiver Ring)", Stil.GOLD, [B.zeitlupe_text(r)]],
 			]})
 	return karten
