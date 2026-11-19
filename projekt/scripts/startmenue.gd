@@ -132,7 +132,7 @@ func _baue() -> void:
 			# 18.11.: unterbrochene Partie (Seite neu geladen, Spiel geschlossen) ganz oben anbieten
 			var runde: int = spiel.zwischenstand_runde() if spiel != null else 0
 			if runde > 0:
-				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie", KUPFER_HELL])
+				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie" + (" im Brakk-Mode" if bool(spiel.lies_zwischenstand().get("brakk_modus", false)) else ""), KUPFER_HELL])   # 19.11.: auch Brakk-Mode
 				_eintraege[1][3] = Stil.TEXT
 		"sandbox":
 			# 18.11.: Sandbox als Unterseite – spielen wie bisher oder eigene Karte bauen
@@ -309,6 +309,14 @@ func _ready() -> void:
 		_unterbrochen_gemeldet = true
 		print("Zwischenstand gefunden: Partie in Runde %d lief ohne Ende." % runde)
 		_meldung = "Die Seite wurde neu geladen – deine Partie kannst du fortsetzen." if OS.has_feature("web") else "Deine letzte Partie ist nicht beendet – du kannst sie fortsetzen."
+	# 19.11.: Diagnose – brach die letzte Sitzung ohne reguläres Ende ab? Einmal melden, mit Modus und Runde.
+	var ab: Dictionary = spiel.abgebrochene_sitzung() if spiel != null else {}
+	if not ab.is_empty():
+		var wo := "%s, Runde %d (%s)" % [str(ab.get("modus", "?")), int(ab.get("runde", 0)), str(ab.get("abschnitt", "?"))]
+		print("Abgebrochene Sitzung: ", wo, " seit ", ab.get("zeit", "?"))
+		_meldung = ("Die letzte Partie brach ohne Ende ab: %s – die Seite wurde neu geladen." if OS.has_feature("web") else "Die letzte Partie brach ohne Ende ab: %s.") % wo
+		if runde > 0:
+			_meldung += " Fortsetzen ganz oben."
 
 
 ## 18.11.: Zwischenstand laden – main.gd setzt ihn beim Neuaufbau der Szene hin.

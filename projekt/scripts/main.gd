@@ -1028,6 +1028,7 @@ func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Butt
 
 ## Neustart ohne Umweg über das Menü. Die Partie ist da schon gespeichert (partien/, nach einem Sieg auch als Phantom).
 func _neustart() -> void:
+	loesche_sitzung()   # 19.11.
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
 	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else ("brakk" if brakk_modus else "normal")   # 18.11.: Neustart bleibt im Brakk-Mode
@@ -1046,6 +1047,7 @@ func _abbruch_klick() -> void:
 
 
 func _zum_menue() -> void:
+	loesche_sitzung()   # 19.11.
 	if _menue == null and not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.: bewusst verlassen – kein „Fortsetzen“ mehr
 	naechster_start = ""
@@ -1136,8 +1138,8 @@ func _speichere_protokoll() -> void:
 
 # -------------------------------------------------------------- Zwischenstand (18.11.)
 ## Am Handy verwirft der Browser manchmal die Seite (Tab im Hintergrund, Speicher voll). Zu Beginn jeder Bauphase
-## (ab Runde 2) wird der Stand gesichert; das Startmenü bietet dann „Fortsetzen“ an. Nur normales Spiel und
-## Phantom-Verteidigung – nicht Sandbox, Tutorial oder Phantom-Angriff. Gelöscht bei Sieg, Niederlage, Hauptmenü, Neustart.
+## (ab Runde 2) wird der Stand gesichert; das Startmenü bietet dann „Fortsetzen“ an. Normales Spiel, Phantom-Verteidigung
+## und (19.11.) Brakk-Mode – nicht Sandbox, Tutorial oder Phantom-Angriff. Gelöscht bei Sieg, Niederlage, Hauptmenü, Neustart.
 ## Der Bau kommt live von der Karte (das Protokoll kennt keine Sprengungen). Nicht gesichert: Werte je Bauwerk
 ## (Schaden/Kills), Lage der Schleudern (ziehen ohnehin jede Runde um).
 const ZWISCHENSTAND := "user://zwischenstand.json"
@@ -1166,7 +1168,7 @@ static func loesche_zwischenstand() -> void:
 
 
 func _speichere_zwischenstand() -> void:
-	if sandbox or brakk_modus or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
+	if sandbox or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
 		return
 	if tutorial != null and is_instance_valid(tutorial):
 		return
@@ -1183,6 +1185,8 @@ func _speichere_zwischenstand() -> void:
 		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad, "herausforderung": herausforderung,
 		"protokoll": _protokoll, "protokoll_datei": _protokoll_datei, "kills": _profil_kills,
 	}
+	if brakk_modus and kommandant != null and kommandant.fortschritt != null:
+		_brakk_zwischenstand(d)   # 19.11.
 	# erst in eine Zwischendatei, dann umbenennen: ein Absturz beim Schreiben lässt den alten Stand heil
 	var tmp := ZWISCHENSTAND + ".tmp"
 	var datei := FileAccess.open(tmp, FileAccess.WRITE)
@@ -1191,6 +1195,65 @@ func _speichere_zwischenstand() -> void:
 	datei.store_string(JSON.stringify(d))
 	datei.close()
 	DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(ZWISCHENSTAND))
+
+
+## 19.11.: Brakk-Mode im Zwischenstand – Brakks Fortschritt, gratis Stellungen; Fabriken im Ringfeld mit ihrem eigenen
+## Stand (ohne Ring), beim Laden baut das Feld sie wieder um.
+func _brakk_zwischenstand(d: Dictionary) -> void:
+	d["brakk_modus"] = true
+	d["brakk"] = kommandant.fortschritt.speichern()
+	d["freie_stellungen"] = freie_stellungen
+	var zellen := _zellen_jetzt()
+	for z: Vector2i in zellen:
+		if fabriken.has(z) and (fabriken[z] as Dictionary).has("ring_vorher"):
+			var v: Dictionary = fabriken[z]["ring_vorher"]
+			zellen[z]["einheit"] = str(v["typ"])
+			zellen[z]["stufe"] = int(v["stufe"])
+			zellen[z].erase("faehigkeit")
+			if str(v["faehigkeit"]) != "":
+				zellen[z]["faehigkeit"] = str(v["faehigkeit"])
+	d["stand"] = Phantom._stand(zellen, _schilde_jetzt())
+
+
+func _brakk_fortsetzen(d: Dictionary) -> void:
+	if kommandant == null:
+		return
+	kommandant.fortschritt = BrakkFortschritt.new(kommandant)
+	kommandant.fortschritt.lade(d.get("brakk", {}), kommandant)
+	freie_stellungen = int(d.get("freie_stellungen", 0))
+	_menue_weg()
+	for i in 3:
+		await get_tree().process_frame   # die HD-Ansicht entsteht erst im nächsten Bild
+	if ego == null and hd != null and kommandant != null:
+		_ego_umschalten()
+
+
+## 19.11.: Diagnose – brach die letzte Sitzung ohne reguläres Ende ab (am Handy: Browser lädt die Seite neu)? Merker in
+## user://, gesetzt zu jeder Welle und Bauphase, gelöscht bei Sieg, Niederlage, Neustart und Hauptmenü. Das Startmenü meldet
+## ihn einmal.
+const SITZUNG := "user://sitzung.json"
+
+
+func _merke_sitzung(abschnitt: String) -> void:
+	var modus := "Brakk-Mode" if brakk_modus else ("Sandbox" if sandbox else ("Phantom-" + phantom_modus if phantom_modus != "" else ("Tutorial" if tutorial != null else "Normales Spiel")))
+	var datei := FileAccess.open(SITZUNG, FileAccess.WRITE)
+	if datei != null:
+		datei.store_string(JSON.stringify({"modus": modus, "runde": welle, "abschnitt": abschnitt, "zeit": Time.get_datetime_string_from_system()}))
+		datei.close()
+
+
+static func loesche_sitzung() -> void:
+	if FileAccess.file_exists(SITZUNG):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SITZUNG))
+
+
+## Abgebrochene Sitzung (einmal): {"modus", "runde", "abschnitt", "zeit"} oder {}; der Merker ist danach gelöscht.
+static func abgebrochene_sitzung() -> Dictionary:
+	if not FileAccess.file_exists(SITZUNG):
+		return {}
+	var daten: Variant = JSON.parse_string(FileAccess.get_file_as_string(SITZUNG))
+	loesche_sitzung()
+	return daten if daten is Dictionary else {}
 
 
 ## Der Bau, wie er gerade steht, im Format von Phantom._wende_an (Feld -> {"typ", ...}).
@@ -1242,6 +1305,11 @@ func _schilde_jetzt() -> Dictionary:
 ## Startmenü → „Fortsetzen“: den gesicherten Stand hinstellen. Passt er nicht, beginnt eine neue Partie.
 func _lade_zwischenstand() -> void:
 	var d := lies_zwischenstand()
+	if bool(d.get("brakk_modus", false)):
+		brakk_modus = true   # 19.11.: wie _brakk_modus_gewaehlt – festes Tempo, HD-2D
+		_tempo_faktor = Werte.BRAKK_TEMPO
+		Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
+		Werte.setze_grafik("hd")
 	herausforderung = str(d.get("herausforderung", ""))   # 18.11.
 	Werte.herausforderung = herausforderung
 	var passt: bool = not d.is_empty() and int(d.get("spalten", 0)) == Werte.SPALTEN and int(d.get("zeilen", 0)) == Werte.ZEILEN \
@@ -1280,6 +1348,8 @@ func _lade_zwischenstand() -> void:
 		karte.cp_feind[i] = bool(feind[i])
 	karte.aktualisiere_pfad()
 	karte.queue_redraw()
+	if brakk_modus:
+		_brakk_fortsetzen(d)   # 19.11.
 	_speichere_zwischenstand()
 	melde("Partie fortgesetzt: Runde %d." % welle, 5.0)
 
@@ -2550,6 +2620,7 @@ func starte_welle(erzwingen: bool = false) -> void:
 	_bezahlt.clear()   # ab jetzt gilt für alles Gebaute die normale Erstattung
 	_abriss_merk = Karte.KEINE
 	phase = Phase.KAMPF
+	_merke_sitzung("Welle")   # 19.11.: Diagnose – brach die Sitzung ab?
 	karte.brut_aktualisieren()   # Brut-Boden: Stand zu Rundenbeginn
 	runde_stats.clear()   # Schadensliste [Tab]: zählt je Runde neu
 	_lazarett_genutzt.clear()
@@ -2962,6 +3033,7 @@ func _naechste_bauphase() -> void:
 	effekte.leeren()
 	if herausforderung == "mauern_fest":
 		setze_kartenmauern(Werte.MAUERN_FEST, true)   # 18.11.: die fertige Mauer steht zu jeder Bauphase wieder (Erdwälle baut man hier nicht)
+	_merke_sitzung("Bauphase")   # 19.11.
 	_speichere_zwischenstand()
 	_starte_bauzeit()   # 18.11.
 	if brakk_modus and ego == null and hd != null and kommandant != null:
@@ -3334,6 +3406,7 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 func _gewonnen() -> void:
 	if phase == Phase.ENDE:
 		return
+	loesche_sitzung()   # 19.11.
 	phase = Phase.ENDE
 	if not sandbox:
 		loesche_zwischenstand()   # 18.11.
@@ -3656,7 +3729,7 @@ func kommandant_steuerbar() -> bool:
 
 ## 18.11. (Paul): Brakk-Mode – eigener Modus aus dem Startmenü. Normales Spiel auf PaulLand, für diese Partie in HD-2D
 ## (die gespeicherte Grafikwahl bleibt), Brakk steht gratis ab Runde 1 vor der Basis, die Ego-Sicht startet gleich.
-## Kein Zwischenstand, keine Phantome, keine Rangliste.
+## Keine Phantome, keine Rangliste. Zwischenstand seit 19.11. (Brakks Fortschritt dabei).
 func _brakk_modus_gewaehlt() -> void:
 	brakk_modus = true
 	# 18.11.: festes Tempo – Brakk selbst läuft in Echtzeit, ein wählbares Tempo würde ihn mal stark, mal schwach machen
@@ -4093,6 +4166,7 @@ func gegner_am_ziel(g: Gegner) -> void:
 func _verloren() -> void:
 	if phase == Phase.ENDE:
 		return
+	loesche_sitzung()   # 19.11.
 	phase = Phase.ENDE
 	if not sandbox:
 		loesche_zwischenstand()   # 18.11.

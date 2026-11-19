@@ -322,3 +322,45 @@ func wirke(spiel: Node) -> void:
 			fab["ring_st"] = st
 		k.fabrik_typ[z] = fab["typ"]
 		k.fabrik_stufe[z] = int(fab["stufe"])
+
+
+## 19.11.: Zwischenstand im Brakk-Mode (Seite am Handy neu geladen) – Stufe, Erfahrung, Ringe mit Stufen und Feldern.
+func speichern() -> Dictionary:
+	var f := {}
+	for ring: String in felder:
+		var e: Vector2i = felder[ring]
+		f[ring] = [e.x, e.y]
+	return {"erfahrung": erfahrung, "stufe": stufe, "xp_rest": _xp_rest, "kill_xp": kill_xp, "ulti_ladung": ulti_ladung,
+		"ulti_ab_welle": ulti_ab_welle, "ringe": Array(ringe), "ring_stufen": ring_stufen, "bezahlt": _bezahlt,
+		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt}
+
+
+func lade(d: Dictionary, brakk: Kommandant) -> void:
+	erfahrung = int(d.get("erfahrung", 0))
+	stufe = clampi(int(d.get("stufe", 1)), 1, STUFE_HOECHST)
+	_xp_rest = float(d.get("xp_rest", 0.0))
+	kill_xp = float(d.get("kill_xp", 0.0))
+	ulti_ladung = int(d.get("ulti_ladung", 0))
+	ulti_ab_welle = int(d.get("ulti_ab_welle", 0))
+	ringe.clear()
+	for r: Variant in d.get("ringe", []):
+		if RINGE.has(str(r)):
+			ringe.append(str(r))
+	ring_stufen.clear()
+	_bezahlt.clear()
+	_gekauft_in.clear()
+	var st: Dictionary = d.get("ring_stufen", {})
+	var bz: Dictionary = d.get("bezahlt", {})
+	var gk: Dictionary = d.get("gekauft_in", {})
+	var fe: Dictionary = d.get("felder", {})
+	for r: String in ringe:
+		ring_stufen[r] = int(st.get(r, 1))
+		_bezahlt[r] = int(bz.get(r, 0))
+		if gk.has(r):
+			_gekauft_in[r] = int(gk[r])
+		if fe.has(r):
+			var e: Array = fe[r]
+			felder[r] = Vector2i(int(e[0]), int(e[1]))
+	gewaehlt = clampi(int(d.get("gewaehlt", 0)), 0, maxi(0, ringe.size() - 1))
+	brakk.max_leben = basis_leben + LEBEN_JE_STUFE * float(stufe - 1)
+	brakk.leben = brakk.max_leben
