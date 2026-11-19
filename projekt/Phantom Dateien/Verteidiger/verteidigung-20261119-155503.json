@@ -1,0 +1,3318 @@
+{
+	"art": "verteidigung",
+	"begonnen": "2026-11-19T15:39:30",
+	"ergebnis": {
+		"ausgang": "sieg",
+		"leben": 15,
+		"runde": 20
+	},
+	"format": 1,
+	"karte": {
+		"basis": [
+			22,
+			5
+		],
+		"checkpoints": [
+			[
+				10,
+				3
+			],
+			[
+				21,
+				12
+			]
+		],
+		"spalten": 28,
+		"zeilen": 14
+	},
+	"phantom_version": 2,
+	"profil": "c11363a30947257b",
+	"quelle": "partie-20261119-153930.json",
+	"runden": [
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 15,
+					"y": 4
+				},
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 16,
+					"y": 4
+				}
+			],
+			"budget_vorher": 70,
+			"in_runde": [
+				{
+					"a": "einheit",
+					"t": 1.7,
+					"typ": "plasmawerfer",
+					"x": 16,
+					"y": 4
+				}
+			],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 9.1,
+				"waelle": 0
+			},
+			"runde": 1,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					}
+				],
+				"generatoren": [],
+				"waelle": []
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 19,
+					"y": 9
+				}
+			],
+			"budget_vorher": 42,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 7.6,
+				"waelle": 0
+			},
+			"runde": 2,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 19,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": []
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 10
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 11
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 12
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 13
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 13
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 22,
+					"y": 13
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 22,
+					"y": 12
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 22,
+					"y": 11
+				},
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 24,
+					"y": 9
+				},
+				{
+					"a": "einheit",
+					"typ": "scharfschuetze",
+					"x": 19,
+					"y": 9
+				}
+			],
+			"budget_vorher": 168,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 9.3,
+				"waelle": 8
+			},
+			"runde": 3,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 18,
+					"y": 9
+				}
+			],
+			"budget_vorher": 93,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 13.4,
+				"waelle": 8
+			},
+			"runde": 4,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 10,
+					"y": 9
+				},
+				{
+					"a": "einheit",
+					"typ": "plasmawerfer",
+					"x": 10,
+					"y": 9
+				}
+			],
+			"budget_vorher": 108,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 30.5,
+				"waelle": 8
+			},
+			"runde": 5,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 12,
+					"y": 0
+				},
+				{
+					"a": "einheit",
+					"typ": "scharfschuetze",
+					"x": 12,
+					"y": 0
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 10,
+					"y": 9
+				}
+			],
+			"budget_vorher": 137,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 50.4,
+				"waelle": 8
+			},
+			"runde": 6,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 15,
+					"y": 4
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 12,
+					"y": 0
+				}
+			],
+			"budget_vorher": 223,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 18.5,
+				"waelle": 8
+			},
+			"runde": 7,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 16,
+					"y": 4
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 18,
+					"y": 9
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 19,
+					"y": 9
+				}
+			],
+			"budget_vorher": 336,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 15.9,
+				"waelle": 8
+			},
+			"runde": 8,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 12,
+					"y": 0
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 24,
+					"y": 9
+				}
+			],
+			"budget_vorher": 287,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 27.0,
+				"waelle": 8
+			},
+			"runde": 9,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 15,
+					"y": 4
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 16,
+					"y": 4
+				}
+			],
+			"budget_vorher": 346,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 2,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 27.1,
+				"waelle": 8
+			},
+			"runde": 10,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 10,
+					"y": 9
+				}
+			],
+			"budget_vorher": 318,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 30.4,
+				"waelle": 8
+			},
+			"runde": 11,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "brandfeld",
+					"stufe": 3,
+					"x": 16,
+					"y": 4
+				}
+			],
+			"budget_vorher": 229,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 27.3,
+				"waelle": 8
+			},
+			"runde": 12,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "bollwerk",
+					"stufe": 3,
+					"x": 15,
+					"y": 4
+				}
+			],
+			"budget_vorher": 161,
+			"in_runde": [
+				{
+					"a": "bau",
+					"t": 91.2,
+					"typ": "stellung",
+					"x": 20,
+					"y": 10
+				}
+			],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 45.8,
+				"waelle": 8
+			},
+			"runde": 13,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "abpraller",
+					"stufe": 3,
+					"x": 10,
+					"y": 9
+				}
+			],
+			"budget_vorher": 45,
+			"in_runde": [
+				{
+					"a": "bau",
+					"t": 35.1,
+					"typ": "stellung",
+					"x": 20,
+					"y": 11
+				}
+			],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 27.8,
+				"waelle": 8
+			},
+			"runde": 14,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 18,
+					"y": 9
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 19,
+					"y": 9
+				}
+			],
+			"budget_vorher": 227,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 3,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 38.4,
+				"waelle": 8
+			},
+			"runde": 15,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "durchschuss",
+					"stufe": 3,
+					"x": 12,
+					"y": 0
+				}
+			],
+			"budget_vorher": 17,
+			"in_runde": [
+				{
+					"a": "bau",
+					"t": 35.7,
+					"typ": "stellung",
+					"x": 22,
+					"y": 11
+				}
+			],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 51.0,
+				"waelle": 8
+			},
+			"runde": 16,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 24,
+					"y": 9
+				}
+			],
+			"budget_vorher": 203,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 50.0,
+				"waelle": 8
+			},
+			"runde": 17,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 19,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "markierung",
+					"stufe": 3,
+					"x": 19,
+					"y": 9
+				},
+				{
+					"a": "zuweisung",
+					"sx": 20,
+					"sy": 10,
+					"x": 19,
+					"y": 9
+				},
+				{
+					"a": "zuweisung",
+					"sx": 20,
+					"sy": 11,
+					"x": 19,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 20,
+					"y": 12
+				},
+				{
+					"a": "zuweisung",
+					"sx": 20,
+					"sy": 12,
+					"x": 19,
+					"y": 9
+				},
+				{
+					"a": "ziel",
+					"modus": "staerkste",
+					"x": 19,
+					"y": 9
+				}
+			],
+			"budget_vorher": 192,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 31.5,
+				"waelle": 8
+			},
+			"runde": 18,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "markierung",
+						"stellungen": [
+							[
+								20,
+								10
+							],
+							[
+								20,
+								11
+							],
+							[
+								20,
+								12
+							]
+						],
+						"stufe": 3,
+						"x": 19,
+						"y": 9,
+						"ziel": "staerkste"
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "minigun",
+					"stufe": 3,
+					"x": 18,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 12,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 11,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 13,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 11,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 12,
+					"y": 5
+				},
+				{
+					"a": "zuweisung",
+					"sx": 13,
+					"sy": 5,
+					"x": 18,
+					"y": 9
+				},
+				{
+					"a": "zuweisung",
+					"sx": 11,
+					"sy": 5,
+					"x": 18,
+					"y": 9
+				},
+				{
+					"a": "zuweisung",
+					"sx": 12,
+					"sy": 5,
+					"x": 18,
+					"y": 9
+				}
+			],
+			"budget_vorher": 177,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 2,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 43.8,
+				"waelle": 11
+			},
+			"runde": 19,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "minigun",
+						"stellungen": [
+							[
+								13,
+								5
+							],
+							[
+								11,
+								5
+							],
+							[
+								12,
+								5
+							]
+						],
+						"stufe": 3,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "markierung",
+						"stellungen": [
+							[
+								20,
+								10
+							],
+							[
+								20,
+								11
+							],
+							[
+								20,
+								12
+							]
+						],
+						"stufe": 3,
+						"x": 19,
+						"y": 9,
+						"ziel": "staerkste"
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						11,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "feuerteam",
+					"stufe": 3,
+					"x": 24,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 8
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 10
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 11
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 12
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 13
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 4,
+					"y": 4
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 4,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 4,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 4,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 4,
+					"y": 0
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 22,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 23,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 24,
+					"y": 6
+				}
+			],
+			"budget_vorher": 173,
+			"in_runde": [],
+			"original": {
+				"ausgang": "sieg",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 113.4,
+				"waelle": 28
+			},
+			"runde": 20,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "abpraller",
+						"stufe": 3,
+						"x": 10,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 12,
+						"y": 0
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "bollwerk",
+						"stufe": 3,
+						"x": 15,
+						"y": 4
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 16,
+						"y": 4
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "minigun",
+						"stellungen": [
+							[
+								13,
+								5
+							],
+							[
+								11,
+								5
+							],
+							[
+								12,
+								5
+							]
+						],
+						"stufe": 3,
+						"x": 18,
+						"y": 9
+					},
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "markierung",
+						"stellungen": [
+							[
+								20,
+								10
+							],
+							[
+								20,
+								11
+							],
+							[
+								20,
+								12
+							]
+						],
+						"stufe": 3,
+						"x": 19,
+						"y": 9,
+						"ziel": "staerkste"
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "feuerteam",
+						"stufe": 3,
+						"x": 24,
+						"y": 9
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						4,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						4,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						4,
+						2,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						4,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						4,
+						4,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						5,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						12,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						11,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		}
+	],
+	"spieler": "APAAtROXOP"
+}

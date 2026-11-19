@@ -24,3 +24,7 @@ angriff-20261117-175444.json
 verteidigung-20261117-173053.json
 # 18.11.2026, 15:10 (Hauptseite, mit Spiel-Update; Pool war seit 17.11. abends versehentlich nicht im Spiel):
 verteidigung-20261118-142823.json
+# 19.11.2026, 16:45 (Hauptseite, Web-Version 38; online schon automatisch über das Profil hochgeladen, jetzt auch im eingebauten Pool):
+angriff-20261119-132418.json
+verteidigung-20261119-130859.json
+verteidigung-20261119-155503.json
