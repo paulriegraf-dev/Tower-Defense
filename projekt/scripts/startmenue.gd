@@ -754,7 +754,7 @@ func _male_rangliste(ci: Control) -> void:
 			_rang_zeile(ci, Rect2(x, y, rechts - x, RANG_ZEILE - 2.0), i, zeilen[i], str(zeilen[i][3]) == mein and mein != "", farbe)
 			y += RANG_ZEILE
 		y += 10.0
-	Stil.absatz(ci, Vector2(x, TAFEL.end.y - 26.0), "Elo steigt mit jedem Sieg – ein Sieg gegen Stärkere bringt mehr.", rechts - x, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))
+	# 19.11. (Paul): Hinweistext unten entfernt
 
 
 ## Eine Zeile: Platzabzeichen links, daneben die Leiste mit Name, Zusatz und Elo.
