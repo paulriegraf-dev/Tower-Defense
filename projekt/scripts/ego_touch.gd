@@ -271,7 +271,7 @@ func _sichtbar(id: String) -> bool:
 		"weg":
 			return spiel.werkzeug != Karte.FREI or ego._feld_zielt
 		"bauliste":
-			return spiel.phase == 0 or spiel.werkzeug != Karte.FREI or bau_offen
+			return not spiel._hud.schadensliste.visible and (spiel.phase == 0 or spiel.werkzeug != Karte.FREI or bau_offen)   # 19.11.: nicht über der Schadensliste
 	return true
 
 
@@ -638,7 +638,7 @@ func _male_knopf(ci: Control, k: Array) -> void:
 	elif not offen:
 		_text(ci, m + Vector2(0, r + 14.0), "ab St.%d" % int(BrakkFortschritt.AB[id]), 16, Color(0.75, 0.78, 0.84))
 	else:
-		_text(ci, m + Vector2(0, r + 14.0), ("Ziehen" if id == "anker" and ego._haken >= 0.0 else str(k[4])) if not (id == "treppe" and ego.brakk.oben) else "Brücke", 16, Color.WHITE)
+		_text(ci, m + Vector2(0, r + 14.0), ("Ziehen" if id == "anker" and ego._haken >= 0.0 else str(k[4])) if not (id == "treppe" and ego.brakk.oben) else ("Brücke" if not ego._bruecke_ziel().is_empty() else "Hinunter"), 16, Color.WHITE)
 
 
 ## Text mit dunklem Schatten – auf hellem Gras und Himmel lesbar.

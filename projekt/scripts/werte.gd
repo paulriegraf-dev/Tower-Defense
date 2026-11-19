@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 33          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 34          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1099,7 +1099,7 @@ const GEGNER := {
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 8,
 	},
 	"belagerung": {
-		"name": "Belagerungsturm", "kurz": "Bel.-Turm", "art": "entert Wälle", "rolle": "belagerung", "fernkampf": false,
+		"name": "Belagerungsturm", "kurz": "Bel.-Turm", "art": "entert Wälle", "rolle": "belagerung", "fernkampf": false, "gross": true,   # 19.11.: großer Gegner (Tumble-Schuss, Doppellanze)
 		"blatt": "res://assets/sprites/belagerungsturm.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.6, "massstab": 1.4,
 		"panzerung": 4.0, "leben": 450.0, "tempo": 0.6, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 15,
@@ -1123,7 +1123,7 @@ const GEGNER := {
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 10,
 	},
 	"schwarm": {
-		"name": "Schwarmgeist", "kurz": "Schwarm", "art": "zerfällt in Drohnen", "rolle": "schwarm", "fernkampf": false,
+		"name": "Schwarmgeist", "kurz": "Schwarm", "art": "zerfällt in Drohnen", "rolle": "schwarm", "fernkampf": false, "gross": true,   # 19.11.: großer Gegner – die Einheit mit der Krone
 		"blatt": "res://assets/sprites/schwarmgeist.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.0, "massstab": 1.1,
 		"panzerung": 3.0, "leben": 270.0, "tempo": 0.8, "reichweite": 1.1, "schaden": 14.0, "abklingzeit": 1.2, "zerfall": 3,   # vorher 200 (14.11.)
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 12,

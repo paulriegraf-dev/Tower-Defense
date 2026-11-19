@@ -18,6 +18,34 @@ const NAMEN := {"doppelsprung": "Doppelsprung [2× Leertaste]", "saeule": "Licht
 const FREIE_WAELLE := 5               # 18.11. (Paul): so viele Erdwälle bekommt Brakk jede Runde geschenkt
 const FREIE_STELLUNGEN := 1           # 19.11. (Paul): … und so viele Stellungen
 const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klonmaschine) auf
+## 19.11. (Paul): Brakks Schaden nach Quelle (Werte-Fenster, [Tab], Sieg-Übersicht). Reihenfolge = Anzeige.
+const QUELLEN := {"pistole": "Pistolen", "tumble": "Tumble-Schuss", "lanze": "Doppellanze", "saeule": "Lichtsäule", "ring": "Ringeffekte",
+	"zeitlupe": "Zeitlupe", "klinge": "Ringklinge", "absprung": "Absprung", "sonst": "Sonstiges"}
+const GEMESSEN_SEK := 5.0             # „Schaden der letzten 5 Sekunden“ im Werte-Fenster
+## 19.11. (Paul): Der erste Schuss nach der Rolle (innerhalb „fenster“ Sekunden) ist verstärkt; tötet er einen großen
+## Gegner (Werte.GEGNER "gross"), ist die Rolle sofort wieder bereit.
+## 19.11. (Paul): Fällt Brakk, steht er nach so vielen Sekunden (Echtzeit) an der Basis wieder auf – nicht erst zur nächsten Runde.
+const RESPAWN_SEK := 10.0
+const TUMBLE_SCHUSS := {"fenster": 2.0, "mal": 2.0, "mal_gross": 3.0}
+## 19.11. (Paul): Doppellanze fürs späte Spiel – zusätzlich zum Schaden nimmt sie jedem Getroffenen diesen Anteil seines
+## maximalen Lebens (große Gegner weniger). Ohne Ringeffekte.
+const LANZE_ANTEIL := {"normal": 0.10, "gross": 0.05}
+## 19.11. (Paul): Zeitlupe [V] – Zusatz je aktivem Ring (beim Auslösen festgelegt). Felder in Feldern, Zeiten in Sekunden.
+const ZEITLUPE_RING := {
+	"bollwerk": {"radius": 6.0, "schild": 0.30, "sek": 10.0},          # danach: Schild für Truppen im Umkreis (Anteil ihres Lebens)
+	"plasmagel": {"radius": 8.0, "heilung": 0.08},                     # währenddessen: Truppen heilen je Sekunde (Anteil des Lebens)
+	"feuerteam": {},                                                   # Fabriken im Taktring-Feld ersetzen sofort gefallene Truppen
+	"laser": {"touch_takt": 1.3},                                      # keine Überhitzung; am Handy (ohne Hitze) schneller
+	"abpraller": {},                                                   # Anker, Rolle, Treppe sofort bereit, währenddessen ohne Abklingzeit
+	"minigun": {"radius": 4.0, "zug": 2.0},                            # am Ende: Sog am Punkt unter dem Fadenkreuz
+	"brandfeld": {"radius": 6.0, "sperre": 8.0},                       # Rauch im Umkreis weg, Gegner darin nicht heilbar
+	"markierung": {"nach": 3.0},                                       # Markierungs-Bonus auch für Brakks Schüsse, bis „nach“ danach
+	"durchschuss": {"weite": 2.0, "bogen": 120.0, "takt": 0.5, "mal": 3.0, "heilung": 0.15},   # Ringklinge (Nahkampf)
+}
+
+
+static func gross(g: Gegner) -> bool:
+	return bool(g.daten.get("gross", false))
 ## 18.11. (Paul): Ringe für die linke Hand – am Lichtterminal der Basis gekauft und ausgebaut (Budget).
 ##   Ringfeld ([C] in der Bauphase): Fabriken darin bauen die Truppe des Rings auf seiner Stufe
 ##   (Stufe 1: spezialisiert, 2: Wertepaket, 3: die Fähigkeit). Im Kampf liegen die Felder fest.
@@ -26,39 +54,39 @@ const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klo
 ## 19.11. (Paul): `brakk_stufen` – was der Ring Brakk auf Ringstufe 1 / 2 / 3 gibt (Stufe 3 = früherer Vollwert).
 ## Ring und Feld passen zusammen: der Ring gibt Brakk dieselbe Wirkung, die das Feld als Truppe baut.
 const RINGE := {
-	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "brakk_stufen": [
+	"durchschuss": {"name": "Durchschlagring", "truppe": "scharfschuetze", "saeule": "fünf schmale Säulen in einer Linie quer durch 5 Felder", "brakk_stufen": [
 		{"weitere": [0.5], "text": "durch 1 weiteren Gegner (halber Schaden)"},
 		{"weitere": [0.5, 0.5], "text": "durch 2 weitere Gegner (halber Schaden)"},
 		{"weitere": [1.0, 0.5], "text": "durch 2 weitere (der erste voll, dann halb)"}]},
-	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "brakk_stufen": [
+	"laser": {"name": "Glutstrahlring", "truppe": "scharfschuetze", "saeule": "kleiner Einschlag mit doppeltem Schaden", "brakk_stufen": [
 		{"schaden": 1.2, "text": "+20 % Schaden"},
 		{"schaden": 1.3, "text": "+30 % Schaden"},
 		{"schaden": 1.4, "text": "+40 % Schaden"}]},
-	"markierung": {"name": "Zielring", "truppe": "scharfschuetze", "brakk_stufen": [   # 19.11. (Paul): neu
+	"markierung": {"name": "Zielring", "truppe": "scharfschuetze", "saeule": "normaler Einschlag", "brakk_stufen": [   # 19.11. (Paul): neu
 		{"mark_bonus": 1.15, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +15 % Schaden"},
 		{"mark_bonus": 1.25, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +25 % Schaden"},
 		{"mark_bonus": 1.35, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +35 % Schaden"}]},
-	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "brakk_stufen": [
+	"feuerteam": {"name": "Taktring", "truppe": "technogunner", "saeule": "drei kleinere Einschläge kurz nacheinander rund um die Marke", "brakk_stufen": [
 		{"takt": 1.0 / 1.15, "text": "15 % schneller, heizt weniger"},
 		{"takt": 1.0 / 1.2, "text": "20 % schneller, heizt weniger"},
 		{"takt": 1.0 / 1.25, "text": "25 % schneller, heizt weniger"}]},
-	"minigun": {"name": "Wirbelring", "truppe": "technogunner", "brakk_stufen": [
+	"minigun": {"name": "Wirbelring", "truppe": "technogunner", "saeule": "die Säule bleibt 3 s stehen, dreht sich und schadet laufend", "brakk_stufen": [
 		{"anlauf": 1.3, "text": "Dauerfeuer läuft an bis 1,3×"},
 		{"anlauf": 1.45, "text": "Dauerfeuer läuft an bis 1,45×"},
 		{"anlauf": 1.6, "text": "Dauerfeuer läuft an bis 1,6×"}]},
-	"bollwerk": {"name": "Wallring", "truppe": "technogunner", "brakk_stufen": [   # 19.11. (Paul): neu
+	"bollwerk": {"name": "Wallring", "truppe": "technogunner", "saeule": "normaler Einschlag", "brakk_stufen": [   # 19.11. (Paul): neu
 		{"schutz": 0.10, "text": "Brakk nimmt 10 % weniger Schaden"},
 		{"schutz": 0.15, "text": "Brakk nimmt 15 % weniger Schaden"},
 		{"schutz": 0.20, "text": "Brakk nimmt 20 % weniger Schaden"}]},
-	"abpraller": {"name": "Sprungring", "truppe": "plasmawerfer", "brakk_stufen": [
+	"abpraller": {"name": "Sprungring", "truppe": "plasmawerfer", "saeule": "Einschlag, dann springt ein Blitz auf bis zu 3 Gegner in der Nähe", "brakk_stufen": [
 		{"spruenge": 1, "sprung_anteil": 0.4, "text": "1 Sprung mit 40 % Schaden"},
 		{"spruenge": 1, "sprung_anteil": 0.6, "text": "1 Sprung mit 60 % Schaden"},
 		{"spruenge": 2, "sprung_anteil": 0.6, "text": "2 Sprünge mit 60 % Schaden"}]},
-	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "brakk_stufen": [
+	"brandfeld": {"name": "Brandring", "truppe": "plasmawerfer", "saeule": "Einschlag und ein großes Brandfeld", "brakk_stufen": [
 		{"brand_takt": 2.5, "text": "Treffer setzen alle 2,5 s den Boden in Brand"},
 		{"brand_takt": 2.0, "text": "Treffer setzen alle 2 s den Boden in Brand"},
 		{"brand_takt": 1.5, "text": "Treffer setzen alle 1,5 s den Boden in Brand"}]},
-	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "brakk_stufen": [
+	"plasmagel": {"name": "Gelring", "truppe": "plasmawerfer", "saeule": "wenig Schaden, aber alle im Feld 4 s stark gebremst", "brakk_stufen": [
 		{"bremse": 1.0, "gel_bonus": 1.2, "text": "bremst 1 s, Gebremste nehmen +20 %"},
 		{"bremse": 1.5, "gel_bonus": 1.3, "text": "bremst 1,5 s, Gebremste nehmen +30 %"},
 		{"bremse": 2.0, "gel_bonus": 1.4, "text": "bremst 2 s, Gebremste nehmen +40 %"}]},
@@ -85,6 +113,10 @@ var _gekauft_in := {}                  # Ring -> Runde des Kaufs (volle Erstattu
 var felder := {}                       # Ring -> linke obere Zelle seines 2×2-Felds (Vector2i), in der Bauphase gesetzt
 var gewaehlt := 0                      # Index des aktiven Rings (Mausrad)
 var wechsel_rest := 0.0                # Ring wird gerade gewechselt: so lange wirkt keiner
+var schaden_quellen := {}               # 19.11.: Quelle -> Schaden über die Partie
+var schaden_runden := {}               # 19.11.: "Runde" -> {Quelle -> Schaden}
+var kills_runden := {}                 # 19.11.: "Runde" -> eigene Kills
+var _gemessen: Array = []              # [Zeit ms, Schaden] der letzten GEMESSEN_SEK
 
 
 func _init(brakk: Kommandant) -> void:
@@ -332,7 +364,7 @@ func speichern() -> Dictionary:
 		f[ring] = [e.x, e.y]
 	return {"erfahrung": erfahrung, "stufe": stufe, "xp_rest": _xp_rest, "kill_xp": kill_xp, "ulti_ladung": ulti_ladung,
 		"ulti_ab_welle": ulti_ab_welle, "ringe": Array(ringe), "ring_stufen": ring_stufen, "bezahlt": _bezahlt,
-		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt}
+		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt, "schaden_quellen": schaden_quellen, "schaden_runden": schaden_runden, "kills_runden": kills_runden, "zaehler": zaehler}
 
 
 func lade(d: Dictionary, brakk: Kommandant) -> void:
@@ -362,5 +394,146 @@ func lade(d: Dictionary, brakk: Kommandant) -> void:
 			var e: Array = fe[r]
 			felder[r] = Vector2i(int(e[0]), int(e[1]))
 	gewaehlt = clampi(int(d.get("gewaehlt", 0)), 0, maxi(0, ringe.size() - 1))
+	schaden_quellen = d.get("schaden_quellen", {})   # 19.11.
+	schaden_runden = d.get("schaden_runden", {})
+	kills_runden = d.get("kills_runden", {})
+	zaehler = d.get("zaehler", {})
 	brakk.max_leben = basis_leben + LEBEN_JE_STUFE * float(stufe - 1)
 	brakk.leben = brakk.max_leben
+
+
+## 19.11.: Ein Treffer Brakks (vom Spiel mit dem tatsächlich abgezogenen Schaden gemeldet).
+func zaehle_quelle(quelle: String, menge: float, getoetet: bool, welle: int) -> void:
+	var q := quelle if QUELLEN.has(quelle) else "sonst"
+	schaden_quellen[q] = float(schaden_quellen.get(q, 0.0)) + menge
+	var r := str(welle)
+	if not schaden_runden.has(r):
+		schaden_runden[r] = {}
+	var d: Dictionary = schaden_runden[r]
+	d[q] = float(d.get(q, 0.0)) + menge
+	if getoetet:
+		kills_runden[r] = int(kills_runden.get(r, 0)) + 1
+	var jetzt := Time.get_ticks_msec()
+	_gemessen.append([jetzt, menge])
+
+
+## Schaden je Sekunde, gemessen über die letzten GEMESSEN_SEK (Echtzeit).
+func dps_gemessen() -> float:
+	var grenze := Time.get_ticks_msec() - int(GEMESSEN_SEK * 1000.0)
+	while not _gemessen.is_empty() and int(_gemessen[0][0]) < grenze:
+		_gemessen.pop_front()
+	var summe := 0.0
+	for e: Array in _gemessen:
+		summe += float(e[1])
+	return summe / GEMESSEN_SEK
+
+
+func schaden_gesamt() -> float:
+	var s := 0.0
+	for q: String in schaden_quellen:
+		s += float(schaden_quellen[q])
+	return s
+
+
+## 19.11.: Was die Zeitlupe mit diesem Ring als aktivem zusätzlich tut – aus ZEITLUPE_RING erzeugt (Übersicht, Terminal).
+static func zeitlupe_text(ring: String) -> String:
+	var z: Dictionary = ZEITLUPE_RING.get(ring, {})
+	match ring:
+		"bollwerk":
+			return "Danach bekommen Truppen im Umkreis von %s Feldern für %s s einen Schild (%d %% ihres Lebens)." % [_zahl(z["radius"]), _zahl(z["sek"]), roundi(float(z["schild"]) * 100.0)]
+		"plasmagel":
+			return "Währenddessen heilen sich Truppen im Umkreis von %s Feldern um %d %% je Sekunde." % [_zahl(z["radius"]), roundi(float(z["heilung"]) * 100.0)]
+		"feuerteam":
+			return "Fabriken im Feld des Taktrings ersetzen sofort ihre gefallenen Truppen."
+		"laser":
+			return "Brakks Waffen überhitzen währenddessen nicht (am Handy, ohne Hitze: %d %% schnellere Schüsse)." % roundi((float(z["touch_takt"]) - 1.0) * 100.0)
+		"abpraller":
+			return "Anker, Rolle und Treppe sind sofort bereit und währenddessen ohne Abklingzeit."
+		"minigun":
+			return "Am Ende zieht ein Sog Gegner im Umkreis von %s Feldern um den Punkt unter dem Fadenkreuz bis zu %s Felder zusammen (nicht durch Mauern, große Gegner nicht)." % [_zahl(z["radius"]), _zahl(z["zug"])]
+		"brandfeld":
+			return "Rauch im Umkreis von %s Feldern löst sich auf, Gegner darin können %s s nicht geheilt werden." % [_zahl(z["radius"]), _zahl(z["sperre"])]
+		"markierung":
+			return "Währenddessen und %s s danach gilt der Markierungs-Bonus auch für Brakks eigene Schüsse." % _zahl(z["nach"])
+		"durchschuss":
+			return "Nahkampf: Brakk steckt die rechte Pistole weg und führt eine Ringklinge – Schläge treffen alle Gegner im Bogen vor ihm bis %s Felder weit, alle %s s, mit %s-fachem Schussschaden; %d %% des Schadens heilen Brakk. Am Handy schlägt er von selbst zu." % [_zahl(z["weite"]), _zahl(z["takt"]), _zahl(z["mal"]), roundi(float(z["heilung"]) * 100.0)]
+	return "kein Zusatz"
+
+
+static func _zahl(v: Variant) -> String:
+	var f := float(v)
+	return str(int(f)) if is_equal_approx(f, roundf(f)) else ("%.1f" % f).replace(".", ",")
+
+
+# ------------------------------------------------------------------ Sieg-Übersicht (19.11.)
+
+## 19.11. (Paul): Titel für den Spielstil – der erste zutreffende gilt. [Titel, Kennzahl, Schwelle, Erklärung].
+## Kennzahlen: faehigkeit_anteil (Lanze, Säule, Zeitlupe, Klinge, Absprung an Brakks Schaden), bewegung_je_runde (Rollen,
+## Anker, Doppelsprünge je Runde), wall_anteil (Kampfzeit oben auf Wällen), bau_anteil (Truppen und Türme am
+## Gesamtschaden), brakk_anteil (Brakk am Gesamtschaden).
+const TITEL := [
+	["Lichtmagier", "faehigkeit_anteil", 0.35, "mehr als ein Drittel von Brakks Schaden aus Fähigkeiten"],
+	["Akrobat", "bewegung_je_runde", 4.0, "viele Rollen, Anker und Doppelsprünge je Runde"],
+	["Scharfschütze", "wall_anteil", 0.40, "einen großen Teil der Kämpfe oben von den Wällen"],
+	["Baumeister", "bau_anteil", 0.60, "Truppen und Türme machten den meisten Schaden"],
+	["Frontkämpfer", "brakk_anteil", 0.60, "Brakk selbst machte den meisten Schaden"],
+	["Allrounder", "", 0.0, "von allem etwas"],
+]
+var zaehler := {}                      # 19.11.: rollen, anker, spruenge, saeulen, lanzen, zeitlupen, wall_sek, kampf_sek
+
+
+func zaehle_zeit(was: String, sek: float) -> void:
+	zaehler[was] = float(zaehler.get(was, 0.0)) + sek
+
+
+## Bericht für die Sieg-Übersicht und das Profil (nur Zahlen und Texte – lässt sich als JSON speichern).
+func sieg_bericht(spiel: Node, sekunden: float) -> Dictionary:
+	var brakk := 0.0
+	var truppen := 0.0
+	var tuerme := 0.0
+	for q: String in spiel.gesamt_stats:
+		var s := float((spiel.gesamt_stats[q] as Dictionary).get("schaden", 0.0))
+		if q == "fabrik:-1,-1":
+			brakk += s
+		elif q.begins_with("fabrik:"):
+			truppen += s
+		else:
+			tuerme += s
+	var gesamt := maxf(1.0, brakk + truppen + tuerme)
+	var faehig := 0.0
+	for q: String in ["lanze", "saeule", "zeitlupe", "klinge", "absprung"]:
+		faehig += float(schaden_quellen.get(q, 0.0))
+	var runden := maxi(1, int(spiel.welle))
+	var kennzahlen := {
+		"faehigkeit_anteil": faehig / maxf(1.0, brakk),
+		"bewegung_je_runde": float(int(zaehler.get("rollen", 0)) + int(zaehler.get("anker", 0)) + int(zaehler.get("spruenge", 0))) / float(runden),
+		"wall_anteil": float(zaehler.get("wall_sek", 0.0)) / maxf(1.0, float(zaehler.get("kampf_sek", 0.0))),
+		"bau_anteil": (truppen + tuerme) / gesamt,
+		"brakk_anteil": brakk / gesamt,
+	}
+	var titel: Array = TITEL[TITEL.size() - 1]
+	for t: Array in TITEL:
+		if str(t[1]) == "" or float(kennzahlen.get(t[1], 0.0)) >= float(t[2]):
+			titel = t
+			break
+	var beste_runde := 0
+	var beste_kills := 0
+	for r: String in kills_runden:
+		if int(kills_runden[r]) > beste_kills:
+			beste_kills = int(kills_runden[r])
+			beste_runde = int(r)
+	var ringliste: Array = []
+	for r: String in ringe:
+		ringliste.append([r, ring_stufe(r)])
+	return {
+		"stufe": stufe, "sekunden": sekunden, "runden": runden, "leben": int(spiel.leben), "max_leben": Werte.START_LEBEN,
+		"titel": titel[0], "titel_grund": titel[3], "ringe": ringliste,
+		"anteile": {"brakk": brakk, "truppen": truppen, "tuerme": tuerme},
+		"quellen": schaden_quellen.duplicate(),
+		"hoehepunkte": [
+			["Meiste Kills in einer Runde", "%d (Runde %d)" % [beste_kills, beste_runde] if beste_kills > 0 else "–"],
+			["Rollen", str(int(zaehler.get("rollen", 0)))],
+			["Zeit auf den Wällen", "%d s" % roundi(float(zaehler.get("wall_sek", 0.0)))],
+		],
+		"datum": Time.get_date_string_from_system(),
+	}

@@ -184,6 +184,7 @@ func _baue() -> void:
 			else:
 				_eintraege = [
 					["Name: " + _name_text(), _starte_eingabe, "Enter bestätigt · bis 16 Zeichen" if _tippt() else "zum Ändern klicken", LICHT],
+					["Statistik" if _profil_brakk else "Brakk-Mode", _profil_brakk_umschalten, "zurück zur Statistik" if _profil_brakk else "Siege, Ringe, Titel und der letzte Sieg", Stil.TEXT],   # 19.11.
 					["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 				]
 		"grafik":
@@ -1031,7 +1032,10 @@ func _male(ci: Control) -> void:
 		if _erststart:
 			Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Wie sollen dich andere Spieler sehen? Der Name steht an deinen Phantomen und in der Rangliste.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
 		else:
-			_male_profil_tafel(ci)
+			if _profil_brakk:
+				_male_profil_brakk(ci)   # 19.11.
+			else:
+				_male_profil_tafel(ci)
 	_male_profil_schild(ci)
 	_male_tc_emblem(ci)
 	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
@@ -1249,3 +1253,41 @@ func _male_lageplan(ci: Control, t: float) -> void:
 		var a2 := 0.06
 		ci.draw_rect(Rect2(0, k * 3.0, 640, 3), Color(0, 0, 0, a2 * (12 - k)))
 		ci.draw_rect(Rect2(0, 357.0 - k * 3.0, 640, 3), Color(0, 0, 0, a2 * (12 - k)))
+
+
+# ------------------------------------------------------------------ Profil: Brakk-Mode (19.11.)
+
+## 19.11. (Paul): Abschnitt „Brakk-Mode“ im Profil – Siege, höchste Stufe, Lieblingsring, häufigster Titel und die
+## Übersicht des letzten Siegs zum Nachschauen (BrakkSieg.male_bericht).
+var _profil_brakk := false
+
+
+func _profil_brakk_umschalten() -> void:
+	_profil_brakk = not _profil_brakk
+	_zeige("profil")
+
+
+func _male_profil_brakk(ci: Control) -> void:
+	var r := Rect2(LISTE_X - 6.0, 204, 624.0 - (LISTE_X - 6.0), 138)
+	Stil.platte(ci, Rect2(TAFEL.position, Vector2(TAFEL.size.x, 128)), 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	var x := TAFEL.position.x + 12.0
+	var y := TAFEL.position.y + 14.0
+	Stil.schreibe(ci, Vector2(x, y), "BRAKK-MODE", Stil.NORMAL, Stil.GOLD)
+	var ring := Profil.brakk_meist("brakk_ringe")
+	var titel := Profil.brakk_meist("brakk_titel")
+	var werte := [
+		["SIEGE", str(Profil.stat("brakk_siege")), Stil.GOLD],
+		["HÖCHSTE STUFE", str(Profil.stat("brakk_stufe")) if Profil.stat("brakk_stufe") > 0 else "–", LICHT],
+		["LIEBLINGSRING", str(BrakkFortschritt.RINGE.get(ring[0], {}).get("name", "–")).trim_suffix("ring") if not ring.is_empty() else "–", Stil.TEXT],
+		["HÄUFIGSTER TITEL", str(titel[0]) if not titel.is_empty() else "–", Stil.TEXT]]
+	var kb := (TAFEL.size.x - 24.0 - 4.0) / 2.0
+	for i in werte.size():
+		var kr := Rect2(roundf(x + (i % 2) * (kb + 4.0)), y + 10.0 + (i / 2) * 38.0, roundf(kb), 34.0)
+		Stil.platte(ci, kr, 2.0, Stil.METALL_TIEF, Stil.RAHMEN)
+		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 13.0), werte[i][1], Stil.GROSS if str(werte[i][1]).length() < 7 else Stil.NORMAL, werte[i][2])
+		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 26.0), werte[i][0], Stil.KLEIN, Stil.TEXT_BLASS)
+	# letzter Sieg
+	Stil.platte(ci, r, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	var b: Dictionary = Profil.einstellung("brakk_letzter_sieg", {})
+	Stil.schreibe(ci, r.position + Vector2(12, 12), "LETZTER SIEG" + (" · " + str(b.get("datum", "")) if not b.is_empty() else ""), Stil.KLEIN, Stil.LEUCHT)
+	BrakkSieg.male_bericht(ci, Rect2(r.position + Vector2(12, 18), r.size - Vector2(24, 22)), b, true)

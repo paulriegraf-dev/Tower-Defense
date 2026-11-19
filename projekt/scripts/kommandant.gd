@@ -282,7 +282,20 @@ func faellt() -> void:
 		if is_instance_valid(e):
 			e.folge = null
 	gesammelt.clear()
-	spiel.melde("Brakk ist gefallen – zur nächsten Runde steht er wieder bereit.", 4.0)
+	if not spiel.brakk_modus:
+		spiel.melde("Brakk ist gefallen – zur nächsten Runde steht er wieder bereit.", 4.0)   # im Brakk-Mode meldet die Ego-Sicht den Respawn
+
+
+## 19.11. (Paul): Brakk-Mode – nach dem Respawn-Timer an der Basis wieder aufstehen, voll geheilt.
+func aufstehen(z: Vector2i) -> void:
+	gefallen = false
+	visible = true
+	oben = false
+	posten_zelle = Karte.KEINE
+	zustand = Zustand.BODEN
+	position = karte.mitte(z)
+	anker = position
+	leben = max_leben
 
 
 ## Zwischen den Runden: wieder aufstehen, voll geheilt, Klonmaschine wieder verfügbar.

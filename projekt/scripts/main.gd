@@ -2527,7 +2527,7 @@ func abpraller(erstes: Gegner, radius: float, schaden: float, farbe: Color) -> v
 var _braende: Array = []   # [Mitte, Radius, Restzeit, Schaden je Sekunde]
 
 func lege_brand(mitte: Vector2, radius: float, schaden_je_sek: float) -> void:
-	_braende.append([mitte, radius, Werte.BRANDFELD_SEK, schaden_je_sek, schadensquelle])
+	_braende.append([mitte, radius, Werte.BRANDFELD_SEK, schaden_je_sek, schadensquelle, brakk_quelle])
 	effekte.brand(mitte, radius, Werte.BRANDFELD_SEK)
 
 
@@ -2537,10 +2537,12 @@ func _braende_wirken(delta: float) -> void:
 	for b: Array in _braende:
 		b[2] -= delta
 		schadensquelle = str(b[4]) if b.size() > 4 else ""
+		brakk_quelle = str(b[5]) if b.size() > 5 else ""
 		schuetze = null   # 18.11.: Brandfeld – keine Truppe schießt gerade
 		for g in gegner.duplicate():
 			if not _geschuetzt(g) and (b[0] as Vector2).distance_to(g.position) <= float(b[1]):
 				g.nimm_schaden(float(b[3]) * delta, true)
+	brakk_quelle = ""
 	_braende = _braende.filter(func(b): return b[2] > 0.0)
 
 
@@ -3436,6 +3438,9 @@ func _gewonnen() -> void:
 	for r: Dictionary in _protokoll.get("runden", []):
 		sek += float((r.get("ergebnis", {}) as Dictionary).get("sekunden", 0.0))
 	var vw := _partie_ins_profil(true)
+	if brakk_modus and ego != null:
+		ego.sieg(sek)   # 19.11.: Brakk-Mode – eigener Abspann und Übersicht
+		return
 	_zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
 		"sekunden": sek, "phantom": als_phantom, "wertung": vw}, als_phantom)
 
@@ -3618,6 +3623,8 @@ func _turmbilder_abgleichen() -> void:
 # Jeder Treffer an einem Gegner wird der Quelle gutgeschrieben, die gerade feuert: eine Fabrik (alle ihre Truppen),
 # eine Turmart oder eine Batterie. Gezählt wird nur Schaden, der wirklich Leben nimmt (kein Überschuss beim letzten Treffer).
 var schadensquelle := ""
+var brakk_quelle := ""   # 19.11.: Brakk-Mode – Unterquelle von Brakks Schaden (pistole, lanze, saeule, ring …), setzt die Ego-Sicht
+var brakk_mark_selbst := false   # 19.11.: Zeitlupe mit Zielring – Brakks Markierung gilt auch für seine eigenen Schüsse
 var runde_stats: Dictionary = {}    # Quelle -> {"schaden", "kills", "name", "blatt", "zelle", "farbe"}
 var gesamt_stats: Dictionary = {}   # dasselbe über die ganze Partie
 var runde_stats_welle := 0          # zu welcher Runde runde_stats gehört
@@ -3645,6 +3652,8 @@ func kuppel_abgefangen(punkt: Vector2, menge: float) -> void:
 func zaehle_schaden(menge: float, getoetet: bool) -> void:
 	if schadensquelle == "" or menge <= 0.0:
 		return
+	if schadensquelle == "fabrik:-1,-1" and kommandant != null and kommandant.fortschritt != null:
+		kommandant.fortschritt.zaehle_quelle(brakk_quelle, menge, getoetet, welle)   # 19.11.
 	if getoetet:
 		_profil_kill(schadensquelle)
 		if schuetze is Einheit and is_instance_valid(schuetze) and schadensquelle.begins_with("fabrik:") \

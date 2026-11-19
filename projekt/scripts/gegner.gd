@@ -22,6 +22,7 @@ var rolle := ""
 var daten: Dictionary
 var leben := 1.0
 var max_leben := 1.0
+var heilsperre_bis := 0            # 19.11.: Brakk-Mode, Zeitlupe mit Brandring – bis dahin (ms) heilt kein Sanitäter
 var leben_faktor := 1.0
 
 var trupp: Array = []               # alle Mitglieder des eigenen Trupps (gemeinsame Liste)
@@ -382,7 +383,7 @@ func _heile(reichweite: float) -> void:
 	_abkling = float(daten["abklingzeit"])
 	var geheilt := false
 	for g in spiel.gegner:
-		if g != self and is_instance_valid(g) and not g._tot and g.leben < g.max_leben and position.distance_to(g.position) <= reichweite:
+		if g != self and is_instance_valid(g) and not g._tot and g.leben < g.max_leben and position.distance_to(g.position) <= reichweite and Time.get_ticks_msec() >= g.heilsperre_bis:
 			g.leben = minf(g.max_leben, g.leben + float(daten["heilung"]) * leben_faktor)
 			g.queue_redraw()
 			geheilt = true
@@ -564,7 +565,7 @@ func nimm_schaden(menge: float, dauer: bool = false) -> void:
 	if panzer > 0.0 and not dauer:
 		menge = maxf(menge - panzer, menge * Werte.PANZERUNG_MIN_ANTEIL)
 		_panzer_blitz = 0.12
-	if markiert > 0.0 and not (markiert_brakk and spiel.schadensquelle == "fabrik:-1,-1"):
+	if markiert > 0.0 and not (markiert_brakk and spiel.schadensquelle == "fabrik:-1,-1" and not spiel.brakk_mark_selbst):   # 19.11.: Zeitlupe mit Zielring – auch für Brakk
 		menge *= markier_faktor
 	if sproede > 0.0:
 		menge *= float(Werte.TURM_STUFE_3["frost"]["sproede"]["sproede"])

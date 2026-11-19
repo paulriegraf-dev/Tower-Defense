@@ -46,6 +46,8 @@ var folge: Node2D = null            # Kommandant hat gesammelt: ihm folgen
 var sturm_bis := 0.0                # Losschlagen: so lange schneller und rascher feuern
 var sturm_ziel := Karte.KEINE       # ... und dorthin stürmen
 var klon := false                   # aus der Klonmaschine (wird nicht noch einmal geklont)
+var ring_schild := 0.0             # 19.11.: Brakk-Mode, Zeitlupe mit Wallring – Schild (Lebenspunkte) …
+var ring_schild_bis := 0           # … bis zu diesem Zeitpunkt (ms, Echtzeit)
 var _gefolgt := false
 
 ## Farbe des Abzeichens je Stufe-3-Fähigkeit
@@ -720,6 +722,10 @@ func nimm_fernschaden(menge: float) -> void:
 
 func nimm_schaden(menge: float) -> void:
 	_anlauf *= 1.0 - Werte.MINIGUN_TREFFER_VERLUST   # Minigun: ein Treffer kostet einen Teil des Anlaufs
+	if ring_schild > 0.0 and Time.get_ticks_msec() < ring_schild_bis:
+		var ab := minf(ring_schild, menge)   # 19.11.: Zeitlupe mit Wallring – Schild fängt zuerst ab
+		ring_schild -= ab
+		menge -= ab
 	var f: float = spiel.schild_faktor(position)   # Schildgenerator-Kuppel
 	if f < 1.0:
 		spiel.kuppel_abgefangen(position, menge * (1.0 - f))

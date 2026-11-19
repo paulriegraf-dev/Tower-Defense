@@ -216,3 +216,32 @@ static func zeilen() -> Array:
 	z.append(["Beste Verteidigung", str(stat("beste_verteidigung")) if stat("beste_verteidigung") > 0 else "–"])
 	z.append(["Eigene Phantome", str(stat("phantome"))])
 	return z
+
+
+## 19.11. (Paul): Sieg im Brakk-Mode – Siege, höchste Stufe, Ringe und Titel zählen, die Übersicht des letzten Siegs merken.
+static func brakk_sieg(bericht: Dictionary) -> void:
+	_lade()
+	_plus("brakk_siege")
+	_max("brakk_stufe", int(bericht.get("stufe", 1)))
+	var ringe: Dictionary = _d.get("e_brakk_ringe", {})
+	for e: Array in bericht.get("ringe", []):
+		ringe[str(e[0])] = int(ringe.get(str(e[0]), 0)) + 1
+	_d["e_brakk_ringe"] = ringe
+	var titel: Dictionary = _d.get("e_brakk_titel", {})
+	var t := str(bericht.get("titel", ""))
+	titel[t] = int(titel.get(t, 0)) + 1
+	_d["e_brakk_titel"] = titel
+	_d["e_brakk_letzter_sieg"] = bericht
+	_speichere()
+
+
+## Häufigster Eintrag einer Zählung (Lieblingsring, häufigster Titel): [Schlüssel, Anzahl] oder [].
+static func brakk_meist(schluessel: String) -> Array:
+	var d: Dictionary = einstellung(schluessel, {})
+	var beste := ""
+	var n := 0
+	for k: String in d:
+		if int(d[k]) > n:
+			n = int(d[k])
+			beste = k
+	return [beste, n] if beste != "" else []

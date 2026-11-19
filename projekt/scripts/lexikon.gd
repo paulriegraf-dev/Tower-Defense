@@ -7,7 +7,7 @@ extends Control
 ## Gezeichnet im UI-Raster (640×360, zweifach skaliert) mit ui_stil.gd. Alte Fassung: _vor_uebersicht/lexikon.gd.
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
-const REITER := ["Gegner", "Truppen", "Bauten", "Regeln"]
+const REITER := ["Gegner", "Truppen", "Bauten", "Regeln", "Brakk", "Ringe"]   # 19.11.: Brakk-Mode – Fähigkeiten und Ringe
 const RAHMEN_R := Rect2(8, 8, 624, 344)
 const GITTER := Rect2(14, 36, 312, 282)
 const SPALTEN := 4
@@ -19,7 +19,7 @@ const GUT := Color("8dff8a")
 const SCHLECHT := Color("ff8a7a")
 
 var _reiter := 0
-var _wahl: Array[int] = [0, 0, 0, 0]
+var _wahl: Array[int] = [0, 0, 0, 0, 0, 0]
 var _knoten := {}             # Name des Eintrags -> gewählter Knoten im Ausbaupfad
 var _maus := Vector2(-100, -100)
 var _zeit := 0.0
@@ -42,6 +42,8 @@ func _ready() -> void:
 	size = Vector2(640, 360)
 	scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
 	mouse_filter = Control.MOUSE_FILTER_STOP   # solange die Übersicht offen ist, wird nicht versehentlich gebaut
+	process_mode = Node.PROCESS_MODE_ALWAYS   # 19.11.: läuft weiter, während das Spiel steht
+	visibility_changed.connect(_sichtbar_geaendert)
 	visible = false
 	_textfeld = Textfeld.new()
 	_textfeld.clip_contents = true
@@ -54,6 +56,18 @@ func _ready() -> void:
 func umschalten() -> void:
 	visible = not visible
 	queue_redraw()
+
+
+## 19.11. (Paul): Solange die Übersicht offen ist, steht die Zeit (alle Modi, auch der Bauzeit-Countdown).
+var _pausiert_von_mir := false
+
+func _sichtbar_geaendert() -> void:
+	if visible and not get_tree().paused:
+		get_tree().paused = true
+		_pausiert_von_mir = true
+	elif not visible and _pausiert_von_mir:
+		_pausiert_von_mir = false
+		get_tree().paused = false
 
 
 func _process(delta: float) -> void:
@@ -120,7 +134,7 @@ func _karten_recht(i: int) -> Rect2:
 
 
 func _reiter_recht(i: int) -> Rect2:
-	return Rect2(14.0 + i * 79.0, 324.0, 75.0, 22.0)
+	return Rect2(14.0 + i * 52.5, 324.0, 50.0, 22.0)   # 19.11.: sechs Reiter (Brakk, Ringe)
 
 
 ## Knoten des Ausbaupfads: erst die Stufen in einer Reihe, dann die Wahl auf Stufe 3 nebeneinander.
@@ -317,6 +331,17 @@ static func _ohne_marke(zeile: String) -> String:
 ## bild: {"tex", "zelle", "reihe", "n", "ursprung", "spiegeln", "farbe", "karte_reihe"} oder {"symbol", "farbe"}.
 ## Karten zeigen das Standbild (Zeile karte_reihe), unter der Maus und auf der Tafel läuft die Animation.
 func _male_bild(ci: CanvasItem, b: Dictionary, fuss: Vector2, box: Vector2, bewegt: bool, karte: bool) -> void:
+	if b.has("glyphe"):
+		# 19.11.: Fähigkeitssymbol aus der Ego-Sicht (EgoModus.GLYPHEN)
+		var gb: Array = EgoModus.GLYPHEN[b["glyphe"]]
+		var gpx := clampf(floorf(minf(box.x, box.y) * 0.6 / 8.0), 1.0, 4.0)
+		var go := (fuss - Vector2(0, box.y / 2.0) - Vector2((gb[0] as String).length(), gb.size()) * gpx / 2.0).round()
+		for gy in gb.size():
+			var gz: String = gb[gy]
+			for gx in gz.length():
+				if gz[gx] != ".":
+					ci.draw_rect(Rect2(go + Vector2(gx, gy) * gpx, Vector2(gpx, gpx)), b.get("farbe", Stil.LEUCHT) if gz[gx] == "#" else Stil.GOLD)
+		return
 	if b.has("symbol"):
 		var px := clampf(floorf(minf(box.x, box.y) * 0.5 / 7.0), 1.0, 3.0)
 		Stil.symbol(ci, b["symbol"], fuss - Vector2(0, box.y / 2.0), px, b.get("farbe", Stil.GOLD))
@@ -860,4 +885,128 @@ func _baue_daten() -> void:
 				"Eis: Gegner und Truppen laufen mit %d %% Tempo. Bebaubar." % roundi(W.EIS_TEMPO * 100.0),
 				"Minenfeld: Der erste Gegner darauf nimmt einmal %d Schaden, zur nächsten Runde liegt die Mine wieder. Nicht bebaubar." % roundi(W.MINE_SCHADEN)]]]},
 	]
-	_daten = [gegner, truppen, bauten, regeln]
+	_daten = [gegner, truppen, bauten, regeln, _brakk_karten(), _ring_karten()]   # 19.11.
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Fähigkeiten und Ringe (19.11.)
+
+## Eine Karte im Reiter „Brakk“: ab welcher Stufe, Taste am PC, Knopf am Handy, was sie tut. Zahlen aus den Tabellen.
+func _faehigkeit(name: String, unter: String, bild: Dictionary, ab: int, pc: String, handy: String, werte: Array, abschnitte: Array) -> Dictionary:
+	var w: Array = [["ab Stufe", str(ab)], ["PC", pc], ["Handy", handy]]
+	w.append_array(werte)
+	return {"name": name, "unter": unter, "marke": "ab St. %d" % ab if ab > 1 else "von Anfang an", "marke_farbe": Stil.GOLD if ab > 1 else Stil.LEUCHT,
+		"bild": bild, "werte": w, "abschnitte": abschnitte}
+
+
+static func _liste(werte: Array) -> String:
+	var t: Array[String] = []
+	for v: Variant in werte:
+		t.append(str(v))
+	return ", ".join(t)
+
+
+func _brakk_karten() -> Array:
+	var E := EgoModus
+	var B := BrakkFortschritt
+	var kd: Dictionary = Werte.KOMMANDANT
+	var ab: Dictionary = B.AB
+	return [
+		_faehigkeit("Pistolen", "zwei im Wechsel", _figur(kd, 2), 1, "Linksklick", "Fadenkreuz", [["Schaden", _z(E.SCHUSS_SCHADEN)], ["alle", _z2(E.SCHUSS_TAKT) + " s"], ["je Stufe", "+%d %%" % roundi(B.SCHADEN_JE_STUFE * 100.0)]], [
+			["Wie sie schießen", Stil.LEUCHT, [
+				"Links und rechts feuern abwechselnd. Grundschaden %s je Schuss, mal Stufenfaktor (×%s auf Stufe 1, je Stufe +%d %%) und den getragenen Ringen." % [_z(E.SCHUSS_SCHADEN), _z2(B.SCHADEN_START), roundi(B.SCHADEN_JE_STUFE * 100.0)],
+				"Bei Dauerfeuer heizt jede Pistole auf (Bögen am Fadenkreuz). Ist eine überhitzt, ist sie kurz gesperrt und die andere schießt weiter.",
+				"Am Handy: Liegt das Fadenkreuz auf einem Gegner, schießt Brakk von selbst – ohne Hitze. Zielen musst du.",
+				"Das Werte-Fenster neben der Lebensleiste zeigt Schaden je Schuss, Schüsse je Sekunde, Schaden je Sekunde und woher jeder Bonus kommt; [Tab] zeigt Brakks Schaden je Quelle."]]]),
+		_faehigkeit("Sprung", "Doppelsprung · Absprung", {"glyphe": "treppe", "farbe": Stil.LEUCHT}, 1, "Leertaste", "Sprung", [["Doppel ab", "St. %d" % int(ab["doppelsprung"])], ["Druckwelle", _z(E.DRUCK_SCHADEN)]], [
+			["Springen", Stil.LEUCHT, [
+				"Leertaste springt. Ab Stufe %d: in der Luft nochmal = Doppelsprung von einer Lichtplattform in der Farbe des aktiven Rings, einmal je Sprung." % int(ab["doppelsprung"]),
+				"Wer in der Luft höher als die Mauerkrone ist, landet beim Hinüberfliegen oben auf dem Wall."]],
+			["Absprung vom Wall", Stil.GOLD, [
+				"Oben auf dem Wall zweimal springen: Brakk fliegt in Laufrichtung (sonst Blickrichtung) hinunter und schlägt mit einer Druckwelle ein – %s × Fähigkeitsschaden im Umkreis von %s Feldern." % [_z(E.DRUCK_SCHADEN), _z(E.DRUCK_RADIUS)]]]]),
+		_faehigkeit("Lichttreppe", "auf den Wall · Lichtbrücke", {"glyphe": "treppe", "farbe": Stil.LEUCHT}, 1, "E", "Treppe", [["Weite", _z(E.TREPPE_WEITE) + " F."], ["steht", _z(E.TREPPE_HALTEN) + " s"], ["Brücke", _z(E.BRUECKE_ABKLING) + " s"]], [
+			["Hinauf", Stil.LEUCHT, [
+				"[E] mit Blick auf einen Erdwall (bis %s Felder): eine Lichttreppe baut sich auf, hinlaufen = hinauf. Aus der Ferne gesetzt wird sie bis zu %d Felder länger. Oben: mehr Reichweite." % [_z(E.TREPPE_WEITE), E.TREPPE_LAENGER]]],
+			["Oben auf dem Wall", Stil.GOLD, [
+				"[E] mit Blick auf einen anderen Wall (bis %s Felder): Lichtbrücke hinüber, %s s begehbar, %s s Abklingzeit. Am Fadenkreuz steht, was [E] gerade tut." % [_z(E.BRUECKE_WEITE), _z(E.BRUECKE_HALTEN), _z(E.BRUECKE_ABKLING)],
+				"Sonst führt [E] eine Treppe hinunter – oder zweimal springen für den Absprung."]]]),
+		_faehigkeit("Tumble", "Hechtrolle", {"glyphe": "tumble", "farbe": Stil.LEUCHT}, int(ab["tumble"]), "Shift", "Rolle", [["Weite", _z(E.TUMBLE_FELDER) + " F."], ["Abklingen", _z(E.TUMBLE_ABKLING) + " s"]], [
+			["Ausweichen", Stil.LEUCHT, [
+				"Rolle in Laufrichtung (ohne Taste nach vorn), %s Felder, kurz unverwundbar – gegen Steine der Schleudern (roter Landekreis)." % _z(E.TUMBLE_FELDER),
+				"Danach läuft Brakk %s s lang %s-mal so schnell (Nachschwung)." % [_z(E.SCHWUNG_SEK), _z(E.SCHWUNG_MAL)]]],
+			["Tumble-Schuss", Stil.GOLD, [
+				"Der erste Schuss nach der Rolle (innerhalb %s s) macht ×%s Schaden, gegen große Gegner (%s) ×%s – mit goldenem Strahl." % [_z(B.TUMBLE_SCHUSS["fenster"]), _z(B.TUMBLE_SCHUSS["mal"]), _gross_namen(), _z(B.TUMBLE_SCHUSS["mal_gross"])],
+				"Tötet er einen großen Gegner, ist die Rolle sofort wieder bereit."]]]),
+		_faehigkeit("Lichtanker", "werfen, ziehen, schwingen", {"glyphe": "anker", "farbe": Stil.LEUCHT}, int(ab["anker"]), "Q", "Anker", [["Weite", _z(E.ANKER_WEITE) + " F."], ["hängt", _z(E.HAKEN_HALTEN) + " s"], ["Abklingen", _z(E.ANKER_ABKLING) + " s"]], [
+			["Zwei Stufen", Stil.LEUCHT, [
+				"Erstes [Q]: der Haken fliegt an Mauerkrone oder Boden unter dem Fadenkreuz (bis %s Felder) und hängt %s s – das Seil hält Brakk wie eine Leine." % [_z(E.ANKER_WEITE), _z(E.HAKEN_HALTEN)],
+				"Zweites [Q]: Brakk wird hingezogen, an einer Mauer landet er oben.",
+				"Dazwischen: laufen und springen = um den Haken schwingen. In der Luft nochmal springen löst das Seil – Brakk schnellt mit dem Schwung weiter.",
+				"Die Abklingzeit läuft ab dem Lösen."]]]),
+		_faehigkeit("Doppellanze", "geladener Durchschuss", {"glyphe": "lanze", "farbe": Stil.LEUCHT}, int(ab["lanze"]), "RMB halten", "Lanze", [["Schaden", _z(E.LANZE_SCHADEN)], ["+ max. Leben", "%d %%" % roundi(float(B.LANZE_ANTEIL["normal"]) * 100.0)], ["Abklingen", _z(E.LANZE_ABKLING) + " s"]], [
+			["Laden und loslassen", Stil.LEUCHT, [
+				"Rechtsklick halten lädt (%s s), loslassen feuert eine Lanze durch alle Gegner auf der Linie (bis %s Felder). Sie lässt die Hitze der Pistolen ab – je heißer, desto stärker. Am Handy ohne Hitze: fest ×%s." % [_z(E.LANZE_LADEN), _z(E.LANZE_WEITE), _z(E.LANZE_TOUCH)]]],
+			["Fürs späte Spiel", Stil.GOLD, [
+				"Zusätzlich nimmt sie jedem getroffenen Gegner %d %% seines maximalen Lebens, großen Gegnern (%s) %d %% – so bleibt sie auch gegen zähe Gegner in späten Runden stark." % [roundi(float(B.LANZE_ANTEIL["normal"]) * 100.0), _gross_namen(), roundi(float(B.LANZE_ANTEIL["gross"]) * 100.0)]]],
+			["Ringe", Stil.GOLD, [
+				"Ein reiner Schadensschuss: Von den Ringen wirken nur der Glutstrahlring (mehr Schaden) und der Gelring (Bonus gegen Gebremste) – und nur, wenn er der aktive Ring ist."]]]),
+		_faehigkeit("Lichtsäule", "Einschlag von oben", {"glyphe": "saeule", "farbe": Stil.LEUCHT}, int(ab["saeule"]), "X + Klick", "Säule", [["Schaden", _z(E.SAEULE_SCHADEN)], ["Weite", _z(E.SAEULE_WEITE) + " F."], ["Abklingen", _z(E.SAEULE_ABKLING) + " s"]], [
+			["Zielen und setzen", Stil.LEUCHT, [
+				"[X] zielt (Marke am Boden), Linksklick setzt, Rechtsklick bricht ab. Nach %s s schlägt die Säule ein: %s × Fähigkeitsschaden im Umkreis von %s Feldern." % [_z(E.SAEULE_VORLAUF), _z(E.SAEULE_SCHADEN), _z(E.SAEULE_RADIUS)],
+				"Die Art hängt vom aktiven Ring ab – siehe Reiter Ringe."]]]),
+		_faehigkeit("Klonmaschine", "Ultimative", {"glyphe": "ulti", "farbe": Stil.GOLD}, int(ab["ulti"]), "R", "Klon", [["lädt durch", "%d Kills" % B.ULTI_KILLS]], [
+			["Klonen", Stil.LEUCHT, [
+				"Lädt durch %d eigene Kills. [R] setzt die Klonmaschine auf das Feld im Blick: Wer hindurchgeht, wird einmal geklont – auch Gegner. Danach eine ganze Runde Pause." % B.ULTI_KILLS]]]),
+		_faehigkeit("Zeitlupe", "die Welt wird langsam", {"glyphe": "zeitlupe", "farbe": Stil.LEUCHT}, int(ab["zeitlupe"]), "V", "Zeitlupe", [["Dauer", _z(E.ZEITLUPE_SEK) + " s"], ["Tempo", "×" + _z(E.ZEITLUPE_TEMPO)], ["Abklingen", _z(E.ZEITLUPE_ABKLING) + " s"]], [
+			["Langsam", Stil.LEUCHT, [
+				"%s s lang läuft alles außer Brakk mit %d %% Tempo – Brakk selbst bleibt schnell." % [_z(E.ZEITLUPE_SEK), roundi(E.ZEITLUPE_TEMPO * 100.0)]]]]),
+		_faehigkeit("Ringe", "Lichtterminal · Ringfeld", {"tex": RingBilder.bild("laser", Einheit.ABZEICHEN.get("laser", Stil.GOLD)), "zelle": Vector2(16, 16), "reihe": 0, "n": 1}, 1, "F · C", "Ringe · Feld", [["Preise", _liste(B.RING_PREISE).replace(", ", "/")]], [
+			["Kaufen", Stil.LEUCHT, [
+				"[F] an der Basis in der Bauphase öffnet das Lichtterminal. Ring kaufen und auf Stufe 2 und 3 ausbauen. Ein Finger je Ring, frei ab Stufe %s." % _liste(B.FINGER_AB),
+				"Alle getragenen Ringe wirken zusammen auf Brakks Schüsse. Das Mausrad wählt den aktiven Ring: er bestimmt Lichtsäule, Doppellanze, Zeitlupe, die Farben und das Feld."]],
+			["Ringfeld [C]", Stil.GOLD, [
+				"In der Bauphase setzt [C] das Feld des aktiven Rings: 2×2 Felder, höchstens 4 Fabriken. Fabriken darin bauen die Truppe des Rings auf seiner Stufe."]]]),
+	]
+
+
+## Namen der großen Gegner (Werte.GEGNER "gross").
+static func _gross_namen() -> String:
+	var n: Array[String] = []
+	for id: String in Werte.GEGNER:
+		if bool((Werte.GEGNER[id] as Dictionary).get("gross", false)):
+			n.append(str(Werte.GEGNER[id]["name"]))
+	return ", ".join(n)
+
+
+## Reiter „Ringe“: je Ring Brakks Schuss auf Stufe 1–3, die Truppe im Feld, die Lichtsäule, die Doppellanze und die Zeitlupe –
+## alles aus BrakkFortschritt.RINGE erzeugt.
+func _ring_karten() -> Array:
+	var B := BrakkFortschritt
+	var karten: Array = []
+	for r: String in B.RINGE:
+		var d: Dictionary = B.RINGE[r]
+		var stufen: Array = d["brakk_stufen"]
+		var truppe: String = d["truppe"]
+		var tname := str(Werte.EINHEITEN[truppe]["name"])
+		var f3 := str(((Werte.STUFE_3[truppe] as Dictionary).get(r, {}) as Dictionary).get("name", r))
+		var farbe: Color = Einheit.ABZEICHEN.get(r, Stil.GOLD)
+		var lanze: Array[String] = []
+		for st in 3:
+			var s: Dictionary = stufen[st]
+			if s.has("schaden"):
+				lanze.append("St. %d: %+d %%" % [st + 1, roundi((float(s["schaden"]) - 1.0) * 100.0)])
+			if s.has("gel_bonus"):
+				lanze.append("St. %d: %+d %% gegen Gebremste" % [st + 1, roundi((float(s["gel_bonus"]) - 1.0) * 100.0)])
+		var schuss: Array = []
+		for i in 3:
+			schuss.append("St. %d: %s" % [i + 1, str(stufen[i]["text"])])
+		karten.append({"name": str(d["name"]).trim_suffix("ring"), "unter": str(d["name"]), "marke": tname, "marke_farbe": farbe,
+			"bild": {"tex": RingBilder.bild(r, farbe), "zelle": Vector2(16, 16), "reihe": 0, "n": 1},
+			"werte": [["Kauf", str(B.RING_PREISE[0])], ["St. 2", "+%d" % B.RING_PREISE[1]], ["St. 3", "+%d" % B.RING_PREISE[2]]],
+			"abschnitte": [
+				["Brakks Schuss", Stil.LEUCHT, schuss],
+				["Truppe im Ringfeld", Stil.GOLD, ["Fabriken im Feld bauen %s auf der Ringstufe, auf Stufe 3 mit %s." % [tname, f3]]],
+				["Lichtsäule (aktiver Ring)", Stil.GOLD, [str(d.get("saeule", "normaler Einschlag"))]],
+				["Doppellanze (aktiver Ring)", Stil.GOLD, ["; ".join(lanze) if not lanze.is_empty() else "keine Wirkung"]],
+				["Zeitlupe (aktiver Ring)", Stil.GOLD, [B.zeitlupe_text(r)]],
+			]})
+	return karten

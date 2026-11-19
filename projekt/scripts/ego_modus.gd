@@ -101,6 +101,7 @@ var _tumble := -1.0             # läuft: Sekunden seit Beginn (-1 = nein)
 var _tumble_r := Vector2.ZERO   # Richtung in der 2D-Logik (Einheitsvektor)
 var _tumble_seite := 0.0        # -1 links, 1 rechts: dorthin kippt die Sicht
 var _tumble_rest := 0.0
+var _tumble_schuss_bis := 0      # 19.11.: bis dahin (ms) ist der nächste Schuss der Tumble-Schuss
 # 19.11. (Paul): Bewegungsgefühl – Nachschwung nach der Rolle, Waffen-Sway, Seitneigung, Landungsdelle, Doppelsprung
 const SCHWUNG_SEK := 1.0         # so lange läuft Brakk nach dem Tumble schneller …
 const SCHWUNG_MAL := 1.4         # … um so viel
@@ -232,8 +233,6 @@ func beenden() -> void:
 		(s[0] as Node).queue_free()
 	if _bau_strahl != null:
 		_bau_strahl.queue_free()
-	if _bruecke_vorschau != null:
-		_bruecke_vorschau.queue_free()
 	if _bruecke != null:
 		_bruecke.queue_free()
 	for s: Array in _saeulen:
@@ -493,13 +492,28 @@ func _process(delta: float) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_uhr_vorher = 0
 		_bild.queue_redraw()
+		_karte_klein.queue_redraw()   # 19.11.: Übersicht / Pause – Minikarte ausblenden
+		return
+	if _sieg_t >= 0.0:
+		_sieg_weiter()   # 19.11.: Sieg – Kameraflug und Übersicht
 		return
 	if is_instance_valid(brakk) and brakk.gefallen and spiel.brakk_modus:
 		# 18.11. (Paul): Im Brakk-Mode bleibt die Ego-Sicht – die Kamera liegt am Boden, bis Brakk zur nächsten Runde aufsteht
 		if not _liegt:
 			_liegt = true
 			_feuer = false
-			spiel.melde("Brakk ist gefallen – zur nächsten Runde steht er wieder auf.", 6.0)
+			_respawn = BrakkFortschritt.RESPAWN_SEK   # 19.11. (Paul): kleiner Respawn-Timer, dann an der Basis
+			if _haken >= 0.0:
+				_haken_los()
+			if _zeitlupe > 0.0:
+				_zeitlupe_aus()
+		var uhr_r := Time.get_ticks_usec()
+		var echt_r := clampf((uhr_r - _uhr_vorher) / 1000000.0, 0.0, 0.1) if _uhr_vorher > 0 else delta
+		_uhr_vorher = uhr_r
+		_respawn -= echt_r
+		if _respawn <= 0.0 and spiel.phase == 1:
+			_wieder_da()
+			return
 		hoehe = move_toward(hoehe, -AUGE + 0.12, delta * 2.0)
 		nick = move_toward(nick, 0.35, delta)
 		_kamera()
@@ -535,6 +549,10 @@ func _process(delta: float) -> void:
 	_treppe_rest -= echt
 	if brakk.fortschritt != null:
 		brakk.fortschritt.weiter(echt)
+		if spiel.phase == 1:
+			brakk.fortschritt.zaehle_zeit("kampf_sek", echt)   # 19.11.: Sieg-Übersicht
+			if brakk.oben:
+				brakk.fortschritt.zaehle_zeit("wall_sek", echt)
 	for i in 2:
 		_rueckstoss[i] = maxf(0.0, float(_rueckstoss[i]) - echt * 6.0)
 		_blitz[i] = maxf(0.0, float(_blitz[i]) - echt)
@@ -838,6 +856,9 @@ func _schuss_blick() -> Vector3:
 
 
 func _schiess() -> void:
+	if _klinge_aktiv():
+		_klinge_schlag()   # 19.11.: Zeitlupe mit Durchschlagring – Nahkampf statt Schuss
+		return
 	_takt = SCHUSS_TAKT * _takt_faktor()
 	_wirbel = minf(1.0, _wirbel + 0.08)   # 18.11.: Wirbelring – Dauerfeuer läuft an
 	var seite := 0 if _links_dran else 1
@@ -874,6 +895,10 @@ func _schiess() -> void:
 	var ende := von + r * (bis if durch or getroffen.is_empty() else float(getroffen[0][0]))
 	var muendung := von + _blick() * 0.5 + _rechts() * (0.16 if seite == 1 else -0.16) - Vector3(0, 0.14, 0)
 	_strahl(muendung, ende, LASER_LINKS if seite == 0 else SCHUSS)
+	var tumble := Time.get_ticks_msec() < _tumble_schuss_bis   # 19.11.: erster Schuss nach der Rolle
+	if tumble:
+		_tumble_schuss_bis = 0
+		_tumble_schuss_bild(muendung, ende)
 	# 18.11.: Schuss – eigener PixelLab-Klang je Pistole (links A, rechts B), dazu Rückstoß und Sichtfeld-Puls
 	Ton.spiele(spiel, "brakk-schuss-a" if seite == 0 else "brakk-schuss-b")   # 18.11.: eigene Schussklänge je Pistole (PixelLab)
 	_kick += 0.022
@@ -891,14 +916,26 @@ func _schiess() -> void:
 		nr += 1
 		if not is_instance_valid(g) or g._tot:
 			continue
+		spiel.brakk_quelle = "pistole" if nr == 1 else "ring"   # 19.11.: Schaden nach Quelle
 		var schaden := SCHUSS_SCHADEN * _schaden_faktor() * _gel_bonus(g) * durch_anteil
+		var tumble_ziel := tumble and nr == 1
+		if tumble_ziel:
+			spiel.brakk_quelle = "tumble"
+			schaden *= float(BrakkFortschritt.TUMBLE_SCHUSS["mal_gross" if BrakkFortschritt.gross(g) else "mal"])
 		g.nimm_schaden(schaden)
 		treffer_zahl += 1
 		_ring_treffer(g, schaden)
 		if g._tot:
 			kill = true
 			_kill(g)
+			if tumble_ziel and BrakkFortschritt.gross(g):
+				_tumble_rest = 0.0   # 19.11.: großer Gegner gefallen – Rolle sofort wieder bereit
+				spiel.melde("Großer Gegner gefallen – Rolle wieder bereit!", 2.0)
+				Ton.spiele(spiel, "alert", -4.0)
+		if tumble_ziel:
+			_tumble_treffer_bild(g)
 	spiel.schadensquelle = ""
+	spiel.brakk_quelle = ""
 	spiel.schuss_herkunft = Vector2.INF
 	_treffer_gefuehl(von + r * float(getroffen[0][0]), kill)
 
@@ -1353,6 +1390,9 @@ func _baue_oberflaeche() -> void:
 
 
 func _male_bild() -> void:
+	if _sieg_t >= 0.0:
+		_sieg_bild(_bild.get_viewport_rect().size)   # 19.11.
+		return
 	if _hud_aus():
 		return   # 18.11. (Paul): Übersicht, Pause, Menüs – nur die Tafel, keine Waffen und Leisten davor
 	var g := _bild.get_viewport_rect().size
@@ -1363,6 +1403,7 @@ func _male_bild() -> void:
 	# rechte Pistole
 	var r_rueck := float(_rueckstoss[1])
 	var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * wpx + (_sway + Vector2(0, 7.0 * _delle)) * wpx   # 19.11.: Sway und Landungsdelle
+	r_pos.y += ts.y * 1.1 * _klinge_auf   # 19.11.: Ringklinge – die rechte Pistole steckt weg
 	_waffe(_tex_pistole, r_pos, ts, -_neigung, float(_blitz[1]) > 0.0, wpx, false, _glut(), float(_gesperrt[1]) > 0.0)
 	# linke Hand: Pistole (gespiegelt) oder Ring – beim Wechsel taucht die eine ab und die andere auf
 	var l_rueck := float(_rueckstoss[0])
@@ -1394,14 +1435,17 @@ func _male_bild() -> void:
 	if _frei():   # 18.11.: bei offenem Menü kein Fadenkreuz und kein Hinweis darüber
 		_fadenkreuz(g, px)
 	_rand_an()   # 19.11.: Leisten in die sichere Fläche (iPhone: Notch, Home-Balken) – Fadenkreuz und Waffen nicht
-	if touch == null or touch.bau_offen:
-		_bauliste(g)
+	if (touch == null or touch.bau_offen) and not (spiel._hud != null and spiel._hud.schadensliste != null and spiel._hud.schadensliste.visible):
+		_bauliste(g)   # 19.11.: bei offener Schadensliste [Tab] nicht darüber
 	# Zustandszeile unten in der Mitte
 	if _klettern >= 0.0:
 		Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, g.y * 0.62), "Lichttreppe", 18, LICHT)
 	_brakk_leiste(g)   # 18.11.: Leben, Stufe, Erfahrung
+	_werte_fenster(g)   # 19.11.
 	_countdown_anzeige(g)   # 18.11.: nächste Welle
 	_rand_aus()
+	_klinge_bild(g, wpx)   # 19.11.: Ringklinge über den Leisten (nur während der Zeitlupe mit Durchschlagring)
+	_respawn_bild(g)   # 19.11.: Countdown, solange Brakk liegt
 	_zeitlupe_bild(g)
 	if brakk.fortschritt != null:
 		_wurf_warnung()   # 18.11.: Steine auf Brakk
@@ -1532,6 +1576,8 @@ func _fadenkreuz(g: Vector2, px: float) -> void:
 	elif brakk.oben and _klettern < 0.0 and _bruecke == null and not _bruecke_ziel().is_empty():
 		var bt := "[E] Lichtbrücke" if _bruecke_cd <= 0.0 else "Lichtbrücke in %.0f s" % ceilf(_bruecke_cd)
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t(bt), 18, LICHT if _bruecke_cd <= 0.0 else Stil.TEXT_BLASS)   # 18.11.
+	elif brakk.oben and _klettern < 0.0 and _bruecke == null and brakk.e_rest <= 0.0:
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[E] Lichttreppe hinunter"), 18, LICHT)   # 19.11.: statt der Vorschau-Bahn nur der Hinweis
 	elif _am_terminal():
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[F] Lichtterminal – Ringe kaufen"), 18, LICHT)
 	var l := 3.0 * px
@@ -1553,7 +1599,7 @@ func _fadenkreuz(g: Vector2, px: float) -> void:
 
 
 func _male_minikarte() -> void:
-	if _hud_aus():
+	if _hud_aus() or _sieg_t >= 0.0:
 		return
 	var g := _karte_klein.get_viewport_rect().size
 	var zelle := floorf(minf(g.x * 0.16 / Werte.SPALTEN, 7.0))
@@ -1702,7 +1748,8 @@ func _takt_faktor() -> float:
 	var f := brakk.fortschritt
 	if f == null:
 		return 1.0
-	return f.schuss_takt() * lerpf(1.0, 1.0 / float(f.brakk_wert("anlauf", 1.0)), _wirbel)
+	var zl := 1.0 / float(BrakkFortschritt.ZEITLUPE_RING["laser"]["touch_takt"]) if touch != null and _zl_aktiv("laser") else 1.0   # 19.11.: am Handy ohne Hitze – schneller
+	return f.schuss_takt() * lerpf(1.0, 1.0 / float(f.brakk_wert("anlauf", 1.0)), _wirbel) * zl
 
 
 ## Wirkung der Ringe auf einen Treffer von Brakk (Abpraller, Brand, Gel).
@@ -1719,6 +1766,8 @@ func _ring_treffer(g: Gegner, schaden: float) -> void:
 	var bremse := float(f.brakk_wert("bremse", 0.0))
 	if bremse > 0.0 and not g._tot:
 		g.gebremst = maxf(g.gebremst, bremse)
+	var vorher_q: String = spiel.brakk_quelle
+	spiel.brakk_quelle = "ring"   # 19.11.: Brand und Abpraller zählen als Ringeffekt
 	var brand_takt := float(f.brakk_wert("brand_takt", 0.0))
 	if brand_takt > 0.0 and Time.get_ticks_msec() >= _brand_ab:
 		# 18.11. (Paul, Schießstand): höchstens ein neues Brandfeld je brand_takt – sonst stapeln sie sich
@@ -1727,6 +1776,7 @@ func _ring_treffer(g: Gegner, schaden: float) -> void:
 	var spruenge := int(f.brakk_wert("spruenge", 0))
 	if spruenge > 0:
 		_brakk_sprung(g, spruenge, schaden * float(f.brakk_wert("sprung_anteil", 0.6)))
+	spiel.brakk_quelle = vorher_q
 
 
 ## Ein Gegner fällt durch Brakks Schuss: Erfahrung (große Gegner mehr).
@@ -1819,6 +1869,7 @@ func _tumble_start() -> void:
 	var v := _vorne() * r.y + _rechts() * r.x
 	_tumble_r = Vector2(v.x, v.z).normalized()
 	_tumble = 0.0
+	_zaehle("rollen")   # 19.11.: Sieg-Übersicht
 	_tumble_rest = TUMBLE_ABKLING
 	brakk.unverwundbar = TUMBLE_DAUER + 0.1
 	_trauma = minf(1.0, _trauma + 0.15)
@@ -1834,6 +1885,7 @@ func _tumble_weiter(dt: float) -> void:
 	if _tumble >= TUMBLE_DAUER:
 		_tumble = -1.0
 		_schwung = SCHWUNG_SEK   # 19.11. (Paul): nach der Rolle kurz schneller
+		_tumble_schuss_bis = Time.get_ticks_msec() + int(float(BrakkFortschritt.TUMBLE_SCHUSS["fenster"]) * 1000.0)   # 19.11.: der nächste Schuss ist verstärkt
 		_rueckstoss[0] = 0.6
 		_rueckstoss[1] = 0.6
 
@@ -1867,6 +1919,7 @@ func _lanze_taste(gedrueckt: bool) -> void:
 ## Beide Pistolen zugleich: ein Strahl durch alle Gegner in der Linie bis zur nächsten Mauer.
 func _lanze_feuer() -> void:
 	_lanze_rest = LANZE_ABKLING
+	_zaehle("lanzen")
 	# 18.11.: die Lanze lässt die angestaute Hitze ab – je heißer, desto stärker (bis doppelt), danach sind beide kalt
 	var lanze_hitze := 1.0 + (float(_hitze[0]) + float(_hitze[1])) / 2.0
 	if touch != null:
@@ -1879,6 +1932,7 @@ func _lanze_feuer() -> void:
 	var kills := 0
 	var treffer := 0
 	spiel.schadensquelle = "fabrik:-1,-1"
+	spiel.brakk_quelle = "lanze"   # 19.11.
 	spiel.schuss_herkunft = brakk.position
 	for g: Gegner in spiel.gegner.duplicate():
 		if not is_instance_valid(g) or g._tot:
@@ -1887,12 +1941,15 @@ func _lanze_feuer() -> void:
 		var t := (c - von).dot(r)
 		if t <= 0.0 or t >= weite or (von + r * t).distance_to(c) > 0.45:
 			continue
-		g.nimm_schaden(LANZE_SCHADEN * _faehigkeit_faktor() * lanze_hitze * _gel_bonus(g, true))
+		# 19.11. (Paul): dazu ein Anteil des maximalen Lebens (große Gegner weniger) – trägt die Lanze ins späte Spiel
+		var anteil := float(BrakkFortschritt.LANZE_ANTEIL["gross" if BrakkFortschritt.gross(g) else "normal"])
+		g.nimm_schaden(LANZE_SCHADEN * _faehigkeit_faktor() * lanze_hitze * _gel_bonus(g, true) + g.max_leben * anteil)
 		treffer += 1
 		if g._tot:
 			kills += 1
 			_kill(g)
 	spiel.schadensquelle = ""
+	spiel.brakk_quelle = ""
 	spiel.schuss_herkunft = Vector2.INF
 	for seite: float in [-1.0, 1.0]:
 		var m := von + r * 0.5 + _rechts() * 0.16 * seite - Vector3(0, 0.14, 0)
@@ -2584,6 +2641,8 @@ func _countdown_anzeige(g: Vector2) -> void:
 func _heize(seite: int) -> void:
 	if touch != null:
 		return   # 18.11. (Paul): am Handy schießt Brakk selbst – kein Überhitzen
+	if _zl_aktiv("laser"):
+		return   # 19.11.: Zeitlupe mit Glutstrahlring – keine Überhitzung
 	var f := brakk.fortschritt
 	var mal := f.hitze_faktor() if f != null else 1.0
 	_hitze[seite] = float(_hitze[seite]) + HITZE_JE_SCHUSS * mal
@@ -2692,6 +2751,7 @@ func _anker_start() -> void:
 		return
 	# 19.11. (Paul): der Haken bleibt hängen – [Q] noch einmal zieht heran, dazwischen laufen, springen, schwingen
 	_haken = 0.0
+	_zaehle("anker")
 	_haken_p = ziel[0]
 	_haken_wall = ziel[1]
 	_seil_lang = maxf(1.0, _fuss3d().distance_to(_haken_p))
@@ -2768,7 +2828,6 @@ const BRUECKE_HALTEN := 10.0
 const BRUECKE_AUFBAU := 0.5
 const BRUECKE_ABKLING := 12.0     # 18.11. (Paul): eigene, längere Abklingzeit (die Treppe bleibt kurz)
 var _bruecke_cd := 0.0
-var _bruecke_vorschau: MeshInstance3D = null
 var _bruecke: Node3D = null
 var _bruecke_felder := {}         # Zellen unter der Bahn: dort darf Brakk oben gehen
 var _bruecke_rest := 0.0
@@ -2867,7 +2926,6 @@ func _auf_bruecke(z: Vector2i) -> bool:
 
 func _bruecke_weiter(dt: float) -> void:
 	_bruecke_cd = maxf(0.0, _bruecke_cd - dt)
-	_bruecke_vorschau_weiter()
 	if _bruecke == null:
 		return
 	_bruecke_rest -= dt
@@ -2972,6 +3030,7 @@ func _saeule_bestaetigen() -> void:
 	_saeule_zielt = false
 	_saeule_ziel = p
 	_saeule_t = 0.0
+	_zaehle("saeulen")
 	_saeule_rest = SAEULE_ABKLING
 	_saeule_blick = Vector2(_vorne().x, _vorne().z).normalized()
 	_hand_zeigen = maxf(_hand_zeigen, SAEULE_VORLAUF + 0.3)   # Brakk wirbelt mit dem Finger, bis die Säule einschlägt
@@ -3064,17 +3123,19 @@ func _saeule_ausloesen(p: Vector2) -> void:
 
 
 ## Ein Einschlag: Schaden im Kreis (Kills geben Erfahrung), Lichtsäule, Funke, Wackeln. Gibt die getroffenen Gegner zurück.
-func _einschlag(p: Vector2, radius: float, schaden: float, wucht: float) -> Array:
+func _einschlag(p: Vector2, radius: float, schaden: float, wucht: float, quelle: String = "saeule") -> Array:
 	var getroffen: Array = []
 	for g: Gegner in spiel.gegner:
 		if is_instance_valid(g) and not g._tot and g.position.distance_to(p) <= radius and not spiel._geschuetzt(g):
 			getroffen.append(g)
 	spiel.schadensquelle = "fabrik:-1,-1"
+	spiel.brakk_quelle = quelle   # 19.11.
 	spiel.schuss_herkunft = Vector2.INF
 	for g: Gegner in getroffen:
 		if is_instance_valid(g) and not g._tot:
 			g.nimm_schaden(schaden * _faehigkeit_faktor() * _gel_bonus(g, true))
 	spiel.schadensquelle = ""
+	spiel.brakk_quelle = ""
 	for g: Gegner in getroffen:
 		if is_instance_valid(g) and g._tot:
 			_kill(g)
@@ -3102,12 +3163,14 @@ func _einschlaege_weiter(dt: float) -> void:
 		_wirbel_saeule[2] = 0.25
 		var p: Vector2 = _wirbel_saeule[0]
 		spiel.schadensquelle = "fabrik:-1,-1"
+		spiel.brakk_quelle = "saeule"
 		for g: Gegner in spiel.gegner.duplicate():
 			if is_instance_valid(g) and not g._tot and g.position.distance_to(p) <= SAEULE_RADIUS * Werte.ZELLE * 0.8 and not spiel._geschuetzt(g):
 				g.nimm_schaden(SAEULE_SCHADEN * 0.12 * _faehigkeit_faktor() * _gel_bonus(g, true))
 				if g._tot:
 					_kill(g)
 		spiel.schadensquelle = ""
+		spiel.brakk_quelle = ""
 	if float(_wirbel_saeule[1]) <= 0.0:
 		_wirbel_saeule = []
 
@@ -3127,8 +3190,10 @@ func _saeule_sprung(p: Vector2, schon: Array) -> void:
 			return
 		_strahl(_zu3d(von, 0.5), _zu3d(bester.position, 0.5), _saeule_farbe)
 		spiel.schadensquelle = "fabrik:-1,-1"
+		spiel.brakk_quelle = "saeule"
 		bester.nimm_schaden(SAEULE_SCHADEN * 0.5 * _faehigkeit_faktor() * _gel_bonus(bester, true))
 		spiel.schadensquelle = ""
+		spiel.brakk_quelle = ""
 		if bester._tot:
 			_kill(bester)
 		getroffen.append(bester)
@@ -3204,6 +3269,8 @@ func _zeitlupe_start() -> void:
 		return
 	_zeitlupe = ZEITLUPE_SEK
 	_zeitlupe_rest = ZEITLUPE_ABKLING
+	_zaehle("zeitlupen")
+	_zl_beginn()   # 19.11.: Zusatz je aktivem Ring
 	if _stop_vorher >= 0.0:
 		_zl_vorher = _stop_vorher
 		_stop_vorher = _stop_vorher * ZEITLUPE_TEMPO
@@ -3215,6 +3282,7 @@ func _zeitlupe_start() -> void:
 
 
 func _zeitlupe_weiter(echt: float) -> void:
+	_zl_weiter(echt)   # 19.11.
 	_zeitlupe_rest -= echt
 	if _zeitlupe <= 0.0:
 		return
@@ -3224,6 +3292,7 @@ func _zeitlupe_weiter(echt: float) -> void:
 
 
 func _zeitlupe_aus() -> void:
+	_zl_ende()   # 19.11.
 	_zeitlupe = 0.0
 	if _stop_vorher >= 0.0:
 		_stop_vorher = _zl_vorher   # ein laufender Hit-Stop stellt danach das normale Tempo her
@@ -3262,31 +3331,6 @@ func _finger_wirbel(rp: Vector2, wpx: float, auf: float) -> void:
 	_bild.draw_circle(mitte, (2.0 + 2.0 * f) * wpx, Color(_saeule_farbe, 0.5 * auf))
 
 
-## 18.11. (Paul): Die Lichtbrücke besser zeigen – oben auf dem Wall liegt eine blasse, pulsierende Vorschau-Bahn dort,
-## wohin [E] die Brücke werfen würde (während der Abklingzeit noch blasser).
-func _bruecke_vorschau_weiter() -> void:
-	var ziel: Array = []
-	if brakk.oben and _bruecke == null and _klettern < 0.0 and _anker < 0.0 and _frei():
-		ziel = _bruecke_ziel()
-	if ziel.is_empty():
-		if _bruecke_vorschau != null:
-			_bruecke_vorschau.visible = false
-		return
-	if _bruecke_vorschau == null:
-		_bruecke_vorschau = MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(0.8, 0.02, 1.0)
-		_bruecke_vorschau.mesh = box
-		_bruecke_vorschau.material_override = _leucht(LICHT, 0.15, 1.5)
-		hd.add_child(_bruecke_vorschau)
-	var a := _zu3d(ziel[1] as Vector2, hd.H + 0.02)
-	var b := _zu3d(ziel[2] as Vector2, hd.H + 0.02)
-	var puls := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 200.0)
-	(_bruecke_vorschau.material_override as StandardMaterial3D).albedo_color = Color(_licht_farbe(), (0.2 if _bruecke_cd <= 0.0 else 0.07) * puls)
-	_bruecke_vorschau.visible = true
-	_bruecke_vorschau.scale = Vector3(1.0, 1.0, maxf(0.05, a.distance_to(b)))
-	_bruecke_vorschau.position = (a + b) / 2.0
-	_bruecke_vorschau.rotation = Vector3(0.0, atan2(b.x - a.x, b.z - a.z), 0.0)
 
 
 ## 18.11. (Paul): Lichtbauten (Treppe, Brücke, Anker) leuchten in der Farbe des aktiven Rings, ohne Ring cyan.
@@ -3603,6 +3647,7 @@ const PLATTFORM_SEK := 0.7
 
 
 func _doppelsprung() -> void:
+	_zaehle("spruenge")
 	if brakk.oben and _absprung_start():
 		return   # 19.11. (Paul): vom Wall hinunter, unten die Druckwelle
 	_doppelt_genutzt = true
@@ -3733,7 +3778,7 @@ func _absprung_weiter(dt: float) -> void:
 func _druckwelle(p: Vector2) -> void:
 	var r := DRUCK_RADIUS * Werte.ZELLE
 	spiel.effekte.flaeche(p, r, _licht_farbe())
-	_einschlag(p, r, DRUCK_SCHADEN, 0.9)
+	_einschlag(p, r, DRUCK_SCHADEN, 0.9, "absprung")
 	Ton.spiele(spiel, "hit-thud", -2.0)
 
 
@@ -3861,3 +3906,503 @@ func _seil_zeichnen(ziel: Vector3, t: float) -> void:
 	_anker_seil.look_at_from_position(_anker_seil.position, haken, Vector3.UP if absf((haken - hand).normalized().y) < 0.99 else Vector3.RIGHT)
 	_anker_haken.position = haken
 	_anker_haken.rotation = Vector3(PI / 2.0, t * 8.0, 0.0)
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Werte-Fenster (19.11.)
+
+## 19.11. (Paul): Klein und immer sichtbar neben der Lebensleiste: Schaden je Schuss, Schüsse je Sekunde, Schaden je
+## Sekunde (gerechnet), Schaden der letzten 5 s (gemessen), Ring-Zusätze – hinter jedem Wert, woher der Bonus kommt.
+## Ändert sich ein Wert (Ringwechsel, Aufstieg), blinkt er kurz grün. Am Handy drei Zeilen.
+const WERTE_BLINK_MS := 700
+var _werte_alt := {}
+var _werte_blink := {}
+
+
+## Kurzname eines Rings ohne „ring“ (Glutstrahl, Gel, Takt …).
+static func ring_kurz(ring: String) -> String:
+	return str(BrakkFortschritt.RINGE[ring]["name"]).trim_suffix("ring")
+
+
+func _prozent(faktor: float) -> String:
+	return "%+d %%" % roundi((faktor - 1.0) * 100.0)
+
+
+## [Schlüssel, Wert, Herkunft] je Zeile.
+func _werte_zeilen() -> Array:
+	var f := brakk.fortschritt
+	var st := f.schaden_faktor()
+	var schuss := SCHUSS_SCHADEN * f.schuss_schaden()
+	var her: Array[String] = ["%s Stufe" % _prozent(st)]
+	var takt_her: Array[String] = []
+	var zusatz: Array[String] = []
+	for r: String in f.ringe:
+		var d: Dictionary = BrakkFortschritt.RINGE[r]["brakk_stufen"][clampi(f.ring_stufe(r), 1, 3) - 1]
+		var k := ring_kurz(r)
+		if d.has("schaden"):
+			her.append("%s %s" % [_prozent(float(d["schaden"])), k])
+		if d.has("takt"):
+			takt_her.append("%s %s" % [_prozent(1.0 / float(d["takt"])), k])
+		if d.has("anlauf"):
+			takt_her.append("bis %s %s" % [_prozent(float(d["anlauf"])), k])
+		if d.has("weitere"):
+			zusatz.append("Durchschlag %d" % (d["weitere"] as Array).size())
+		if d.has("mark_bonus"):
+			zusatz.append("Ziel %s" % _prozent(float(d["mark_bonus"])))
+		if d.has("gel_bonus"):
+			zusatz.append("Gel %s gg. Gebremste" % _prozent(float(d["gel_bonus"])))
+		if d.has("brand_takt"):
+			zusatz.append("Brand alle %s s" % str(d["brand_takt"]).replace(".", ","))
+		if d.has("spruenge"):
+			zusatz.append("Abpraller %d× %d %%" % [int(d["spruenge"]), roundi(float(d["sprung_anteil"]) * 100.0)])
+		if d.has("schutz"):
+			zusatz.append("Schutz %d %%" % roundi(float(d["schutz"]) * 100.0))
+	var pro_sek := 1.0 / maxf(0.01, SCHUSS_TAKT * _takt_faktor())
+	return [
+		["schuss", "Schuss %.0f" % schuss, ", ".join(her)],
+		["takt", "%.1f Schüsse/s" % pro_sek, ", ".join(takt_her)],
+		["dps", "Schaden/s %.0f" % (schuss * pro_sek), "gerechnet"],
+		["gemessen", "letzte 5 s %.0f/s" % f.dps_gemessen(), "gemessen"],
+		["ringe", "Ringe: " + (" · ".join(zusatz) if not zusatz.is_empty() else "keine Zusätze"), ""],
+	]
+
+
+func _werte_fenster(g: Vector2) -> void:
+	var f := brakk.fortschritt
+	if f == null:
+		return
+	var zeilen := _werte_zeilen()
+	var jetzt := Time.get_ticks_msec()
+	for z: Array in zeilen:
+		var k: String = z[0]
+		if k == "gemessen":
+			continue   # ändert sich laufend – blinkt nicht
+		var text := str(z[1]) + str(z[2])
+		if _werte_alt.has(k) and _werte_alt[k] != text:
+			_werte_blink[k] = jetzt + WERTE_BLINK_MS
+		_werte_alt[k] = text
+	var breite := clampf(g.x * 0.26, 260.0, 460.0)
+	var bx := (g.x - breite) / 2.0
+	var by := roundf(g.y * 0.86) - 34.0
+	var texte: Array = []   # [Text, Schlüssel]
+	if touch != null:
+		# Handy: drei kurze Zeilen über der Lebensleiste (links, neben den Bau-Knöpfen ist kein Platz)
+		texte = [[str(zeilen[0][1]) + " · " + str(zeilen[1][1]), "schuss"], [str(zeilen[2][1]) + " · " + str(zeilen[3][1]), "dps"], [str(zeilen[4][1]), "ringe"]]
+	else:
+		for z: Array in zeilen:
+			texte.append([str(z[1]) + ("   (" + str(z[2]) + ")" if str(z[2]) != "" else ""), z[0]])
+	var gr := 16 if touch != null else 18
+	var zh := 20.0
+	var w := 0.0
+	for t: Array in texte:
+		w = maxf(w, Stil.breite(str(t[0]), gr))
+	w = minf(w + 16.0, 300.0 if touch != null else 440.0)
+	var h := zh * texte.size() + 8.0
+	var o := Vector2(bx, by - 12.0 - h) if touch != null else Vector2(bx + breite + 24.0, by + 30.0 - h)
+	_bild.draw_rect(Rect2(o, Vector2(w, h)), Color(0.04, 0.05, 0.08, 0.62))
+	_bild.draw_rect(Rect2(o, Vector2(w, h)), Color(1, 1, 1, 0.12), false, 1.0)
+	for i in texte.size():
+		var k: String = texte[i][1]
+		var blink := int(_werte_blink.get(k, 0)) > jetzt
+		var farbe := Color("7dffa0") if blink else (Stil.TEXT_BLASS if k == "ringe" else Stil.TEXT)
+		var text: String = texte[i][0]
+		var gekuerzt := false
+		while Stil.breite(text + ("…" if gekuerzt else ""), gr) > w - 12.0 and text.length() > 4:
+			text = text.substr(0, text.length() - 1)   # zu lang (Handy): kürzen
+			gekuerzt = true
+		if gekuerzt:
+			text += "…"
+		Stil.schreibe(_bild, o + Vector2(8.0, 4.0 + zh * (i + 0.5)), text, gr, farbe)
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Tumble-Schuss (19.11.)
+
+## 19.11. (Paul): Eigener Mündungs- und Treffereffekt für den verstärkten ersten Schuss nach der Rolle: ein zweiter, goldener
+## Strahl, ein großer Funke an der Mündung, Wackeln und ein tiefer Klang; am Ziel ein goldener Ring.
+const TUMBLE_FARBE := Color("ffd166")
+
+func _tumble_schuss_bild(muendung: Vector3, ende: Vector3) -> void:
+	_strahl(muendung + Vector3(0, 0.015, 0), ende, TUMBLE_FARBE)
+	_strahl(muendung - Vector3(0, 0.015, 0), ende, TUMBLE_FARBE.lightened(0.4))
+	_funke(muendung, 0.2)
+	_trauma = minf(1.0, _trauma + 0.25)
+	_kick += 0.05
+	_fov_puls = maxf(_fov_puls, 5.0)
+	Ton.spiele(spiel, "tc-rail", -6.0)
+
+
+func _tumble_treffer_bild(g: Gegner) -> void:
+	if not is_instance_valid(g):
+		return
+	spiel.effekte.flaeche(g.position, Werte.ZELLE * 0.7, TUMBLE_FARBE)
+	_funke(_zu3d(g.position, 0.45), 0.35)
+	_einfrieren(STOP_KILL)
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Zeitlupe je Ring (19.11.)
+
+## 19.11. (Paul): Die Zeitlupe [V] bekommt je aktivem Ring einen Zusatz, beim Auslösen festgelegt. Die Lichtsäule deckt
+## Schaden und Bremsen ab – die Zeitlupe stützt Truppen, macht Brakk beweglich oder kontert Gegner-Tricks.
+## Werte in BrakkFortschritt.ZEITLUPE_RING.
+var _zl_ring := ""               # Ring, mit dem die laufende (oder letzte) Zeitlupe ausgelöst wurde
+var _zl_nach_bis := 0            # Zielring: Bonus noch bis dahin (ms)
+var _zl_heil_takt := 0.0
+
+
+func _zl_wert(ring: String, schluessel: String) -> float:
+	return float((BrakkFortschritt.ZEITLUPE_RING.get(ring, {}) as Dictionary).get(schluessel, 0.0))
+
+
+func _zl_aktiv(ring: String) -> bool:
+	return _zeitlupe > 0.0 and _zl_ring == ring
+
+
+func _truppen_um(p: Vector2, radius_felder: float) -> Array:
+	var liste: Array = []
+	for e: Variant in spiel.einheiten:
+		if is_instance_valid(e) and e is Einheit and not (e is Kommandant) and not (e as Einheit).ist_pilot and (e as Einheit).leben > 0.0 \
+				and (e as Einheit).position.distance_to(p) <= radius_felder * Werte.ZELLE:
+			liste.append(e)
+	return liste
+
+
+func _zl_beginn() -> void:
+	_zl_ring = brakk.fortschritt.aktiv() if brakk.fortschritt != null else ""
+	var farbe := _licht_farbe()
+	match _zl_ring:
+		"abpraller":
+			_zl_bereit()
+			spiel.melde("Zeitlupe · Sprungring: Anker, Rolle und Treppe ohne Abklingzeit.", 2.5)
+		"brandfeld":
+			# Rauch im Umkreis löst sich auf, Gegner darin können eine Weile nicht geheilt werden
+			var r := _zl_wert("brandfeld", "radius") * Werte.ZELLE
+			var weg := 0
+			while spiel.effekte.blase_rauch_weg(_fuss2d(), r) != null and weg < 20:
+				weg += 1
+			var bis := Time.get_ticks_msec() + int(_zl_wert("brandfeld", "sperre") * 1000.0)
+			for g: Gegner in spiel.gegner:
+				if is_instance_valid(g) and not g._tot and g.position.distance_to(_fuss2d()) <= r:
+					g.heilsperre_bis = bis
+			spiel.effekte.welle(_fuss2d(), r, farbe, "funk", 0.9)
+			spiel.melde("Zeitlupe · Brandring: Rauch weg, Gegner %s s nicht heilbar." % BrakkFortschritt._zahl(_zl_wert("brandfeld", "sperre")), 2.5)
+		"feuerteam":
+			spiel.melde("Zeitlupe · Taktring: Fabriken im Feld ersetzen sofort ihre Truppen.", 2.5)
+		"laser":
+			spiel.melde("Zeitlupe · Glutstrahlring: keine Überhitzung." if touch == null else "Zeitlupe · Glutstrahlring: schnellere Schüsse.", 2.5)
+		"durchschuss":
+			_klinge_schlag_t = -1.0
+			Ton.spiele(spiel, "tc-arc", -2.0)
+			spiel.melde("Zeitlupe · Durchschlagring: Ringklinge – Nahkampf!", 2.5)
+
+
+func _zl_weiter(dt: float) -> void:
+	spiel.brakk_mark_selbst = _zl_aktiv("markierung") or Time.get_ticks_msec() < _zl_nach_bis
+	# Klinge auf- und abbauen
+	_klinge_auf = move_toward(_klinge_auf, 1.0 if _klinge_aktiv() else 0.0, dt * (3.5 if _klinge_aktiv() else 5.0))
+	if _klinge_schlag_t >= 0.0:
+		_klinge_schlag_t += dt
+		if _klinge_schlag_t > KLINGE_SCHLAG_SEK:
+			_klinge_schlag_t = -1.0
+	if _zeitlupe <= 0.0:
+		return
+	match _zl_ring:
+		"abpraller":
+			_zl_bereit()
+		"plasmagel":
+			_zl_heil_takt += dt
+			if _zl_heil_takt >= 0.25:
+				var anteil := _zl_wert("plasmagel", "heilung") * _zl_heil_takt
+				_zl_heil_takt = 0.0
+				for e: Einheit in _truppen_um(_fuss2d(), _zl_wert("plasmagel", "radius")):
+					if e.leben < e.max_leben:
+						e.leben = minf(e.max_leben, e.leben + e.max_leben * anteil)
+						spiel.effekte.plus(e.position + Vector2(0, -18), Color("7dff9a"))
+		"feuerteam":
+			var f := brakk.fortschritt
+			if f != null and f.felder.has("feuerteam"):
+				for z: Vector2i in spiel.fabriken:
+					if BrakkFortschritt.im_feld(z, f.felder["feuerteam"] as Vector2i):
+						spiel.fabriken[z]["timer"] = Werte.PRODUKTION_SEK   # fehlt eine Truppe, kommt sie im nächsten Bild
+		"durchschuss":
+			if touch != null and _takt <= 0.0 and _frei() and not _klinge_ziele().is_empty():
+				_klinge_schlag()   # am Handy schlägt Brakk von selbst zu
+
+
+func _zl_ende() -> void:
+	match _zl_ring:
+		"bollwerk":
+			var bis := Time.get_ticks_msec() + int(_zl_wert("bollwerk", "sek") * 1000.0)
+			var n := 0
+			for e: Einheit in _truppen_um(_fuss2d(), _zl_wert("bollwerk", "radius")):
+				e.ring_schild = e.max_leben * _zl_wert("bollwerk", "schild")
+				e.ring_schild_bis = bis
+				spiel.effekte.welle(e.position, Werte.ZELLE * 0.55, _licht_farbe(), "heil", 0.8)
+				n += 1
+			if n > 0:
+				spiel.melde("Wallring: %d Truppen mit Schild." % n, 2.0)
+		"minigun":
+			_zl_sog()
+		"markierung":
+			_zl_nach_bis = Time.get_ticks_msec() + int(_zl_wert("markierung", "nach") * 1000.0)
+
+
+## Sprungring: Anker, Rolle und Treppe (und Brücke) bereit.
+func _zl_bereit() -> void:
+	_anker_rest = 0.0
+	_tumble_rest = 0.0
+	brakk.e_rest = 0.0
+	_bruecke_cd = 0.0
+
+
+## Wirbelring am Ende: Gegner um den Punkt unter dem Fadenkreuz zusammenziehen – Schritt für Schritt, nur über begehbare
+## Felder (nicht durch Mauern), große Gegner nicht.
+func _zl_sog() -> void:
+	var p := ziel_welt(true)
+	if p.x < -9000.0:
+		return
+	var r := _zl_wert("minigun", "radius") * Werte.ZELLE
+	var zug := _zl_wert("minigun", "zug") * Werte.ZELLE
+	for g: Gegner in spiel.gegner:
+		if not is_instance_valid(g) or g._tot or BrakkFortschritt.gross(g) or g.position.distance_to(p) > r:
+			continue
+		if hd.ist_hoch(karte.zelle_bei(g.position)):
+			continue   # oben auf einem Wall bleibt er
+		var weg := minf(zug, g.position.distance_to(p))
+		var richtung := (p - g.position).normalized()
+		var bisher := g.position
+		var s := 0.0
+		while s < weg:
+			s = minf(weg, s + 4.0)
+			var neu := g.position + richtung * s
+			if not karte.ist_begehbar(karte.zelle_bei(neu)):
+				break
+			bisher = neu
+		if bisher != g.position:
+			spiel.effekte.strahl(g.position, bisher, _licht_farbe(), 2.0)
+			g.position = bisher
+			g.plane_neu()
+	spiel.effekte.welle(p, r, _licht_farbe(), "funk", 0.8)
+	_trauma = minf(1.0, _trauma + 0.3)
+	Ton.spiele(spiel, "hit-boom", -6.0)
+
+
+# ------------------------------------------------------------------ Ringklinge (Zeitlupe mit Durchschlagring)
+
+## 19.11. (Paul): Nahkampf – eine Lichtklinge an der rechten Hand aus denselben sechseckigen Lichtplatten wie Lichttreppe
+## und Lichtplattform, in der Farbe des aktiven Rings (wechselt mit). Aufbau (Platten springen nacheinander auf), zwei
+## Schlagbilder (links, rechts) mit Leuchtspur. Aus Code gezeichnet; ein PixelLab-Bild kann sie später ersetzen.
+const KLINGE_SCHLAG_SEK := 0.22
+const KLINGE_PLATTEN := 7
+var _klinge_auf := 0.0           # 0 = weggesteckt, 1 = ganz aufgebaut
+var _klinge_schlag_t := -1.0     # Sekunden seit dem Schlag (-1 = keiner)
+var _klinge_seite := 1           # 1 = von rechts nach links, -1 = umgekehrt
+
+
+func _klinge_aktiv() -> bool:
+	return _zl_aktiv("durchschuss")
+
+
+## Gegner im Bogen vor Brakk in Reichweite.
+func _klinge_ziele() -> Array:
+	var liste: Array = []
+	var weite := _zl_wert("durchschuss", "weite") * Werte.ZELLE
+	var halb := deg_to_rad(_zl_wert("durchschuss", "bogen") / 2.0)
+	var vorne := Vector2(_vorne().x, _vorne().z)
+	for g: Gegner in spiel.gegner:
+		if not is_instance_valid(g) or g._tot or spiel._geschuetzt(g):
+			continue
+		var d := g.position - _fuss2d()
+		if d.length() <= weite and (d.length() < 8.0 or absf(vorne.angle_to(d)) <= halb):
+			liste.append(g)
+	return liste
+
+
+func _klinge_schlag() -> void:
+	if _takt > 0.0 or _klinge_auf < 0.6:
+		return
+	_takt = _zl_wert("durchschuss", "takt")
+	_klinge_schlag_t = 0.0
+	_klinge_seite = -_klinge_seite
+	var ziele := _klinge_ziele()
+	Ton.spiele(spiel, "tc-arc", -4.0)
+	_kick += 0.02
+	if ziele.is_empty():
+		return
+	var schaden := SCHUSS_SCHADEN * _schaden_faktor() * _zl_wert("durchschuss", "mal")
+	var summe := 0.0
+	var kill := false
+	spiel.schadensquelle = "fabrik:-1,-1"
+	spiel.brakk_quelle = "klinge"
+	spiel.schuss_herkunft = brakk.position
+	for g: Gegner in ziele:
+		if not is_instance_valid(g) or g._tot:
+			continue
+		var vorher := g.leben
+		g.nimm_schaden(schaden * _gel_bonus(g))
+		summe += maxf(0.0, vorher - maxf(g.leben, 0.0))
+		if g._tot:
+			kill = true
+			_kill(g)
+	spiel.schadensquelle = ""
+	spiel.brakk_quelle = ""
+	spiel.schuss_herkunft = Vector2.INF
+	brakk.leben = minf(brakk.max_leben, brakk.leben + summe * _zl_wert("durchschuss", "heilung"))   # Schaden heilt Brakk
+	_treffer_gefuehl(_zu3d(_fuss2d() + Vector2(_vorne().x, _vorne().z) * Werte.ZELLE, 0.5), kill)
+
+
+## Sechseck (Lichtplatte) in 2D.
+func _sechseck(mitte: Vector2, r: float, winkel: float) -> PackedVector2Array:
+	var p := PackedVector2Array()
+	for i in 6:
+		var w := winkel + TAU * float(i) / 6.0
+		p.append(mitte + Vector2(cos(w), sin(w)) * r)
+	return p
+
+
+func _klinge_bild(g: Vector2, wpx: float) -> void:
+	if _klinge_auf <= 0.01:
+		return
+	var farbe := _licht_farbe()
+	var hand := Vector2(g.x * 0.8, g.y * 1.02)
+	# Grundwinkel: die Klinge zeigt schräg nach oben links zum Fadenkreuz; beim Schlag schwingt sie durch
+	var w0 := -PI * 0.64
+	var schwung := 0.0
+	if _klinge_schlag_t >= 0.0:
+		var x := clampf(_klinge_schlag_t / KLINGE_SCHLAG_SEK, 0.0, 1.0)
+		schwung = (1.0 - pow(1.0 - x, 3.0)) * 1.3 - 0.65   # schnell, dann aus
+		schwung *= float(_klinge_seite)
+	var winkel := w0 + schwung
+	var laenge := g.y * 0.6
+	# Leuchtspur beim Schlag: blasse Platten auf den vorigen Winkeln
+	if _klinge_schlag_t >= 0.0:
+		for s in 5:
+			var ws := winkel - float(_klinge_seite) * 0.12 * float(s + 1)
+			var a := 0.22 * (1.0 - float(s) / 5.0) * (1.0 - _klinge_schlag_t / KLINGE_SCHLAG_SEK)
+			for i in KLINGE_PLATTEN:
+				var t := float(i + 1) / float(KLINGE_PLATTEN)
+				var m := hand + Vector2(cos(ws), sin(ws)) * laenge * t
+				_bild.draw_colored_polygon(_sechseck(m, wpx * (10.0 - 5.0 * t), ws), Color(farbe, a))
+	# Platten vom Griff zur Spitze, beim Aufbau springen sie nacheinander mit Überschwung auf
+	for i in KLINGE_PLATTEN:
+		var t := float(i + 1) / float(KLINGE_PLATTEN)
+		var auf := clampf(_klinge_auf * float(KLINGE_PLATTEN) - float(i), 0.0, 1.0)
+		if auf <= 0.0:
+			continue
+		var pop := 1.0 + 2.70158 * pow(auf - 1.0, 3) + 1.70158 * pow(auf - 1.0, 2)   # Ease-out-back
+		var m := hand + Vector2(cos(winkel), sin(winkel)) * laenge * t
+		var r := wpx * (11.0 - 6.0 * t) * pop
+		_bild.draw_colored_polygon(_sechseck(m, r * 1.35, winkel), Color(farbe, 0.25))
+		_bild.draw_colored_polygon(_sechseck(m, r, winkel), Color(farbe, 0.85))
+		_bild.draw_polyline(_sechseck(m, r, winkel) + PackedVector2Array([_sechseck(m, r, winkel)[0]]), farbe.lightened(0.6), maxf(1.0, wpx * 0.5))
+	# Griff: ein Ring um die Hand
+	_bild.draw_arc(hand, wpx * 7.0, 0.0, TAU, 24, Color(farbe.lightened(0.4), 0.9 * _klinge_auf), wpx * 1.5)
+
+
+func _zaehle(was: String) -> void:
+	if brakk.fortschritt != null:
+		brakk.fortschritt.zaehler[was] = int(brakk.fortschritt.zaehler.get(was, 0)) + 1
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Sieg (19.11.)
+
+## 19.11. (Paul): Fällt das gegnerische HQ: kurz Zeitlupe, dann fährt die Kamera aus Brakks Augen nach oben über die
+## Verteidigung (Umkehrung des Einflugs), darüber „SIEG“, danach die Übersicht (BrakkSieg).
+const SIEG_LUPE := 1.2           # Sekunden Zeitlupe nach dem Fall
+const SIEG_FLUG := 3.0           # Sekunden Kameraflug
+var _sieg_t := -1.0
+var _sieg_tafel: BrakkSieg = null
+var _sieg_bericht := {}
+
+
+func sieg(sekunden: float) -> void:
+	if _sieg_t >= 0.0:
+		return
+	_sieg_t = 0.0
+	_feuer = false
+	if _zeitlupe > 0.0:
+		_zeitlupe_aus()
+	if brakk.fortschritt != null:
+		_sieg_bericht = brakk.fortschritt.sieg_bericht(spiel, sekunden)
+		Profil.brakk_sieg(_sieg_bericht)
+	Engine.time_scale = 0.15
+	_trauma = 0.6
+	Ton.spiele(spiel, "alert", 0.0)
+
+
+func _sieg_weiter() -> void:
+	var uhr := Time.get_ticks_usec()
+	var echt := clampf((uhr - _uhr_vorher) / 1000000.0, 0.0, 0.1) if _uhr_vorher > 0 else 0.016
+	_uhr_vorher = uhr
+	_sieg_t += echt
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if _sieg_t >= SIEG_LUPE and Engine.time_scale < 0.5:
+		Engine.time_scale = Werte.SPIELTEMPO   # nach der kurzen Zeitlupe wieder normal
+	_trauma = maxf(0.0, _trauma - TRAUMA_ABBAU * echt)
+	_wackel_t += echt * 30.0
+	_kamera()
+	# Umkehrung des Einflugs: aus den Augen nach oben hinten, Blick hinunter auf die Verteidigung
+	var t := clampf((_sieg_t - SIEG_LUPE * 0.5) / SIEG_FLUG, 0.0, 1.0)
+	var e := t * t * (3.0 - 2.0 * t)
+	var k := hd.kamera
+	k.position += Vector3(0, 12.0 * e, 0) - _vorne() * 9.0 * e
+	k.rotation.x = lerpf(k.rotation.x, -1.05, e)
+	_bild.queue_redraw()
+	_karte_klein.queue_redraw()
+	if _sieg_t >= SIEG_LUPE * 0.5 + SIEG_FLUG + 0.4 and _sieg_tafel == null:
+		_sieg_tafel = BrakkSieg.new()
+		_sieg_tafel.spiel = spiel
+		_sieg_tafel.bericht = _sieg_bericht
+		_ebene.add_child(_sieg_tafel)
+
+
+func _sieg_bild(g: Vector2) -> void:
+	if _sieg_tafel != null:
+		return
+	var x := clampf((_sieg_t - SIEG_LUPE * 0.5) / 0.5, 0.0, 1.0)
+	if x <= 0.0:
+		return
+	var pop := 1.0 + 2.70158 * pow(x - 1.0, 3) + 1.70158 * pow(x - 1.0, 2)   # Ease-out-back
+	var m := Vector2(g.x / 2.0, g.y * 0.32)
+	Stil.ebene = Transform2D(0.0, Vector2.ONE * pop, 0.0, m)   # Texte wandern mit der Skalierung mit
+	_bild.draw_set_transform_matrix(Stil.ebene)
+	Stil.schreibe_mittig(_bild, Vector2(3, 4), "SIEG", 96, Color(0, 0, 0, 0.6))
+	Stil.schreibe_mittig(_bild, Vector2.ZERO, "SIEG", 96, Stil.GOLD)
+	Stil.ebene = Transform2D.IDENTITY
+	_bild.draw_set_transform_matrix(Transform2D.IDENTITY)
+	Stil.schreibe_mittig(_bild, m + Vector2(0, 78), "Das HQ der Myriaden ist gefallen.", 24, Color(Stil.TEXT, x))
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Respawn (19.11.)
+
+## 19.11. (Paul): Fällt Brakk, läuft ein kleiner Respawn-Timer (BrakkFortschritt.RESPAWN_SEK, Echtzeit), danach steht er an
+## der Basis wieder auf – voll geheilt, mit einer Lichtplattform unter den Füßen. Endet die Welle vorher, steht er wie
+## bisher zur nächsten Runde auf.
+var _respawn := 0.0
+
+
+func _wieder_da() -> void:
+	var z: Vector2i = spiel._feld_vor_basis()
+	if z == Karte.KEINE:
+		z = brakk.aufstellung
+	brakk.aufstehen(z)
+	_liegt = false
+	hoehe = 0.0
+	steig = 0.0
+	nick = 0.0
+	_doppelt_genutzt = false
+	_lichtplattform()
+	_trauma = minf(1.0, _trauma + 0.3)
+	Ton.spiele(spiel, "alert", -4.0)
+	spiel.melde("Brakk ist zurück – an der Basis.", 2.5)
+
+
+## Großer Hinweis mit Countdown, solange Brakk liegt.
+func _respawn_bild(g: Vector2) -> void:
+	if not _liegt:
+		return
+	var m := Vector2(g.x / 2.0, g.y * 0.42)
+	var text := "Gefallen – zurück an der Basis in %d s" % ceili(maxf(_respawn, 0.0)) if spiel.phase == 1 else "Gefallen – zur nächsten Runde wieder da"
+	_bild.draw_rect(Rect2(m.x - 260.0, m.y - 30.0, 520.0, 64.0), Color(0.04, 0.05, 0.08, 0.7))
+	Stil.schreibe_mittig(_bild, m - Vector2(0, 8), text, 24, Stil.ROT)
+	var anteil := clampf(1.0 - _respawn / BrakkFortschritt.RESPAWN_SEK, 0.0, 1.0)
+	_bild.draw_rect(Rect2(m.x - 220.0, m.y + 16.0, 440.0, 6.0), Color(1, 1, 1, 0.12))
+	_bild.draw_rect(Rect2(m.x - 220.0, m.y + 16.0, 440.0 * anteil, 6.0), LICHT)
