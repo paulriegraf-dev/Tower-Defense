@@ -54,6 +54,7 @@ var markiert := 0.0                 # Sekunden: von einem Scharfschützen markie
 var markier_faktor := Werte.MARKIERUNG_FAKTOR   # 19.11.: so viel mehr Schaden nimmt er markiert (Brakks Zielring: weniger)
 var markiert_brakk := false          # 19.11.: die Markierung kommt von Brakks Zielring – Brakks eigene Treffer zählen dann nicht mit
 var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
+var frost_tempo := 1.0              # 19.11.: wie stark der letzte Frostpuls bremst (Stufe 2 stärker)
 var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schwächer als Plasmagel)
 var eingefroren := 0.0              # Sekunden: Schockfrost – steht ganz still
 var sproede := 0.0                  # Sekunden: Sprödes Eis – nimmt mehr Schaden
@@ -111,13 +112,11 @@ func tempo() -> float:
 		t *= Werte.FERNKAMPF_GEFECHT_TEMPO
 	elif rolle == "schild":
 		t *= _schild_gleichschritt()
-	if elite:
-		t *= Werte.BRAKK_ELITE_TEMPO
 	var r := t
 	if gebremst > 0.0:
 		r = t * Werte.PLASMAGEL_TEMPO
 	elif gefroren > 0.0:
-		r = t * float(Werte.TURMARTEN["frost"]["bremse_tempo"])
+		r = t * (frost_tempo if frost_tempo < 1.0 else float(Werte.TURMARTEN["frost"]["bremse_tempo"]))
 	# 18.11. (Etappe 2): Sumpf bremst zusätzlich, zusammen aber nie unter SUMPF_MIN_TEMPO (schon Langsameres bleibt);
 	# Eis beschleunigt
 	var s: float = karte.boden_tempo(position) if not _auf_wall else 1.0
@@ -191,7 +190,7 @@ func _durchkommen(opfer: Einheit, delta: float) -> bool:
 		return false
 	_aufgehalten = 0.0
 	_durchbruch = Werte.BRAKK_DURCHBRUCH_DAUER
-	_boden_frei = Werte.BRAKK_DURCHBRUCH_FREI
+	_boden_frei = 1.5
 	var seite := Vector2(-vor.y, vor.x)
 	if (opfer.position - position).dot(seite) < 0.0:
 		seite = -seite
@@ -411,7 +410,7 @@ func _process(delta: float) -> void:
 				karte.beschiesse(bau, daten["schaden"])
 	elif daten["schaden"] > 0.0:
 		var opfer: Einheit = null if _boden_frei > 0.0 else spiel.naechste_bodeneinheit(position, reichweite)
-		if opfer != null and spiel.brakk_modus and not elite and _durchkommen(opfer, delta):
+		if opfer != null and spiel.brakk_modus and _durchkommen(opfer, delta):
 			opfer = null   # gesprungen oder durchgebrochen: weiter auf dem Weg
 		if opfer != null:
 			_sprite.bewegt(false)

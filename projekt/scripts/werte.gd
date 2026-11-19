@@ -391,17 +391,17 @@ const TURMARTEN := {
 # Turmupgrades (Klick auf den Turm), wie bei den Fabriken: Stufe 2 fest, auf Stufe 3 eine von zwei Fähigkeiten.
 const KOSTEN_TURM_STUFE: Array[int] = [125, 300]   # Patch 17.11.: vorher 175/450 (Upgrades lohnten sich für den Schaden kaum)
 const TURM_STUFE_2 := {
-	"geschuetz": {"abklingzeit": 0.65, "reichweite": 4.0, "text": "Feuert schneller (alle 0,65 statt 0,9 Sekunden) und reicht 4 statt 3,5 Felder."},   # 17.11.: +0,5 Reichweite
-	"frost": {"bremse_sek": 2.4, "text": "Bremst länger: 2,4 statt 1,6 Sekunden."},
-	"funk": {"reichweite": 3.5, "text": "Größerer Umkreis: 3,5 statt 2,5 Felder."},
-	"lanze": {"schaden": 65.0, "text": "Stärkerer Strahl: 65 statt 45 Schaden."},
-	"heil": {"heilung": 12.0, "text": "Heilt mehr: 12 statt 8 Leben."},
+	"geschuetz": {"abklingzeit": 0.65, "reichweite": 4.0, "schaden": 22.0, "text": "Starke Kanone: 22 statt 16 Schaden, alle 0,65 statt 0,9 Sekunden, 4 statt 3,5 Felder."},   # 19.11.: +6 Schaden (Paul: Stufe 2 zu schwach)
+	"frost": {"bremse_sek": 2.4, "bremse_tempo": 0.55, "text": "Bremst länger und stärker: 2,4 statt 1,6 Sekunden, auf 55 statt 65 % Tempo."},   # 19.11.
+	"funk": {"reichweite": 3.5, "feuer_faktor": 0.7, "text": "Größerer Umkreis (3,5 statt 2,5 Felder), Stellungen feuern 30 % statt 25 % schneller."},   # 19.11.
+	"lanze": {"schaden": 80.0, "text": "Stärkerer Strahl: 80 statt 45 Schaden."},   # 19.11.: vorher 65
+	"heil": {"heilung": 14.0, "text": "Heilt mehr: 14 statt 8 Leben."},   # 19.11.: vorher 12
 }
 const TURM_STUFE_3 := {
 	"geschuetz": {
 		"doppelschuss": {"name": "Doppelschuss", "ziele": 2, "text": "Trifft zwei Gegner zugleich.",
 			"stark": "gegen Rudel", "schwach": "nicht stärker gegen einzelne zähe Gegner"},
-		"schwer": {"name": "Schwere Munition", "schaden": 35.0, "abklingzeit": 1.1, "text": "35 statt 16 Schaden, dafür alle 1,1 Sekunden.",
+		"schwer": {"name": "Schwere Munition", "schaden": 55.0, "abklingzeit": 1.1, "text": "55 statt 22 Schaden, dafür alle 1,1 Sekunden.",   # 19.11.: vorher 35 (sonst schwächer als Stufe 2)
 			"stark": "gegen Belagerungsturm und Sphären", "schwach": "schwach gegen Hunderudel"},
 	},
 	"frost": {
@@ -411,7 +411,7 @@ const TURM_STUFE_3 := {
 			"stark": "stark neben Lanze und Stellungen", "schwach": "nutzlos ohne Schützen in der Nähe"},
 	},
 	"funk": {
-		"verstaerker": {"name": "Verstärker", "feuer_faktor": 0.6, "text": "Stellungen im Umkreis feuern 40 % statt 25 % schneller.",
+		"verstaerker": {"name": "Verstärker", "feuer_faktor": 0.6, "text": "Stellungen im Umkreis feuern 40 % statt 30 % schneller.",
 			"stark": "reiner Schadensbonus", "schwach": "hilft nicht gegen Rauch"},
 		"peilsender": {"name": "Peilsender", "peilung": true, "text": "Truppen in Stellungen im Umkreis sehen durch Rauch (Klarsicht).",
 			"stark": "gegen Rauchwerfer", "schwach": "kein zusätzliches Tempo"},
@@ -440,7 +440,18 @@ const MAGNET := {
 # Seine Kuppel deckt den ganzen Ring samt Rand: Truppen darunter nehmen weniger Schaden, Steine der Schleuder und Rauch prallen ab.
 const KOSTEN_GENERATOR: int = 150
 const HOF_MIN: int = 2             # so viele Felder muss ein Hof mindestens haben (der Generator braucht zwei)
-const HOF_MAX: int = 12            # größere eingeschlossene Flächen zählen nicht als Hof
+const HOF_MAX: int = 36            # 19.11.: Zitadelle bis Stufe III (6×6 innen); größere eingeschlossene Flächen zählen nicht (vorher 12)
+## Zitadelle (19.11., vorher „Hof“): Stufe nach Innenfläche – I bis 4 Felder (2×2), II bis 16 (4×4), III bis 36 (6×6).
+const ZITADELLE_STUFEN: Array[int] = [4, 16, 36]
+const ZITADELLE_III_AB_WELLE: int = 10   # Stufe III erst ab dieser Welle (sonst deckt die Kuppel zu früh zu viel Weg)
+
+
+static func zitadelle_stufe(felder: int) -> int:
+	for i in ZITADELLE_STUFEN.size():
+		if felder <= ZITADELLE_STUFEN[i]:
+			return i + 1
+	return 0
+
 const KUPPEL_SCHUTZ: float = 0.4   # Truppen unter der Kuppel nehmen so viel weniger Schaden
 const KUPPEL_RAND: float = 1.0     # Felder: so weit reicht die Kuppel über den äußersten Wall des Rings hinaus
 const KOSTEN_PANZER: int = 30      # Panzerung eines Erdwalls: Die erste Sprengung nimmt nur die Panzerung
@@ -1145,20 +1156,13 @@ const KOMMANDANT := {
 }
 ## Brakk-Mode nach dem Playtest (19.11., Paul): Gegner kommen gegen Bodentruppen besser durch.
 const BRAKK_BODEN_SCHADEN := 1.5       # Gegner machen gegen Truppen am Boden so viel mehr Schaden (Stellungen, Bauten, Brakk: normal)
-const BRAKK_DURCHBRUCH_SEK := 2.5      # so lange von Bodentruppen aufgehalten, dann bricht ein Nahkämpfer durch (nicht Elite):
+const BRAKK_DURCHBRUCH_SEK := 3.0      # so lange von Bodentruppen aufgehalten, dann bricht ein Nahkämpfer durch:
 const BRAKK_DURCHBRUCH_SCHUB := 0.5    # ... stößt die Truppe so viele Felder zur Seite ...
 const BRAKK_DURCHBRUCH_STARK := 1.5    # ... und macht so lange so viel mehr Schaden
 const BRAKK_DURCHBRUCH_DAUER := 4.0
-const BRAKK_DURCHBRUCH_FREI := 2.5     # so lange lässt er sich danach nicht aufhalten – dann wieder wie sonst
 const BRAKK_SPRUNG_SEK := 0.8          # Hunde: so lange aufgehalten, dann springen sie über die Truppe hinweg
 const BRAKK_SPRUNG_ABKLING := 4.0
-## Elite-Trupp (19.11., Paul): kommt in diesen Runden zusätzlich zur Welle, mitten hinein – eigene kleine Gruppe.
-const BRAKK_ELITE := {
-	8: ["fahne", "hund", "hund", "hund", "hund"],
-	13: ["schild", "schild", "sphaere", "sphaere", "sphaere"],
-	19: ["schild", "schild", "sani", "schwarm", "schwarm", "sphaere", "sphaere"],
-}
-const BRAKK_ELITE_TEMPO := 0.85        # Elite läuft etwas langsamer
+const BRAKK_ELITE_AB := 3              # ab dieser Runde kommt je Runde (Runde 20: je Durchgang) ein Elite-Trupp
 const BRAKK_ELITE_LEBEN := 2.5
 const BRAKK_ELITE_SCHADEN := 1.5
 const BRAKK_ELITE_FLAECHE := 0.9       # Felder: Elite-Treffer streifen Truppen in diesem Umkreis ...

@@ -2209,8 +2209,12 @@ func _tuerme_feuern(delta: float) -> void:
 						for g in gegner.duplicate():
 							if is_instance_valid(g) and not _geschuetzt(g) and von.distance_to(g.position) <= weite and karte.sicht_von_wall(z, von, g.position):
 								var sek := float(karte.turm_wert(z, "bremse_sek"))
+								var bt := float(karte.turm_wert(z, "bremse_tempo"))   # 19.11.: Stufe 2 bremst stärker
 								if g.gefroren <= 0.0:
 									objekt_zaehle(z, "gebremst", 1.0)
+									g.frost_tempo = bt
+								else:
+									g.frost_tempo = minf(g.frost_tempo, bt)
 								g.gefroren = maxf(g.gefroren, sek)
 								if sproede > 0.0:
 									g.sproede = maxf(g.sproede, sek)
@@ -2825,13 +2829,8 @@ func _lade_durchgang() -> void:
 		_ausgaenge.append(str(ausgaenge[i]) if i < ausgaenge.size() else "")
 		_locker.append(bool(locker[i]) if i < locker.size() else false)
 	_elite_nr = -1
-	if brakk_modus and _durchgang == 1 and Werte.BRAKK_ELITE.has(welle) and not _schlange.is_empty():
-		# 19.11. (Paul): Elite-Trupp zusätzlich zur Welle, mitten hinein
-		_elite_nr = int(_schlange.size() / 2.0)
-		_schlange.insert(_elite_nr, (Werte.BRAKK_ELITE[welle] as Array).duplicate())
-		_pausen.insert(_elite_nr, 0.0)
-		_ausgaenge.insert(_elite_nr, "")
-		_locker.insert(_elite_nr, false)
+	if brakk_modus and welle >= Werte.BRAKK_ELITE_AB and _schlange.size() >= 2:
+		_elite_nr = randi_range(1, _schlange.size() - 1)   # nicht der erste Trupp
 	var info: Array = _welle.get("wurf_info", [])
 	var wuerfe: Array = _welle["wurf"]
 	for i in wuerfe.size():
@@ -4449,12 +4448,14 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 	if typ == Karte.GENERATOR:
 		var hof := karte.hof_von(z)
 		if hof.is_empty():
-			return "Turm auf freiem Feld = Schildgenerator: nur in einem Hof (2–%d freie Felder, rundum von Erdwällen eingeschlossen)." % Werte.HOF_MAX
+			return "Turm auf freiem Feld = Schildgenerator: nur in einer Zitadelle (2–%d Felder innen, rundum von Erdwällen eingeschlossen)." % Werte.HOF_MAX
 		if not karte.ist_frei(z):
-			return "Der Generator braucht ein freies Feld im Hof."
+			return "Der Generator braucht ein freies Feld in der Zitadelle."
+		if Werte.zitadelle_stufe(hof.size()) >= 3 and welle < Werte.ZITADELLE_III_AB_WELLE and not sandbox:
+			return "Zitadelle III (mehr als %d Felder innen) erst ab Welle %d." % [Werte.ZITADELLE_STUFEN[1], Werte.ZITADELLE_III_AB_WELLE]
 		for c: Vector2i in hof:
 			if karte.inhalt(c) == Karte.GENERATOR:
-				return "In diesem Hof steht schon ein Schildgenerator."
+				return "In dieser Zitadelle steht schon ein Schildgenerator."
 	elif typ == Karte.PANZER:
 		if karte.inhalt(z) != Karte.WALL:
 			return "Panzerung geht nur auf einem Erdwall."

@@ -323,16 +323,20 @@ func _baue() -> void:
 
 func _baue_generator() -> void:
 	var offen: bool = spiel.karte.kuppeln.filter(func(k): return k[2] == zelle).is_empty()
-	var stand := "generator|%s" % offen
+	var hof: Array = spiel.karte.hof_von(zelle)
+	var stufe := Werte.zitadelle_stufe(hof.size()) if not hof.is_empty() else 0
+	var stand := "generator|%s|%d" % [offen, stufe]
 	if stand == _stand:
 		return
 	_stand = stand
 	_leeren()
-	_kopf("Schildgenerator", "")
+	_kopf("Schildgenerator", "Zitadelle " + ["", "I", "II", "III"][stufe] if stufe > 0 else "")
 	_stats_zeile()
-	_zeile("Kuppel über dem Hof: Truppen darunter nehmen %d %% weniger Schaden, Steine prallen ab." % roundi(Werte.KUPPEL_SCHUTZ * 100), Stil.KLEIN, Stil.TEXT)
+	_zeile("Kuppel über der Zitadelle: Truppen darunter nehmen %d %% weniger Schaden, Steine prallen ab." % roundi(Werte.KUPPEL_SCHUTZ * 100), Stil.KLEIN, Stil.TEXT)
 	if offen:
 		_zeile("Kuppel aus: Der Ring ist offen.", Stil.KLEIN, Stil.WARN)
+	elif stufe < 3:
+		_zeile("Ausbauen: Ring eine Kachel weiter nach außen ziehen, alten Ring abreißen – die Kuppel wächst mit (Stufe III ab Welle %d)." % Werte.ZITADELLE_III_AB_WELLE, Stil.KLEIN, Stil.TEXT_BLASS)
 	_fertig()
 
 

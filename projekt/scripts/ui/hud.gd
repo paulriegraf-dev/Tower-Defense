@@ -60,15 +60,22 @@ const TURM_FORMEN := [
 	["frost", ["T##", "#..", "#.."]],
 	["lanze", ["#T#", "#.#", "..."]],
 	["heil", ["#..", ".T.", "..#"]],
-	["schild", [".##.", "#T.#", "#..#", ".##."]],   # Schildgenerator in einem Hof: 2–12 freie Felder, rundum Erdwälle oder Tor (Ecken egal)
+	["schild", [".##.", "#T.#", "#..#", ".##."]],   # Zitadelle (19.11., vorher Hof): Ring aus Erdwällen (Ecken egal), Stufe I–III, siehe ZITADELLE
 ]
+## Zitadelle in drei Stufen (19.11.): Klick auf die Karte schaltet die Vorlage I → II → III → aus.
+const ZITADELLE := {
+	"schild": [".##.", "#T.#", "#..#", ".##."],
+	"schild2": [".####.", "#T...#", "#....#", "#....#", "#....#", ".####."],
+	"schild3": [".######.", "#T.....#", "#......#", "#......#", "#......#", "#......#", "#......#", ".######."],
+}
 const SCHILD_FARBE := Color("b48cff")
 
 
 ## Name, Formname und Farbe eines Kärtchens.
 static func _form_info(art: String) -> Array:
-	if art == "schild":
-		return ["Schild", "Hof", SCHILD_FARBE, "Schildgenerator"]
+	if art.begins_with("schild"):
+		var st: String = {"schild": "I", "schild2": "II", "schild3": "III"}.get(art, "I")
+		return ["Zitadelle", "Stufe " + st if art != "schild" else "I · II · III", SCHILD_FARBE, "Zitadelle " + st]
 	var d: Dictionary = Werte.TURMARTEN[art]
 	var kurz: String = {"geschuetz": "Geschütz", "funk": "Funk", "frost": "Frost", "lanze": "Lanze", "heil": "Heil"}.get(art, art)
 	return [kurz, str(d["form"]), Color(str(d["farbe"])), str(d["name"])]
@@ -605,6 +612,18 @@ func _male_formvorlage() -> void:
 	var mitte: Vector2 = spiel.welt_zu_bild(k.mitte(z))
 	var nachbar: Vector2 = spiel.welt_zu_bild(k.mitte(z) + Vector2(Werte.ZELLE, 0))
 	var halb := maxf(8.0, absf(nachbar.x - mitte.x) * 0.42)
+	if formvorlage.begins_with("schild") and k.ist_frei(z) and not k.hof_von(z).is_empty():
+		# 19.11.: Die Maus steht schon in einer fertigen Zitadelle – deren Innenfeld zeigen statt einer Vorlage
+		var hof: Array = k.hof_von(z)
+		for c: Vector2i in hof:
+			var pc: Vector2 = spiel.welt_zu_bild(k.mitte(c))
+			_warnung.draw_rect(Rect2(pc - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4)), Color(farbe, 0.22))
+		var st := Werte.zitadelle_stufe(hof.size())
+		var txt := "Zitadelle %s (%d Felder): Generator passt" % [["", "I", "II", "III"][st], hof.size()]
+		if st >= 3 and spiel.welle < Werte.ZITADELLE_III_AB_WELLE and not spiel.sandbox:
+			txt = "Zitadelle III erst ab Welle %d" % Werte.ZITADELLE_III_AB_WELLE
+		Stil.schreibe_mittig(_warnung, mitte + Vector2(0, -halb - 14.0), txt, Stil.NORMAL, Color.WHITE)
+		return
 	var fehlt := 0
 	for e: Array in formvorlage_felder(formvorlage, z):
 		var p: Vector2 = spiel.welt_zu_bild(k.mitte(e[0]))
@@ -617,7 +636,7 @@ func _male_formvorlage() -> void:
 			_warnung.draw_rect(r, Color(farbe, 0.18))
 			_warnung.draw_rect(r, Color(0.05, 0.05, 0.08, 0.7), false, 5.0)
 			_warnung.draw_rect(r, farbe, false, 2.0)
-	if formvorlage != "schild" and not (k.inhalt(z) == Karte.WALL):
+	if not formvorlage.begins_with("schild") and not (k.inhalt(z) == Karte.WALL):
 		fehlt += 1   # der Turm selbst steht auch auf einem Erdwall (der Generator dagegen auf einem freien Feld)
 	var rt := Rect2(mitte - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4))
 	_warnung.draw_rect(rt, Color(farbe, 0.45))
@@ -627,19 +646,86 @@ func _male_formvorlage() -> void:
 	Stil.schreibe_mittig(_warnung, mitte + Vector2(0, -halb - 14.0), text, Stil.NORMAL, Color.WHITE)
 
 
+## 19.11. (Paul: „klarer machen, dass die Felder nach dem Bau nicht mehr für andere Türme gelten“): Mit dem
+## Turm-Werkzeug [4] bekommen vergebene Erdwälle die Farbe ihres Turms, eine Schraffur und eine Linie zum Turm.
+## Über einem freien Erdwall zeigt die Vorschau genau die Wälle, die der neue Turm belegen würde.
+func _male_turm_stuetzen() -> void:
+	if spiel.werkzeug != Karte.TURM or not _bauphase:
+		return
+	var k: Karte = spiel.karte
+	var a: Vector2 = spiel.welt_zu_bild(k.mitte(Vector2i.ZERO))
+	var b: Vector2 = spiel.welt_zu_bild(k.mitte(Vector2i(1, 0)))
+	var halb := maxf(8.0, absf(b.x - a.x) * 0.42)
+	for n: Vector2i in k.stuetze_von:
+		var t: Vector2i = k.stuetze_von[n]
+		if k.ausbau.get(t, Karte.FREI) != Karte.TURM or k.inhalt(n) != Karte.WALL:
+			continue
+		var farbe := Color(str(Werte.TURMARTEN[k.turm_art.get(t, "geschuetz")]["farbe"]))
+		var p: Vector2 = spiel.welt_zu_bild(k.mitte(n))
+		_warnung.draw_line(p, spiel.welt_zu_bild(k.mitte(t)), Color(farbe, 0.5), 2.0)
+		var r := Rect2(p - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4))
+		_warnung.draw_rect(r, Color(farbe, 0.16))
+		_schraffur(r, Color(farbe, 0.55))
+		_warnung.draw_rect(r, Color(farbe, 0.9), false, 2.0)
+	if formvorlage != "":
+		return
+	var z: Vector2i = k.zelle_bei(spiel.maus_welt())
+	if not k.in_karte(z) or k.inhalt(z) != Karte.WALL or k.ausbau.get(z, Karte.FREI) == Karte.TURM:
+		return
+	var oben: Vector2 = spiel.welt_zu_bild(k.mitte(z)) + Vector2(0, -halb - 14.0)
+	if k.stuetze_von.has(z) and k.ausbau.get(k.stuetze_von[z], Karte.FREI) == Karte.TURM:
+		Stil.schreibe_mittig(_warnung, oben, "Gehört schon einem Turm", Stil.NORMAL, Stil.WARN)
+		return
+	var art := k.turm_form(z)
+	if art == "":
+		Stil.schreibe_mittig(_warnung, oben, "Keine Turmform – [4]-Leiste zeigt die Formen", Stil.NORMAL, Stil.TEXT_BLASS)
+		return
+	var farbe := Color(str(Werte.TURMARTEN[art]["farbe"]))
+	for w: Vector2i in k._waehle_stuetzen(z, art):
+		var p: Vector2 = spiel.welt_zu_bild(k.mitte(w))
+		var r := Rect2(p - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4))
+		_warnung.draw_rect(r, Color(farbe, 0.25))
+		_warnung.draw_rect(r, Color(0.05, 0.05, 0.08, 0.7), false, 5.0)
+		_warnung.draw_rect(r, farbe, false, 2.5)
+	var pz: Vector2 = spiel.welt_zu_bild(k.mitte(z))
+	_warnung.draw_rect(Rect2(pz - Vector2(halb, halb * 0.7), Vector2(halb * 2.0, halb * 1.4)), Color.WHITE, false, 2.0)
+	Stil.schreibe_mittig(_warnung, oben, "%s – belegt diese Erdwälle" % str(Werte.TURMARTEN[art]["name"]), Stil.NORMAL, farbe)
+
+
+## Schräge Striche in einem Rechteck (45°), auf das Rechteck beschnitten.
+func _schraffur(r: Rect2, farbe: Color, abstand: float = 6.0) -> void:
+	var w := r.size.x
+	var h := r.size.y
+	var c := -h
+	while c < w:
+		var s0 := Vector2(c, h)
+		var s1 := Vector2(c + h, 0)
+		if s0.x < 0.0:
+			s0 = Vector2(0.0, h + s0.x)
+		if s1.x > w:
+			s1 = Vector2(w, s1.x - w)
+		_warnung.draw_line(r.position + s0, r.position + s1, farbe, 1.0)
+		c += abstand
+
+
 func _formen_klick(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var i := int(floorf(((event as InputEventMouseButton).position.x - 5.0) / 59.0))
 		if i >= 0 and i < TURM_FORMEN.size():
 			var art: String = TURM_FORMEN[i][0]
-			formvorlage = "" if formvorlage == art else art
+			if art == "schild":
+				# 19.11.: Zitadelle – I → II → III → aus
+				var folge := {"": "schild", "schild": "schild2", "schild2": "schild3", "schild3": ""}
+				formvorlage = str(folge.get(formvorlage, "schild")) if formvorlage == "" or formvorlage.begins_with("schild") else "schild"
+			else:
+				formvorlage = "" if formvorlage == art else art
 		_formen.accept_event()
 
 
 ## Die Felder der Wallform von `art`, wenn der Turm auf `z` stünde – in der Lage (gedreht/gespiegelt), in der schon die
 ## meisten Erdwälle stehen. Ergebnis: Liste von [Feld, steht schon].
 func formvorlage_felder(art: String, z: Vector2i) -> Array:
-	var raster: Array = []
+	var raster: Array = ZITADELLE.get(art, [])
 	for f: Array in TURM_FORMEN:
 		if f[0] == art:
 			raster = f[1]
@@ -678,7 +764,7 @@ func formvorlage_felder(art: String, z: Vector2i) -> Array:
 
 func _male_formen(ci: Control) -> void:
 	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
-	Stil.schreibe(ci, Vector2(6, 6), "Türme und Schildgenerator – die Erdwälle drumherum bestimmen, was entsteht · Klick = Vorlage an der Maus", Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.schreibe(ci, Vector2(6, 6), "Klick = Vorlage an der Maus · schraffierte Erdwälle gehören schon einem Turm und zählen für keinen anderen", Stil.KLEIN, Stil.TEXT_BLASS)
 	var unter := ""
 	var k: Karte = spiel.karte
 	var mz: Vector2i = k.zelle_bei(spiel.maus_welt())
@@ -689,13 +775,16 @@ func _male_formen(ci: Control) -> void:
 	for i in TURM_FORMEN.size():
 		var art: String = TURM_FORMEN[i][0]
 		var raster: Array = TURM_FORMEN[i][1]
+		if art == "schild" and formvorlage.begins_with("schild"):
+			art = formvorlage   # Zitadelle: die gewählte Stufe zeigen
+			raster = ZITADELLE[art]
 		var info := _form_info(art)
 		var farbe: Color = info[2]
 		var r := Rect2(Vector2(5.0 + i * 59.0, 13.0), Vector2(56, 57))
-		var an := art == unter or art == formvorlage
+		var an := art == unter or art == formvorlage or (unter == "schild" and art.begins_with("schild"))
 		Stil.platte(ci, r, 3.0, Stil.METALL if an else Stil.METALL_TIEF, farbe if an else Stil.RAHMEN)
 		var spalten := (raster[0] as String).length()
-		var feld := 8.0 if raster.size() <= 3 else 6.0
+		var feld := 8.0 if raster.size() <= 3 else (6.0 if raster.size() <= 4 else 24.0 / raster.size())
 		var ecke := Vector2(r.get_center().x - feld * spalten / 2.0, r.position.y + 4.0 + (3.0 * 8.0 - raster.size() * feld) / 2.0).round()
 		for y in raster.size():
 			for x in spalten:
@@ -1179,6 +1268,7 @@ var _warnung: Control
 func _male_schleuder_warnung() -> void:
 	if spiel == null or spiel.im_kampf():
 		return
+	_male_turm_stuetzen()
 	_male_formvorlage()
 	var t := _jetzt()
 	for b: Zonenbau in spiel.zonenbauten:
