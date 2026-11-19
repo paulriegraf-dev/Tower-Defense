@@ -46,6 +46,11 @@ static func schrift() -> Font:
 
 
 ## Bildschirmpixel je UI-Pixel (bei 1920×1080: 1,5 vom Fenster mal 2 von der Oberfläche = 3).
+## 19.11.: Zusatz-Maßstab für eine Fläche, die über UI_SKALA hinaus vergrößert ist (z. B. die [Tab]-Liste am Handy) – nur
+## während deren Zeichnen gesetzt, damit die Schrift in der echten Größe gerendert wird (scharf statt gestreckt).
+static var zusatz := 1.0
+
+
 static func skala() -> float:
 	var st := 1.0
 	var baum := Engine.get_main_loop() as SceneTree
@@ -53,7 +58,7 @@ static func skala() -> float:
 		var soll := Vector2(baum.root.content_scale_size)
 		if soll.x > 0.0 and soll.y > 0.0:
 			st = minf(baum.root.size.x / soll.x, baum.root.size.y / soll.y)
-	return UI_SKALA * maxf(st, 0.01)
+	return UI_SKALA * maxf(st, 0.01) * zusatz
 
 
 ## Schriftgröße in Bildschirmpixeln: das nächste Vielfache von 25 (mindestens 25).

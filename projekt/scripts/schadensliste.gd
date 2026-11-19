@@ -28,6 +28,8 @@ func _process(_delta: float) -> void:
 		per_knopf = not per_knopf
 	_tab_vorher = tab
 	var an: bool = per_knopf and spiel._menue == null
+	var handy: bool = spiel.brakk_modus and spiel.get("ego") != null and spiel.ego != null and spiel.ego.touch != null
+	scale = Vector2.ONE * Stil.UI_SKALA * (B_HANDY if handy else 1.0)
 	if an != visible:
 		visible = an
 	if visible:
@@ -95,6 +97,7 @@ const B_BREITE := 120.0
 const B_ZEILE := 8.0
 const B_QUELLEN := 4
 const B_ANDERE := 3
+const B_HANDY := 1.6      # 19.11. (Paul): am Handy größer (die Bauliste ist dort ohnehin weg, solange die Liste offen ist)
 
 
 ## Text auf eine Breite kürzen (mit „…“).
@@ -107,6 +110,12 @@ func _kurz(text: String, weite: float) -> String:
 
 
 func _male_brakk() -> void:
+	Stil.zusatz = scale.x / Stil.UI_SKALA   # 19.11.: am Handy größer – Schrift in echter Größe
+	_male_brakk_inhalt()
+	Stil.zusatz = 1.0
+
+
+func _male_brakk_inhalt() -> void:
 	var f: BrakkFortschritt = spiel.kommandant.fortschritt
 	var runde := maxi(spiel.runde_stats_welle, 1)
 	var quellen: Dictionary = f.schaden_runden.get(str(runde), {})
