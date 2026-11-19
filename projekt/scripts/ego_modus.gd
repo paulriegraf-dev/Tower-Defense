@@ -60,6 +60,7 @@ var _abwaerts := false           # 18.11.: die Treppe führt gerade hinunter
 var _treppe_rest := 0.0
 const KLETTER_EINSTECKEN := 0.35   # 18.11.: länger – die Stufen bauen sich nacheinander auf, damit man die Treppe sieht
 const KLETTER_STEIGEN := 0.75
+var _kletter_dauer := KLETTER_STEIGEN   # 19.11. (Paul): eine lange Treppe geht Brakk im Lauftempo hinauf (wie auf der Lichtbrücke), nicht im Sprint
 const TREPPE_STUFEN := 6
 
 # Ring (linke Hand): 0 = Pistole, 1 = Ring vorne
@@ -1062,6 +1063,8 @@ func _steige_hinauf() -> void:
 	_kletter_von = _fuss3d()
 	_kletter_nach = _zu3d(karte.mitte(_kletter_zelle), hd.H)
 	_abwaerts = false
+	# direkt vor der Wand wie bisher (0,75 s); je länger die Treppe, desto länger der Aufstieg – nie schneller als TEMPO
+	_kletter_dauer = maxf(KLETTER_STEIGEN, _kletter_von.distance_to(_kletter_nach) / TEMPO)
 	_klettern = KLETTER_EINSTECKEN   # die Treppe steht schon: gleich steigen
 	steig = 0.0
 
@@ -1088,6 +1091,7 @@ func _versuche_absteigen(melden: bool) -> bool:
 		_treppe_fuss = _kletter_nach
 		_treppe_fuss2d = Vector2.INF
 		_abwaerts = true
+		_kletter_dauer = KLETTER_STEIGEN
 		brakk.oben = false   # ab jetzt zählt er als am Boden (die 2D-Logik), die Kamera steigt die Treppe hinab
 		brakk.posten_zelle = Karte.KEINE
 		brakk.zustand = Einheit.Zustand.BODEN
@@ -1106,7 +1110,7 @@ func _kletter_weiter(dt: float) -> void:
 	_klettern += dt
 	if _klettern < KLETTER_EINSTECKEN:
 		return
-	var f := clampf((_klettern - KLETTER_EINSTECKEN) / KLETTER_STEIGEN, 0.0, 1.0)
+	var f := clampf((_klettern - KLETTER_EINSTECKEN) / _kletter_dauer, 0.0, 1.0)
 	var weich := f * f * (3.0 - 2.0 * f)
 	var p := _kletter_von.lerp(_kletter_nach, weich)
 	hoehe = lerpf(_kletter_von.y, _kletter_nach.y, minf(1.0, weich * 1.15))

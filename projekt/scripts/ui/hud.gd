@@ -996,6 +996,14 @@ var _pause_tafel: Malflaeche
 var _pause_titel := "Pause"
 var _pause_knoepfe: Array[Tafelknopf] = []
 var _einstellungen := false
+# 19.11. (Paul, Handy: Run mitten in der Runde verloren): Das Pause-Menü geht im Kampf von selbst auf, wenn die Seite den
+# Fokus verliert – ein Tipp, der gerade unterwegs war, traf dann „Hauptmenü“ oder „Neustart“. Deshalb: kurze Sperre nach
+# dem Aufgehen, und beide Knöpfe fragen nach (zweiter Tipp innerhalb weniger Sekunden).
+const PAUSE_SPERRE_MS := 700
+const SICHER_FRIST_MS := 4000
+var _pause_seit_ms := 0
+var _sicher_was := ""
+var _sicher_ms := 0
 
 
 func _baue_pause() -> void:
@@ -1061,6 +1069,8 @@ func pause_an() -> void:
 	if _pause.visible:
 		return
 	_pause.visible = true
+	_pause_seit_ms = Time.get_ticks_msec()
+	_sicher_was = ""
 	get_tree().paused = true
 	if spiel.get("_zoom_grund") != null:
 		spiel._zoom_grund.visible = false   # das Spiel steht: main blendet ihn erst danach wieder ein
@@ -1090,16 +1100,31 @@ func _hauptseite() -> void:
 	_einstellungen = false
 	_pause_titel = "Pause"
 	var neu := "Nochmal angreifen" if spiel.phantom_modus == "angriff" else "Neustart"
+	var fragt := Time.get_ticks_msec() - _sicher_ms <= SICHER_FRIST_MS
 	_pause_zeige([
 		["Weiter", pause_aus],
-		[neu, func():
-			get_tree().paused = false
-			spiel._neustart()],
+		["Sicher? Nochmal tippen" if fragt and _sicher_was == "neustart" else neu, _nachfragen.bind("neustart")],
 		["Einstellungen", _einstellungsseite],
-		["Hauptmenü", func():
-			get_tree().paused = false
-			spiel._zum_menue()],
+		["Sicher? Nochmal tippen" if fragt and _sicher_was == "menue" else "Hauptmenü", _nachfragen.bind("menue")],
 	])
+
+
+## Neustart und Hauptmenü beenden die laufende Partie: erster Tipp fragt nach, der zweite (innerhalb der Frist) führt aus.
+func _nachfragen(was: String) -> void:
+	var jetzt := Time.get_ticks_msec()
+	if jetzt - _pause_seit_ms < PAUSE_SPERRE_MS:
+		return   # Tipp, der schon unterwegs war, als das Menü aufging
+	if _sicher_was == was and jetzt - _sicher_ms <= SICHER_FRIST_MS:
+		_sicher_was = ""
+		get_tree().paused = false
+		if was == "neustart":
+			spiel._neustart()
+		else:
+			spiel._zum_menue()
+		return
+	_sicher_was = was
+	_sicher_ms = jetzt
+	_hauptseite()
 
 
 func _einstellungsseite() -> void:
