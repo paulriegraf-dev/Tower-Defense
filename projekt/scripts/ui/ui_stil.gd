@@ -84,6 +84,11 @@ static func breite(text: String, groesse: int) -> float:
 	return schrift_fuer(_roh(groesse)).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _roh(groesse)).x / skala()
 
 
+## 19.11.: Äußere Zeichen-Verschiebung (sichere Ränder am iPhone): Wer mit draw_set_transform_matrix(ebene) zeichnet,
+## setzt sie hier, damit Texte mitwandern. Sonst Identität.
+static var ebene := Transform2D.IDENTITY
+
+
 ## Text, dessen Großbuchstaben senkrecht um `links_mitte.y` stehen. Gibt die Breite zurück.
 static func schreibe(ci: CanvasItem, links_mitte: Vector2, text: String, groesse: int, farbe: Color) -> float:
 	var roh := _roh(groesse)
@@ -91,9 +96,9 @@ static func schreibe(ci: CanvasItem, links_mitte: Vector2, text: String, groesse
 	var sk := skala()
 	var basis := Vector2(links_mitte.x, links_mitte.y + (f.get_ascent(roh) - f.get_descent(roh)) / 2.0 / sk)
 	basis = (basis * sk).round() / sk   # auf ganze Bildschirmpixel
-	ci.draw_set_transform(basis, 0.0, Vector2(1.0 / sk, 1.0 / sk))
+	ci.draw_set_transform_matrix(ebene * Transform2D(0.0, Vector2(1.0 / sk, 1.0 / sk), 0.0, basis))
 	ci.draw_string(f, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, -1, roh, farbe)
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	ci.draw_set_transform_matrix(ebene)
 	return breite(text, groesse)
 
 
@@ -107,9 +112,9 @@ static func absatz(ci: CanvasItem, oben_links: Vector2, text: String, weite: flo
 	var f := schrift_fuer(roh)
 	var sk := skala()
 	var start := ((oben_links + Vector2(0, f.get_ascent(roh) / sk)) * sk).round() / sk
-	ci.draw_set_transform(start, 0.0, Vector2(1.0 / sk, 1.0 / sk))
+	ci.draw_set_transform_matrix(ebene * Transform2D(0.0, Vector2(1.0 / sk, 1.0 / sk), 0.0, start))
 	ci.draw_multiline_string(f, Vector2.ZERO, text, HORIZONTAL_ALIGNMENT_LEFT, weite * sk, roh, -1, farbe)
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	ci.draw_set_transform_matrix(ebene)
 
 
 static func absatz_groesse(text: String, weite: float, groesse: int) -> Vector2:

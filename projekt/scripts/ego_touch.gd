@@ -87,9 +87,10 @@ func _frei() -> bool:
 func _gehoert_mir(p: Vector2) -> bool:
 	if not _frei():
 		return false
+	var g := SichererRand.nach_aussen(p)   # 19.11.: p liegt in der sicheren Fläche, die HUD-Knöpfe im Bild
 	for b: Node in spiel._hud.find_children("*", "BaseButton", true, false):
 		var c := b as Control
-		if c.is_visible_in_tree() and c.get_global_rect().has_point(p):
+		if c.is_visible_in_tree() and c.get_global_rect().has_point(g):
 			return false
 	return true
 
@@ -108,7 +109,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.pressed:
-			_maus_meins = _gehoert_mir(mb.position)
+			_maus_meins = _gehoert_mir(SichererRand.nach_innen(mb.position))
 		if _maus_meins:
 			if not mb.pressed:
 				_maus_meins = false
@@ -120,24 +121,26 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
+		var tp := SichererRand.nach_innen(t.position)   # 19.11.: Knöpfe liegen in der sicheren Fläche
 		if t.pressed:
-			_letzte[t.index] = t.position
-			if _druck(t.index, t.position):
+			_letzte[t.index] = tp
+			if _druck(t.index, tp):
 				get_viewport().set_input_as_handled()
 		else:
 			_letzte.erase(t.index)
-			if _los(t.index, t.position):
+			if _los(t.index, tp):
 				get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
 		# 18.11. (Paul): Nicht `d.relative` nehmen – im Browser bezieht es sich mit zwei Fingern teils auf den anderen
 		# Finger, dann springt der Blick. Jeder Finger rechnet seine Bewegung aus seiner eigenen letzten Position.
-		var vorher: Vector2 = _letzte.get(d.index, d.position)
-		_letzte[d.index] = d.position
-		var rel := d.position - vorher
+		var dp := SichererRand.nach_innen(d.position)
+		var vorher: Vector2 = _letzte.get(d.index, dp)
+		_letzte[d.index] = dp
+		var rel := dp - vorher
 		if rel.length() > SPRUNG_MAX:
 			rel = Vector2.ZERO
-		if _ziehen(d.index, d.position, rel):
+		if _ziehen(d.index, dp, rel):
 			get_viewport().set_input_as_handled()
 
 
@@ -414,12 +417,16 @@ func _process(delta: float) -> void:
 func male(ci: Control) -> void:
 	if not _frei():
 		return
-	_male_stick(ci)
 	_male_auto_ziel(ci)
 	var zid := zielt()
 	if zid != "":
 		_male_vorschau(ci, zid)
 	_male_bau_hinweis(ci)   # 19.11.
+	# 19.11.: ab hier in der sicheren Fläche (iPhone: Notch, Home-Balken); Eingaben rechnet _input mit nach_innen um
+	var t := Transform2D(0.0, Vector2.ONE * SichererRand.faktor(), 0.0, SichererRand.versatz())
+	Stil.ebene = t
+	ci.draw_set_transform_matrix(t)
+	_male_stick(ci)
 	for k: Array in KNOEPFE:
 		if _sichtbar(str(k[0])):
 			_male_knopf(ci, k)
@@ -434,6 +441,8 @@ func male(ci: Control) -> void:
 		ci.draw_line(ABBRUCH + Vector2(-s, s), ABBRUCH + Vector2(s, -s), Color.WHITE, 4.0)
 		_text(ci, ABBRUCH + Vector2(0, ABBRUCH_R + 16.0), "Abbrechen", 18, ROT)
 		_text(ci, Vector2(640, 214), "Ziehen zum Zielen · loslassen: auslösen", 20, Color.WHITE)
+	Stil.ebene = Transform2D.IDENTITY
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 ## 19.11. (Paul): Bauen am Handy deutlicher – unter dem Fadenkreuz steht, was der Knopf „Bauen“ jetzt tut: grün „Erdwall

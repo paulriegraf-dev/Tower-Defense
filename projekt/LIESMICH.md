@@ -276,6 +276,21 @@ Mit `frei` am Ende gilt unbegrenztes Budget. Ausgegeben wird je Runde der Durchs
 ## Zahlen ändern
 Alle Werte (Kosten, Leben, Tempo, Wellen) stehen in `scripts/werte.gd`.
 
+## Web-Version veröffentlichen und Web-App am iPhone (19.11.)
+
+Die Browserfassung liegt im Nachbarordner `td-web` (GitHub Pages, Repo `paulriegraf-dev/Tower-Defense`). Ablauf je Veröffentlichung:
+
+1. `Werte.VERSION` in `scripts/werte.gd` um 1 hochzählen (steht unten im Startmenü – daran sieht man am Handy, welcher Stand läuft) und committen.
+2. Stand in `master` bringen, `td-web` aktualisieren (`git pull`).
+3. Web-Export: `Godot --headless --path . --export-release "Web" ../td-web/index.html`.
+4. **Die Web-App-Dateien aus `web/` nach `td-web/` kopieren** – `manifest.json`, `icon-192.png`, `icon-512.png` und `index.apple-touch-icon.png` (überschreibt das weichgezeichnete Symbol des Exports durch das scharfe). Der Export legt sie nicht selbst an.
+5. Projektkopie: `git archive master | tar -x -C ../td-web/projekt`.
+6. In `td-web` committen und pushen.
+
+**Web-App (ohne Service Worker):** Das Manifest (`display: fullscreen`, Rückfall `standalone`, Querformat, Farbe des Startbilds) und die Kopfzeilen im Export (`html/head_include`: Manifest-Link, `apple-mobile-web-app-capable`, Titel „TD Battler“, Statusleiste `black-translucent`, `viewport-fit=cover`) lassen das Spiel vom Homebildschirm im Vollbild ohne Safari-Leisten starten. Bewusst **kein** Service Worker und kein Offline-Cache (`progressive_web_app/enabled` bleibt aus) – Updates kommen sofort über den Link. Die Web-App hat am iPhone einen eigenen Speicher: Profil und Zwischenstand beginnen dort neu.
+
+**Sichere Ränder:** `scripts/sicherer_rand.gd` liest im Browser `env(safe-area-inset-*)` (auf Handys sonst `DisplayServer.get_display_safe_area`) und rechnet sie in die Spielfläche 1280×720 um (was in die schwarzen Balken fällt, zählt nicht). HUD, Startmenü, die Leisten der Ego-Sicht und die Touch-Knöpfe werden darin eingepasst (gleichmäßig etwas kleiner); Fadenkreuz, Waffen und Zielmarken bleiben, wo sie sind. Am PC sind die Ränder 0. Ausprobieren: `TD_RAND="60,0,60,40"` (links, oben, rechts, unten in Spielpixeln).
+
 ## Dateien
 - `scripts/main.gd` Ablauf, Eingabe, Anzeige
 - `scripts/karte.gd` Raster, Wegsuche, Zeichnen

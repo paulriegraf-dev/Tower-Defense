@@ -41,6 +41,7 @@ var _meldung := ""
 var _eintraege: Array = []         # [Text, Aktion, Untertitel, Farbe]
 # Titelbild (NES/Mega-Drive-Art): nur beim ersten Öffnen nach Programmstart, eine Taste/ein Klick führt zur Liste
 static var _titel_gesehen := false
+var _grund: ColorRect
 var _titel := false
 var _titel_zeit := 0.0
 var _sterne: Array = []
@@ -66,6 +67,12 @@ class Flaeche extends Control:
 
 func _init() -> void:
 	layer = 100
+	# 19.11.: Hintergrund hinter der Menüfläche – mit sicheren Rändern (iPhone) ist sie etwas kleiner als das Bild
+	_grund = ColorRect.new()
+	_grund.color = Color("0b0e14")
+	_grund.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_grund.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_grund)
 	_welt = Flaeche.new()
 	_welt.size = Vector2(640, 360)
 	_welt.scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
@@ -851,6 +858,8 @@ func _process(delta: float) -> void:
 		_eintraege[0][0] = "Name: " + _name_text()
 	# Übersicht offen: das Menü wartet unsichtbar
 	_welt.visible = not (spiel != null and spiel.get("_lexikon") != null and spiel._lexikon.visible)
+	SichererRand.einpassen(_welt, Stil.UI_SKALA)   # 19.11.: iPhone – sichere Ränder (am PC unverändert)
+	_grund.visible = _welt.visible and SichererRand.faktor() < 1.0
 	_welt.queue_redraw()
 
 
@@ -1025,6 +1034,7 @@ func _male(ci: Control) -> void:
 			_male_profil_tafel(ci)
 	_male_profil_schild(ci)
 	_male_tc_emblem(ci)
+	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
 
 
 ## 18.11.: Steckbrief der gewählten Karte rechts neben der Liste. (Paul 18.11.: statt des Minikarten-Bilds –

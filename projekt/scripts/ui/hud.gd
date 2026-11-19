@@ -361,6 +361,7 @@ func aktualisiere(_delta: float) -> void:
 	_aktualisiere_oben_rechts()
 	_aktualisiere_tipps()
 	_ordne_an()
+	SichererRand.einpassen(wurzel, 2.0)   # 19.11.: iPhone – nicht unter Notch und Home-Balken (am PC unverändert)
 	# 18.11.: Leistung – neu gezeichnet wird nur, was sich geändert hat (vorher alles in jedem Bild, ~1 ms am PC).
 	# Überfahren mit der Maus und Größenwechsel zeichnen die Flächen selbst neu. In jedem Bild bleiben: die Konsole
 	# (Monitor flimmert, Radar läuft), das Start-Emblem, solange es pulsiert, und die Zeichnungen im Spielfeld (Kamera).

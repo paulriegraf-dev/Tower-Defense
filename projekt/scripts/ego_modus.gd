@@ -583,6 +583,7 @@ func _process(delta: float) -> void:
 	_treffer_merken(echt)   # 18.11.
 	_saeule_weiter(echt)
 	_zeitlupe_weiter(echt)
+	SichererRand.einpassen(_karte_klein)   # 19.11.: Minikarte nicht unter der Notch
 	_bild.queue_redraw()
 	_karte_klein.queue_redraw()
 
@@ -1392,6 +1393,7 @@ func _male_bild() -> void:
 		_finger_wirbel(rp, wpx, auf)   # 18.11.: Lichtsäule
 	if _frei():   # 18.11.: bei offenem Menü kein Fadenkreuz und kein Hinweis darüber
 		_fadenkreuz(g, px)
+	_rand_an()   # 19.11.: Leisten in die sichere Fläche (iPhone: Notch, Home-Balken) – Fadenkreuz und Waffen nicht
 	if touch == null or touch.bau_offen:
 		_bauliste(g)
 	# Zustandszeile unten in der Mitte
@@ -1399,6 +1401,7 @@ func _male_bild() -> void:
 		Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, g.y * 0.62), "Lichttreppe", 18, LICHT)
 	_brakk_leiste(g)   # 18.11.: Leben, Stufe, Erfahrung
 	_countdown_anzeige(g)   # 18.11.: nächste Welle
+	_rand_aus()
 	_zeitlupe_bild(g)
 	if brakk.fortschritt != null:
 		_wurf_warnung()   # 18.11.: Steine auf Brakk
@@ -1406,8 +1409,22 @@ func _male_bild() -> void:
 	if touch != null:
 		touch.male(_bild)   # 18.11.: Handy – Stick und Knöpfe statt Leisten
 		return
+	_rand_an()
 	_faehigkeiten(g)   # 18.11.: Symbole mit Abklingzeit
 	_ringleiste(g)   # 18.11.: getragene Ringe
+	_rand_aus()
+
+
+## 19.11.: Zeichnen in der sicheren Fläche an/aus (am PC Identität). Texte über Stil.ebene mit.
+func _rand_an() -> void:
+	var t := Transform2D(0.0, Vector2.ONE * SichererRand.faktor(), 0.0, SichererRand.versatz())
+	Stil.ebene = t
+	_bild.draw_set_transform_matrix(t)
+
+
+func _rand_aus() -> void:
+	Stil.ebene = Transform2D.IDENTITY
+	_bild.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 const NEIGUNG := 0.2   # die Pistolen zeigen leicht nach innen, zum Fadenkreuz
