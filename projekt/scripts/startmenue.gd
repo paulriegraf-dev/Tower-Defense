@@ -427,7 +427,7 @@ func _phantom(art: String) -> void:
 		if pfad != "" and art == "verteidigung":
 			var ersatz: Array = []
 			var ohne: Array = [str(e["id"])]
-			for i in 2:
+			for i in 6:   # 19.11.: der Angriff läuft immer bis Runde 20 – genug Ersatz holen (sonst springt der eingebaute Pool ein)
 				var x := Online.waehle("verteidigung", "zufall", ohne)
 				if x.is_empty():
 					break

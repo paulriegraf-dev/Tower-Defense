@@ -102,7 +102,17 @@ static func _wellen_preis(nr: int) -> int:
 const PUNKTE_JE_LEBEN: int = 100        # je genommenes Leben ...
 const SPAR_FAKTOR: float = 1.0          # ... mal (1 + Anteil des nicht genutzten Budgets): wer mit halbem Budget trifft, bekommt das 1,5-Fache
 const PUNKTE_GEKNACKT: int = 1000       # je Verteidigung, die fällt
-const PUNKTE_FRUEH: int = 50            # dazu je Runde, die sie vor Runde 20 fällt
+const PUNKTE_FRUEH: int = 0             # 19.11.: gestrichen (war 50 je Runde vor Runde 20) – frühes Knacken lohnt sich schon durch den nächsten Gegner
+## 19.11. (Paul): Punkte gegen eine Verteidigung zählen nach ihrer Stärke (Elo): (Elo / 1000)², begrenzt auf 0,5 bis 2.
+## Gegen schwache Bauten gibt es weniger, gegen starke mehr. Ohne Elo (offline) zählt ×1.
+const STAERKE_MIN: float = 0.5
+const STAERKE_MAX: float = 2.0
+
+
+static func staerke(elo: float) -> float:
+	if elo <= 0.0:
+		return 1.0
+	return clampf(pow(elo / 1000.0, 2.0), STAERKE_MIN, STAERKE_MAX)
 const PUNKTE_JE_SEKUNDE_20: int = 10    # letzte Runde: je Sekunde, die das eigene HQ hält
 
 
@@ -113,15 +123,18 @@ static func wertung(runden: Array) -> Dictionary:
 	var runde20 := 0
 	var genommen := 0
 	var gefallen := 0
+	var faktoren := {}
 	for r: Dictionary in runden:
 		var n := int(r.get("leben_genommen", 0))
+		var f := float(r.get("staerke", 1.0))
+		faktoren[snappedf(f, 0.01)] = true
 		genommen += n
 		if n > 0:
 			var frei := clampf(1.0 - float(r.get("punkte", 0)) / maxf(1.0, float(r.get("budget", 1))), 0.0, 1.0)
-			leben += roundi(n * PUNKTE_JE_LEBEN * (1.0 + SPAR_FAKTOR * frei))
+			leben += roundi(n * PUNKTE_JE_LEBEN * (1.0 + SPAR_FAKTOR * frei) * f)
 		if r.get("geknackt", false):
 			gefallen += 1
-			geknackt += PUNKTE_GEKNACKT + PUNKTE_FRUEH * maxi(0, Werte.LETZTE_RUNDE - int(r["runde"]))
+			geknackt += roundi((PUNKTE_GEKNACKT + PUNKTE_FRUEH * maxi(0, Werte.LETZTE_RUNDE - int(r["runde"]))) * f)
 		if int(r["runde"]) >= Werte.LETZTE_RUNDE:
 			runde20 += roundi(float(r.get("sekunden", 0.0)) * PUNKTE_JE_SEKUNDE_20)
 	var zeilen: PackedStringArray = []
@@ -130,6 +143,10 @@ static func wertung(runden: Array) -> Dictionary:
 		zeilen.append("%d Verteidigung%s geknackt: %d" % [gefallen, "en" if gefallen > 1 else "", geknackt])
 	if runde20 > 0:
 		zeilen.append("Runde 20 gehalten: %d" % runde20)
+	if faktoren.size() > 1 or not faktoren.has(1.0):
+		var fs: Array = faktoren.keys()
+		fs.sort()
+		zeilen.append("Gegnerstärke " + ", ".join(fs.map(func(x): return "×%.2f" % float(x))).replace(".", ","))
 	return {"gesamt": leben + geknackt + runde20, "leben": leben, "geknackt": geknackt, "runde20": runde20, "zeilen": zeilen}
 
 

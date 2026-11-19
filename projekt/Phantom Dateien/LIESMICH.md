@@ -15,7 +15,9 @@ Zusatzmodus neben Normal, ersetzt ihn nicht. Beide Seiten sind Phantome:
 - Angreifer baut blind und sieht den Bau erst in der Runde, mit Kriegsnebel. Verteidiger bekommt immer die Vorschau.
 - Kein Dauerschaden: Der Phantom-Bau steht jede Runde wie geplant, Phantom startet mit vollen Leben.
 - Wertung: Summe über 20 Runden (wie lange gehalten, wie viele Leben verloren), Runde 20 als Durchhalte-Runde.
-- Fällt das Verteidiger-Phantom vorher: Ersatz-Phantom (1–2 beim Start geladen), eine Runde ohne Nebel. Fällt der Verteidiger: Partie zu Ende.
+- Fällt das Verteidiger-Phantom vorher: das nächste übernimmt (19.11.: ohne Grenze, immer bis Runde 20 – erst online gezogene, dann der eingebaute Pool; wer schon dran war, kommt erst wieder, wenn alle dran waren), eine Runde ohne Nebel. Fällt der Verteidiger: Partie zu Ende.
+- 19.11.: Punkte des Angreifers zählen nach der Stärke der Verteidigung: (Elo / 1000)², begrenzt auf ×0,5 bis ×2 (offline ×1). Der Frühbonus für frühes Knacken ist gestrichen.
+- 19.11.: Nur vollständige Angriffe (bis Runde 20) werden gespeichert, hochgeladen und zählen für Profil und Rangliste. Aufgeben (Knopf nach dem Knacken, Neustart, Hauptmenü) bringt keine Wertung – die Verteidigung, die gerade steht, bekommt den Sieg (Elo).
 
 ## Preise (Startwerte, geschätzt, nicht getestet) – preise.json
 Anker Hund = 10. Kämpfer nach Aufwand, sie aufzuhalten; Wegbereiter geschätzt.

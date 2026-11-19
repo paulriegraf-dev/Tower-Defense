@@ -479,6 +479,7 @@ func _angriff_runde_fertig(geknackt: bool = false) -> void:
 	_angriff_log.append({
 		"runde": welle,
 		"gegen_pfad": _aktiv_pfad,
+		"staerke": snappedf(_staerke_jetzt(), 0.01),   # 19.11.: Gegnerstärke für die Wertung
 		"geknackt": geknackt,
 		"trupps": (_plaene.get(welle, []) as Array).duplicate(true),
 		"punkte": Phantom.plan_preis(_plaene.get(welle, [])),
@@ -496,18 +497,67 @@ func _angriff_runde_fertig(geknackt: bool = false) -> void:
 func _phantom_gefallen() -> void:
 	var neu := {}
 	if not endkampf and welle < Werte.LETZTE_RUNDE:
-		while not _ersatz.is_empty() and neu.is_empty():
-			var kpfad: String = _ersatz.pop_front()
-			var kandidat := Phantom.lade(kpfad)
-			if (kandidat.get("runden", []) as Array).size() > welle:
-				neu = kandidat
-				neu["_pfad"] = kpfad
+		# 19.11. (Paul): Der Angriff läuft immer bis Runde 20 – fällt eine Verteidigung, übernimmt die nächste.
+		# Erst die mitgebrachten (online gezogenen) Ersatz-Phantome, dann der eingebaute Pool; wer schon dran war,
+		# kommt erst wieder, wenn alle einmal dran waren.
+		for versuch in 2:
+			if _ersatz.is_empty():
+				_ersatz_nachfuellen(versuch == 1)
+			while not _ersatz.is_empty() and neu.is_empty():
+				var kpfad: String = _ersatz.pop_front()
+				var kandidat := Phantom.lade(kpfad)
+				if (kandidat.get("runden", []) as Array).size() > welle:
+					neu = kandidat
+					neu["_pfad"] = kpfad
+			if not neu.is_empty():
+				break
 	if neu.is_empty():
 		_angriff_runde_fertig(true)
 		_angriff_ende("durchbruch", true)
 		return
 	_angriff_runde_fertig(true)
 	_zeige_geknackt(neu)
+
+
+## 19.11.: Ersatz aus dem eingebauten Pool – zuerst die, die in diesem Angriff noch nicht dran waren
+## (`wiederholen` = auch die schon geknackten, nur nicht die aktuelle).
+func _ersatz_nachfuellen(wiederholen: bool) -> void:
+	var dran := {}
+	for e: Dictionary in _angriff_log:
+		dran[str(e.get("gegen_pfad", "")).get_file()] = true
+	dran[_aktiv_pfad.get_file()] = true
+	var pool := Phantom.liste("verteidigung")
+	pool.shuffle()
+	for f: Dictionary in pool:
+		var datei := str(f["pfad"]).get_file()
+		if datei == _aktiv_pfad.get_file():
+			continue
+		if wiederholen or not dran.has(datei):
+			_ersatz.append(f["pfad"])
+
+
+## Stärke der gerade stehenden Verteidigung für die Wertung (aus ihrem Elo online; offline ×1).
+func _staerke_jetzt() -> float:
+	var id := Online.id_von(_aktiv_pfad)
+	if id == "":
+		return 1.0
+	for e: Dictionary in Online.listen["verteidigung"]:
+		if str(e["id"]) == id:
+			return Phantom.staerke(float(e.get("elo", 1000.0)))
+	return 1.0
+
+
+## 19.11. (Paul): Angriff mittendrin aufgegeben (Knopf nach dem Knacken, Neustart oder Hauptmenü): keine Wertung,
+## nichts wird gespeichert oder hochgeladen – die Verteidigung, die gerade steht, bekommt den Sieg (Elo).
+var _angriff_fertig := false
+
+func _angriff_aufgeben() -> void:
+	if phantom_modus != "angriff" or _angriff_fertig:
+		return
+	_angriff_fertig = true
+	var vid := Online.id_von(_aktiv_pfad)
+	if vid != "" and Online.aktiv():
+		Online.duell("", vid, 0.0, 0)
 
 
 ## Angriff: Eine Verteidigung ist gefallen und ein Ersatz-Phantom steht bereit. Zwischenwertung zeigen (15.11.):
@@ -530,13 +580,17 @@ func _zeige_geknackt(neu: Dictionary) -> void:
 			{"name": "LEBEN GENOMMEN", "zahl": genommen, "farbe": _F_ROT, "symbol": "herz"},
 			{"name": "GEKNACKT", "zahl": _geknackt + 1, "farbe": _F_KUPFER}],
 		"kaesten": [{"titel": "NÄCHSTER GEGNER: %s" % gegner_name.to_upper(), "farbe": _F_KUPFER_HELL,
-			"text": "Neue Karte, volle %d Leben, eine Runde ohne Nebel. Jede weitere geknackte Verteidigung bringt mehr Punkte." % Werte.START_LEBEN}],
+			"text": "Neue Karte, volle %d Leben, eine Runde ohne Nebel. Der Angriff geht bis Runde %d – Punkte zählen nach der Stärke der Verteidigung. Aufgeben bringt keine Wertung." % [Werte.START_LEBEN, Werte.LETZTE_RUNDE]}],
 		"zeilen": ["  ·  ".join(wertung["zeilen"])],
 		"knoepfe": [
 			["Weiter gegen %s" % gegner_name, func():
 				_tafel.visible = false
 				_ersatz_uebernimmt(neu), _F_KUPFER_HELL],
-			["Beenden · Wertung sichern", func(): _angriff_ende("durchbruch", true), _F_TEXT]],
+			["Aufgeben · keine Wertung", func():
+				_tafel.visible = false
+				_aktiv_pfad = str(neu.get("_pfad", ""))   # die nächste Verteidigung stand bereit – sie bekommt den Sieg
+				_angriff_aufgeben()
+				_zum_menue(), _F_TEXT]],
 	})
 
 
@@ -582,6 +636,9 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 		punkte += int(e["punkte"])
 		genommen += int(e["leben_genommen"])
 	var wertung := Phantom.wertung(_angriff_log)
+	_angriff_fertig = true
+	# 19.11. (Paul): Nur vollständige Angriffe (bis Runde 20) zählen für Rangliste, Profil und Online-Pool.
+	var vollstaendig := welle >= Werte.LETZTE_RUNDE
 	var daten := {
 		"format": 1, "art": "angriff", "spieler": Profil.name(), "profil": Profil.id(), "begonnen": Time.get_datetime_string_from_system(),
 		"gegen": str(_phantom.get("quelle", "")),
@@ -589,9 +646,10 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 			"durchgaenge_runde_20": _durchgang if endkampf else 0, "wertung": wertung["gesamt"]},
 		"runden": _angriff_log,
 	}
-	var pfad := Phantom.speichere("angriff", daten)
-	_merke_export(daten, "angriff")
-	Profil.angriff_ende(int(wertung["gesamt"]), _geknackt + (1 if grund == "durchbruch" else 0))
+	var pfad := Phantom.speichere("angriff", daten) if vollstaendig else ""
+	if vollstaendig:
+		_merke_export(daten, "angriff")
+		Profil.angriff_ende(int(wertung["gesamt"]), _geknackt + (1 if grund == "durchbruch" else 0))
 	if _geknackt + (1 if grund == "durchbruch" else 0) > 0:
 		erfolg("einbrecher")   # 18.11.
 	if pfad != "":
@@ -612,7 +670,9 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 	var zeilen: Array = ["  ·  ".join(wertung["zeilen"])]
 	if endkampf:
 		zeilen.append("Runde 20: %d Durchgänge, %d Sekunden" % [_durchgang, int(_kampf_sek)])
-	if pfad == "":
+	if not vollstaendig:
+		zeilen.append("Kein Ersatz-Phantom mehr da – der Angriff endet vor Runde %d und zählt nicht für die Rangliste." % Werte.LETZTE_RUNDE)
+	elif pfad == "":
 		zeilen.append("(Speichern hat nicht geklappt.)")
 	_zeige_tafel({
 		"kicker": "PHANTOM-ANGRIFF  ·  GEGEN %s" % str(_phantom.get("spieler", "?")).to_upper(), "titel": titel, "titel_farbe": farbe, "rahmen": farbe,
@@ -1028,6 +1088,8 @@ func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Butt
 
 ## Neustart ohne Umweg über das Menü. Die Partie ist da schon gespeichert (partien/, nach einem Sieg auch als Phantom).
 func _neustart() -> void:
+	if phase != Phase.ENDE:
+		_angriff_aufgeben()   # 19.11.: Angriff abgebrochen – zählt für die Verteidigung
 	loesche_sitzung()   # 19.11.
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
@@ -1047,6 +1109,8 @@ func _abbruch_klick() -> void:
 
 
 func _zum_menue() -> void:
+	if phase != Phase.ENDE or (_tafel != null and _tafel.visible and not _angriff_fertig):
+		_angriff_aufgeben()   # 19.11.: Angriff abgebrochen – zählt für die Verteidigung
 	loesche_sitzung()   # 19.11.
 	if _menue == null and not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.: bewusst verlassen – kein „Fortsetzen“ mehr

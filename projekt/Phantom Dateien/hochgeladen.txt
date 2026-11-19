@@ -28,3 +28,4 @@ verteidigung-20261118-142823.json
 angriff-20261119-132418.json
 verteidigung-20261119-130859.json
 verteidigung-20261119-155503.json
+# 19.11.2026, 17:00: Teil-Angriffe (vor Runde 20 beendet) aus Pool und Online-Rangliste entfernt (liegen in _archiv_phantome): angriff-20261117-135947.json, angriff-20261117-140346.json, angriff-20261117-153453.json
