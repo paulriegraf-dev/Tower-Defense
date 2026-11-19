@@ -36,6 +36,7 @@ const KNOEPFE := [
 	["ring", Vector2(1092, 222), 32.0, "", "Ring"],
 	["feld", Vector2(990, 222), 30.0, "", "Feld"],
 	["aktion", Vector2(820, 560), 46.0, "", ""],
+	["sprung", Vector2(905, 455), 40.0, "", "Sprung"],   # 19.11. (Paul): Sprung, zweimal = Doppelsprung, vom Wall = Absprung
 	["bauliste", Vector2(54, 140), 30.0, "", "Bauen"],
 ]
 
@@ -143,6 +144,9 @@ func _druck(f: int, p: Vector2) -> bool:
 			bau_offen = not bau_offen
 			if not bau_offen:
 				spiel.werkzeug = Karte.FREI
+			return true
+		if id == "sprung":
+			ego._leertaste()   # 19.11.: sofort beim Antippen
 			return true
 		_knopf[f] = {"id": id, "start": p, "pos": p, "gezogen": false}
 		if id == "lanze":
@@ -455,7 +459,7 @@ func _male_vorschau(ci: Control, id: String) -> void:
 				else:
 					fehlt = "Auf einen Erdwall zielen (bis %d Felder)" % int(EgoModus.TREPPE_WEITE)
 		"anker":
-			var a := ego._anker_ziel()
+			var a := [ego._haken_p, Karte.KEINE] if ego._haken >= 0.0 else ego._anker_ziel()   # 19.11.: hängt er, zeigt der Knopf zum Haken
 			if not a.is_empty():
 				ziel = a[0]
 				name = "Lichtanker"
@@ -568,12 +572,12 @@ func _male_knopf(ci: Control, k: Array) -> void:
 	# Beschriftung
 	if id == "aktion":
 		_text(ci, m, _aktion_text(), 20, Color.WHITE)
-	elif id == "feld" or id == "bauliste":
+	elif id == "feld" or id == "bauliste" or id == "sprung":
 		_text(ci, m, str(k[4]), 18, Color.WHITE)
 	elif not offen:
 		_text(ci, m + Vector2(0, r + 14.0), "ab St.%d" % int(BrakkFortschritt.AB[id]), 16, Color(0.75, 0.78, 0.84))
 	else:
-		_text(ci, m + Vector2(0, r + 14.0), str(k[4]) if not (id == "treppe" and ego.brakk.oben) else "Brücke", 16, Color.WHITE)
+		_text(ci, m + Vector2(0, r + 14.0), ("Ziehen" if id == "anker" and ego._haken >= 0.0 else str(k[4])) if not (id == "treppe" and ego.brakk.oben) else "Brücke", 16, Color.WHITE)
 
 
 ## Text mit dunklem Schatten – auf hellem Gras und Himmel lesbar.

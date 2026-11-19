@@ -717,14 +717,14 @@ func _baue_daten() -> void:
 				"Holt verlorene Checkpoints %s-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder da." % _z(kd["cp_faktor"])]]]},
 			{"kurz": "Brakk", "bild": _figur(kd), "abschnitte": [
 				["Brakk-Mode (Startmenü)", Stil.LEUCHT, [
-				"Du bist Brakk in der Ego-Sicht: [W][A][S][D] + Maus, Klick schießt, Leertaste springt.",
+				"Du bist Brakk in der Ego-Sicht: [W][A][S][D] + Maus, Klick schießt, Leertaste springt (in der Luft nochmal: Doppelsprung von einer Lichtplattform, vom Wall: Absprung mit Druckwelle).",
 				"Zwei Pistolen im Wechsel. Jede überhitzt bei Dauerfeuer (Bögen am Fadenkreuz) und ist dann kurz gesperrt.",
 				"Runden laufen von selbst: Countdown in der Bauphase, [Enter] startet früher. Keine Fabrik nötig, jede Runde 5 Erdwälle gratis.",
 				"Viele Gegner, Schleudern werfen auch auf Brakk: roter Landekreis – mit [Shift] ausweichen. Der rote Bogen am Rand zeigt, woher Treffer kommen.",
 				"Bauen mit [1]–[7] (5 Felder Reichweite), [F] baut aus. Der Schild der Gegnerzone fängt Schüsse ab."]],
 				["Fähigkeiten (frei mit der Stufe)", Stil.GOLD, [
 				"[E] Lichttreppe auf den Wall im Blick (bis 5 Felder, steht 8 s) – oben auf dem Wall [E] Lichtbrücke zum nächsten Wall.",
-				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (zieht dich hin) · St. 4 Rechtsklick halten: Doppellanze (lässt die Hitze ab).",
+				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (werfen, nochmal [Q] zieht dich hin, dazwischen schwingen) · St. 4 Rechtsklick halten: Doppellanze (lässt die Hitze ab).",
 				"St. 6 [X] Lichtsäule (zielen, Linksklick setzt; Art je aktivem Ring) · St. 7 [R] Klonmaschine (lädt durch 30 Kills) · St. 8 [V] Zeitlupe.",
 				"Stufen: Erfahrung aus eigenen Kills und Wellen; jede Stufe +5 % Schaden, +30 Leben."]],
 				["Ringe (Lichtterminal: [F] an der Basis)", Stil.GOLD, [

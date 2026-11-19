@@ -100,6 +100,18 @@ var _tumble := -1.0             # läuft: Sekunden seit Beginn (-1 = nein)
 var _tumble_r := Vector2.ZERO   # Richtung in der 2D-Logik (Einheitsvektor)
 var _tumble_seite := 0.0        # -1 links, 1 rechts: dorthin kippt die Sicht
 var _tumble_rest := 0.0
+# 19.11. (Paul): Bewegungsgefühl – Nachschwung nach der Rolle, Waffen-Sway, Seitneigung, Landungsdelle, Doppelsprung
+const SCHWUNG_SEK := 1.0         # so lange läuft Brakk nach dem Tumble schneller …
+const SCHWUNG_MAL := 1.4         # … um so viel
+const SWAY_STAERKE := 0.06       # Bildpunkte der Waffe je Bildpunkt Mausbewegung
+const SWAY_MAX := 9.0            # höchstens so viele Waffen-Bildpunkte
+const NEIGUNG_SEITE := 0.025     # Bogenmaß Kippen beim Seitwärtslaufen
+var _schwung := 0.0              # Restzeit des Nachschwungs
+var _sway := Vector2.ZERO        # Waffen hängen der Maus nach (Waffen-Bildpunkte)
+var _seit := 0.0                 # geglättete Seitwärtsbewegung -1..1 (für die Neigung)
+var _delle := 0.0                # Landungsdelle 0..1
+var _doppelt_genutzt := false    # Doppelsprung schon verbraucht (bis zur Landung)
+var _plattformen: Array = []     # Lichtplattformen des Doppelsprungs: [Node3D, Alter]
 var _lanze := -1.0              # lädt: Sekunden seit Beginn (-1 = nein)
 var _lanze_rest := 0.0
 var _wirbel := 0.0               # 18.11.: Wirbelring – Anlauf des Dauerfeuers 0..1
@@ -238,6 +250,8 @@ func beenden() -> void:
 		_vorschau.queue_free()
 	for m: Node in _feld_marken:
 		m.queue_free()
+	for p: Array in _plattformen:
+		(p[0] as Node).queue_free()
 	if _ebene != null:
 		_ebene.queue_free()
 	if is_instance_valid(spiel):
@@ -318,6 +332,7 @@ func _input(event: InputEvent) -> void:
 		var m := event as InputEventMouseMotion
 		gier -= m.relative.x * BLICK
 		nick = clampf(nick - m.relative.y * BLICK, -1.25, 1.25)
+		_sway = (_sway - m.relative * SWAY_STAERKE).limit_length(SWAY_MAX)   # 19.11.: Waffen hängen nach
 		return
 	if event is InputEventMouseButton:
 		var b := event as InputEventMouseButton
@@ -461,6 +476,11 @@ func _leertaste() -> void:
 		return
 	if hoehe <= _boden() + 0.001:
 		steig = SPRUNG
+		_doppelt_genutzt = false
+		if _haken >= 0.0:
+			_flug = _lauf * SCHWING_MAL   # 19.11. (Paul): am Lichtanker schwingen
+	elif not _doppelt_genutzt:
+		_doppelsprung()   # 19.11. (Paul): in der Luft – Lichtplattform unter den Füßen
 
 
 # ------------------------------------------------------------------ Ablauf
@@ -523,6 +543,10 @@ func _process(delta: float) -> void:
 	var ring_soll := 1.0 if (spiel.werkzeug != Karte.FREI or _klettern >= 0.0 or _hand_zeigen > 0.0 or _treppe_aufbau >= 0.0) else 0.0
 	_ring = move_toward(_ring, ring_soll, echt * 6.0)
 	_tumble_rest -= echt
+	_schwung = maxf(0.0, _schwung - echt)
+	_sway = _sway.lerp(Vector2.ZERO, 1.0 - exp(-9.0 * echt))
+	_delle = move_toward(_delle, 0.0, echt * 4.0)
+	_plattformen_weiter(echt)
 	_lanze_rest -= echt
 	_anker_rest -= echt
 	if not _feuer:
@@ -535,11 +559,16 @@ func _process(delta: float) -> void:
 		_kletter_weiter(echt)
 	elif _anker >= 0.0:
 		_anker_weiter(echt)   # 18.11.
+	elif _absprung >= 0.0:
+		_absprung_weiter(echt)   # 19.11.
 	elif _tumble >= 0.0:
 		_tumble_weiter(echt)
 	else:
 		_gehen(echt if frei else 0.0)
 		_fallen(echt)
+		_flug_weiter(echt)   # 19.11.: Schwung aus Seil und Absprung
+	if _haken >= 0.0 and _anker < 0.0 and _klettern < 0.0:
+		_haken_weiter(echt)   # 19.11.: Lichtanker hängt
 	if _feuer and frei and _takt <= 0.0 and _klettern < 0.0 and _lanze < 0.0 and not _saeule_zielt and not _feld_zielt:
 		_schiess()
 	_kamera()
@@ -570,14 +599,18 @@ func _gehen(dt: float) -> void:
 	if touch != null:
 		r += touch.stick()   # 18.11.: Handy-Stick (stufenlos)
 	_geht = r != Vector2.ZERO and dt > 0.0
+	_lauf = Vector2.ZERO
+	_seit = lerpf(_seit, clampf(r.x, -1.0, 1.0) if _geht else 0.0, 1.0 - exp(-8.0 * dt)) if dt > 0.0 else _seit
 	brakk._sprite.bewegt(_geht)
 	if not _geht:
 		return
 	r = r.limit_length(1.0) if touch != null else r.normalized()
-	var v := (_vorne() * r.y + _rechts() * r.x) * TEMPO * dt
+	var schwung := lerpf(1.0, SCHWUNG_MAL, clampf(_schwung / 0.3, 0.0, 1.0)) if _schwung > 0.0 else 1.0   # 19.11.: Nachschwung, klingt zum Ende aus
+	var v := (_vorne() * r.y + _rechts() * r.x) * TEMPO * schwung * dt
+	_lauf = Vector2(v.x, v.z) / dt   # 19.11.: für Absprung und Schwingen
 	var schritt := Vector2(v.x, v.z) * Werte.ZELLE
-	_schritt(Vector2(schritt.x, 0.0))
-	_schritt(Vector2(0.0, schritt.y))
+	_luft_schritt(Vector2(schritt.x, 0.0))   # 19.11.: hoch genug in der Luft landet Brakk auf einem Wall
+	_luft_schritt(Vector2(0.0, schritt.y))
 	if hoehe <= _boden() + 0.001:
 		_gang += dt * 9.0
 
@@ -634,6 +667,8 @@ func _fallen(dt: float) -> void:
 			if steig < -3.0:
 				_rueckstoss[0] = 0.5   # kleines Nachfedern beim Landen
 				_rueckstoss[1] = 0.5
+				_delle = clampf(-steig / 9.0, 0.3, 1.0)   # 19.11.: die Sicht federt kurz ein
+			_doppelt_genutzt = false
 			hoehe = b
 			steig = 0.0
 	else:
@@ -648,10 +683,11 @@ func _kamera() -> void:
 	k.position = _fuss3d() + Vector3(0, AUGE + wippen, 0)
 	var tw := sin(clampf(_tumble / TUMBLE_DAUER, 0.0, 1.0) * PI) if _tumble >= 0.0 else 0.0   # 18.11.: Tumble – tief und gekippt
 	k.position.y -= 0.38 * tw
+	k.position.y -= 0.12 * sin(_delle * PI * 0.5)   # 19.11.: Landungsdelle
 	# 18.11.: Rückstoß hebt die Sicht kurz an, Wackeln aus Trauma² mit überlagerten Sinuswellen (kein Zittern)
 	var w2 := _trauma * _trauma
 	k.rotation = Vector3(nick + _kick - 0.35 * tw + WACKEL_WINKEL * w2 * sin(_wackel_t * 1.7), gier + WACKEL_WINKEL * w2 * sin(_wackel_t * 2.3),
-		WACKEL_WINKEL * 0.6 * w2 * sin(_wackel_t * 1.1) - 0.5 * tw * _tumble_seite)
+		WACKEL_WINKEL * 0.6 * w2 * sin(_wackel_t * 1.1) - 0.5 * tw * _tumble_seite - NEIGUNG_SEITE * _seit)
 	k.fov = SICHTWINKEL - _fov_puls + _fov_weit
 	_einflug_kamera(k)   # 18.11.: Einflug nach der Einsatz-Tafel
 	var w: float = spiel.effekte.wackeln
@@ -1052,7 +1088,7 @@ func _kletter_weiter(dt: float) -> void:
 		_rueckstoss[0] = 0.5
 		_rueckstoss[1] = 0.5
 		_trauma = minf(1.0, _trauma + 0.1)
-		spiel.melde("Oben auf dem Wall: mehr Reichweite. [E] = Lichttreppe hinunter, oder über die Kante springen.", 3.0)
+		spiel.melde("Oben auf dem Wall: mehr Reichweite. [E] = Lichttreppe hinunter, oder zweimal springen: Absprung mit Druckwelle.", 3.0)
 		return
 	brakk.position = _zu2d(p)
 
@@ -1181,7 +1217,7 @@ func _treppe_weiter() -> void:
 	for i in mats.size():
 		(mats[i] as StandardMaterial3D).albedo_color.a = float(grund[i]) * sicht
 	# an den Fuß gelaufen: hinauf
-	if _treppe_fuss2d != Vector2.INF and not brakk.oben and _fuss2d().distance_to(_treppe_fuss2d) <= Werte.ZELLE * 0.4:
+	if _treppe_fuss2d != Vector2.INF and not brakk.oben and _absprung < 0.0 and _fuss2d().distance_to(_treppe_fuss2d) <= Werte.ZELLE * 0.4:   # 19.11.: nicht mitten im Absprung
 		_steige_hinauf()
 
 
@@ -1275,13 +1311,13 @@ func _male_bild() -> void:
 	var wipp := Vector2(cos(_gang * 0.5) * 3.0, absf(sin(_gang * 0.5)) * 4.0) if _geht else Vector2.ZERO
 	# rechte Pistole
 	var r_rueck := float(_rueckstoss[1])
-	var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * wpx
+	var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * wpx + (_sway + Vector2(0, 7.0 * _delle)) * wpx   # 19.11.: Sway und Landungsdelle
 	_waffe(_tex_pistole, r_pos, ts, -_neigung, float(_blitz[1]) > 0.0, wpx, false, _glut(), float(_gesperrt[1]) > 0.0)
 	# linke Hand: Pistole (gespiegelt) oder Ring – beim Wechsel taucht die eine ab und die andere auf
 	var l_rueck := float(_rueckstoss[0])
 	var ab := clampf(_ring * 2.0, 0.0, 1.0)              # Pistole sinkt
 	var auf := clampf(_ring * 2.0 - 1.0, 0.0, 1.0)       # Ring kommt
-	var l_basis := Vector2(g.x * 0.20 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + Vector2(-wipp.x, wipp.y)
+	var l_basis := Vector2(g.x * 0.20 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + Vector2(-wipp.x, wipp.y) + (_sway * 0.8 + Vector2(0, 7.0 * _delle)) * wpx
 	if ab < 1.0:
 		var lp := l_basis + Vector2(-l_rueck * 2.0, l_rueck * 6.0) * wpx + Vector2(0, ab * ts.y)
 		_waffe(_tex_pistole_links, lp, ts, _neigung, float(_blitz[0]) > 0.0, wpx, true, _glut(), float(_gesperrt[0]) > 0.0)
@@ -1730,6 +1766,7 @@ func _tumble_weiter(dt: float) -> void:
 	_fallen(dt)
 	if _tumble >= TUMBLE_DAUER:
 		_tumble = -1.0
+		_schwung = SCHWUNG_SEK   # 19.11. (Paul): nach der Rolle kurz schneller
 		_rueckstoss[0] = 0.6
 		_rueckstoss[1] = 0.6
 
@@ -2574,7 +2611,10 @@ func _anker_ziel() -> Array:
 
 
 func _anker_start() -> void:
-	if _anker >= 0.0 or _klettern >= 0.0 or _tumble >= 0.0 or not _darf("anker"):
+	if _haken >= 0.0:
+		_anker_ziehen()   # 19.11. (Paul): zweites [Q] zieht heran
+		return
+	if _anker >= 0.0 or _klettern >= 0.0 or _tumble >= 0.0 or _absprung >= 0.0 or not _darf("anker"):
 		return
 	if _anker_rest > 0.0:
 		spiel.melde("Lichtanker wieder in %.0f s." % ceilf(_anker_rest), 1.5)
@@ -2583,22 +2623,18 @@ func _anker_start() -> void:
 	if ziel.is_empty():
 		spiel.melde("Kein Halt für den Lichtanker – auf eine Mauerkrone oder den Boden zielen (bis %d Felder)." % int(ANKER_WEITE), 2.0)
 		return
-	_anker_von = _fuss3d()
-	_anker_nach = ziel[0]
-	_anker_wall = ziel[1]
-	_anker_dauer = maxf(0.25, _anker_von.distance_to(_anker_nach) / ANKER_TEMPO)
-	_anker = 0.0
-	_anker_rest = ANKER_ABKLING
-	steig = 0.0
-	if brakk.oben:
-		brakk.oben = false
-		brakk.posten_zelle = Karte.KEINE
-		brakk.zustand = Einheit.Zustand.BODEN
-	_hand_zeigen = maxf(_hand_zeigen, _anker_dauer + 0.2)
-	_trauma = minf(1.0, _trauma + 0.15)
-	_kick += 0.03
+	# 19.11. (Paul): der Haken bleibt hängen – [Q] noch einmal zieht heran, dazwischen laufen, springen, schwingen
+	_haken = 0.0
+	_haken_p = ziel[0]
+	_haken_wall = ziel[1]
+	_seil_lang = maxf(1.0, _fuss3d().distance_to(_haken_p))
+	_hand_zeigen = maxf(_hand_zeigen, 0.5)
+	_trauma = minf(1.0, _trauma + 0.1)
+	_kick += 0.02
 	Ton.spiele(spiel, "tc-arc", -3.0)
-	Ton.spiele(spiel, "tc-rail", -10.0)
+	if not _anker_erklaert:
+		_anker_erklaert = true
+		spiel.melde("Lichtanker hängt: nochmal Anker ([Q]) zieht dich hin · laufen und springen = schwingen · in der Luft nochmal springen = abschnellen.", 4.0)
 	if _anker_seil == null:
 		_anker_seil = MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -2631,15 +2667,7 @@ func _anker_weiter(dt: float) -> void:
 	brakk.position = _zu2d(p)
 	_fov_weit = 9.0 * sin(f * PI)
 	_geht = false
-	# Seil von der Ringhand zum Haken, der Haken dreht sich
-	var hand := hd.kamera.global_position + _blick() * 0.35 - _rechts() * 0.22 - Vector3(0, 0.2, 0)
-	var haken := _anker_nach + Vector3(0, 0.05, 0)
-	var lang := maxf(0.05, hand.distance_to(haken))
-	_anker_seil.scale = Vector3(1.0 + 0.4 * sin(_anker * 40.0), 1.0, lang)
-	_anker_seil.position = (hand + haken) / 2.0
-	_anker_seil.look_at_from_position(_anker_seil.position, haken, Vector3.UP if absf((haken - hand).normalized().y) < 0.99 else Vector3.RIGHT)
-	_anker_haken.position = haken
-	_anker_haken.rotation = Vector3(PI / 2.0, _anker * 8.0, 0.0)
+	_seil_zeichnen(_anker_nach, _anker + 1.0)   # der Haken sitzt schon
 	if f < 1.0:
 		return
 	# angekommen
@@ -3497,3 +3525,272 @@ func _briefing_taste(ci: CanvasItem, p: Vector2, t: String, aktiv: bool, a: floa
 	Stil.platte(ci, r, 3.0, Color(Stil.METALL_TIEF, a), Color(LICHT if aktiv else Stil.RAHMEN, a))
 	Stil.schreibe_mittig(ci, r.get_center(), t, groesse, Color(Color.WHITE if aktiv else Stil.TEXT_BLASS, a))
 	return bw
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Doppelsprung mit Lichtplattform (19.11.)
+
+## 19.11. (Paul): Leertaste in der Luft – der Ring wirft eine Lichtplattform unter Brakks Füße, er stößt sich ab.
+## Einmal je Sprung, wieder nach der Landung. Die Plattform springt auf (Überschwung), pulsiert kurz und verblasst.
+const DOPPEL_SPRUNG := 4.0       # Startgeschwindigkeit nach oben (der erste Sprung: SPRUNG)
+const PLATTFORM_SEK := 0.7
+
+
+func _doppelsprung() -> void:
+	if brakk.oben and _absprung_start():
+		return   # 19.11. (Paul): vom Wall hinunter, unten die Druckwelle
+	_doppelt_genutzt = true
+	steig = DOPPEL_SPRUNG
+	if _haken >= 0.0:
+		_flug *= ABSCHNELLEN_MAL   # 19.11.: am Seil – das Seil löst sich, der Schwung bleibt
+		_haken_los()
+	_lichtplattform()
+
+
+## Sechseckige Lichtplattform unter Brakks Füßen, in der Farbe des aktiven Rings (springt auf, dreht sich, verblasst).
+func _lichtplattform() -> void:
+	var farbe := _licht_farbe()
+	var p := Node3D.new()
+	hd.add_child(p)
+	p.position = _fuss3d() - Vector3(0, 0.04, 0)
+	var platte := MeshInstance3D.new()
+	var zyl := CylinderMesh.new()
+	zyl.top_radius = 0.45
+	zyl.bottom_radius = 0.38
+	zyl.height = 0.06
+	zyl.radial_segments = 6   # sechseckig, wie eine Lichtkachel
+	platte.mesh = zyl
+	platte.material_override = _leucht(farbe, 0.6, 2.2)
+	p.add_child(platte)
+	var rand := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.44
+	tor.outer_radius = 0.5
+	tor.ring_segments = 6
+	tor.rings = 6
+	rand.mesh = tor
+	rand.material_override = _leucht(farbe.lightened(0.6), 0.95, 3.0)
+	rand.position.y = 0.03
+	p.add_child(rand)
+	p.scale = Vector3(0.2, 1.0, 0.2)
+	_plattformen.append([p, 0.0])
+	_trauma = minf(1.0, _trauma + 0.08)
+	_rueckstoss[0] = 0.4
+	_rueckstoss[1] = 0.4
+	Ton.spiele(spiel, "tc-arc", -8.0)
+
+
+func _plattformen_weiter(dt: float) -> void:
+	for e: Array in _plattformen:
+		e[1] = float(e[1]) + dt
+		var p: Node3D = e[0]
+		var t := float(e[1])
+		var x := clampf(t / 0.12, 0.0, 1.0)
+		var s := 1.0 + 2.70158 * pow(x - 1.0, 3) + 1.70158 * pow(x - 1.0, 2)   # Ease-out-back
+		var weit := maxf(0.2, s) + 0.15 * t
+		p.scale = Vector3(weit, 1.0, weit)
+		p.rotation.y += dt * 2.0
+		var a := clampf(1.0 - (t - PLATTFORM_SEK * 0.5) / (PLATTFORM_SEK * 0.5), 0.0, 1.0)
+		for c: Node in p.get_children():
+			var m := (c as MeshInstance3D).material_override as StandardMaterial3D
+			m.albedo_color.a = a * (0.6 if c == p.get_child(0) else 0.95)
+	var weg := _plattformen.filter(func(e: Array) -> bool: return float(e[1]) >= PLATTFORM_SEK)
+	for e: Array in weg:
+		(e[0] as Node).queue_free()
+	_plattformen = _plattformen.filter(func(e: Array) -> bool: return float(e[1]) < PLATTFORM_SEK)
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Absprung vom Wall mit Druckwelle (19.11.)
+
+## 19.11. (Paul): Oben auf dem Wall springen, in der Luft noch einmal springen – Brakk stößt sich von der Lichtplattform ab,
+## fliegt in Laufrichtung (ohne Taste: Blickrichtung) hinunter und schlägt unten mit einer Druckwelle ein.
+const ABSPRUNG_WEITE := 4.0      # höchstens so viele Felder weit sucht er einen Landeplatz
+const DRUCK_RADIUS := 1.5        # Felder
+const DRUCK_SCHADEN := 80.0      # wie die Säule mal Fähigkeitsschaden
+var _absprung := -1.0            # läuft: Sekunden seit dem Abstoßen (-1 = nein)
+var _ab_von := Vector3.ZERO
+var _ab_nach := Vector3.ZERO
+var _ab_dauer := 0.5
+var _lauf := Vector2.ZERO        # Laufgeschwindigkeit (Felder/s, x und z) aus _gehen
+var _flug := Vector2.ZERO        # Schwung in der Luft (Felder/s), aus Seil oder Abschnellen – weg bei der Landung
+
+
+func _absprung_start() -> bool:
+	var r := _lauf.normalized() if _lauf != Vector2.ZERO else Vector2(_vorne().x, _vorne().z).normalized()
+	var ziel := Vector2.INF
+	var w := 1.0
+	while w <= ABSPRUNG_WEITE and ziel == Vector2.INF:
+		var p := _fuss2d() + r * w * Werte.ZELLE
+		if _passt_unten(p) and not hd.ist_hoch(karte.zelle_bei(p)):
+			ziel = p
+		w += 0.25
+	if ziel == Vector2.INF:
+		return false
+	_doppelt_genutzt = true
+	_lichtplattform()
+	if _haken >= 0.0:
+		_haken_los()
+	_treppe_rest = minf(_treppe_rest, 0.0)   # die Treppe vergeht – sonst führt sie unten gleich wieder hinauf
+	_ab_von = _fuss3d()
+	_ab_nach = _zu3d(ziel, 0.0)
+	_ab_dauer = clampf(_ab_von.distance_to(_ab_nach) / 6.0, 0.4, 0.7)
+	_absprung = 0.0
+	steig = 0.0
+	_flug = Vector2.ZERO
+	brakk.oben = false
+	brakk.posten_zelle = Karte.KEINE
+	brakk.zustand = Einheit.Zustand.BODEN
+	return true
+
+
+func _absprung_weiter(dt: float) -> void:
+	_absprung += dt
+	var f := clampf(_absprung / _ab_dauer, 0.0, 1.0)
+	var p := _ab_von.lerp(_ab_nach, f)
+	hoehe = lerpf(_ab_von.y, 0.0, f * f) + sin(f * PI) * 0.6   # erst hoch, dann steil hinunter
+	brakk.position = _zu2d(p)
+	_fov_weit = 6.0 * sin(f * PI)
+	_geht = false
+	if f < 1.0:
+		return
+	_absprung = -1.0
+	_fov_weit = 0.0
+	hoehe = 0.0
+	_setze_fuss(_zu2d(_ab_nach))
+	_doppelt_genutzt = false
+	_delle = 1.0
+	_rueckstoss[0] = 0.8
+	_rueckstoss[1] = 0.8
+	_druckwelle(_zu2d(_ab_nach))
+
+
+func _druckwelle(p: Vector2) -> void:
+	var r := DRUCK_RADIUS * Werte.ZELLE
+	spiel.effekte.flaeche(p, r, _licht_farbe())
+	_einschlag(p, r, DRUCK_SCHADEN, 0.9)
+	Ton.spiele(spiel, "hit-thud", -2.0)
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Lichtanker hängt, Schwingen (19.11.)
+
+## 19.11. (Paul): Erstes [Q] wirft den Haken – er bleibt bis HAKEN_HALTEN hängen. Das Seil hält Brakk wie eine Leine
+## (weiter als das Seil kommt er nicht). In der Luft am straffen Seil wird er leichter und schwingt um den Haken:
+## springt er im Laufen, nimmt er den Lauf als Schwung mit. Zweites [Q] zieht heran, nochmal springen schnellt ab.
+const HAKEN_HALTEN := 5.0
+const SCHWING_MAL := 1.3         # Laufgeschwindigkeit -> Schwung beim Sprung am Seil
+const SCHWING_LEICHT := 0.45     # so viel der Schwere hebt das Seil in der Luft auf
+const ABSCHNELLEN_MAL := 1.3     # Schwung beim Lösen mit dem Doppelsprung
+var _haken := -1.0               # hängt: Sekunden seit dem Wurf (-1 = nein)
+var _haken_p := Vector3.ZERO
+var _haken_wall := Karte.KEINE
+var _seil_lang := 1.0
+var _anker_erklaert := false
+
+
+func _anker_ziehen() -> void:
+	_anker_von = _fuss3d()
+	_anker_nach = _haken_p
+	_anker_wall = _haken_wall
+	_anker_dauer = maxf(0.25, _anker_von.distance_to(_anker_nach) / ANKER_TEMPO)
+	_anker = 0.0
+	_haken = -1.0
+	_anker_rest = ANKER_ABKLING
+	steig = 0.0
+	_flug = Vector2.ZERO
+	if brakk.oben:
+		brakk.oben = false
+		brakk.posten_zelle = Karte.KEINE
+		brakk.zustand = Einheit.Zustand.BODEN
+	_hand_zeigen = maxf(_hand_zeigen, _anker_dauer + 0.2)
+	_trauma = minf(1.0, _trauma + 0.15)
+	_kick += 0.03
+	Ton.spiele(spiel, "tc-rail", -10.0)
+
+
+func _haken_los() -> void:
+	_haken = -1.0
+	_anker_rest = ANKER_ABKLING
+	if _anker_seil != null:
+		_anker_seil.visible = false
+		_anker_haken.visible = false
+
+
+func _haken_weiter(dt: float) -> void:
+	_haken += dt
+	if _haken >= HAKEN_HALTEN or brakk.gefallen:
+		_haken_los()
+		return
+	_hand_zeigen = maxf(_hand_zeigen, 0.3)
+	var fuss := _fuss3d()
+	var d := fuss - _haken_p
+	var luft := hoehe > _boden() + 0.001 or steig > 0.0
+	if luft and d.length() > _seil_lang * 0.9:
+		steig += SCHWERE * SCHWING_LEICHT * dt   # das straffe Seil trägt mit
+	if d.length() > _seil_lang:
+		var n := d.normalized()
+		if luft:
+			var soll := _haken_p + n * _seil_lang
+			var s := Vector2(soll.x - fuss.x, soll.z - fuss.z) * Werte.ZELLE
+			_luft_schritt(Vector2(s.x, 0.0))
+			_luft_schritt(Vector2(0.0, s.y))
+			hoehe = maxf(_boden(), soll.y)
+			var v := Vector3(_flug.x, steig, _flug.y)
+			var raus := v.dot(n)
+			if raus > 0.0:
+				v -= n * raus   # nur noch quer zum Seil: Schwingen
+			_flug = Vector2(v.x, v.z)
+			steig = v.y
+		else:
+			# am Boden: eine Leine – weiter als das Seil geht es nicht
+			var dy := fuss.y - _haken_p.y
+			var waag := sqrt(maxf(0.0, _seil_lang * _seil_lang - dy * dy))
+			var dh := Vector2(d.x, d.z)
+			if dh.length() > waag:
+				var s := (dh.normalized() * waag - dh) * Werte.ZELLE
+				_schritt(Vector2(s.x, 0.0))
+				_schritt(Vector2(0.0, s.y))
+	_seil_zeichnen(_haken_p, _haken)
+
+
+## Schwung in der Luft weitertragen; bei der Landung ist er weg.
+func _flug_weiter(dt: float) -> void:
+	if _flug == Vector2.ZERO:
+		return
+	if hoehe <= _boden() + 0.001 and steig <= 0.0:
+		_flug = Vector2.ZERO
+		return
+	var s := _flug * dt * Werte.ZELLE
+	if not _luft_schritt(Vector2(s.x, 0.0)):
+		_flug.x = 0.0
+	if not _luft_schritt(Vector2(0.0, s.y)):
+		_flug.y = 0.0
+
+
+## Ein Stück gehen oder fliegen. Wer höher als die Mauerkrone ist, landet beim Hinüberfliegen oben auf dem Wall.
+func _luft_schritt(s: Vector2) -> bool:
+	var vorher := _fuss2d()
+	var neu := vorher + s
+	if not brakk.oben and hoehe >= hd.H - 0.05 and not _passt_unten(neu):
+		var z := karte.zelle_bei(neu)
+		if hd.ist_hoch(z) and karte.inhalt(z) == Karte.WALL:
+			brakk.oben = true
+			brakk.posten_zelle = z
+			brakk.zustand = Einheit.Zustand.AUF_POSTEN
+			hoehe = maxf(hoehe, hd.H)
+			_setze_fuss(neu)
+			return true
+	_schritt(s)
+	return _fuss2d() != vorher
+
+
+## Seil von der Ringhand zum Haken; der Haken dreht sich. In den ersten 0,12 s fliegt er erst hinaus.
+func _seil_zeichnen(ziel: Vector3, t: float) -> void:
+	if _anker_seil == null:
+		return
+	var hand := hd.kamera.global_position + _blick() * 0.35 - _rechts() * 0.22 - Vector3(0, 0.2, 0)
+	var haken := hand.lerp(ziel + Vector3(0, 0.05, 0), clampf(t / 0.12, 0.0, 1.0))
+	var lang := maxf(0.05, hand.distance_to(haken))
+	_anker_seil.scale = Vector3(1.0 + 0.4 * sin(t * 40.0), 1.0, lang)
+	_anker_seil.position = (hand + haken) / 2.0
+	_anker_seil.look_at_from_position(_anker_seil.position, haken, Vector3.UP if absf((haken - hand).normalized().y) < 0.99 else Vector3.RIGHT)
+	_anker_haken.position = haken
+	_anker_haken.rotation = Vector3(PI / 2.0, t * 8.0, 0.0)
