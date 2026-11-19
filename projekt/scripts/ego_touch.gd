@@ -37,6 +37,7 @@ const KNOEPFE := [
 	["feld", Vector2(990, 222), 30.0, "", "Feld"],
 	["aktion", Vector2(820, 560), 46.0, "", ""],
 	["sprung", Vector2(905, 455), 40.0, "", "Sprung"],   # 19.11. (Paul): Sprung, zweimal = Doppelsprung, vom Wall = Absprung
+	["weg", Vector2(688, 524), 36.0, "", "Weglegen"],   # 19.11. (Paul): Bauwerk weglegen / Ringfeld abbrechen
 	["bauliste", Vector2(54, 140), 30.0, "", "Bauen"],
 ]
 
@@ -94,6 +95,14 @@ func _gehoert_mir(p: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	# 19.11. (Paul): Fabrikmenü am Handy – ein Tipp neben die Tafel schließt sie (vorher öffnete das Spiel sie unter dem
+	# Fadenkreuz sofort wieder, Blick und Stick hingen). Der Tipp zählt danach gleich für Stick und Blick.
+	if (event is InputEventMouseButton or event is InputEventScreenTouch) and event.is_pressed():
+		var wo: Vector2 = (event as InputEventMouseButton).position if event is InputEventMouseButton else (event as InputEventScreenTouch).position
+		if _menue_zu(wo) and event is InputEventMouseButton:
+			_maus_meins = true
+			get_viewport().set_input_as_handled()
+			return
 	# Die Maus, die Godot aus dem ersten Finger macht (oder am PC die echte Maus mit TD_TOUCH), darf nicht zusätzlich
 	# klicken oder schwenken, wenn der Finger der Steuerung gehört.
 	if event is InputEventMouseButton:
@@ -131,6 +140,14 @@ func _input(event: InputEvent) -> void:
 		if _ziehen(d.index, d.position, rel):
 			get_viewport().set_input_as_handled()
 
+
+
+func _menue_zu(p: Vector2) -> bool:
+	var m: Control = spiel._fabrikmenue
+	if m == null or not m.visible or m.get_global_rect().has_point(p):
+		return false
+	spiel._schliesse_fabrikmenue()
+	return true
 
 func _druck(f: int, p: Vector2) -> bool:
 	if not _gehoert_mir(p):
@@ -248,6 +265,8 @@ func _sichtbar(id: String) -> bool:
 			return f != null and not f.ringe.is_empty() and spiel.phase == 0
 		"aktion":
 			return _aktion_text() != ""
+		"weg":
+			return spiel.werkzeug != Karte.FREI or ego._feld_zielt
 		"bauliste":
 			return spiel.phase == 0 or spiel.werkzeug != Karte.FREI or bau_offen
 	return true
@@ -262,10 +281,12 @@ func _knopf_bei(p: Vector2) -> String:
 
 
 func _aktion_text() -> String:
+	if ego._feld_zielt:
+		return "Setzen"   # 19.11.: Ringfeld bestätigen
 	if spiel.werkzeug != Karte.FREI:
 		return "Bauen"
 	if ego.gebaeude_im_blick() != Karte.KEINE:
-		return "Ausbauen"
+		return "Truppe" if spiel.brakk_modus else "Ausbauen"   # 19.11.: im Brakk-Mode gibt es nur die Truppenwahl
 	if ego._am_terminal():
 		return "Ringe"
 	return ""
@@ -306,6 +327,11 @@ func _tippen(id: String) -> void:
 			ego._wirf_feld()
 		"aktion":
 			_aktion()
+		"weg":
+			if ego._feld_zielt:
+				ego._feld_abbrechen()
+			else:
+				spiel.werkzeug = Karte.FREI
 		"treppe":
 			_e_ausloesen()
 		"anker":
@@ -329,6 +355,9 @@ func _ausloesen(id: String) -> void:
 
 
 func _aktion() -> void:
+	if ego._feld_zielt:
+		ego._feld_bestaetigen()
+		return
 	if spiel.werkzeug != Karte.FREI:
 		var z: Vector2i = spiel.karte.zelle_bei(ego.ziel_welt())
 		if not ego._in_reichweite(z):
@@ -390,6 +419,7 @@ func male(ci: Control) -> void:
 	var zid := zielt()
 	if zid != "":
 		_male_vorschau(ci, zid)
+	_male_bau_hinweis(ci)   # 19.11.
 	for k: Array in KNOEPFE:
 		if _sichtbar(str(k[0])):
 			_male_knopf(ci, k)
@@ -405,6 +435,26 @@ func male(ci: Control) -> void:
 		_text(ci, ABBRUCH + Vector2(0, ABBRUCH_R + 16.0), "Abbrechen", 18, ROT)
 		_text(ci, Vector2(640, 214), "Ziehen zum Zielen · loslassen: auslösen", 20, Color.WHITE)
 
+
+## 19.11. (Paul): Bauen am Handy deutlicher – unter dem Fadenkreuz steht, was der Knopf „Bauen“ jetzt tut: grün „Erdwall
+## hier bauen“ oder rot, warum nicht (Stellungen rasten dabei auf den nächsten passenden Wall ein).
+func _male_bau_hinweis(ci: Control) -> void:
+	if spiel.werkzeug == Karte.FREI or ego._feld_zielt:
+		return
+	var p := ego.ziel_welt()
+	var text := ""
+	var ok := false
+	if p.x < -9000.0:
+		text = "Auf den Boden oder einen Wall schauen"
+	else:
+		var z: Vector2i = spiel.karte.zelle_bei(p)
+		var grund: String = spiel.bau_hindernis(z, spiel.werkzeug)
+		if not ego._in_reichweite(z):
+			grund = "Zu weit – höchstens %d Felder" % int(EgoModus.BAU_REICHWEITE)
+		ok = grund == ""
+		var name: String = str(spiel.BAUTEN[spiel.werkzeug][1]) if spiel.BAUTEN.has(spiel.werkzeug) else "Bauwerk"
+		text = "%s hier bauen – „Bauen“ tippen" % name if ok else grund
+	_text(ci, Vector2(640, 410), text, 20, Color("7dffa0") if ok else ROT)
 
 func _male_stick(ci: Control) -> void:
 	var aktiv := _stick_finger >= 0
@@ -572,6 +622,8 @@ func _male_knopf(ci: Control, k: Array) -> void:
 	# Beschriftung
 	if id == "aktion":
 		_text(ci, m, _aktion_text(), 20, Color.WHITE)
+	elif id == "weg":
+		_text(ci, m, "Abbruch" if ego._feld_zielt else "Weglegen", 16, Color.WHITE)
 	elif id == "feld" or id == "bauliste" or id == "sprung":
 		_text(ci, m, str(k[4]), 18, Color.WHITE)
 	elif not offen:

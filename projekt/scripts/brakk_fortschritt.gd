@@ -13,8 +13,8 @@ const SCHADEN_START := 1.85            # 19.11. (Paul, Bot-Partien): Brakk ist d
 const SCHADEN_JE_STUFE := 0.10        # … und je Stufe 10 % stärker (Platz nach oben für Ringe und Stufen)
 const LEBEN_JE_STUFE := 30.0          # +30 Leben je Stufe über 1
 ## Freischaltungen: Fähigkeit -> Stufe
-const AB := {"tumble": 2, "anker": 3, "lanze": 4, "saeule": 6, "ulti": 7, "zeitlupe": 8}
-const NAMEN := {"saeule": "Lichtsäule [X]", "zeitlupe": "Zeitlupe [V]", "tumble": "Tumble [Shift]", "anker": "Lichtanker [Q]", "lanze": "Doppellanze [Rechtsklick]", "ulti": "Klonmaschine [R]"}
+const AB := {"tumble": 2, "doppelsprung": 2, "anker": 3, "lanze": 4, "saeule": 6, "ulti": 7, "zeitlupe": 8}
+const NAMEN := {"doppelsprung": "Doppelsprung [2× Leertaste]", "saeule": "Lichtsäule [X]", "zeitlupe": "Zeitlupe [V]", "tumble": "Tumble [Shift]", "anker": "Lichtanker [Q]", "lanze": "Doppellanze [Rechtsklick]", "ulti": "Klonmaschine [R]"}
 const FREIE_WAELLE := 5               # 18.11. (Paul): so viele Erdwälle bekommt Brakk jede Runde geschenkt
 const FREIE_STELLUNGEN := 1           # 19.11. (Paul): … und so viele Stellungen
 const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klonmaschine) auf

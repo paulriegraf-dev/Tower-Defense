@@ -479,7 +479,7 @@ func _leertaste() -> void:
 		_doppelt_genutzt = false
 		if _haken >= 0.0:
 			_flug = _lauf * SCHWING_MAL   # 19.11. (Paul): am Lichtanker schwingen
-	elif not _doppelt_genutzt:
+	elif not _doppelt_genutzt and (brakk.fortschritt == null or brakk.fortschritt.frei("doppelsprung")):   # 19.11. (Paul): ab Stufe 2
 		_doppelsprung()   # 19.11. (Paul): in der Luft – Lichtplattform unter den Füßen
 
 
@@ -743,7 +743,44 @@ func _strahl_bis(von: Vector3, r: Vector3, weite: float) -> float:
 
 
 ## Punkt unter dem Fadenkreuz in der 2D-Logik (für Bauen, Q, R): Mauerkrone oder Boden.
+## 19.11. (Paul): Mit Stellung (und den anderen Ausbauten) in der Hand rastet das Ziel auf das nächste passende Feld ein.
 func ziel_welt(nur_boden: bool = false) -> Vector2:
+	var p := _ziel_roh(nur_boden)
+	if nur_boden or p.x < -9000.0 or not spiel._ist_ausbau(spiel.werkzeug):
+		return p
+	return _ausbau_einrasten(p)
+
+
+const EINRASTEN := 1.6           # Felder: so weit neben dem Fadenkreuz darf das eingerastete Feld liegen
+var _einrast_bild := -1
+var _einrast_roh := Vector2.INF
+var _einrast_ziel := Vector2.ZERO
+
+
+func _ausbau_einrasten(p: Vector2) -> Vector2:
+	var bild := Engine.get_process_frames()
+	if bild == _einrast_bild and p == _einrast_roh:
+		return _einrast_ziel   # je Bild nur einmal suchen (Vorschau, Strahl und Klick fragen dasselbe)
+	var z := karte.zelle_bei(p)
+	var ziel := p
+	if spiel.bau_hindernis(z, spiel.werkzeug) != "" or not _in_reichweite(z):
+		var beste := EINRASTEN * Werte.ZELLE
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var c := z + Vector2i(dx, dy)
+				if c == z or not karte.in_karte(c) or not _in_reichweite(c):
+					continue
+				var d := karte.mitte(c).distance_to(p)
+				if d < beste and spiel.bau_hindernis(c, spiel.werkzeug) == "":
+					beste = d
+					ziel = karte.mitte(c)
+	_einrast_bild = bild
+	_einrast_roh = p
+	_einrast_ziel = ziel
+	return ziel
+
+
+func _ziel_roh(nur_boden: bool) -> Vector2:
 	var von := hd.kamera.global_position
 	var r := _blick()
 	if r.y >= -0.01:
@@ -952,6 +989,7 @@ func _strahlen_weiter(dt: float) -> void:
 ## TREPPE_HALTEN Sekunden; wer an ihren Fuß läuft, steigt hinauf. Steht Brakk schon davor, geht es gleich los.
 const TREPPE_WEITE := 5.0
 const TREPPE_HALTEN := 8.0
+const TREPPE_LAENGER := 2         # 19.11.: so viele Felder darf die Treppe aus der Ferne länger werden
 const TREPPE_AUFBAU := 0.45       # so lange springen die Stufen nacheinander auf
 var _treppe_aufbau := -1.0        # läuft: Sekunden seit dem Werfen
 var _treppe_fuss2d := Vector2.INF # Fußpunkt der stehenden Treppe in der 2D-Logik (INF = keine)
@@ -981,6 +1019,14 @@ func _treppe_ziel() -> Array:
 				fuss = c
 	if fuss == Karte.KEINE:
 		return []
+	# 19.11. (Paul): aus der Ferne gesetzt wird die Treppe länger – ihr Fuß rückt (bis TREPPE_LAENGER Felder) auf Brakk zu
+	var n2 := fuss - z
+	var abstand := Vector2(z).distance_to(Vector2(karte.zelle_bei(_fuss2d())))
+	for k in range(1, TREPPE_LAENGER + 1):
+		var c2: Vector2i = fuss + n2
+		if float(k) + 1.0 > abstand - 0.5 or not karte.in_karte(c2) or not karte.ist_begehbar(c2) or hd.ist_hoch(c2):
+			break
+		fuss = c2
 	return [z, fuss]
 
 
@@ -1444,7 +1490,7 @@ func _fadenkreuz(g: Vector2, px: float) -> void:
 	var m := (g / 2.0).round()
 	if _feld_zielt and brakk.fortschritt != null and not brakk.fortschritt.ringe.is_empty():
 		var fr := brakk.fortschritt.ringe[clampi(brakk.fortschritt.gewaehlt, 0, brakk.fortschritt.ringe.size() - 1)]
-		Stil.schreibe_mittig(_bild, m + Vector2(0, 26.0 * px), "%s-Feld: %d/4 Fabriken · [C] / Linksklick setzen · Rechtsklick / Esc abbrechen" % [str(BrakkFortschritt.RINGE[fr]["name"]), _feld_fabriken(_feld_ecke).size()], 18, _ring_farbe(fr))   # 19.11.
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 26.0 * px), ("%s-Feld: %d/4 Fabriken · „Setzen“ tippen · „Abbruch“" if touch != null else "%s-Feld: %d/4 Fabriken · [C] / Linksklick setzen · Rechtsklick / Esc abbrechen") % [str(BrakkFortschritt.RINGE[fr]["name"]), _feld_fabriken(_feld_ecke).size()], 18, _ring_farbe(fr))   # 19.11.
 	if _saeule_zielt:
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 26.0 * px), "Linksklick: Lichtsäule setzen · [X] / Rechtsklick: abbrechen", 18, _saeule_farbe)   # 18.11.
 	if spiel.werkzeug != Karte.FREI:
@@ -3604,8 +3650,8 @@ func _plattformen_weiter(dt: float) -> void:
 ## 19.11. (Paul): Oben auf dem Wall springen, in der Luft noch einmal springen – Brakk stößt sich von der Lichtplattform ab,
 ## fliegt in Laufrichtung (ohne Taste: Blickrichtung) hinunter und schlägt unten mit einer Druckwelle ein.
 const ABSPRUNG_WEITE := 4.0      # höchstens so viele Felder weit sucht er einen Landeplatz
-const DRUCK_RADIUS := 1.5        # Felder
-const DRUCK_SCHADEN := 80.0      # wie die Säule mal Fähigkeitsschaden
+const DRUCK_RADIUS := 1.3        # Felder
+const DRUCK_SCHADEN := 30.0      # 19.11. (Paul): genervt (war 80) – wie die Säule mal Fähigkeitsschaden
 var _absprung := -1.0            # läuft: Sekunden seit dem Abstoßen (-1 = nein)
 var _ab_von := Vector3.ZERO
 var _ab_nach := Vector3.ZERO
