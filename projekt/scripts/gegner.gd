@@ -67,6 +67,12 @@ var _letzte_frei := Karte.KEINE    # 17.11.: letztes freie Feld, auf dem er stan
 var ohne_treffer := 0.0           # Sekunden seit dem letzten Treffer (Aufräumen: niemand erreicht ihn mehr)
 var draussen := 0.0               # Sekunden außerhalb der Zone (16.11.: frisch Gestartete zählen beim Aufräumen nicht)
 var blick := Vector2.RIGHT          # Laufrichtung (Schildträger: dorthin zeigt sein Schild)
+# Brakk-Mode (19.11.): Elite-Trupp, Durchbrechen, Sprung der Hunde
+var elite := false
+var _aufgehalten := 0.0             # so lange kämpft er schon gegen dieselbe Bodentruppe
+var _durchbruch := 0.0              # Sekunden: nach dem Durchbrechen stärker
+var _boden_frei := 0.0              # Sekunden: Bodentruppen halten ihn nicht auf (nach Sprung oder Durchbruch)
+var _sprung_abkling := 0.0
 
 
 func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, start_zelle: Vector2i, erstes_ziel: int) -> void:
@@ -105,6 +111,8 @@ func tempo() -> float:
 		t *= Werte.FERNKAMPF_GEFECHT_TEMPO
 	elif rolle == "schild":
 		t *= _schild_gleichschritt()
+	if elite:
+		t *= Werte.BRAKK_ELITE_TEMPO
 	var r := t
 	if gebremst > 0.0:
 		r = t * Werte.PLASMAGEL_TEMPO
@@ -122,6 +130,79 @@ func tempo() -> float:
 
 ## 19.11.: Ein Schildträger mit Battlesphären im Trupp läuft knapp vor ihnen: Ist er weiter als SCHILD_VORSPRUNG vor
 ## der hintersten Sphäre, passt er sich ihrem (beim Schießen langsamen) Tempo an oder wartet. Hinter ihnen holt er auf.
+## Brakk-Mode: Elite-Trupp – eingefärbt, größer, mehr Leben und Schaden, Treffer streifen Truppen in der Nähe.
+func mache_elite() -> void:
+	elite = true
+	max_leben *= Werte.BRAKK_ELITE_LEBEN
+	leben = max_leben
+	scale = Vector2.ONE * 1.25
+	queue_redraw()
+
+
+## Schaden dieses Gegners gegen eine Truppe (Brakk-Mode: am Boden mehr, Elite mehr, nach dem Durchbrechen mehr).
+func schaden_gegen(e: Einheit, grund: float) -> float:
+	var s := grund
+	if spiel.brakk_modus:
+		if not (e is Kommandant) and e.am_boden():
+			s *= Werte.BRAKK_BODEN_SCHADEN
+		if elite:
+			s *= Werte.BRAKK_ELITE_SCHADEN
+		if _durchbruch > 0.0:
+			s *= Werte.BRAKK_DURCHBRUCH_STARK
+	return s
+
+
+## Elite: Treffer streift andere Bodentruppen im Umkreis.
+func _elite_streif(um: Vector2, menge: float, ausser: Einheit) -> void:
+	if not elite:
+		return
+	var r := Werte.BRAKK_ELITE_FLAECHE * Werte.ZELLE
+	spiel.effekte.welle(um, r, Color("ff8a3a"), "staub", 0.35)
+	for e in spiel.einheiten:
+		if e != ausser and is_instance_valid(e) and e.am_boden() and e.position.distance_to(um) <= r:
+			e.nimm_schaden(menge * Werte.BRAKK_ELITE_FLAECHE_ANTEIL)
+
+
+## Brakk-Mode: aufgehalten von einer Bodentruppe – Hunde springen nach kurzer Zeit darüber, alle anderen Nahkämpfer
+## brechen nach BRAKK_DURCHBRUCH_SEK durch (stoßen sie zur Seite und schlagen eine Weile stärker zu). true = er ist weg.
+func _durchkommen(opfer: Einheit, delta: float) -> bool:
+	_aufgehalten += delta
+	var vor := blick
+	if _index < _weg.size():
+		vor = (karte.mitte(_weg[_index]) - position).normalized()
+	if vor == Vector2.ZERO:
+		vor = Vector2.RIGHT
+	if typ == "hund":
+		if _aufgehalten < Werte.BRAKK_SPRUNG_SEK or _sprung_abkling > 0.0:
+			return false
+		var ziel := opfer.position + vor * Werte.ZELLE * 0.9
+		if not karte.ist_frei(karte.zelle_bei(ziel)):
+			return false
+		_aufgehalten = 0.0
+		_sprung_abkling = Werte.BRAKK_SPRUNG_ABKLING
+		_boden_frei = 1.2
+		var tw := create_tween()
+		tw.tween_property(self, "position", ziel, 0.35).set_trans(Tween.TRANS_SINE)
+		var hoch := create_tween()
+		hoch.tween_property(_sprite, "position:y", _sprite.position.y - 26.0, 0.17).set_ease(Tween.EASE_OUT)
+		hoch.tween_property(_sprite, "position:y", _sprite.position.y, 0.18).set_ease(Tween.EASE_IN)
+		return true
+	if _aufgehalten < Werte.BRAKK_DURCHBRUCH_SEK or opfer is Kommandant:
+		return false
+	_aufgehalten = 0.0
+	_durchbruch = Werte.BRAKK_DURCHBRUCH_DAUER
+	_boden_frei = Werte.BRAKK_DURCHBRUCH_FREI
+	var seite := Vector2(-vor.y, vor.x)
+	if (opfer.position - position).dot(seite) < 0.0:
+		seite = -seite
+	var neu := opfer.position + seite * Werte.ZELLE * Werte.BRAKK_DURCHBRUCH_SCHUB
+	if karte.ist_frei(karte.zelle_bei(neu)):
+		var tw := opfer.create_tween()
+		tw.tween_property(opfer, "position", neu, 0.2)
+	spiel.effekte.welle(position, Werte.ZELLE * 0.8, Color("ff5a3a"), "staub", 0.4)
+	return true
+
+
 func _schild_gleichschritt() -> float:
 	var hinterste: Gegner = null
 	for g: Gegner in trupp:
@@ -249,6 +330,9 @@ func _process(delta: float) -> void:
 		_sprite.bewegt(false)
 		return
 	_im_gefecht -= delta
+	_durchbruch -= delta
+	_boden_frei -= delta
+	_sprung_abkling -= delta
 	# Steht er (nimmt einen Checkpoint ein, kämpft)? Dann warten Abfänger nicht am Treffpunkt, sondern kommen zu ihm.
 	if position.distance_to(_stand_pos) < 2.0:
 		_stand += delta
@@ -265,6 +349,9 @@ func _process(delta: float) -> void:
 		sproede -= delta
 		queue_redraw()
 	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.6, 1.0, 0.75) if gebremst > 0.0 else (Color(0.75, 0.92, 1.0) if gefroren > 0.0 or eingefroren > 0.0 else Color.WHITE))
+	if elite:
+		_sprite.modulate *= Color(1.25, 0.72, 0.45)   # Brakk-Mode: Elite – glühend rot-orange
+		queue_redraw()
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
 	if reichweite > 0.0:
 		reichweite += karte.anhoehe_bonus(karte.zelle_bei(position)) * Werte.ZELLE   # 18.11.: Anhöhe gilt auch für Gegner
@@ -316,12 +403,16 @@ func _process(delta: float) -> void:
 			_sprite.angriff(_abkling)
 			if ziel != null:
 				spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
-				ziel.nimm_fernschaden(float(daten.get("schaden_einheit", daten["schaden"])))   # 18.11.: Fernschuss (Ruine deckt)
+				var s := schaden_gegen(ziel, float(daten.get("schaden_einheit", daten["schaden"])))
+				ziel.nimm_fernschaden(s)   # 18.11.: Fernschuss (Ruine deckt)
+				_elite_streif(ziel.position, s, ziel)
 			else:
 				spiel.schuss(position + Vector2(0, -6), karte.mitte(bau), Color("ff7ad9"))
 				karte.beschiesse(bau, daten["schaden"])
 	elif daten["schaden"] > 0.0:
-		var opfer: Einheit = spiel.naechste_bodeneinheit(position, reichweite)
+		var opfer: Einheit = null if _boden_frei > 0.0 else spiel.naechste_bodeneinheit(position, reichweite)
+		if opfer != null and spiel.brakk_modus and not elite and _durchkommen(opfer, delta):
+			opfer = null   # gesprungen oder durchgebrochen: weiter auf dem Weg
 		if opfer != null:
 			_sprite.bewegt(false)
 			_sprite.flip_h = (opfer.position.x < position.x) != _blickt_links
@@ -329,8 +420,11 @@ func _process(delta: float) -> void:
 				_abkling = daten["abklingzeit"]
 				_sprite.angriff(daten["abklingzeit"])
 				spiel.schuss(position, opfer.position, Color("ff7ad9"))
-				opfer.nimm_schaden(daten["schaden"])
+				var s := schaden_gegen(opfer, float(daten["schaden"]))
+				opfer.nimm_schaden(s)
+				_elite_streif(opfer.position, s, opfer)
 			return
+		_aufgehalten = 0.0
 
 	# 2) Am Ziel?
 	if _index >= _weg.size():
@@ -641,6 +735,13 @@ func sprengt() -> Vector2i:
 
 
 func _draw() -> void:
+	if elite:
+		# Brakk-Mode: Elite – pulsierender Glutring am Fuß, Krönchen über dem Kopf
+		var p := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 160.0)
+		draw_arc(Vector2(0, 8), 22.0, 0.0, TAU, 28, Color(1.0, 0.45, 0.15, 0.85 * p), 3.0)
+		draw_arc(Vector2(0, 8), 28.0, 0.0, TAU, 28, Color(1.0, 0.7, 0.2, 0.35 * p), 2.0)
+		var k := Vector2(0, -56)
+		draw_colored_polygon(PackedVector2Array([k + Vector2(-9, 4), k + Vector2(-9, -4), k + Vector2(-4, 0), k + Vector2(0, -7), k + Vector2(4, 0), k + Vector2(9, -4), k + Vector2(9, 4)]), Color("ffb347"))
 	if float(daten.get("panzerung", 0.0)) > 0.0:
 		# Panzerung: kleine Stahlplakette am Fuß, blitzt bei jedem Treffer auf
 		var pm := Vector2(15, 10) if Werte.grafik_neu else Vector2(15, 4)

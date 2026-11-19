@@ -2802,6 +2802,8 @@ func _beende_wurfziel() -> void:
 
 
 ## Füllt die Schlangen mit dem nächsten Durchgang der Welle (in normalen Runden gibt es nur einen).
+var _elite_nr := -1   # 19.11.: Brakk-Mode – dieser Trupp des Durchgangs kommt als Elite (-1 = keiner)
+
 func _lade_durchgang() -> void:
 	_durchgang += 1
 	_durchgang_sek = _kampf_sek
@@ -2822,6 +2824,14 @@ func _lade_durchgang() -> void:
 		_pausen.append(float(pausen[i]) if i < pausen.size() else 0.0)
 		_ausgaenge.append(str(ausgaenge[i]) if i < ausgaenge.size() else "")
 		_locker.append(bool(locker[i]) if i < locker.size() else false)
+	_elite_nr = -1
+	if brakk_modus and _durchgang == 1 and Werte.BRAKK_ELITE.has(welle) and not _schlange.is_empty():
+		# 19.11. (Paul): Elite-Trupp zusätzlich zur Welle, mitten hinein
+		_elite_nr = int(_schlange.size() / 2.0)
+		_schlange.insert(_elite_nr, (Werte.BRAKK_ELITE[welle] as Array).duplicate())
+		_pausen.insert(_elite_nr, 0.0)
+		_ausgaenge.insert(_elite_nr, "")
+		_locker.insert(_elite_nr, false)
 	var info: Array = _welle.get("wurf_info", [])
 	var wuerfe: Array = _welle["wurf"]
 	for i in wuerfe.size():
@@ -3771,7 +3781,7 @@ func gegner_besiegt(g: Gegner) -> void:
 	if not g.klon and brakk_modus:
 		# 18.11. (Paul): Brakk-Mode – dreimal so viele Gegner, aber dieselbe Wirtschaft: je Gegner ein Drittel der Prämie
 		# (Bruchteile werden gesammelt, damit auch 2er-Prämien zählen)
-		_brakk_praemie += float(einkommen(int(g.daten["praemie"]))) / BRAKK_GEGNER_MAL
+		_brakk_praemie += float(einkommen(int(g.daten["praemie"]))) / BRAKK_GEGNER_MAL * (Werte.BRAKK_ELITE_PRAEMIE if g.elite else 1.0)
 		var ganz := floori(_brakk_praemie)
 		budget += ganz
 		_brakk_praemie -= float(ganz)
@@ -3951,6 +3961,12 @@ func _neuer_gegner(typ: String, zelle: Vector2i, erstes_ziel: int) -> Gegner:
 	figuren.add_child(g)
 	g.start(self, karte, typ, _welle["leben_faktor"], zelle, erstes_ziel)
 	gegner.append(g)
+	if brakk_modus and _trupp_nr == _elite_nr and not _schlange.is_empty():
+		g.mache_elite()
+		if _trupp.is_empty():
+			# 19.11. (Paul): Ansturm – ein Elite-Trupp je Runde, mit Ansage
+			_einblendung.banner("ELITE-TRUPP", "Ein verstärkter Trupp greift an – mehr Leben, mehr Schaden, Treffer streifen.", Color("ff8a3a"))
+			Ton.spiele(self, "alert")
 	if typ == "sprenger":
 		melde("Sprenger unterwegs! Sein Ziel blinkt orange.", 4.0)
 	return g
@@ -5178,6 +5194,8 @@ func _ziehe_waelle(ziel: Vector2i) -> void:
 
 
 func _oeffne_fabrikmenue(z: Vector2i) -> void:
+	if brakk_modus and fabriken.has(z) and not karte.paar.has(z):
+		return   # 19.11. (Paul): Brakk-Mode – Fabriken lassen sich nicht bearbeiten (Ringe laufen über Brakk)
 	if phantom_modus == "angriff":
 		return   # der Bau gehört dem Phantom
 	if karte.paar.has(z) and not fabriken.has(z):

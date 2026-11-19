@@ -455,6 +455,8 @@ func gebaeude_im_blick() -> Vector2i:
 
 func _ist_ausbaubar(z: Vector2i) -> bool:
 	var was: int = karte.inhalt(z)
+	if spiel.fabriken.has(z) and spiel.brakk_modus and not karte.paar.has(z):
+		return false   # 19.11. (Paul): Brakk-Mode – Fabriken nicht bearbeitbar (Pilotenfabrik der Batterie schon)
 	return spiel.fabriken.has(z) or was == Karte.BATTERIE or was == Karte.GENERATOR or karte.ausbau.get(z, Karte.FREI) == Karte.TURM
 
 

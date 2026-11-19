@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 40          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 41          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1143,6 +1143,28 @@ const KOMMANDANT := {
 	"kletter_abklingzeit": 3.0,
 	"cp_faktor": 4.0,             # holt verlorene Checkpoints so viel schneller zurück
 }
+## Brakk-Mode nach dem Playtest (19.11., Paul): Gegner kommen gegen Bodentruppen besser durch.
+const BRAKK_BODEN_SCHADEN := 1.5       # Gegner machen gegen Truppen am Boden so viel mehr Schaden (Stellungen, Bauten, Brakk: normal)
+const BRAKK_DURCHBRUCH_SEK := 2.5      # so lange von Bodentruppen aufgehalten, dann bricht ein Nahkämpfer durch (nicht Elite):
+const BRAKK_DURCHBRUCH_SCHUB := 0.5    # ... stößt die Truppe so viele Felder zur Seite ...
+const BRAKK_DURCHBRUCH_STARK := 1.5    # ... und macht so lange so viel mehr Schaden
+const BRAKK_DURCHBRUCH_DAUER := 4.0
+const BRAKK_DURCHBRUCH_FREI := 2.5     # so lange lässt er sich danach nicht aufhalten – dann wieder wie sonst
+const BRAKK_SPRUNG_SEK := 0.8          # Hunde: so lange aufgehalten, dann springen sie über die Truppe hinweg
+const BRAKK_SPRUNG_ABKLING := 4.0
+## Elite-Trupp (19.11., Paul): kommt in diesen Runden zusätzlich zur Welle, mitten hinein – eigene kleine Gruppe.
+const BRAKK_ELITE := {
+	8: ["fahne", "hund", "hund", "hund", "hund"],
+	13: ["schild", "schild", "sphaere", "sphaere", "sphaere"],
+	19: ["schild", "schild", "sani", "schwarm", "schwarm", "sphaere", "sphaere"],
+}
+const BRAKK_ELITE_TEMPO := 0.85        # Elite läuft etwas langsamer
+const BRAKK_ELITE_LEBEN := 2.5
+const BRAKK_ELITE_SCHADEN := 1.5
+const BRAKK_ELITE_FLAECHE := 0.9       # Felder: Elite-Treffer streifen Truppen in diesem Umkreis ...
+const BRAKK_ELITE_FLAECHE_ANTEIL := 0.4  # ... mit so viel vom Schaden
+const BRAKK_ELITE_PRAEMIE := 2.0
+
 ## Battlesphäre schießt sich ein (19.11., Paul): Jeder Treffer auf ein Feld lässt Sphären, die auf dieses Feld schießen,
 ## schneller feuern – bis zu EINSCHUSS_MAX mehr Schüsse je Sekunde (also bis +50 % Schaden). Ohne Treffer kühlt das Feld ab.
 const EINSCHUSS_JE_TREFFER := 0.08
