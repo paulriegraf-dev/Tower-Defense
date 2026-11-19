@@ -652,8 +652,10 @@ func _baue_daten() -> void:
 			"Ziele der Reihe nach: Truppen in Stellungen, dann Fabriken und Batterien, dann Bodentruppen.",
 			"An Truppen macht sie %s Schaden, an Gebäuden %s." % [_z(W.GEGNER["sphaere"]["schaden_einheit"]), _z(W.GEGNER["sphaere"]["schaden"])],
 			"Solange sie schießt, läuft sie nur langsam weiter (%d %% Tempo)." % roundi(W.FERNKAMPF_GEFECHT_TEMPO * 100),
+			"Schießt sich ein: Jeder Sphärentreffer auf ein Feld lässt alle Sphären, die darauf schießen, schneller feuern – bis +%d %% Schaden. Nach %s Sekunden ohne Treffer kühlt das Feld ab." % [roundi(W.EINSCHUSS_MAX * 100), _z(W.EINSCHUSS_SEK)],
 			"Zerschossene Fabriken und Batterien fallen bis zum Rundenende aus."], [
 			"Scharfschützen: mehr Reichweite als die Sphäre.",
+			"Bedrängte Stellung räumen lassen oder nachbesetzen: Das Einschießen gilt dem Feld.",
 			"Fabriken nicht direkt an den Weg stellen.",
 			"Der Reservepilot der Batterie repariert Ausgefallenes."]),
 		_gegner("fahne", "ab Runde 6", [
@@ -689,7 +691,8 @@ func _baue_daten() -> void:
 			"Trägt einen großen Schild nach vorn: Alles von vorn macht nur %d %% Schaden – auch Batterie, Plasma und Lanze." % roundi(W.SCHILD_FRONT_FAKTOR * 100),
 			"Fläche und Strahlen von vorn fängt er auch für die ab, die direkt hinter ihm gehen.",
 			"Er zieht das Feuer auf sich: Truppen, Türme und Batterien nehmen ihn zuerst ins Visier, egal welche Zielwahl.",
-			"Er geht %s Sekunden vor dem Rest seines Trupps los. Von der Seite und von hinten trifft alles voll." % _z(W.SCHILD_VORLAUF_SEK)], [
+			"Er geht %s Sekunden vor dem Rest seines Trupps los. Von der Seite und von hinten trifft alles voll." % _z(W.SCHILD_VORLAUF_SEK),
+			"Mit Battlesphären im Trupp bleibt er knapp vor ihnen (%s Felder) und passt sein Tempo an, statt davonzulaufen." % _z(W.SCHILD_VORSPRUNG)], [
 			"Stellungen und Türme seitlich am Gang oder hinter einer Kurve.",
 			"Lanze in einer Klammer am Ende eines Gangs trifft ihn, sobald er abbiegt."]),
 		_gegner("sani", "ab Runde 14", [

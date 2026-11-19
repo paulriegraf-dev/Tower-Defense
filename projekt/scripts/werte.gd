@@ -119,11 +119,11 @@ const SCHLEUDER := {
 	"angriff_dauer": 2.8,
 	"massstab": 1.1,
 	"leben": 250.0,
-	"reichweite": 7.0,
+	"reichweite": 9.0,    # 19.11.: vorher 7 – noch aus der Zeit der 20 Spalten breiten Karte
 	"abklingzeit": 6.0,
 	"flugzeit": 1.3,
 	"schaden_einheit": 35.0,
-	"schaden_haufen": 22.0,     # Flächentreffer auf einen Haufen Bodentruppen (jede Truppe im Umkreis)
+	"schaden_haufen": 28.0,     # 19.11.: vorher 22 – Flächentreffer auf einen Haufen Bodentruppen (jede Truppe im Umkreis)
 	"schaden_fabrik": 60.0,
 }
 static var AUSGAENGE := {"": Vector2i(0, 4), "oben": Vector2i(1, 1), "unten": Vector2i(1, 8)}   # Phantom-Modus: hier kommt ein Trupp geschlossen aus der Zone
@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 36          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 37          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -205,7 +205,7 @@ const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plas
 # Stufe 1: spezialisiert – bleibt bei ihrer Truppe und hält eine Truppe mehr.
 # Stufe 2: Wertepaket je Truppe (siehe STUFE_2).
 # Stufe 3: Sonderfähigkeit zur Wahl (siehe STUFE_3) – ändert, wie die Truppe kämpft.
-const KOSTEN_STUFE: Array[int] = [75, 175, 450]   # vorher 50/150/400 (14.11. erhöht)      # Preis für Stufe 1, 2 und 3
+const KOSTEN_STUFE: Array[int] = [125, 200, 450]   # 19.11. (Paul, gegen Fabrik-Spam): vorher 75/175/450 (14.11.: 50/150/400)      # Preis für Stufe 1, 2 und 3
 const KOSTEN_BATTERIE_STUFE: Array[int] = [125, 175, 450]   # vorher 100/150/400 (14.11. erhöht)   # dasselbe für die Batterie
 const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
 const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
@@ -1143,6 +1143,13 @@ const KOMMANDANT := {
 	"kletter_abklingzeit": 3.0,
 	"cp_faktor": 4.0,             # holt verlorene Checkpoints so viel schneller zurück
 }
+## Battlesphäre schießt sich ein (19.11., Paul): Jeder Treffer auf ein Feld lässt Sphären, die auf dieses Feld schießen,
+## schneller feuern – bis zu EINSCHUSS_MAX mehr Schüsse je Sekunde (also bis +50 % Schaden). Ohne Treffer kühlt das Feld ab.
+const EINSCHUSS_JE_TREFFER := 0.08
+const EINSCHUSS_MAX := 0.5
+const EINSCHUSS_SEK := 2.0             # so lange ohne Sphärentreffer, dann ist das Feld wieder kalt
+## Schildträger im Trupp mit Battlesphären (19.11.): bleibt so weit vor der nächsten Sphäre und läuft nicht davon.
+const SCHILD_VORSPRUNG := 0.8          # Felder
 const FERNKAMPF_GEFECHT_TEMPO := 0.35   # Battlesphäre: solange sie schießt, läuft sie nur mit diesem Anteil ihres Tempos
 # Platz auf dem Feld (15.11.): Felder sind nur das Wegraster. Einheiten stehen frei darin und halten Abstand nach ihrem Radius
 # (Anteil einer Feldbreite). 16.11.: enger gepackt, damit in den schmalen Gängen viele Einheiten in ein Feld passen und sich

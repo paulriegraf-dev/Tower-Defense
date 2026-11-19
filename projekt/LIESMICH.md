@@ -98,7 +98,7 @@ Startest du im Menü ein **normales Spiel**, fragt Sonde 7 (Funkfenster im Holog
 - **Abstand zur Zone:** Eigene Truppen bleiben 2 Felder vor der Zone stehen (ein Checkpoint näher an der Zone wird trotzdem verteidigt) (außer in der letzten Runde), damit die Gegner herauskommen.
 
 ## Truppen sind knapp
-- **Eine Fabrik hält 2 Truppen.** Stufe 1 (75) legt sie auf eine Truppe fest und gibt die dritte. Stufe 2 kostet 175, Stufe 3 450. Batterie-Stufen: 125 / 175 / 450.
+- **Eine Fabrik hält 2 Truppen.** Stufe 1 (125) legt sie auf eine Truppe fest und gibt die dritte. Stufe 2 kostet 200, Stufe 3 450 (19.11.: vorher 75/175). Batterie-Stufen: 125 / 175 / 450.
 - **Entgegenlaufen, nie hinterher:** Bodentruppen suchen ein Feld auf dem Weg eines Gegners, an dem sie vor ihm ankommen (auch durch ein Tor), höchstens zwei je Feld. Wer nicht mehr abzufangen ist, gehört den Stellungen, Türmen und Batterien weiter hinten.
 - **Aufräumen am Rundenende:** Kommt nichts mehr nach, steigen Truppen ohne Ziel nur für Gegner aus der Stellung, die 3 s feststehen oder 8 s von niemandem getroffen wurden – höchstens 2 Truppen je solchem Gegner.
 - **Runden 1 und 2:** Alle Gegner kommen über die Hauptlinie, nichts verteilt sich.
@@ -146,7 +146,7 @@ Die Gegner werden je Runde um 0,20 zäher (Runde 19: ×4,6); in Runde 20 hat die
 | 15 | Letzte Runde | Gegenangriff auf das HQ. Drei Laser verteidigen die Zone (flach, nur gegen Bodentruppen, Wälle geben Deckung), Gegner kommen in dichter Folge. |
 
 ## Preise
-Erdwall 10, Stellung 25, Turm 75 (jede Form), Tor 40, Panzerung 30, Batterie mit Pilotenfabrik 290 (jede weitere 20 % mehr). Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 75, Stufe 2 175, Stufe 3 450; Batterie 125 / 175 / 450; Turm Stufe 2 125, Stufe 3 300.
+Erdwall 10, Stellung 25, Turm 75 (jede Form), Tor 40, Panzerung 30, Batterie mit Pilotenfabrik 290 (jede weitere 20 % mehr). Die erste Fabrik kostet 50, jede weitere 25 % mehr als die vorige (Pilotenfabriken zählen nicht mit). Stufe 1 (festlegen) 125, Stufe 2 200, Stufe 3 450; Batterie 125 / 175 / 450; Turm Stufe 2 125, Stufe 3 300.
 
 **Übersicht [I]:** Karten für alle Gegner, eigenen Truppen und Bauten mit Werten, Verhalten und Gegenmitteln (Reiter unten, Karte anklicken). Die Texte stehen in `scripts/lexikon.gd`, die Zahlen kommen aus `werte.gd`.
 Truppen kosten nichts. Einkommen: Bonus nach jeder Runde (100 + 5 je Rundennummer) und Prämien je besiegtem Gegner.
@@ -320,7 +320,7 @@ Die Pläne stehen in `werkzeuge/plaene.gd` als Zeichenraster und lassen sich dor
 Ein Klick auf eine Fabrik (ohne Bauwerkzeug) öffnet eine Tafel daneben. Truppe und Ausbaustufe werden dort angeklickt (keine Tasten mehr). **Esc** schließt.
 
 - **Stufe 0:** Grundfabrik, hält 3 Truppen, die Truppe lässt sich jederzeit umstellen (in der Welle gilt das für die nächste Truppe).
-- **Stufe 1, Spezialisieren (75):** bleibt bei ihrer Truppe, hält dafür eine Truppe mehr. Umstellen geht danach nicht mehr.
+- **Stufe 1, Spezialisieren (125):** bleibt bei ihrer Truppe, hält dafür eine Truppe mehr. Umstellen geht danach nicht mehr.
 - **Stufe 2 (175):** Wertepaket je Truppe – Scharfschütze: Klarsicht (schießt auch im Rauch), +30 % Schaden, feuert 20 % schneller. Technogunner: +50 % Leben, +30 % Schaden, +0,5 Reichweite. Plasmawerfer: +0,2 Fläche, +30 % Schaden, läuft 25 % schneller.
 - **Stufe 3 (450):** eine Fähigkeit zur Wahl, die ändert, wie die Truppe kämpft.
   - Scharfschütze: **Durchschuss** (gerade Linie durch alle Gegner), **Laserstrahl** (Dauerstrahl, wächst am selben Ziel bis auf das Dreifache), **Zielmarkierung** (nur aus der Stellung: trifft das stärkste Ziel der ganzen Karte, wenig eigener Schaden, feuert aber gut doppelt so schnell wie normal; das Ziel nimmt 5 Sekunden lang 40 % mehr Schaden und kann auch aus dem Rauch heraus getroffen werden).

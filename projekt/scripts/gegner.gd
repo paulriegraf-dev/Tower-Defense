@@ -103,6 +103,8 @@ func tempo() -> float:
 		return 0.0
 	if _im_gefecht > 0.0 and daten["fernkampf"]:
 		t *= Werte.FERNKAMPF_GEFECHT_TEMPO
+	elif rolle == "schild":
+		t *= _schild_gleichschritt()
 	var r := t
 	if gebremst > 0.0:
 		r = t * Werte.PLASMAGEL_TEMPO
@@ -116,6 +118,39 @@ func tempo() -> float:
 	elif s > 1.0:
 		r *= s
 	return r
+
+
+## 19.11.: Ein Schildträger mit Battlesphären im Trupp läuft knapp vor ihnen: Ist er weiter als SCHILD_VORSPRUNG vor
+## der hintersten Sphäre, passt er sich ihrem (beim Schießen langsamen) Tempo an oder wartet. Hinter ihnen holt er auf.
+func _schild_gleichschritt() -> float:
+	var hinterste: Gegner = null
+	for g: Gegner in trupp:
+		if g != self and is_instance_valid(g) and g.typ == "sphaere" and g.leben > 0.0:
+			if hinterste == null or g.rest_weg() > hinterste.rest_weg():
+				hinterste = g
+	if hinterste == null or rest_weg() >= hinterste.rest_weg() or warte_noch > 0.0:
+		return 1.0   # keine Sphäre dabei, oder er ist (noch) nicht vor ihr
+	var abstand := position.distance_to(hinterste.position) / float(Werte.ZELLE)
+	if abstand <= Werte.SCHILD_VORSPRUNG:
+		return 1.0
+	var faktor := Werte.FERNKAMPF_GEFECHT_TEMPO if hinterste._im_gefecht > 0.0 else 1.0
+	if abstand > Werte.SCHILD_VORSPRUNG + 0.8:
+		faktor *= 0.3   # zu weit vorn: fast stehen bleiben, bis sie aufgeschlossen hat
+	return faktor
+
+
+## Einschießen der Battlesphären (19.11.): Feld -> [Treffer, Zeit des letzten Treffers] (Spielzeit).
+static var _einschuss := {}
+
+func _einschuss_bonus(z: Vector2i) -> float:
+	var jetzt: float = spiel._kampf_sek
+	var e: Array = _einschuss.get(z, [0, -999.0])
+	if jetzt < float(e[1]) or jetzt - float(e[1]) > Werte.EINSCHUSS_SEK:
+		e = [0, jetzt]
+	e[0] = int(e[0]) + 1
+	e[1] = jetzt
+	_einschuss[z] = e
+	return minf(Werte.EINSCHUSS_MAX, Werte.EINSCHUSS_JE_TREFFER * float(int(e[0]) - 1))
 
 
 func _tempo_ungebremst() -> float:
@@ -274,7 +309,11 @@ func _process(delta: float) -> void:
 			_im_gefecht = 0.4   # beim Schießen läuft sie nur langsam weiter
 		if _abkling <= 0.0 and (ziel != null or bau != Karte.KEINE):
 			_abkling = daten["abklingzeit"]
-			_sprite.angriff(daten["abklingzeit"])
+			if typ == "sphaere":
+				# eingeschossenes Feld: schneller feuern (bis +50 % Schüsse je Sekunde)
+				var zf: Vector2i = karte.zelle_bei(ziel.position) if ziel != null else bau
+				_abkling = float(daten["abklingzeit"]) / (1.0 + _einschuss_bonus(zf))
+			_sprite.angriff(_abkling)
 			if ziel != null:
 				spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
 				ziel.nimm_fernschaden(float(daten.get("schaden_einheit", daten["schaden"])))   # 18.11.: Fernschuss (Ruine deckt)
