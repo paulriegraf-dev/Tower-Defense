@@ -149,7 +149,7 @@ func _baue() -> void:
 			# 20.11. (Schritt 5b): Classic = der bisherige Brakk-Mode, Rogue = Order 24
 			_eintraege = [
 				["Classic", _brakk_mode, "20 Runden gegen die Myriaden in der Ego-Sicht – wie bisher", LICHT],
-				["Rogue · Befehl 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL],
+				["Rogue · Befehl 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL] if Profil.rogue_frei() else ["Rogue · gesperrt", _rogue_gesperrt, "erst Classic gewinnen (Runde 20) – dann geht es weiter …", Stil.TEXT_BLASS],   # 20.11. (Paul)
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 		"rogue":
@@ -488,6 +488,11 @@ func _af_absatz(ci: Control, x: float, y: float, text: String, weite: float, far
 ## 18.11.: Brakk-Mode – am PC mit Maus und Tastatur, am Handy mit Touch-Steuerung (ego_touch.gd).
 func _brakk_mode() -> void:
 	_zeige_anfuehrer("brakk", _starte.bind(true, "brakk"), true)   # 20.11.: erst den Anführer wählen (Brakk, Irrtürmer, Sonde 7)
+
+
+## 20.11. (Paul): Rogue ist gesperrt, bis Classic einmal gewonnen wurde.
+func _rogue_gesperrt() -> void:
+	_meldung = "Rogue schaltest du frei, wenn du Classic bis Runde 20 gewinnst."
 
 
 ## 20.11. (Schritt 5b): Order 24 auf einer Rogue-Karte (Regelpaket modus "rogue" – main.gd startet dann Order24).

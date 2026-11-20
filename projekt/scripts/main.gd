@@ -2440,6 +2440,8 @@ func _checkpoints_halten(delta: float) -> void:
 		var besetzt := false
 		var cp_faktor := 1.0
 		for e in einheiten:
+			if order24 != null and e is Kommandant:
+				continue   # 20.11.: Befehl 24 – Brakk gehört nicht mehr zum Technoclan
 			if e.zustand == Einheit.Zustand.BODEN and karte.zelle_bei(e.position) == karte.checkpoints[i]:
 				besetzt = true
 				if e is Kommandant:
@@ -3898,6 +3900,9 @@ func _gewonnen() -> void:
 	var vw := _partie_ins_profil(true)
 	if brakk_modus and ego != null:
 		ego.sieg(sek)   # 19.11.: Brakk-Mode – eigener Abspann und Übersicht
+		if order24 == null and not sandbox and phantom_modus == "":
+			Profil.setze_einstellung("rogue_frei", true)   # 20.11. (Paul): Classic gewonnen – Rogue ist frei …
+			ego._sieg_bericht["weiter"] = Werte.anfuehrer == "brakk"   # … und Brakk kann gleich weiterspielen (Befehl 24)
 		return
 	_zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
 		"sekunden": sek, "phantom": als_phantom, "wertung": vw}, als_phantom)
@@ -4276,6 +4281,60 @@ func _order24_gewaehlt() -> void:
 		await get_tree().process_frame
 	if ego == null and hd != null and kommandant != null:
 		_ego_umschalten()
+
+
+## 20.11. (Paul): Classic gewonnen, „Weiterspielen …?“ – die Partie geht als Befehl 24 weiter: Die eigene Verteidigung
+## (Wälle, Türme, Fabriken, Stellungen, Truppen) bleibt stehen und wird zum Gegner, Brakk steht am eigenen HQ, und
+## Sonde 7 hintergeht ihn (Verrat-Sequenz mit Schockimpuls: Erfahrung und Ringe weg). Die Myriaden sind fort, ihr HQ
+## steht als Zuflucht wieder (Platzhalter: neu aufgestellt).
+func befehl24_weiterspielen() -> void:
+	if order24 != null or ego == null:
+		return
+	ego.sieg_aufheben()
+	for g in gegner.duplicate():
+		if is_instance_valid(g):
+			g.queue_free()
+	gegner.clear()
+	_schlange.clear()
+	_pausen.clear()
+	_wurf_schlange.clear()
+	_wurf_aktiv.clear()
+	for b in zonenbauten.duplicate():
+		if is_instance_valid(b):
+			b.queue_free()
+	zonenbauten.clear()
+	hq = _neuer_zonenbau("hq", Werte.START_ZELLE)
+	endkampf = false
+	welle = 1
+	phase = Phase.BAU
+	werkzeug = Karte.FREI
+	_tempo_faktor = Werte.BRAKK_TEMPO
+	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
+	for i in karte.cp_feind.size():
+		karte.cp_feind[i] = false
+	Werte.KARTE_REGELN["bauten"] = {"batterie": false, "fabrik": false, "generator": false, "panzer": false, "stellung": false, "tor": false, "turm": false, "wall": false}
+	Werte.KARTE_REGELN["brakk_stufe"] = 4
+	# Truppen zurück an ihre Fabriken (sie standen im Gegenangriff in der Zone)
+	for e in einheiten:
+		if not is_instance_valid(e) or e is Kommandant:
+			continue
+		if e.posten_zelle != Karte.KEINE and karte.posten.get(e.posten_zelle) == e:
+			karte.posten.erase(e.posten_zelle)
+		e.posten_zelle = Karte.KEINE
+		if fabriken.has(e.fabrik_zelle):
+			e.position = karte.mitte(e.fabrik_zelle)
+		e.zustand = Einheit.Zustand.BODEN
+		e._punkte.clear()
+	order24 = Order24.new()
+	order24.weiter = true
+	add_child(order24)
+	order24.einrichten(self)
+	budget = 300
+	if kommandant != null:
+		kommandant.position = karte.mitte(order24.brakk_start())
+		kommandant.anker = kommandant.position
+		kommandant.leben = kommandant.max_leben
+	print("BEFEHL24 Weiterspielen nach dem Classic-Sieg")
 
 
 ## 20.11. (Schritt 5b): Ziele für Brakks Waffen in der Ego-Sicht – in Order 24 die Technoclan-Stellvertreter.
@@ -4707,6 +4766,8 @@ func laserziel(von: Vector2, weite: float) -> Einheit:
 
 
 func gegner_am_ziel(g: Gegner) -> void:
+	if order24 != null and order24.gegner_am_ziel(g):
+		return   # 20.11.: Befehl 24 – Myriaden des Überläufers greifen das Technoclan-HQ an
 	if OS.get_environment("TD_WURF_LOG") != "":
 		print("DURCH R%d t=%.1f  %s%s  Checkpoints beim Gegner: %s" % [welle, _kampf_sek, g.typ, " (geworfen)" if g.geworfen else "", karte.cp_feind])
 	g.trupp.erase(g)

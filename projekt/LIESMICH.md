@@ -404,6 +404,29 @@ Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme
 - Q und E (Anker, Lichttreppe, Lichtbrücke) laden in Befehl 24 um `mobil_abkling` 125 % langsamer.
 - Wirtschaft: Geleerte Stellungen und gesprengte Wälle bringen kein Geld mehr. Eine zerstörte Fabrik bringt 80 und 20 Erfahrung, eine Sabotage 40 und 10 Erfahrung (`xp_fabrik`, `xp_sabotage`). Kills geben wie bisher Erfahrung.
 
+**Nachtrag 2 (20.11., Paul): endlos mit Eskalation, versteckter Vorstoß, Überläufer**
+- **Endlos:** `ueberleben_sek` 0, kein Sieg nach Zeit. Die Uhr zählt hoch; fällt Brakk, ist die Wertung die überlebte Zeit („Gefallen · 17:32 überlebt“).
+- **Eskalation:** Der Wellentakt sinkt von `welle_takt` 90 auf `welle_takt_min` 40 s über `eskalation_sek` 600 s ab Jagdbeginn. Je `welle_wachsen_sek` 120 s kommt ein Mann mehr pro Welle. Ab `stufe2_ab` 420 s kommen Wellen auf Stufe 2, ab `faehigkeit_ab` 720 s auf Stufe 3 mit zufälliger Fähigkeit. Neue Truppen bekommen je Minute +`staerke_je_min` 4 % Schaden, +`tempo_je_min` 2 % Tempo (höchstens +40 %) und +`leben_je_min` 3 % Leben. Ab `lager_neu_ab` 360 s baut der Technoclan alle `lager_neu_takt` 150 s ein neues Lager außerhalb von Brakks Sicht (bis `lager_max` 8). Ab `tore_ab` 480 s setzt er Tore in Wälle, wenn das den Weg zum Myriaden-HQ abkürzt (`tore_max` 4).
+- **Wege:** Jede abgeschlossene Fläche der Formation bekommt einen Durchbruch zum Schild, auch neue Lager (`_tasche`, `_oeffne_weg`). Ist Brakks letzter Ort zu Fuß nicht erreichbar (oben auf einem Wall), laufen die Trupps zum nächsten erreichbaren Feld daneben.
+- **Versteckter Vorstoß:** Ab `vorstoss_start` läuft ein Trupp aufs Myriaden-HQ, ohne Ansage und ohne Anzeige. Sobald die Einnahme beginnt, wundert sich Brakk in einem Funkfenster (Steuerung frei), was die dort vorhaben. Halten müssen sie es `vorstoss_sek` 30 s.
+- **Überläufer (geheim):** Steht das Myriaden-HQ bei `geheim_ab` 900 s noch, meldet Sonde 7 Brakks Überlaufen. Danach:
+  - **Bauen:** [1]–[7] baut Myriaden-Fabriken (Hund, Battlesphäre, Schildträger, Sprenger, Rauchwerfer, Sanitäter, Fahnenträger) auf dem Feld unter dem Fadenkreuz in der Zone links. Baupreis = Preis der Einheit aus dem Taktikplaner × `myr_bau_mal` 4.
+  - **Wellen:** Alle `myr_takt` 30 s schickt jede Fabrik Einheiten im Wert von `myr_wert` 60 über die Checkpoints zur Technoclan-Basis. Das kostet `myr_kosten_anteil` 50 % ihres Preises. Dazu kommen `geheim_einkommen` 30 Beute je Zyklus.
+  - **Checkpoints:** Brakk nimmt Checkpoints selbst ein (darauf stehen, kein Technoclan in 2 Feldern), die Myriaden auch. Der Technoclan schickt Truppen, um sie zurückzuholen. Hält Brakk beide `geheim_cp_sek` 30 s, fällt der Schild des Technoclan-HQ. Verliert er beide, kommt er zurück.
+  - **Angriff:** Ohne Schild ist das HQ (`geheim_hq_leben` 3000) ein Ziel für Brakks Waffen, und Myriaden an der Basis treffen es → geheimes Ende „Überläufer · Befehl 24 gebrochen“.
+  - **Myriaden-HQ:** Es kann weiter besetzt werden: Die Fabriken stehen dann still. Brakk holt es zurück, wenn er `myr_rueck_sek` 10 s dort steht, ohne Technoclan in der Nähe.
+- Funksprüche im Spiel: `Order24.funken(zeilen)` (Verrat24 mit `sperrt = false`, Fenster oben).
+
+**Nachtrag 3 (20.11., Paul): Übergang aus Classic**
+- **Freischaltung:** Rogue (Befehl 24) ist erst frei, wenn Classic einmal gewonnen wurde (Profil-Einstellung `rogue_frei`). Codes `befehl24` und `allesfrei` schalten es auch frei. Vorher steht im Menü „Rogue · gesperrt“.
+- **Weiterspielen:** Nach einem Classic-Sieg mit Brakk steht unter der Siegtafel „Weiterspielen …?“ (`main.befehl24_weiterspielen`). Die Partie geht als Befehl 24 weiter:
+  - Die eigene Verteidigung (Wälle, Türme, Fabriken, Stellungen, Truppen) bleibt stehen und ist jetzt der Gegner.
+  - Fehlen Fabriken im Schild, kommen bis zu `fabriken_innen` dazu. Alle Fabriken draußen werden Lager, alle Türme bekommen einen Kern.
+  - Taschen werden geöffnet. Die Myriaden sind fort; ihr HQ steht als Zuflucht wieder da (Platzhalter: neu aufgestellt).
+- **Sequenz mit Schock:** Brakk steht am eigenen HQ, Sonde 7 hintergeht ihn (`Verrat24.ZEILEN_WEITER`). Ein Schockimpuls (`Order24._schock`) nimmt ihm alle Erfahrung und Ringe; er fängt auf Stufe 4 mit 300 Beute neu an, und die Ringfelder der Fabriken erlöschen. Auch mit [Esc] übersprungen gilt der Schock.
+- Aus dem Menü gestartet gibt es weiter die vorgebaute Welt (Formation, Lager).
+- Prüfen: `godot --headless --path . --fixed-fps 60 -s werkzeuge/befehl24weitertest.gd` (schreibt `rogue_frei` ins Profil – vorher sichern).
+
 ### Menü und Editor (20.11., Schritt 5b)
 - **Brakk-Mode** im Startmenü hat jetzt zwei Unterpunkte: **Classic** (der bisherige Brakk-Mode) und **Rogue · Order 24**. Die Szenarien
   stehen weiter unter Herausforderungen (Paul, 20.11.).

@@ -29,9 +29,13 @@ func _initialize() -> void:
 	r["karte"] = a[0] if a.size() > 0 and not phasen else (a[1] if a.size() > 1 else "3-zitadelle")
 	r["brakk_schaden"] = 0
 	r["ueberleben_sek"] = 2000
+	r["geheim_ab"] = 0
 	if phasen:
-		for k: String in {"flucht_sek": 5, "jagd_start": 20, "vorstoss_start": 40, "vorstoss_sek": 5, "welle_takt": 6, "elite_jede": 3, "ueberleben_sek": 75, "sicht_verlust": 3, "such_sek": 4}:
-			r[k] = {"flucht_sek": 5, "jagd_start": 20, "vorstoss_start": 40, "vorstoss_sek": 5, "welle_takt": 6, "elite_jede": 3, "ueberleben_sek": 75, "sicht_verlust": 3, "such_sek": 4}[k]
+		var kurz := {"flucht_sek": 5, "jagd_start": 20, "vorstoss_start": 40, "vorstoss_sek": 5, "welle_takt": 6, "welle_takt_min": 3, "eskalation_sek": 30,
+			"welle_wachsen_sek": 10, "stufe2_ab": 30, "faehigkeit_ab": 45, "lager_neu_ab": 25, "lager_neu_takt": 8, "tore_ab": 30, "tore_takt": 4,
+			"elite_jede": 3, "ueberleben_sek": 0, "geheim_ab": 60, "myr_takt": 5, "geheim_cp_sek": 5, "geheim_hq_leben": 300, "sicht_verlust": 3, "such_sek": 4}
+		for k: String in kurz:
+			r[k] = kurz[k]
 	Order24.test_werte = r
 	var main_skript: GDScript = load("res://scripts/main.gd")
 	main_skript.set("naechster_start", "normal")
@@ -284,17 +288,23 @@ func _phasen_pruefen() -> void:
 	pruefe(o.phase_bei(vorstoss + 1.0, 0) == "vorstoss", "Phase: Vorstoß ab %.0f s" % vorstoss)
 
 
-## Ablauf mit verkürzten Zeiten (Flucht 5 s, Jagd 20 s, Vorstoß 40 s, Wellen alle 6 s, Sieg 75 s). Brakk springt alle 9 s
-## an einen weit entfernten Ort (so verlieren ihn die Trupps: suchen, dann Streife).
+## Ablauf mit verkürzten Zeiten (Flucht 5 s, Jagd 20 s, versteckter Vorstoß 40 s, Überläufer 60 s, Wellen alle 6 → 3 s).
+## Brakk springt bis zum Überläufer alle 9 s weit weg (so verlieren ihn die Trupps: suchen, dann Streife). Der Test hält
+## das Myriaden-HQ (räumt Technoclan-Truppen dort ab, sobald Brakk den Vorstoß bemerkt hat), damit der geheime Verlauf beginnt.
 func _phasen_lauf(k: Kommandant, karte: Karte) -> void:
 	var t := o.zeit
 	if o.vorbei or spiel.phase == 2:
-		pruefe(t >= o.wf("ueberleben_sek") - 1.0, "Ende: Sieg nach %.0f s (eingestellt %d)" % [t, int(o.w("ueberleben_sek"))])
+		pruefe(o.geheim_sieg, "Ende: Technoclan-HQ zerstört – geheimes Ende nach %.0f s" % t)
 		var b: Dictionary = spiel.ego._sieg_bericht if spiel.ego != null else o.bericht(true)
-		pruefe(str(b.get("kopf", "")) == "BEFEHL 24 ÜBERSTANDEN" and str(b.get("titel", "")) in ["Saboteur", "Geist", "Berserker"], "Siegbild: %s · Spielstil %s (%s)" % [str(b.get("kopf", "")), str(b.get("titel", "")), str(b.get("titel_grund", ""))])
+		pruefe(str(b.get("kopf", "")).begins_with("ÜBERLÄUFER") and str(b.get("titel", "")) in ["Saboteur", "Geist", "Berserker"], "Siegbild: %s · Spielstil %s" % [str(b.get("kopf", "")), str(b.get("titel", ""))])
 		pruefe(modi_gesehen.has("suche") and modi_gesehen.has("streife"), "Jagdtrupps: verlieren Brakk, suchen, gehen wieder Streife (%s)" % str(modi_gesehen.keys()))
 		print("TEST BEFEHL24 OK" if fehler.is_empty() else "TEST BEFEHL24 FEHLER %d: %s" % [fehler.size(), str(fehler)])
 		quit(0 if fehler.is_empty() else 1)
+		return
+	if t > 150.0:
+		pruefe(false, "Kein Ende nach 150 s (Überläufer %s, Schild aus %s, HQ %.0f)" % [str(o.geheim), str(o.hq_schild_aus), o.tc_hq_leben])
+		print("TEST BEFEHL24 FEHLER %d: %s" % [fehler.size(), str(fehler)])
+		quit(1)
 		return
 	for tr: Dictionary in o.trupps:
 		modi_gesehen[str(tr["modus"])] = true
@@ -316,45 +326,90 @@ func _phasen_lauf(k: Kommandant, karte: Karte) -> void:
 				passt = false
 		pruefe(passt or groessen.size() == 1, "Jagd: Trupps zu %d–%d (%s)" % [int(o.w("trupp_min")), int(o.w("trupp_max")), str(groessen)])
 		pruefe(absf(float(o.jaeger.size()) / float(maxi(1, alle)) - o.wf("jagd_anteil") / 100.0) < 0.15, "Jagd: %d von %d Truppen jagen (Soll %d %%)" % [o.jaeger.size(), alle, int(o.w("jagd_anteil"))])
-	if t > 20.0 + o.wf("welle_takt") * 3.0 + 2.0 and not merk.has("p_wellen"):
+	if t > 34.0 and not merk.has("p_raus"):
+		merk["p_raus"] = true
+		var unterwegs := 0
+		var n := 0
+		for id: int in (merk.get("erste_jaeger", []) as Array):
+			var e: Variant = instance_from_id(id)
+			if is_instance_valid(e):
+				n += 1
+				var hier := karte.zelle_bei((e as Node2D).position)
+				var zz: Vector2i = o.marschziel(e as Einheit)
+				if zz != Karte.KEINE and (hier.distance_to(zz) <= 1.5 or not karte.einheiten_weg(hier, zz).is_empty()):
+					unterwegs += 1
+		pruefe(n > 0 and float(unterwegs) / float(n) >= 0.8, "Jagd: Jäger haben einen Weg zu ihrem Ziel (%d von %d)" % [unterwegs, n])
+	if t > 38.0 and not merk.has("p_wellen"):
 		merk["p_wellen"] = true
 		var elite := false
 		for tr: Dictionary in o.trupps:
 			var m: Array = (tr["mitglieder"] as Array).filter(func(x: Variant) -> bool: return is_instance_valid(x))
 			if m.size() == 3 and m.all(func(x: Variant) -> bool: return bool((x as Einheit).daten.get("elite", false))):
 				elite = true
-		pruefe(o.wellen >= 3, "Wellen aus dem Schild: %d nach %.0f s" % [o.wellen, t])
-		pruefe(elite, "Dritte Welle: Elitetrupp aus genau drei")
-	if t > 34.0 and not merk.has("p_raus"):
-		merk["p_raus"] = true
-		var draussen := 0
-		var n := 0
-		for id: int in (merk.get("erste_jaeger", []) as Array):
-			var e: Variant = instance_from_id(id)
-			if is_instance_valid(e):
-				n += 1
-				if (e as Node2D).position.distance_to(o.schild_mitten[0]) > (Order24.SCHILD_RADIUS + 3.0) * Werte.ZELLE:
-					draussen += 1
-		pruefe(n > 0 and float(draussen) / float(n) >= 0.5, "Jagd: Jäger schwärmen aus (%d von %d weit weg vom Schild)" % [draussen, n])
-	if t > 41.5 and not merk.has("p_vorstoss"):
-		merk["p_vorstoss"] = true
-		var v := 0
-		for tr: Dictionary in o.trupps:
-			if str(tr["modus"]) == "vorstoss":
-				v += 1
-		pruefe(o.phase() == "vorstoss" and v == 1, "Phase bei %.0f s: Vorstoß, ein Trupp zum Myriaden-HQ" % t)
-	if t > 68.0 and not merk.has("p_hq"):
-		merk["p_hq"] = true
-		if not o.hq_eingenommen:
-			print("INFO Vorstoß kam in der verkürzten Zeit nicht an (%d %%) – HQ-Fall direkt ausgelöst" % roundi(o.vorstoss_anteil * 100.0))
-			o._zweites_hq()
-		var hq_kit := false
-		for m: Dictionary in o.medkits:
-			if bool(m.get("hq", false)):
-				hq_kit = true
-		pruefe(not o.am_terminal(karte.mitte(o.terminal) + Vector2(Werte.ZELLE, Werte.ZELLE) * 0.5) and not hq_kit, "Myriaden-HQ gefallen: Ringterminal unerreichbar, Med-Kit dort weg")
+		pruefe(o.wellen >= 3 and elite, "Wellen aus dem Schild: %d nach %.0f s, darunter ein Elitetrupp aus drei" % [o.wellen, t])
+		pruefe(o.welle_takt_jetzt() < o.wf("welle_takt"), "Eskalation: Wellentakt %.1f s (Start %d s)" % [o.welle_takt_jetzt(), int(o.w("welle_takt"))])
+		pruefe(o.fabrik_hp.size() > int(merk.get("lager_start", 0)), "Eskalation: neues Lager gebaut (%d Lager)" % o.fabrik_hp.size())
+		pruefe(o.tore_gesetzt >= 1 or o.tor_versuche >= 1, "Eskalation: Tore in den Wällen – %d gesetzt, %d geprüft" % [o.tore_gesetzt, o.tor_versuche])
+	if not merk.has("lager_start"):
+		merk["lager_start"] = o.fabrik_hp.size()
+	if t > 52.0 and not merk.has("p_faehig"):
+		merk["p_faehig"] = true
+		var faehig := 0
+		for e in o._truppen():
+			if str((e as Einheit).faehigkeit) != "":
+				faehig += 1
+		pruefe(faehig > 0, "Eskalation: Wellen mit Fähigkeiten (%d Truppen)" % faehig)
+		pruefe(o.phase_text().find("Vorstoß") < 0, "Versteckter Vorstoß: die Anzeige verrät nichts (%s)" % o.phase_text())
+		print("INFO Brakk hat den Vorstoß bemerkt: %s (Einnahme %d %%)" % [str(o._brakk_ahnt), roundi(o.vorstoss_anteil * 100.0)])
+	# Brakk hält das Myriaden-HQ: wer dort steht, fällt (sobald Brakk es bemerkt hat)
+	if o._brakk_ahnt and not o.geheim:
+		var hq := karte.mitte(Werte.ANGRIFFS_ZELLE)
+		for e in o._truppen():
+			if (e as Node2D).position.distance_to(hq) <= 2.0 * Werte.ZELLE:
+				(e as Einheit).nimm_schaden(99999.0)
+	if o.geheim and not merk.has("p_geheim"):
+		merk["p_geheim"] = true
+		pruefe(not o.hq_eingenommen and karte.cp_aktiv, "Überläufer beginnt bei %.0f s (Myriaden-HQ gehalten)" % t)
+		spiel.budget = 2000
+		var gebaut := 0
+		for y in range(1, Werte.ZEILEN - 1):
+			for x in Werte.ZONE_SPALTEN:
+				if gebaut < 3 and o.myr_bauen(Order24.MYR_TYPEN[gebaut], Vector2i(x, y), karte.mitte(Vector2i(x, y))) == "":
+					gebaut += 1
+		pruefe(gebaut == 3 and o.myr_fabriken.size() == 3, "Überläufer: 3 Myriaden-Fabriken in der Zone gebaut")
+		pruefe(o.myr_bauen("hund", Vector2i(Werte.ZONE_SPALTEN + 2, 3), karte.mitte(Vector2i(Werte.ZONE_SPALTEN + 2, 3))) != "", "Überläufer: außerhalb der Zone wird nicht gebaut")
+		merk["geheim_t"] = t
+	if o.geheim and merk.has("geheim_t"):
+		var seit := t - float(merk["geheim_t"])
+		if seit > o.wf("myr_takt") + 1.0 and not merk.has("p_myr"):
+			merk["p_myr"] = true
+			var myr: int = spiel.gegner.filter(func(g: Variant) -> bool: return not (g is Order24.BrakkZiel)).size()
+			pruefe(myr > 0, "Überläufer: Myriaden-Welle läuft (%d Myriaden)" % myr)
+			for i in karte.checkpoints.size():
+				spiel.checkpoint_erreicht(i)   # Brakk und die Myriaden haben beide Checkpoints
+		if merk.has("p_myr") and not merk.has("p_schild"):
+			for i in karte.checkpoints.size():
+				karte.cp_feind[i] = true   # halten
+			if o.hq_schild_aus:
+				merk["p_schild"] = true
+				pruefe(true, "Überläufer: beide Checkpoints gehalten – Schild des Technoclan-HQ gefallen")
+				var ziel: Gegner = null
+				for z: Gegner in o.ego_ziele():
+					if (z as Order24.TechnoZiel).art == "hq":
+						ziel = z
+				o._ziele_pflegen()
+				for z: Gegner in o.ego_ziele():
+					if (z as Order24.TechnoZiel).art == "hq":
+						ziel = z
+				pruefe(ziel != null, "Überläufer: Technoclan-HQ ist ein Ziel für Brakks Waffen")
+				if ziel != null:
+					spiel.schadensquelle = "fabrik:-1,-1"
+					ziel.nimm_schaden(99999.0)
+					spiel.schadensquelle = ""
+				else:
+					o._tc_hq_treffer(99999.0)
 	# Brakk springt weit weg (Brakks Tempo verunsichert die KI)
-	if t >= _sprung and t > 22.0:
+	if t >= _sprung and t > 22.0 and not o.geheim:
 		_sprung = t + 9.0
 		var hier := karte.zelle_bei(k.position)
 		for versuch in 60:

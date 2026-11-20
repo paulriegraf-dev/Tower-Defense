@@ -25,7 +25,16 @@ extends Node
 
 const STANDARD := {
 	# 20.11. (Paul, Ergänzung Befehl 24): Ablauf Flucht → Sabotage → Jagd → Vorstoß, alle Zeiten in echten Sekunden
-	"ueberleben_sek": 900,      # so lange überstehen = Sieg (15 Minuten)
+	"ueberleben_sek": 0,        # 0 = endlos (Paul, 20.11.: kein Sieg nach Zeit – die Wertung ist, wie lange Brakk durchhält); sonst Sieg nach so vielen Sekunden
+	"geheim_ab": 900,           # hält Brakk das Myriaden-HQ bis hierhin, beginnt der geheime Verlauf „Überläufer“ (0 = aus)
+	"myr_takt": 30,             # Überläufer: Wellenzyklus der Myriaden-Fabriken
+	"myr_wert": 60,             # Wert der Einheiten je Fabrik und Zyklus (Hund 10 → 6 Hunde, Fahne 75 → 1)
+	"myr_bau_mal": 4,           # Baupreis = Einheitenpreis × so viel
+	"myr_kosten_anteil": 50,    # Prozent des Einheitenpreises kostet die Produktion je Zyklus
+	"geheim_einkommen": 30,     # Beute je Zyklus
+	"geheim_cp_sek": 30,        # beide Checkpoints so lange halten → Schild des Technoclan-HQ fällt
+	"geheim_hq_leben": 3000,    # Leben des Technoclan-HQ
+	"myr_rueck_sek": 10,        # so lange am besetzten Myriaden-HQ stehen (ohne Technoclan in der Nähe) = zurückerobert
 	"flucht_sek": 45,           # Flucht: niemand jagt, die Truppen gehen in Stellung
 	"jagd_start": 150,          # Sabotage bis hier (Verteidiger statisch), dann Jagd …
 	"sabotage_ende_fabriken": 2,  # … oder schon, sobald so viele Fabriken zerstört sind
@@ -35,11 +44,25 @@ const STANDARD := {
 	"sicht_verlust": 8,         # so lange aus der Sicht, dann sucht der Trupp …
 	"such_sek": 20,             # … so lange um den letzten Punkt, dann wieder Streife
 	"welle_takt": 90,           # in der Jagd alle so viele Sekunden ein neuer Trupp aus den Schild-Fabriken
+	"welle_takt_min": 40,       # 20.11. (Paul): Eskalation – der Takt sinkt bis hierhin …
+	"eskalation_sek": 600,      # … über so viele Sekunden ab Jagdbeginn
+	"welle_wachsen_sek": 120,   # alle so viele Sekunden ein Mann mehr je Welle
+	"stufe2_ab": 420,           # ab hier kommen Wellen auf Fabrik-Stufe 2 …
+	"faehigkeit_ab": 720,       # … ab hier auf Stufe 3 mit Fähigkeit (Minigun, Brandfeld …)
+	"staerke_je_min": 4,        # Prozent mehr Schaden je Minute für neue Truppen
+	"tempo_je_min": 2,          # Prozent schneller je Minute (höchstens +40 %)
+	"leben_je_min": 3,          # Prozent mehr Leben je Minute
+	"lager_neu_ab": 360,        # ab hier baut der Technoclan neue Lager (außer Brakks Sicht) …
+	"lager_neu_takt": 150,      # … so oft …
+	"lager_max": 8,             # … bis so viele Lager stehen
+	"tore_ab": 480,             # ab hier setzt er Tore in seine Wälle Richtung Myriaden-HQ …
+	"tore_takt": 60,            # … so oft …
+	"tore_max": 4,              # … höchstens so viele
 	"welle_groesse": 5,         # so groß (jede zerstörte Fabrik draußen: einer weniger, dauerhaft)
 	"elite_jede": 3,            # jede so vielte Welle ein Elitetrupp aus genau drei
 	"vorstoss": true,           # Technoclan darf das Myriaden-HQ einnehmen
 	"vorstoss_start": 480,      # ab dann marschiert ein Jagdtrupp darauf
-	"vorstoss_sek": 15,         # so lange muss er es halten
+	"vorstoss_sek": 30,         # so lange muss er es halten
 	"brakk_schaden": 25,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an (Balance gegen seine Beweglichkeit)
 	"medkit_takt": 60,          # Med-Kit am Myriaden-HQ liegt so oft wieder, nach dessen Fall so oft eins verstreut
 	"medkit_heilung": 40,       # Prozent von Brakks Leben
@@ -108,6 +131,13 @@ var _phase_vorher := ""
 var _terminal_erklaert := false
 var _takt := 0.0
 var _druck_naechster := 0.0
+var geheim := false              # 20.11. (Paul): geheimer Verlauf „Überläufer“ läuft
+var _lager_naechst := 0.0
+var _tore_naechst := 0.0
+var tore_gesetzt := 0
+var tor_versuche := 0             # Prüfung: so oft wurde nach einem Tor gesucht
+var _brakk_ahnt := false
+var funk: Verrat24 = null         # Funkspruch im Spiel (Steuerung frei)
 var vorstoss_anteil := 0.0       # 0..1 Einnahme des Myriaden-HQ
 var hq_eingenommen := false
 var schild_mitten: Array[Vector2] = []
@@ -147,6 +177,7 @@ var _hatte_pilot := false
 var _schnellstart := false       # Besatzung der Fabriken steht gleich zu Beginn
 var kills := 0
 var verrat_ueberspringen := false   # Test: ohne Verrat-Sequenz
+var weiter := false                # 20.11. (Paul): nach dem Classic-Sieg weitergespielt – die eigene Verteidigung ist der Gegner
 static var test_werte := {}       # Tests: überschreiben das Regelpaket (main lädt die Karte beim Start neu)
 var verrat: Verrat24 = null       # 20.11.: läuft gerade die Verrat-Sequenz?
 var verrat_fertig := false
@@ -199,6 +230,9 @@ func einrichten(p_spiel: Node) -> void:
 
 
 func _karte_aufbauen() -> void:
+	if weiter:
+		_karte_uebernehmen()
+		return
 	var wahl := str(w("karte"))
 	var formationen: Array[String] = Werte.ALARM_FORMATIONEN
 	var phantome: Array = Phantom.liste("verteidigung") if Werte.SPALTEN == 28 else []
@@ -289,6 +323,71 @@ func _karte_aufbauen() -> void:
 	print("ORDER24 Fabriken %d (im Schild %d) · Stellungen %d · Türme %d (Heiltürme %d) · Batterie %s" % [spiel.fabriken.size(), innen, _zaehle_ausbau(Karte.STELLUNG), _zaehle_ausbau(Karte.TURM), karte.turm_art.values().count("heil"), str(b_feld)])
 
 
+## 20.11. (Paul): Weiterspielen nach dem Classic-Sieg – nichts neu bauen: die Verteidigung des Spielers ist die Karte.
+## Schild ums HQ; fehlen Fabriken darin, kommen welche dazu (von dort kommen die Jagdwellen). Alle Fabriken draußen sind
+## Lager (Leben, Sabotage, Streife), alle Türme haben einen Kern. Wege aus Taschen werden geöffnet, die Zuflucht liegt am
+## Myriaden-HQ.
+func _karte_uebernehmen() -> void:
+	var basis_mitte: Vector2 = karte.mitte(karte.basis) + Vector2(0, -Werte.ZELLE * 0.5)
+	schild_mitten = [basis_mitte]
+	var innen := 0
+	for z: Vector2i in spiel.fabriken:
+		if _im_schild(karte.mitte(z)) and str(spiel.fabriken[z]["typ"]) != "pilot":
+			innen += 1
+	var innen_felder: Array[Vector2i] = []
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var z := karte.basis + Vector2i(dx, dy)
+			if karte.ist_bebaubar(z) and karte.mitte(z).distance_to(basis_mitte) < (SCHILD_RADIUS - 0.5) * Werte.ZELLE:
+				innen_felder.append(z)
+	innen_felder.shuffle()
+	for z: Vector2i in innen_felder:
+		if innen >= int(w("fabriken_innen")):
+			break
+		if _setze_fabrik(z, Werte.ALARM_TRUPPEN[innen % Werte.ALARM_TRUPPEN.size()], int(w("stufe_innen"))):
+			innen += 1
+	for z: Vector2i in spiel.fabriken:
+		if not _im_schild(karte.mitte(z)) and str(spiel.fabriken[z]["typ"]) != "pilot":
+			fabrik_hp[z] = wf("fabrik_leben")
+	for z: Vector2i in karte.ausbau:
+		if karte.ausbau[z] == Karte.TURM:
+			kern[z] = wf("kern_leben")
+	karte.turm_schaden.clear()
+	karte.ausgefallen.clear()
+	_wege_freimachen()
+	for z: Vector2i in karte.feld:
+		karte.fest[z] = true
+	karte.cp_aktiv = false
+	karte.cp_route = false
+	karte.aktualisiere_pfad()
+	for z: Vector2i in fabrik_hp:
+		rueckseite[z] = _rueck_feld(z)
+		routen[z] = _streifenweg(z)
+	print("ORDER24 Übernahme der eigenen Verteidigung: Fabriken %d (im Schild %d) · Stellungen %d · Türme %d" % [spiel.fabriken.size(), innen, _zaehle_ausbau(Karte.STELLUNG), kern.size()])
+
+
+## 20.11. (Paul): Schockimpuls in der Verrat-Sequenz nach dem Classic-Sieg – Brakk verliert Erfahrung und Ringe und
+## fängt auf der Startstufe von Befehl 24 neu an (Regelpaket brakk_stufe, sonst 4). Ringfelder der Fabriken erlöschen.
+func _schock() -> void:
+	var k: Kommandant = spiel.kommandant
+	if k == null:
+		return
+	for z: Vector2i in spiel.fabriken:
+		(spiel.fabriken[z] as Dictionary).erase("ring")
+	var vorher := k.fortschritt.stufe if k.fortschritt != null else 1
+	var ringe := k.fortschritt.ringe.size() if k.fortschritt != null else 0
+	k.max_leben = float(k.daten["leben"])
+	k.leben = k.max_leben
+	k.fortschritt = BrakkFortschritt.new(k)
+	spiel.budget = 300
+	if spiel.ego != null:
+		spiel.ego.set("_trauma", 1.0)
+	Ton.spiele(spiel, "tc-arc", 0.0)
+	Ton.spiele(spiel, "alert", -2.0)
+	spiel.melde("Schockimpuls: %d Ringe und alle Erfahrung verloren – zurück von Stufe %d auf Stufe %d." % [ringe, vorher, k.fortschritt.stufe], 6.0)
+	print("ORDER24 Schock: Stufe %d → %d, %d Ringe weg" % [vorher, k.fortschritt.stufe, ringe])
+
+
 ## 20.11.: Fabrik direkt auf die Karte (ohne Bauregeln und Wegprüfung – im Aufbau gilt der Gegnerweg nicht).
 func _setze_fabrik(z: Vector2i, typ: String, stufe: int) -> bool:
 	if not karte.ist_bebaubar(z) or karte.ist_basis(z):
@@ -374,49 +473,105 @@ func _wege_freimachen() -> void:
 	var m: Vector2 = schild_mitten[0]
 	var extra := {}
 	var geoeffnet := 0
+	var schild: Array[Vector2i] = []
+	for y in Werte.ZEILEN:
+		for x in Werte.SPALTEN:
+			var z := Vector2i(x, y)
+			if karte.mitte(z).distance_to(m) < (SCHILD_RADIUS - 0.3) * Werte.ZELLE and karte.ist_begehbar(z) and karte.ist_frei(z):
+				schild.append(z)
 	for ziel_y: float in [0.15, 0.5, 0.85]:
 		var ziel := Vector2i(Werte.ZONE_SPALTEN + 1, clampi(roundi(float(Werte.ZEILEN - 1) * ziel_y), 1, Werte.ZEILEN - 2))
-		var kosten := {}
-		var vorher := {}
-		var offen: Array[Vector2i] = []
-		for y in Werte.ZEILEN:
-			for x in Werte.SPALTEN:
-				var z := Vector2i(x, y)
-				if karte.mitte(z).distance_to(m) < (SCHILD_RADIUS - 0.3) * Werte.ZELLE and karte.ist_begehbar(z) and karte.ist_frei(z):
-					kosten[z] = 0.0
-					offen.append(z)
-		while not offen.is_empty():
-			var bi := 0
-			for i in offen.size():
-				if float(kosten[offen[i]]) < float(kosten[offen[bi]]):
-					bi = i
-			var z: Vector2i = offen[bi]
-			offen.remove_at(bi)
-			if z == ziel:
-				break
+		geoeffnet += _oeffne_weg(schild, ziel, extra)
+	# 20.11. (Paul): auch jedes Lager hat einen Weg zum Schild (sonst stehen seine Truppen in einer Tasche fest)
+	if not schild.is_empty():
+		for f: Vector2i in fabrik_hp:
+			var raus: Array[Vector2i] = []
 			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				var n := z + d
-				var k := _durchgang_kosten(n)
-				if k >= INF:
-					continue
-				var neu := float(kosten[z]) + k + float(extra.get(n, 0.0))
-				if neu < float(kosten.get(n, INF)):
-					if not kosten.has(n):
-						offen.append(n)
-					kosten[n] = neu
-					vorher[n] = z
-		if not vorher.has(ziel):
-			continue
-		var z2: Vector2i = ziel
-		while vorher.has(z2):
-			extra[z2] = 3.0
-			if karte.inhalt(z2) == Karte.WALL:
-				karte.entferne(z2)
-				geoeffnet += 1
-			z2 = vorher[z2]
+				if karte.ist_begehbar(f + d) and karte.ist_frei(f + d):
+					raus.append(f + d)
+			if raus.is_empty():
+				continue
+			if not karte.einheiten_weg(raus[0], schild[0]).is_empty():
+				continue
+			geoeffnet += _oeffne_weg(raus, schild[0], extra)
+		# jede abgeschlossene Fläche (Tasche in der Formation) bekommt einen Durchbruch
+		for runde in 12:
+			var tasche := _tasche(schild[0])
+			if tasche.is_empty():
+				break
+			var n := _oeffne_weg(tasche, schild[0], extra)
+			if n == 0:
+				break
+			geoeffnet += n
+			karte.aktualisiere_pfad()
 	karte.pruefe_stuetzen()
 	karte.aktualisiere_pfad()
 	print("ORDER24 Wege aus dem Schild: %d Erdwälle geöffnet" % geoeffnet)
+
+
+## Eine begehbare Fläche, von der aus `ziel` nicht erreichbar ist (leer = keine). Nachbarschaft wie die Truppen: 4 Richtungen.
+func _tasche(ziel: Vector2i) -> Array[Vector2i]:
+	var gesehen := {}
+	for y in Werte.ZEILEN:
+		for x in range(Werte.ZONE_SPALTEN, Werte.SPALTEN):
+			var s := Vector2i(x, y)
+			if gesehen.has(s) or not karte.ist_begehbar(s) or not karte.ist_frei(s):
+				continue
+			var flaeche: Array[Vector2i] = [s]
+			gesehen[s] = true
+			var i := 0
+			while i < flaeche.size():
+				for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var n := flaeche[i] + d
+					if karte.in_karte(n) and not gesehen.has(n) and karte.ist_begehbar(n) and karte.ist_frei(n):
+						gesehen[n] = true
+						flaeche.append(n)
+				i += 1
+			if not flaeche.has(ziel) and karte.einheiten_weg(s, ziel).is_empty():
+				return flaeche
+	return []
+
+
+## Günstigster Weg von einem der Felder `von` nach `ziel` (frei 1, blanker Erdwall 6, schon benutzte Felder teurer);
+## Erdwälle darauf werden entfernt. Gibt zurück, wie viele.
+func _oeffne_weg(von: Array[Vector2i], ziel: Vector2i, extra: Dictionary) -> int:
+	var kosten := {}
+	var vorher := {}
+	var offen: Array[Vector2i] = []
+	for z: Vector2i in von:
+		kosten[z] = 0.0
+		offen.append(z)
+	while not offen.is_empty():
+		var bi := 0
+		for i in offen.size():
+			if float(kosten[offen[i]]) < float(kosten[offen[bi]]):
+				bi = i
+		var z: Vector2i = offen[bi]
+		offen.remove_at(bi)
+		if z == ziel:
+			break
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := z + d
+			var k := _durchgang_kosten(n)
+			if k >= INF:
+				continue
+			var neu := float(kosten[z]) + k + float(extra.get(n, 0.0))
+			if neu < float(kosten.get(n, INF)):
+				if not kosten.has(n):
+					offen.append(n)
+				kosten[n] = neu
+				vorher[n] = z
+	if not vorher.has(ziel):
+		return 0
+	var geoeffnet := 0
+	var z2: Vector2i = ziel
+	while vorher.has(z2):
+		extra[z2] = 3.0
+		if karte.inhalt(z2) == Karte.WALL:
+			karte.entferne(z2)
+			geoeffnet += 1
+		z2 = vorher[z2]
+	return geoeffnet
 
 
 ## Kosten eines Felds für _wege_freimachen: frei 1, blanker Erdwall 6 (wird geöffnet), sonst unpassierbar.
@@ -709,6 +864,8 @@ func _verrat_beginnen() -> void:
 	ego.gier = atan2(-zum_hq.x, -zum_hq.y)   # Blick zum HQ (gier 0 = Norden)
 	ego.nick = -0.08
 	verrat = Verrat24.new()
+	if weiter:
+		verrat.zeilen = Verrat24.ZEILEN_WEITER   # 20.11. (Paul): nach dem Sieg – mit Schockimpuls
 	add_child(verrat)
 	verrat.ereignis.connect(_verrat_ereignis)
 	verrat.fertig.connect(_verrat_ende)
@@ -730,8 +887,12 @@ func _verrat_ereignis(was: String) -> void:
 					e.zustand = Einheit.Zustand.AUF_POSTEN   # nur für die Anziel-Pose (die Haltung aus der Stellung)
 			if was == "ueberspringen":
 				schild_auf = 1.0
+				if weiter:
+					_schock()   # auch übersprungen: Erfahrung und Ringe sind weg
 			else:
 				Ton.spiele(spiel, "tc-arc", -6.0)
+		"schock":
+			_schock()
 		"verrat":
 			Ton.spiele(spiel, "alert", -2.0)
 			var tw := create_tween()
@@ -819,13 +980,21 @@ func _process(delta: float) -> void:
 			_vorstoss(echt)
 	_medkits_pflegen(k, echt)
 	_3d_pflegen()
-	if zeit >= wf("ueberleben_sek"):
+	if wf("ueberleben_sek") > 0.0 and zeit >= wf("ueberleben_sek") and not geheim:
 		_ende(true)
+	# 20.11. (Paul): hält Brakk das Myriaden-HQ bis geheim_ab, beginnt der geheime Verlauf
+	if not geheim and wf("geheim_ab") > 0.0 and zeit >= wf("geheim_ab") and not hq_eingenommen:
+		_geheim_starten()
+	if geheim:
+		_geheim_pflegen(k, echt)
 
 
 ## Brakk kommt nicht in den Schild des HQ (am Rand wird er hinausgeschoben).
 func _schild_halten(k: Kommandant) -> void:
-	for m: Vector2 in schild_mitten:
+	for i in schild_mitten.size():
+		if i == 0 and hq_schild_aus:
+			continue   # 20.11.: Überläufer – Schild des Technoclan-HQ gefallen
+		var m: Vector2 = schild_mitten[i]
 		var r := SCHILD_RADIUS * Werte.ZELLE
 		var d := k.position - m
 		if d.length() < r:
@@ -835,6 +1004,17 @@ func _schild_halten(k: Kommandant) -> void:
 
 func restzeit() -> float:
 	return maxf(0.0, wf("ueberleben_sek") - zeit)
+
+
+## 20.11.: Uhr oben – endlos (ueberleben_sek 0) zählt sie die überstandene Zeit hoch, sonst herunter.
+func uhr_sek() -> float:
+	return zeit if wf("ueberleben_sek") <= 0.0 else restzeit()
+
+
+func uhr_anteil() -> float:
+	if wf("ueberleben_sek") <= 0.0:
+		return fmod(zeit, 60.0) / 60.0
+	return clampf(zeit / maxf(1.0, wf("ueberleben_sek")), 0.0, 1.0)
 
 
 # ------------------------------------------------------------------ Truppen der Fabriken (20.11.)
@@ -856,8 +1036,12 @@ func _ist_innen(e: Einheit) -> bool:
 
 ## 20.11. (Paul): Jede neue Technoclan-Truppe in Befehl 24 ist schwächer (truppen_leben), es gibt dafür mehr Fabriken.
 func neue_einheit(e: Einheit) -> void:
-	e.max_leben *= wf("truppen_leben") / 100.0
+	var minuten := zeit / 60.0   # 20.11. (Paul): Eskalation – nicht nur Leben, auch Schaden und Tempo wachsen mit der Zeit
+	e.max_leben *= wf("truppen_leben") / 100.0 * (1.0 + wf("leben_je_min") / 100.0 * minuten)
 	e.leben = e.max_leben
+	e.daten = e.daten.duplicate()
+	e.daten["schaden"] = float(e.daten["schaden"]) * (1.0 + wf("staerke_je_min") / 100.0 * minuten)
+	e.daten["tempo"] = float(e.daten["tempo"]) * minf(1.4, 1.0 + wf("tempo_je_min") / 100.0 * minuten)
 
 
 ## 20.11. (Paul): Läuft Brakk auf den Erdwällen, reichen die Türme weiter (und er ist ihr einziges Ziel).
@@ -957,6 +1141,17 @@ func _ziele_pflegen() -> void:
 		t.position = karte.mitte(z) + Vector2(0, -8)
 		t.leben = float(kern[z])
 		t.max_leben = wf("kern_leben")
+	# 20.11.: Überläufer – ohne Schild ist das Technoclan-HQ ein Ziel für Brakks Waffen
+	if geheim and hq_schild_aus and tc_hq_leben > 0.0:
+		noch["hq"] = true
+		var th: TechnoZiel = _ziele.get("hq", null)
+		if th == null:
+			th = _neues_ziel("hq")
+			th.zelle = karte.basis
+			th.art = "hq"
+		th.position = karte.mitte(karte.basis) + Vector2(0, -Werte.ZELLE * 0.5)
+		th.leben = tc_hq_leben
+		th.max_leben = wf("geheim_hq_leben")
 	for schl: String in _ziele.keys():
 		if not noch.has(schl):
 			var t: TechnoZiel = _ziele[schl]
@@ -995,6 +1190,10 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			kills += 1
 			if war_stellung:
 				_praemie("stellungen", int(w("praemie_stellung")), "Stellung geleert")
+		return
+	if t.art == "hq":
+		_tc_hq_treffer(menge * BAU_SCHADEN)
+		t.leben = tc_hq_leben
 		return
 	var z := t.zelle
 	if t.art == "kern":
@@ -1321,10 +1520,10 @@ func _piloten() -> void:
 
 
 ## Truppe ohne Fabrik-Kontingent (Pilot, Begleiter, Jagdtrupp, Verräter in der Sequenz).
-func _neue_truppe(typ: String, von: Vector2i, stufe: int) -> Einheit:
+func _neue_truppe(typ: String, von: Vector2i, stufe: int, faehigkeit: String = "") -> Einheit:
 	var e := Einheit.new()
 	spiel.figuren.add_child(e)
-	e.start(spiel, karte, typ, von, stufe)
+	e.start(spiel, karte, typ, von, stufe, faehigkeit)
 	neue_einheit(e)
 	spiel.einheiten.append(e)
 	return e
@@ -1429,11 +1628,12 @@ func phase_text() -> String:
 			return "Flucht · zum Myriaden-HQ im Westen"
 		"sabotage":
 			return "Sabotage · Jagd in %s" % _uhr(maxf(0.0, wf("jagd_start") - zeit))
-		"jagd":
-			return "Jagd · %d Trupps%s" % [trupps.size(), " · Vorstoß in %s" % _uhr(wf("vorstoss_start") - zeit) if bool(w("vorstoss")) and not hq_eingenommen else ""]
-	if hq_eingenommen:
-		return "Jagd · Myriaden-HQ gefallen"
-	return "Vorstoß · Myriaden-HQ %d %%" % roundi(vorstoss_anteil * 100.0)
+		"flucht", "sabotage":
+			pass
+	if geheim:
+		return "Überläufer · %s" % geheim_text()
+	# 20.11. (Paul): der Vorstoß aufs Myriaden-HQ bleibt geheim – angezeigt wird nur die Jagd
+	return "Jagd · %d Trupps · Druck ×%.1f%s" % [trupps.size(), druck(), " · Myriaden-HQ gefallen" if hq_eingenommen else ""]
 
 
 static func _uhr(sek: float) -> String:
@@ -1454,10 +1654,8 @@ func _ablauf(k: Kommandant) -> void:
 			spiel.melde("Sabotage: [E] an der Rückseite einer Fabrik halten, Erdwälle mit [C] sprengen, Turmkerne zerschießen.", 7.0)
 		elif p == "jagd" and not jagd:
 			_jagd_eroeffnen(k)
-		elif p == "vorstoss":
-			if not jagd:
-				_jagd_eroeffnen(k)
-			spiel.melde("Sonde 7: „Vorstoß auf das Myriaden-HQ.“", 5.0)
+		elif p == "vorstoss" and not jagd:
+			_jagd_eroeffnen(k)   # der Vorstoß selbst wird nicht angesagt
 	if not jagd and not in_deckung:
 		_alarm_auf_brakk(k)   # 20.11. (Paul): schon vor der Jagd Druck – wer ihn sieht, ruft die Truppen in der Nähe
 	if not jagd:
@@ -1465,8 +1663,9 @@ func _ablauf(k: Kommandant) -> void:
 	_bekannt_pflegen(k)
 	_trupps_lenken(k)
 	if zeit >= _naechste_welle:
-		_naechste_welle += wf("welle_takt")
+		_naechste_welle += welle_takt_jetzt()
 		_jagdwelle()
+	_eskalation()
 	if phase() == "vorstoss" and not hq_eingenommen and zeit >= _vorstoss_wahl:
 		_vorstoss_waehlen()
 
@@ -1528,14 +1727,22 @@ func _jagdwelle() -> void:
 		return
 	wellen += 1
 	var elite := int(w("elite_jede")) > 0 and wellen % int(w("elite_jede")) == 0
-	var n := 3 if elite else maxi(1, int(w("welle_groesse")) - int(sabotage["fabriken"]))
+	var wachsen := floori(maxf(0.0, zeit - wf("jagd_start")) / maxf(10.0, wf("welle_wachsen_sek")))   # 20.11. (Paul): Eskalation
+	var n := 3 if elite else maxi(1, int(w("welle_groesse")) + wachsen - int(sabotage["fabriken"]))
+	var stufe := 4 if elite else (3 if zeit >= wf("faehigkeit_ab") else (2 if zeit >= wf("stufe2_ab") else 1))
 	var neu: Array = []
 	for i in n:
 		var z: Vector2i = quellen[i % quellen.size()]
-		neu.append(_neue_truppe(str(spiel.fabriken[z]["typ"]), z, 4 if elite else 1))
+		var typ := str(spiel.fabriken[z]["typ"])
+		var faehig := ""
+		if stufe == 3:
+			var liste: Array = (Werte.STUFE_3.get(typ, {}) as Dictionary).keys()
+			if not liste.is_empty():
+				faehig = str(liste.pick_random())
+		neu.append(_neue_truppe(typ, z, stufe, faehig))
 	_neuer_trupp(neu, "jagd")
 	spiel.melde("Ein %s verlässt den Schild (%d)." % ["Elitetrupp" if elite else "Jagdtrupp", n], 3.0)
-	print("ORDER24 Welle %d bei %.0f s: %d%s" % [wellen, zeit, n, " Elite" if elite else ""])
+	print("ORDER24 Welle %d bei %.0f s: %d%s · Stufe %d · Takt %.0f s" % [wellen, zeit, n, " Elite" if elite else "", stufe, welle_takt_jetzt()])
 
 
 ## Ein Trupp: sieht er Brakk, jagt er; verliert er ihn sicht_verlust Sekunden, sucht er such_sek um den letzten Punkt,
@@ -1565,6 +1772,8 @@ func _trupps_lenken(k: Kommandant) -> void:
 			t["zuletzt"] = bekannt   # eine Stellung hat ihn gemeldet
 			t["gesehen"] = zeit
 			t["modus"] = "jagd"
+		# 20.11.: Ziel, das die Truppen zu Fuß erreichen (Brakk oben auf einem Wall oder in einer Tasche: das nächste Feld daneben)
+		t["ziel_ok"] = _erreichbar_nahe(t["zuletzt"] as Vector2i, karte.zelle_bei(((t["mitglieder"] as Array)[0] as Node2D).position))
 		match str(t["modus"]):
 			"jagd":
 				if zeit - float(t["gesehen"]) > wf("sicht_verlust"):
@@ -1590,7 +1799,7 @@ func _trupp_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 				s = {"z": _freies_feld_nahe(t["zuletzt"] as Vector2i, 4), "bis": zeit + 5.0}
 				_suchziel[id] = s
 			return s["z"]
-	var ziel: Vector2i = t["zuletzt"]
+	var ziel: Vector2i = t.get("ziel_ok", t["zuletzt"])
 	var nr := (t["mitglieder"] as Array).find(e)
 	if nr <= 0 or nr > 2:
 		return ziel
@@ -1599,7 +1808,23 @@ func _trupp_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 	if r.length() < Werte.ZELLE * 1.5:
 		return ziel   # schon da: alle direkt
 	var flanke := r.normalized().orthogonal() * (3.0 if nr == 1 else -3.0) * Werte.ZELLE
-	return _freies_feld_bei(karte.mitte(ziel) + flanke, ziel)
+	var fz := _freies_feld_bei(karte.mitte(ziel) + flanke, ziel)
+	return fz if not karte.einheiten_weg(karte.zelle_bei(e.position), fz).is_empty() else ziel
+
+
+## 20.11.: `ziel` selbst, wenn es von `von` zu Fuß erreichbar ist – sonst das nächste erreichbare Feld bis 4 Felder daneben.
+func _erreichbar_nahe(ziel: Vector2i, von: Vector2i) -> Vector2i:
+	if von == ziel or not karte.einheiten_weg(von, ziel).is_empty():
+		return ziel
+	for r in range(1, 5):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var z := ziel + Vector2i(dx, dy)
+				if karte.in_karte(z) and karte.ist_begehbar(z) and karte.ist_frei(z) and not karte.einheiten_weg(von, z).is_empty():
+					return z
+	return ziel
 
 
 ## Nächstes freie, begehbare Feld bei einem Punkt (sonst `sonst`).
@@ -1664,6 +1889,108 @@ func _wege_loggen() -> void:
 		print("JAGD Trupp %d: %d Jäger · Ziel %s · Weg %d Felder · Tore/Lücken %s" % [i + 1, m.size(), str(t["zuletzt"]), weg.size(), str(luecken)])
 
 
+
+
+# ------------------------------------------------------------------ Eskalation (20.11., Paul)
+
+## Wie stark der Druck gerade ist (1 = Jagdbeginn) – für die Anzeige.
+func druck() -> float:
+	return 1.0 + maxf(0.0, zeit - wf("jagd_start")) / maxf(60.0, wf("eskalation_sek"))
+
+
+## Abstand der Jagdwellen: von welle_takt zum Jagdbeginn auf welle_takt_min nach eskalation_sek.
+func welle_takt_jetzt() -> float:
+	var t := clampf(maxf(0.0, zeit - wf("jagd_start")) / maxf(1.0, wf("eskalation_sek")), 0.0, 1.0)
+	var takt := lerpf(wf("welle_takt"), wf("welle_takt_min"), t)
+	return takt * (1.5 if geheim else 1.0)
+
+
+## Neue Lager außer Brakks Sicht und Tore in den Wällen Richtung Myriaden-HQ.
+func _eskalation() -> void:
+	if zeit >= wf("lager_neu_ab") and zeit >= _lager_naechst and fabrik_hp.size() < int(w("lager_max")):
+		_lager_naechst = zeit + wf("lager_neu_takt")
+		_neues_lager()
+	if zeit >= wf("tore_ab") and zeit >= _tore_naechst and tore_gesetzt < int(w("tore_max")):
+		_tore_naechst = zeit + wf("tore_takt")
+		_tor_setzen()
+
+
+## Ein neues Lager (Fabrik, Stellungen, Turm) auf einem freien Feld, das Brakk gerade nicht sieht, nicht zu nah an ihm.
+func _neues_lager() -> void:
+	var k: Kommandant = spiel.kommandant
+	var kandidaten: Array[Vector2i] = []
+	for y in range(1, Werte.ZEILEN - 1):
+		for x in range(Werte.ZONE_SPALTEN + 3, Werte.SPALTEN - 1):
+			var z := Vector2i(x, y)
+			if not karte.ist_bebaubar(z) or _im_schild(karte.mitte(z)) or karte.ist_basis(z) or _terminal_feld(z):
+				continue
+			if karte.mitte(z).distance_to(k.position) < 7.0 * Werte.ZELLE or karte.sicht_frei(k.position, karte.mitte(z)):
+				continue
+			var frei := true
+			for f: Vector2i in spiel.fabriken:
+				if Vector2(f - z).length() < 4.0:
+					frei = false
+			for e in spiel.einheiten:
+				if is_instance_valid(e) and karte.zelle_bei((e as Node2D).position) == z:
+					frei = false
+			if frei:
+				kandidaten.append(z)
+	if kandidaten.is_empty():
+		return
+	var z: Vector2i = kandidaten.pick_random()
+	_setze_fabrik(z, Werte.ALARM_TRUPPEN[randi() % Werte.ALARM_TRUPPEN.size()], 2 if zeit >= wf("stufe2_ab") else 1)
+	var gebaut := 0
+	for d: Vector2i in [Vector2i(-2, 0), Vector2i(0, -2), Vector2i(0, 2), Vector2i(2, 0), Vector2i(-2, -2), Vector2i(-2, 2), Vector2i(2, -2), Vector2i(2, 2)]:
+		var n := z + d
+		if gebaut >= int(w("stellungen_je_fabrik")):
+			break
+		if karte.ist_bebaubar(n) and not _im_schild(karte.mitte(n)) and not karte.ist_basis(n) and not _terminal_feld(n) and karte.zelle_bei(k.position) != n:
+			karte.setze(n, Karte.WALL)
+			karte.baue_aus(n, Karte.STELLUNG)
+			karte.fest[n] = true
+			gebaut += 1
+	fabrik_hp[z] = wf("fabrik_leben")
+	karte.fest[z] = true
+	_lager_turm(z)
+	_wege_freimachen()
+	rueckseite[z] = _rueck_feld(z)
+	routen[z] = _streifenweg(z)
+	karte.aktualisiere_pfad()
+	spiel.melde("Der Technoclan hat ein neues Lager errichtet.", 3.0)
+	print("ORDER24 Neues Lager %s bei %.0f s (%d Stellungen)" % [str(z), zeit, gebaut])
+
+
+## Ein Tor in den Wall, der auf dem Weg vom Schild zum Myriaden-HQ am meisten Umweg kostet (die Truppen gehen hindurch).
+func _tor_setzen() -> void:
+	tor_versuche += 1
+	var start := _freies_feld_bei(karte.mitte(karte.basis) + Vector2(-(SCHILD_RADIUS + 1.0) * Werte.ZELLE, 0), karte.basis)
+	var ziel := _freies_feld_bei(karte.mitte(Werte.ANGRIFFS_ZELLE + Vector2i(Werte.ZONE_SPALTEN + 1, 0)), Werte.ANGRIFFS_ZELLE)
+	var bestes := Karte.KEINE
+	var gewinn := 0
+	var vorher := karte.einheiten_weg(start, ziel).size()
+	if vorher == 0:
+		vorher = 999
+	for z: Vector2i in karte.feld.keys():
+		if karte.feld[z] != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)):
+			continue
+		var quer := (karte.inhalt(z + Vector2i(0, 1)) == Karte.WALL and karte.inhalt(z - Vector2i(0, 1)) == Karte.WALL) or (karte.inhalt(z + Vector2i(1, 0)) == Karte.WALL and karte.inhalt(z - Vector2i(1, 0)) == Karte.WALL)
+		if not quer:
+			continue
+		karte._astar_einheiten.set_point_solid(z, false)   # zur Probe: wäre hier ein Tor
+		var nach := karte.einheiten_weg(start, ziel).size()
+		karte._astar_einheiten.set_point_solid(z, true)
+		if nach > 0 and vorher - nach > gewinn:
+			gewinn = vorher - nach
+			bestes = z
+	if bestes == Karte.KEINE:
+		print("ORDER24 Kein Tor nötig bei %.0f s (Weg %d Felder)" % [zeit, vorher])
+		return
+	karte.baue_aus(bestes, Karte.TOR)
+	karte.aktualisiere_pfad()
+	tore_gesetzt += 1
+	print("ORDER24 Tor %s bei %.0f s (Weg %d Felder kürzer)" % [str(bestes), zeit, gewinn])
+
+
 # ------------------------------------------------------------------ Vorstoß
 
 ## Ab vorstoss_start bekommt ein Jagdtrupp das Myriaden-HQ als Ziel (fällt er, nach 20 s der nächste).
@@ -1685,11 +2012,12 @@ func _vorstoss_waehlen() -> void:
 		return
 	bester["modus"] = "vorstoss"
 	_vorstoss_wahl = zeit + 20.0
-	spiel.melde("Ein Jagdtrupp marschiert auf das Myriaden-HQ – hält er es %d s, fällt es." % int(w("vorstoss_sek")), 5.0)
 	print("ORDER24 Vorstoß bei %.0f s: %d Truppen zum Myriaden-HQ" % [zeit, (bester["mitglieder"] as Array).size()])
 
 
 func _vorstoss(echt: float) -> void:
+	if myr_hq_besetzt:
+		return
 	var hq: Vector2 = karte.mitte(Werte.ANGRIFFS_ZELLE)
 	var da := 0
 	for t: Dictionary in trupps:
@@ -1699,9 +2027,17 @@ func _vorstoss(echt: float) -> void:
 			if is_instance_valid(e) and (e as Node2D).position.distance_to(hq) <= 1.6 * Werte.ZELLE:
 				da += 1
 	if da > 0:
+		if not _brakk_ahnt:
+			_brakk_ahnt = true   # 20.11. (Paul): Brakk merkt, dass am Myriaden-HQ etwas vorgeht
+			funken([["BRAKK", "Moment … was treiben die da am Myriaden-HQ?", ""], ["BRAKK", "Nehmen die es ein, ist meine letzte Zuflucht weg. Das lasse ich nicht zu.", ""]])
+			print("ORDER24 Brakk ahnt den Vorstoß bei %.0f s" % zeit)
 		vorstoss_anteil = minf(1.0, vorstoss_anteil + echt / maxf(1.0, wf("vorstoss_sek")))
 		if vorstoss_anteil >= 1.0:
-			_zweites_hq()
+			if geheim:
+				myr_hq_besetzt = true   # im Überläufer-Verlauf: kein zweiter Schild, Brakk kann es zurückholen
+				spiel.melde("Der Technoclan hat das Myriaden-HQ besetzt – die Fabriken stehen still. Stell dich hin und hol es zurück!", 6.0)
+			else:
+				_zweites_hq()
 	else:
 		vorstoss_anteil = maxf(0.0, vorstoss_anteil - echt / maxf(1.0, wf("vorstoss_sek")) * 0.5)
 
@@ -1820,9 +2156,258 @@ func _medkits_pflegen(k: Kommandant, echt: float) -> void:
 ## Ringterminal: steht Brakk darauf, öffnet [F] das Lichtterminal (Ringe kaufen und aufwerten) – auch im Kampf.
 ## Nach dem Fall des Myriaden-HQ liegt es im zweiten Schild.
 func am_terminal(fuss: Vector2) -> bool:
-	if terminal == Karte.KEINE or hq_eingenommen:
+	if terminal == Karte.KEINE or hq_eingenommen or myr_hq_besetzt:
 		return false
 	return fuss.distance_to(karte.mitte(terminal) + Vector2(Werte.ZELLE, Werte.ZELLE) * 0.5) <= 1.6 * Werte.ZELLE
+
+
+
+
+# ------------------------------------------------------------------ Überläufer – geheimer Verlauf (20.11., Paul)
+## Hält Brakk das Myriaden-HQ bis geheim_ab (der Vorstoß darauf ist nicht angesagt – Brakk ahnt es nur), meldet Sonde 7,
+## dass er übergelaufen ist. Dann baut er mit [1]–[7] Myriaden-Fabriken in der Zone des HQ (Baupreis = Einheitenpreis
+## × myr_bau_mal, je Wellenzyklus kostet die Produktion myr_kosten_anteil % der Einheiten). Alle myr_takt Sekunden
+## laufen die Myriaden los – über die Checkpoints zur Technoclan-Basis. Hält Brakk beide Checkpoints geheim_cp_sek lang,
+## fällt der Schild des Technoclan-HQ; Brakks Waffen und Myriaden an der Basis zerstören es → geheimes Ende.
+## Das Myriaden-HQ kann weiter fallen (die Fabriken stehen dann still) und von Brakk zurückerobert werden.
+
+const MYR_TYPEN: Array[String] = ["hund", "sphaere", "schild", "sprenger", "rauch", "sani", "fahne"]
+const MYR_FARBE := Color("ff7ad9")
+var myr_fabriken := {}            # Zonenfeld -> {"typ": String, "knoten": Node3D}
+var myr_hq_besetzt := false
+var _myr_rueck := 0.0
+var _myr_uhr := 0.0
+var cp_gehalten := 0.0
+var hq_schild_aus := false
+var tc_hq_leben := 0.0
+var geheim_sieg := false
+var _cp_brakk: Array[float] = [0.0, 0.0]
+var _cp_takt := 0.0
+
+
+func geheim_text() -> String:
+	if myr_hq_besetzt:
+		return "Myriaden-HQ besetzt – zurückerobern!"
+	if hq_schild_aus:
+		return "Technoclan-HQ %d %%" % roundi(100.0 * tc_hq_leben / maxf(1.0, wf("geheim_hq_leben")))
+	var n := karte.cp_feind.count(true)
+	return "Checkpoints %d/%d%s" % [n, karte.cp_feind.size(), " · Schild fällt in %d s" % ceili(wf("geheim_cp_sek") - cp_gehalten) if n == karte.cp_feind.size() and n > 0 else ""]
+
+
+## Funkspruch im Spiel (Steuerung bleibt frei): Zeilen wie in der Verrat-Sequenz.
+func funken(zeilen: Array) -> void:
+	if spiel.ego == null:
+		return
+	if funk != null:
+		funk.queue_free()
+	funk = Verrat24.new()
+	funk.zeilen = zeilen
+	funk.sperrt = false
+	add_child(funk)
+	funk.fertig.connect(func() -> void:
+		if funk != null:
+			funk.queue_free()
+		funk = null)
+
+
+func _geheim_starten() -> void:
+	geheim = true
+	karte.cp_aktiv = true
+	karte.cp_route = true
+	for i in karte.cp_feind.size():
+		karte.cp_feind[i] = false
+	karte.aktualisiere_pfad()
+	tc_hq_leben = wf("geheim_hq_leben")
+	_myr_uhr = 0.0
+	spiel._einblendung.banner("ÜBERLÄUFER", "Brakk führt jetzt die Myriaden", MYR_FARBE)
+	Ton.spiele(spiel, "alert")
+	funken([
+		["SONDE 7 · FUNK", "An alle Einheiten: Kommandant Brakk hat sich endgültig dem Feind angeschlossen.", ""],
+		["BRAKK", "Ihr habt es so gewollt. Myriaden – ab jetzt kämpft ihr mit mir.", ""],
+		["", "Baue Myriaden-Fabriken in der Zone am HQ mit [1]–[7]. Nimm beide Checkpoints und halte sie – dann fällt der Schild des Technoclan-HQ.", ""],
+	])
+	print("ORDER24 Überläufer bei %.0f s" % zeit)
+
+
+func _geheim_pflegen(k: Kommandant, echt: float) -> void:
+	# Wellenzyklus der Myriaden
+	_myr_uhr += echt
+	if _myr_uhr >= wf("myr_takt"):
+		_myr_uhr = 0.0
+		spiel.budget += int(w("geheim_einkommen"))
+		if not myr_hq_besetzt:
+			_myr_welle()
+	# Brakk nimmt Checkpoints ein (er gehört jetzt zu den Myriaden)
+	for i in karte.checkpoints.size():
+		var cp: Vector2i = karte.checkpoints[i]
+		if karte.cp_feind[i]:
+			_cp_brakk[i] = 0.0
+			continue
+		if karte.zelle_bei(k.position).distance_to(cp) <= 1.0 and not _technoclan_nah(karte.mitte(cp), 2.0):
+			_cp_brakk[i] += echt
+			if _cp_brakk[i] >= Werte.EINNAHME_SEK:
+				_cp_brakk[i] = 0.0
+				spiel.checkpoint_erreicht(i)
+				spiel.melde("Checkpoint %d eingenommen." % (i + 1), 3.0)
+		else:
+			_cp_brakk[i] = maxf(0.0, _cp_brakk[i] - echt)
+	# Der Technoclan holt verlorene Checkpoints zurück: die nächsten Truppen am Boden laufen hin
+	_cp_takt -= echt
+	if _cp_takt <= 0.0:
+		_cp_takt = 3.0
+		for i in karte.checkpoints.size():
+			if karte.cp_feind[i]:
+				_rueckholer(karte.checkpoints[i])
+	# Beide gehalten → Schild fällt; verliert Brakk beide wieder, kommt er zurück
+	var n := karte.cp_feind.count(true)
+	if n == karte.cp_feind.size() and n > 0:
+		cp_gehalten += echt
+		if cp_gehalten >= wf("geheim_cp_sek") and not hq_schild_aus:
+			hq_schild_aus = true
+			spiel._einblendung.banner("SCHILD GEFALLEN", "Das Technoclan-HQ ist verwundbar", MYR_FARBE)
+			Ton.spiele(spiel, "alert")
+			print("ORDER24 Schild des Technoclan-HQ gefallen bei %.0f s" % zeit)
+	else:
+		cp_gehalten = maxf(0.0, cp_gehalten - echt)
+		if n == 0 and hq_schild_aus:
+			hq_schild_aus = false
+			spiel.melde("Der Technoclan hat beide Checkpoints zurück – der Schild steht wieder.", 4.0)
+	# Besetztes Myriaden-HQ zurückerobern
+	if myr_hq_besetzt:
+		var hq := karte.mitte(Werte.ANGRIFFS_ZELLE)
+		if k.position.distance_to(hq) <= 2.0 * Werte.ZELLE and not _technoclan_nah(hq, 3.0):
+			_myr_rueck += echt
+			if _myr_rueck >= wf("myr_rueck_sek"):
+				myr_hq_besetzt = false
+				_myr_rueck = 0.0
+				vorstoss_anteil = 0.0
+				spiel.melde("Myriaden-HQ zurückerobert – die Fabriken laufen wieder.", 4.0)
+		else:
+			_myr_rueck = maxf(0.0, _myr_rueck - echt)
+
+
+func _technoclan_nah(p: Vector2, felder: float) -> bool:
+	for e in _truppen():
+		if (e as Node2D).position.distance_to(p) <= felder * Werte.ZELLE:
+			return true
+	return false
+
+
+## Bis zu drei Truppen am Boden (keine Verteidiger der Basis) laufen zu einem verlorenen Checkpoint.
+func _rueckholer(cp: Vector2i) -> void:
+	var p := karte.mitte(cp)
+	var liste: Array = _truppen().filter(func(x: Variant) -> bool: return (x as Einheit).zustand == Einheit.Zustand.BODEN and not _ist_innen(x as Einheit) and x != pilot and not eskorte.has(x))
+	liste.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.position.distance_squared_to(p) < b.position.distance_squared_to(p))
+	for e: Variant in liste.slice(0, 3):
+		alarm[(e as Node).get_instance_id()] = {"ziel": cp, "bis": zeit + 15.0}
+
+
+## Ein Wellenzyklus: jede Myriaden-Fabrik schickt Einheiten im Wert von myr_wert los, wenn die Beute für die Produktion reicht.
+func _myr_welle() -> void:
+	var los := 0
+	for z: Vector2i in myr_fabriken:
+		var typ := str((myr_fabriken[z] as Dictionary)["typ"])
+		var preis := maxi(1, Phantom.preis(typ))
+		var n := maxi(1, roundi(wf("myr_wert") / float(preis)))
+		var kosten := roundi(float(n * preis) * wf("myr_kosten_anteil") / 100.0)
+		if spiel.budget < kosten:
+			spiel.melde("Zu wenig Beute für die Myriaden-Fabrik (%s): %d nötig." % [str(Werte.GEGNER[typ]["name"]), kosten], 3.0)
+			continue
+		spiel.budget -= kosten
+		for i in n:
+			var g: Gegner = spiel._neuer_gegner(typ, z, 0)
+			g.position += Vector2(randf_range(-8, 8), randf_range(-8, 8))
+		los += n
+	if los > 0:
+		print("ORDER24 Myriaden-Welle bei %.0f s: %d Einheiten" % [zeit, los])
+
+
+## [1]–[7] im Überläufer-Verlauf: Myriaden-Fabrik auf dem Feld unter dem Fadenkreuz bauen (nur in der Zone am HQ).
+func ego_zahl(ego: EgoModus, taste: int) -> bool:
+	if not geheim or vorbei:
+		return false
+	var nr := taste - KEY_1
+	if nr < 0 or nr >= MYR_TYPEN.size():
+		return false
+	var grund := myr_bauen(MYR_TYPEN[nr], karte.zelle_bei(ego.ziel_welt()), ego._fuss2d())
+	if grund != "":
+		spiel.melde(grund, 2.5)
+	return true
+
+
+func myr_preis(typ: String) -> int:
+	return Phantom.preis(typ) * int(w("myr_bau_mal"))
+
+
+## Baut eine Myriaden-Fabrik; gibt den Grund zurück, wenn es nicht geht ("" = gebaut).
+func myr_bauen(typ: String, z: Vector2i, fuss: Vector2) -> String:
+	if myr_hq_besetzt:
+		return "Das Myriaden-HQ ist besetzt – erst zurückerobern."
+	if not karte.in_karte(z) or z.x >= Werte.ZONE_SPALTEN:
+		return "Myriaden-Fabriken nur in der Zone am Myriaden-HQ (ganz links)."
+	if myr_fabriken.has(z) or z == Werte.START_ZELLE or z == Werte.ANGRIFFS_ZELLE or _terminal_feld(z) or not karte.ist_frei(z):
+		return "Hier ist kein Platz."
+	if karte.mitte(z).distance_to(fuss) > 7.0 * Werte.ZELLE:
+		return "Zu weit weg – geh näher heran."
+	var preis := myr_preis(typ)
+	if spiel.budget < preis:
+		return "Zu wenig Beute: %d nötig." % preis
+	spiel.budget -= preis
+	myr_fabriken[z] = {"typ": typ, "knoten": null}
+	Ton.spiele(spiel, "ui-klick")
+	spiel.melde("Myriaden-Fabrik: %s (−%d)." % [str(Werte.GEGNER[typ]["name"]), preis], 2.5)
+	print("ORDER24 Myriaden-Fabrik %s bei %s" % [typ, str(z)])
+	return ""
+
+
+## Myriaden an der Technoclan-Basis (main.gegner_am_ziel): ohne Schild treffen sie das HQ, mit Schild verpuffen sie.
+func gegner_am_ziel(g: Gegner) -> bool:
+	if not geheim:
+		return false
+	g.trupp.erase(g)
+	spiel.gegner.erase(g)
+	g.queue_free()
+	if hq_schild_aus:
+		_tc_hq_treffer(float(maxi(20, Phantom.preis(g.typ))) * 3.0)
+	return true
+
+
+func _tc_hq_treffer(menge: float) -> void:
+	if not hq_schild_aus or vorbei:
+		return
+	tc_hq_leben -= menge
+	if tc_hq_leben <= 0.0:
+		tc_hq_leben = 0.0
+		geheim_sieg = true
+		print("ORDER24 Technoclan-HQ zerstört bei %.0f s – geheimes Ende" % zeit)
+		_ende(true)
+
+
+## Kasten in Myriaden-Farbe mit dem Bild der Einheit darüber (Platzhalter).
+func _myr_3d(hd: HdAnsicht) -> void:
+	for z: Vector2i in myr_fabriken:
+		var f: Dictionary = myr_fabriken[z]
+		if f["knoten"] != null:
+			continue
+		var kn := Node3D.new()
+		hd.add_child(kn)
+		kn.position = Vector3(float(z.x) + 0.5, 0.0, float(z.y) + 0.5)
+		_kasten3d(kn, Vector3(0.85, 0.6, 0.85), Color("5a2350"), Vector3(0, 0.3, 0))
+		_kasten3d(kn, Vector3(0.6, 0.12, 0.6), MYR_FARBE, Vector3(0, 0.66, 0))
+		var d: Dictionary = Werte.grafik_daten(Werte.GEGNER[str(f["typ"])])
+		if d.has("blatt") and d.has("zelle"):
+			var bild := AtlasTexture.new()
+			bild.atlas = load(str(d["blatt"]))
+			bild.region = Rect2(0, 0, float(d["zelle"]), float(d["zelle"]))
+			var s := Sprite3D.new()
+			s.texture = bild
+			s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			s.pixel_size = 0.7 / float(d["zelle"])
+			s.position = Vector3(0, 1.25, 0)
+			kn.add_child(s)
+		f["knoten"] = kn
+		_knoten3d.append(kn)
 
 
 # ------------------------------------------------------------------ Ego-Sicht: Tasten und Anzeige (20.11.)
@@ -1852,6 +2437,14 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 ## Anzeige unter der Uhr: Sprengladungen, „In Deckung“, Sabotage-Fortschritt und Hinweise.
 func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	var Stil := preload("res://scripts/ui/ui_stil.gd")
+	if geheim:
+		# 20.11.: Überläufer – Bauliste der Myriaden-Fabriken links
+		var by := roundf(g.y * 0.3)
+		Stil.schreibe(bild, Vector2(24, by), "MYRIADEN-FABRIKEN · Zone links", 14, MYR_FARBE)
+		for i in MYR_TYPEN.size():
+			var typ := MYR_TYPEN[i]
+			var preis := myr_preis(typ)
+			Stil.schreibe(bild, Vector2(24, by + 18.0 + i * 17.0), "[%d] %s  %d" % [i + 1, str(Werte.GEGNER[typ]["name"]), preis], 14, Stil.TEXT if spiel.budget >= preis else Stil.TEXT_BLASS)
 	var y := 116.0 + 52.0
 	var m := Vector2(g.x / 2.0, y)
 	if am_terminal(ego._fuss2d()):
@@ -1992,6 +2585,8 @@ func _3d_pflegen() -> void:
 		_schild3d.append(mi)
 	if not _schild3d.is_empty():
 		(_schild3d[0] as Node3D).scale = Vector3.ONE * maxf(0.001, schild_auf)   # 20.11.: Verrat – der Schild schließt sich
+		(_schild3d[0] as Node3D).visible = not hq_schild_aus
+	_myr_3d(hd)
 	# 20.11.: Sprengladungen am Boden (rot-gelbe Kästen), tickende Ladungen auf dem Wall (blinken), Trümmer, qualmende Türme
 	# t_ms von oben
 	for l: Dictionary in ladungen_boden:
@@ -2117,8 +2712,8 @@ func bericht(sieg: bool) -> Dictionary:
 	if k != null and k.fortschritt != null:
 		b = k.fortschritt.sieg_bericht(spiel, zeit)
 	var stil := spielstil()
-	b["kopf"] = "BEFEHL 24 ÜBERSTANDEN" if sieg else "GEFALLEN"
-	b["unterzeile"] = "%s gegen den Technoclan überstanden." % _uhr(zeit)
+	b["kopf"] = ("ÜBERLÄUFER · BEFEHL 24 GEBROCHEN" if geheim_sieg else "BEFEHL 24 ÜBERSTANDEN") if sieg else "GEFALLEN · %s ÜBERLEBT" % _uhr(zeit)
+	b["unterzeile"] = "Das Technoclan-HQ ist gefallen – nach %s." % _uhr(zeit) if geheim_sieg else "%s gegen den Technoclan überstanden." % _uhr(zeit)
 	b["titel"] = stil[0]
 	b["titel_grund"] = stil[1]
 	b["sekunden"] = zeit
@@ -2127,12 +2722,14 @@ func bericht(sieg: bool) -> Dictionary:
 	var an: Dictionary = b.get("anteile", {})
 	b["anteile"] = {"brakk": float(an.get("brakk", 0.0)), "truppen": 0.0, "tuerme": 0.0}   # Truppen und Türme sind hier der Gegner
 	b["hoehepunkte"] = [
-		["Überlebt", "%s von %s" % [_uhr(zeit), _uhr(wf("ueberleben_sek"))]],
+		["Überlebt", _uhr(zeit) if wf("ueberleben_sek") <= 0.0 else "%s von %s" % [_uhr(zeit), _uhr(wf("ueberleben_sek"))]],
 		["Fabriken zerstört / sabotiert", "%d / %d" % [int(sabotage["fabriken"]), int(sabotage["sabotiert"])]],
 		["Kills", str(kills)],
 		["Ringe", str((b.get("ringe", []) as Array).size())],
 		["Erdwälle gesprengt · in Deckung", "%d · %d %%" % [int(sabotage["waelle"]), roundi(100.0 * deckung_sek / maxf(1.0, zeit))]],
 	]
+	if geheim:
+		(b["hoehepunkte"] as Array).append(["Überläufer: Myriaden-Fabriken", str(myr_fabriken.size())])
 	return b
 
 

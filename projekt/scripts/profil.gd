@@ -193,6 +193,7 @@ static func setze_erfolg(id: String) -> bool:
 const CODES := {
 	"allesfrei": "alle Anführer frei",
 	"erfolge": "alle Erfolge",
+	"befehl24": "Brakk-Mode Rogue (Befehl 24) frei",   # 20.11.
 }
 const PER_CODE := "Code"
 
@@ -200,6 +201,11 @@ const PER_CODE := "Code"
 static func hat_code(code: String) -> bool:
 	_lade()
 	return (_d.get("codes", []) as Array).has(code)
+
+
+## 20.11. (Paul): Rogue (Befehl 24) ist frei, wenn Classic einmal gewonnen wurde (oder per Code „befehl24“/„allesfrei“).
+static func rogue_frei() -> bool:
+	return bool(einstellung("rogue_frei", false)) or hat_code("befehl24") or hat_code("allesfrei")
 
 
 ## Erfolg wirklich verdient (nicht über den Code „erfolge“)?

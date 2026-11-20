@@ -9,6 +9,7 @@ const Stil := preload("res://scripts/ui/ui_stil.gd")
 const TAFEL := Rect2(120, 34, 400, 292)
 const KNOPF_NOCHMAL := Rect2(196, 298, 116, 20)
 const KNOPF_MENUE := Rect2(328, 298, 116, 20)
+const KNOPF_WEITER := Rect2(240, 332, 160, 20)   # 20.11. (Paul): nach dem Classic-Sieg – weiter in Befehl 24
 
 var spiel: Node
 var bericht: Dictionary = {}
@@ -33,7 +34,9 @@ func _gui_input(event: InputEvent) -> void:
 		_maus = (event as InputEventMouseMotion).position
 	elif event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var p := (event as InputEventMouseButton).position
-		if KNOPF_NOCHMAL.has_point(p):
+		if bool(bericht.get("weiter", false)) and KNOPF_WEITER.has_point(p):
+			spiel.befehl24_weiterspielen()
+		elif KNOPF_NOCHMAL.has_point(p):
 			spiel._neustart()
 		elif KNOPF_MENUE.has_point(p):
 			spiel._zum_menue()
@@ -46,7 +49,10 @@ func _draw() -> void:
 	var af := str(bericht.get("anfuehrer", "brakk"))   # 20.11.: der Anführer steht mit drauf (Brakk wie bisher)
 	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), str(bericht.get("kopf", "SIEG")) + ("" if af == "brakk" else " · " + Anfuehrer.name(af).to_upper()), Stil.GROSS, Stil.GOLD)   # 20.11.: Kopf aus dem Bericht (Befehl 24: Überstanden / Gefallen)
 	male_bericht(self, Rect2(TAFEL.position + Vector2(10, 28), TAFEL.size - Vector2(20, 64)), bericht)
-	for k: Array in [[KNOPF_NOCHMAL, "Nochmal"], [KNOPF_MENUE, "Hauptmenü"]]:
+	var knoepfe: Array = [[KNOPF_NOCHMAL, "Nochmal"], [KNOPF_MENUE, "Hauptmenü"]]
+	if bool(bericht.get("weiter", false)):
+		knoepfe.append([KNOPF_WEITER, "Weiterspielen …?"])   # 20.11. (Paul)
+	for k: Array in knoepfe:
 		var r: Rect2 = k[0]
 		var an := r.has_point(_maus)
 		Stil.platte(self, r, 2.0, Stil.METALL if an else Stil.METALL_DUNKEL, Stil.LEUCHT if an else Stil.RAHMEN)

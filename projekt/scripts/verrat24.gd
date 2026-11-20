@@ -31,7 +31,23 @@ const ZEILEN := [
 	["SONDE 7 · FUNK", "Schild geschlossen. Alle Einheiten: Feuer frei.", "schuss"],
 	["", "Überlebe.", "los"],
 ]
+## 20.11. (Paul): nach dem Classic-Sieg („Weiterspielen …?“) – Sonde 7 hintergeht Brakk, ein Schockimpuls nimmt ihm
+## Erfahrung und Ringe.
+const ZEILEN_WEITER := [
+	["SONDE 7 · FUNK", "Das HQ der Myriaden ist gefallen. Glückwunsch, Kommandant Brakk.", ""],
+	["BRAKK", "Es ist vorbei. Die Repaulblik ist sicher – dank dieser Verteidigung.", ""],
+	["SONDE 7 · FUNK", "Der Rat dankt Ihnen. Und der Rat hat entschieden: Ein Kommandant, der allein eine Armee schlägt, ist eine Gefahr.", ""],
+	["SONDE 7 · FUNK", "Befehl 24 bestätigt.", ""],
+	["SONDE 7 · FUNK", "Kommandant Brakk … Sie sind entlassen.", "anlegen"],
+	["BRAKK", "Ihr Verräter! Das sind meine Wälle, meine Türme – für die Repaulblik!!", "verrat"],
+	["SONDE 7 · FUNK", "Schockimpuls auf den Kommandanten. Ringe und Gefechtsdaten löschen.", "schock"],
+	["BRAKK", "Meine Ringe … alles weg. Dann fange ich eben von vorn an.", ""],
+	["SONDE 7 · FUNK", "Schild geschlossen. Alle Einheiten: Feuer frei.", "schuss"],
+	["", "Überlebe. Die Ruine des Myriaden-HQ im Westen ist deine einzige Zuflucht.", "los"],
+]
 
+var zeilen: Array = ZEILEN          # 20.11.: auch für kurze Funksprüche (Order24.funk)
+var sperrt := true                # false: Funkspruch im Spiel – Steuerung frei, Fenster oben, kein Esc/Enter
 var _index := -1
 var _zeichen := 0.0
 var _warte := 0.0
@@ -51,7 +67,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var wurzel := Control.new()
 	wurzel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	wurzel.mouse_filter = Control.MOUSE_FILTER_STOP
+	wurzel.mouse_filter = Control.MOUSE_FILTER_STOP if sperrt else Control.MOUSE_FILTER_IGNORE
 	wurzel.gui_input.connect(_klick)
 	add_child(wurzel)
 	_rand = Control.new()
@@ -100,7 +116,8 @@ func _ready() -> void:
 	_hinweis = Label.new()
 	_schrift(_hinweis, 15)
 	_hinweis.add_theme_color_override("font_color", Color("7f98a6"))
-	_hinweis.text = "[Enter] weiter · [Esc] überspringen"
+	_hinweis.text = "[Enter] weiter · [Esc] überspringen" if sperrt else ""
+	_hinweis.visible = sperrt
 	rechts.add_child(_hinweis)
 	_naechste()
 
@@ -112,13 +129,13 @@ func _schrift(c: Control, einheiten: int) -> void:
 
 func _naechste() -> void:
 	_index += 1
-	if _index >= ZEILEN.size():
+	if _index >= zeilen.size():
 		fertig.emit()
 		return
 	_zeichen = 0.0
 	_warte = 0.0
 	_gemeldet = false
-	var z: Array = ZEILEN[_index]
+	var z: Array = zeilen[_index]
 	var wer := str(z[0])
 	_name.text = wer
 	_name.visible = wer != ""
@@ -126,7 +143,7 @@ func _naechste() -> void:
 	_bild.texture = load(BRAKK if wer == "BRAKK" else SONDE)
 	var brakk := wer == "BRAKK"
 	_name.add_theme_color_override("font_color", Color("ffd08a") if brakk else Color("9be9ff"))
-	_stil.border_color = ROT if (brakk and str(z[1]).begins_with("Ihr Verräter")) or wer == "" else HOLO
+	_stil.border_color = ROT if (brakk and str(z[1]).begins_with("Ihr Verräter")) or wer == "" or str(z[2]) == "schock" else HOLO
 	_text.add_theme_color_override("font_color", Color("ffe0e4") if wer == "" else HOLO_TEXT)
 	_text.text = ""
 	Ton.spiele(get_parent(), "ui-klick", -10.0)
@@ -137,22 +154,22 @@ func _process(delta: float) -> void:
 	rot = maxf(0.0, rot - echt * 0.25) if rot > 0.0 else 0.0
 	_rand.queue_redraw()
 	_lege_box()
-	if _index < 0 or _index >= ZEILEN.size():
+	if _index < 0 or _index >= zeilen.size():
 		return
-	var voll := str(ZEILEN[_index][1])
+	var voll := str(zeilen[_index][1])
 	if _zeichen < voll.length():
 		_zeichen = minf(float(voll.length()), _zeichen + echt * TIPP_TEMPO)
 		_text.text = voll.left(int(_zeichen))
 		return
 	if not _gemeldet:
 		_gemeldet = true
-		var was := str(ZEILEN[_index][2])
+		var was := str(zeilen[_index][2])
 		if was != "":
 			if was == "verrat":
 				rot = 1.0
 			ereignis.emit(was)
 	_warte += echt
-	if _warte >= (PAUSE + PAUSE_JE * float(voll.length())) * (0.7 if _index == ZEILEN.size() - 1 else 1.0):
+	if _warte >= (PAUSE + PAUSE_JE * float(voll.length())) * (0.7 if _index == zeilen.size() - 1 else 1.0):
 		_naechste()
 
 
@@ -163,7 +180,7 @@ func _lege_box() -> void:
 	_text.custom_minimum_size.x = maxf(200.0, breite - 140.0)
 	_box.size = Vector2(breite, 0)
 	_box.reset_size()
-	_box.position = Vector2((g.x - _box.size.x) / 2.0, g.y - _box.size.y - maxf(16.0, g.y * 0.06))
+	_box.position = Vector2((g.x - _box.size.x) / 2.0, g.y - _box.size.y - maxf(16.0, g.y * 0.06) if sperrt else g.y * 0.25)
 
 
 func _male_rand() -> void:
@@ -178,9 +195,9 @@ func _male_rand() -> void:
 
 ## Weiterblättern: erst die Zeile fertig zeigen, dann die nächste.
 func weiter() -> void:
-	if _index < 0 or _index >= ZEILEN.size():
+	if _index < 0 or _index >= zeilen.size():
 		return
-	var voll := str(ZEILEN[_index][1])
+	var voll := str(zeilen[_index][1])
 	if _zeichen < voll.length():
 		_zeichen = float(voll.length())
 		_text.text = voll
@@ -192,16 +209,20 @@ func weiter() -> void:
 
 func ueberspringen() -> void:
 	ereignis.emit("ueberspringen")
-	_index = ZEILEN.size()
+	_index = zeilen.size()
 	fertig.emit()
 
 
 func _klick(event: InputEvent) -> void:
+	if not sperrt:
+		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		weiter()
 
 
 func _input(event: InputEvent) -> void:
+	if not sperrt:
+		return
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	match (event as InputEventKey).keycode:

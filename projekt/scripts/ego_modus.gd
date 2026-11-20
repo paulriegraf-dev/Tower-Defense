@@ -404,6 +404,9 @@ func _input(event: InputEvent) -> void:
 			_feld_abbrechen()   # 19.11.: Ringfeld nicht setzen
 			get_viewport().set_input_as_handled()
 			return
+		if event.pressed and spiel.order24 != null and spiel.order24.ego_zahl(self, kc):
+			get_viewport().set_input_as_handled()   # 20.11.: Befehl 24, Überläufer – [1]–[7] Myriaden-Fabrik
+			return
 		# 20.11.: Schritt 6b – Fähigkeiten und Bewegung über die Tastenbelegung des Anführers (Werte.ANFUEHRER_EGO)
 		var taste := str(TASTEN.get(kc, ""))
 		if taste != "":
@@ -2925,14 +2928,14 @@ func _countdown_anzeige(g: Vector2) -> void:
 ## 20.11. (Schritt 5b): Order 24 – Restzeit, Phase und Beute oben in der Mitte.
 func _order24_anzeige(g: Vector2) -> void:
 	var o: Order24 = spiel.order24
-	var rest := ceili(o.restzeit())
+	var rest := ceili(o.uhr_sek())   # 20.11.: endlos – die Uhr zählt hoch
 	var farbe := Stil.WARN if o.jagd else Stil.GOLD
 	var m := Vector2(g.x / 2.0, 116.0)
 	var r := Rect2(m.x - 170.0, m.y - 18.0, 340.0, 36.0)
 	_bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
 	_bild.draw_rect(r, farbe, false, 2.0)
 	Stil.schreibe_mittig(_bild, m + Vector2(0, -2), "Befehl 24 · %d:%02d" % [rest / 60, rest % 60], 20, farbe)
-	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * clampf(o.zeit / maxf(1.0, o.wf("ueberleben_sek")), 0.0, 1.0), 3)), farbe)
+	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * o.uhr_anteil(), 3)), farbe)
 	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "%s · Budget %d" % [o.phase_text(), int(spiel.budget)], 14, Stil.TEXT_BLASS)
 	if o.am_terminal(_fuss2d()) and (_terminal == null or not _terminal.visible):
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 52), "[F] Ringterminal", 16, Stil.GOLD)
@@ -4638,6 +4641,17 @@ const SIEG_FLUG := 3.0           # Sekunden Kameraflug
 var _sieg_t := -1.0
 var _sieg_tafel: BrakkSieg = null
 var _sieg_bericht := {}
+
+
+## 20.11. (Paul): Classic gewonnen → „Weiterspielen …?“ – zurück aus Kameraflug und Übersicht in die Ego-Sicht (Befehl 24).
+func sieg_aufheben() -> void:
+	_sieg_t = -1.0
+	if _sieg_tafel != null:
+		_sieg_tafel.queue_free()
+		_sieg_tafel = null
+	_sieg_bericht = {}
+	_uhr_vorher = 0
+	_trauma = 0.0
 
 
 func sieg(sekunden: float) -> void:
