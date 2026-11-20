@@ -26,7 +26,7 @@ extends Node
 const STANDARD := {
 	# 20.11. (Paul, Ergänzung Befehl 24): Ablauf Flucht → Sabotage → Jagd → Vorstoß, alle Zeiten in echten Sekunden
 	"ueberleben_sek": 0,        # 0 = endlos (Paul, 20.11.: kein Sieg nach Zeit – die Wertung ist, wie lange Brakk durchhält); sonst Sieg nach so vielen Sekunden
-	"geheim_ab": 900,           # hält Brakk das Myriaden-HQ bis hierhin, beginnt der geheime Verlauf „Überläufer“ (0 = aus)
+	"geheim_ab": 720,           # hält Brakk das Myriaden-HQ bis hierhin, beginnt der geheime Verlauf „Überläufer“ (0 = aus)   # 20.11. (Paul): ab 12:00 statt 15:00
 	"myr_takt": 30,             # Überläufer: Wellenzyklus der Myriaden-Fabriken
 	"myr_wert": 60,             # Wert der Einheiten je Fabrik und Zyklus (Hund 10 → 6 Hunde, Fahne 75 → 1)
 	"myr_bau_mal": 4,           # (alt: Baupreis = Einheitenpreis × so viel – seit dem Ringfeld-Umbau unbenutzt)
@@ -46,12 +46,12 @@ const STANDARD := {
 	"trupp_max": 5,
 	"sicht_verlust": 8,         # so lange aus der Sicht, dann sucht der Trupp …
 	"such_sek": 20,             # … so lange um den letzten Punkt, dann wieder Streife
-	"welle_takt": 90,           # in der Jagd alle so viele Sekunden ein neuer Trupp aus den Schild-Fabriken
-	"welle_takt_min": 40,       # 20.11. (Paul): Eskalation – der Takt sinkt bis hierhin …
+	"welle_takt": 60,           # in der Jagd alle so viele Sekunden ein neuer Trupp aus den Schild-Fabriken
+	"welle_takt_min": 25,       # 20.11. (Paul): 25 statt 40 s, Eskalation – der Takt sinkt bis hierhin …
 	"eskalation_sek": 600,      # … über so viele Sekunden ab Jagdbeginn
 	"welle_wachsen_sek": 120,   # alle so viele Sekunden ein Mann mehr je Welle
-	"stufe2_ab": 420,           # ab hier kommen Wellen auf Fabrik-Stufe 2 …
-	"faehigkeit_ab": 720,       # … ab hier auf Stufe 3 mit Fähigkeit (Minigun, Brandfeld …)
+	"stufe2_ab": 300,           # ab hier kommen Wellen auf Fabrik-Stufe 2 …
+	"faehigkeit_ab": 540,       # … ab hier auf Stufe 3 mit Fähigkeit (Minigun, Brandfeld …)
 	"staerke_je_min": 4,        # Prozent mehr Schaden je Minute für neue Truppen
 	"tempo_je_min": 2,          # Prozent schneller je Minute (höchstens +40 %)
 	"leben_je_min": 10,         # Prozent mehr Leben je Minute – 20.11. (Paul): vorher 3 (Brakks Schaden wuchs viel schneller)
@@ -61,8 +61,8 @@ const STANDARD := {
 	"tore_ab": 480,             # ab hier setzt er Tore in seine Wälle Richtung Myriaden-HQ …
 	"tore_takt": 60,            # … so oft …
 	"tore_max": 4,              # … höchstens so viele
-	"welle_groesse": 5,         # so groß (jede zerstörte Fabrik draußen: einer weniger, dauerhaft)
-	"elite_jede": 3,            # jede so vielte Welle ein Elitetrupp aus genau drei
+	"welle_groesse": 6,         # so groß (jede zerstörte Fabrik draußen: einer weniger, dauerhaft)
+	"elite_jede": 2,            # jede so vielte Welle ein Elitetrupp aus genau drei
 	"vorstoss": true,           # Technoclan darf das Myriaden-HQ einnehmen
 	"vorstoss_start": 480,      # ab dann marschiert ein Jagdtrupp darauf
 	"vorstoss_sek": 30,         # so lange muss er es halten
@@ -1266,6 +1266,8 @@ func _kopfgeld(ort: String) -> void:
 		return
 	var m: Array = _kopfgeld_merk.get(ort, [0, -999.0])
 	var n := int(m[0]) if zeit - float(m[1]) < wf("kill_frist") else 0
+	if ort.begins_with("f:"):
+		n = 0   # 20.11. (Paul): Truppen am Boden bringen immer das volle Kopfgeld – nur Stellungen nutzen sich ab
 	var betrag := maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe"))))
 	_kopfgeld_merk[ort] = [n + 1, zeit]
 	if betrag > 0:
