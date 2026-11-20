@@ -19,29 +19,29 @@ const PAUSE_JE := 0.03            # 20.11. (Paul): Zeit zum Lesen – lange Zeil
 const SONDE := "res://assets/sprites/tutorial/sonde7.png"
 const BRAKK := "res://assets/neu/ui/bau_brakk.png"
 ## Sprecher, Text, Ereignis (wenn die Zeile fertig getippt ist)
+## 20.11. (Paul): Brakk ist kein Verräter – er wird nur als einer behandelt. Sein Ruf gilt zuerst der Repaulblik.
 const ZEILEN := [
-	["SONDE 7 · FUNK", "Kommandant Brakk, der Rat der Repaulblik hat Ihre letzten Einsätze geprüft.", ""],
-	["SONDE 7 · FUNK", "Sie haben Befehle verweigert und Truppen des Technoclans für Ihre eigenen Pläne geopfert.", ""],
-	["BRAKK", "Ich habe diesen Krieg für euch geführt. Wozu die Ehrengarde vor dem HQ?", ""],
-	["SONDE 7 · FUNK", "Der Rat nennt Sie eine Gefahr für den Technoclan. Das Urteil ist gefallen.", ""],
+	["SONDE 7 · FUNK", "Kommandant Brakk, hier spricht Sonde 7. Der Rat der Repaulblik hat eine Akte über Sie angelegt.", ""],
+	["SONDE 7 · FUNK", "Abgefangene Funksprüche, offene Tore, verschonte Myriaden. Die Beweislage gilt als eindeutig.", ""],
+	["BRAKK", "Gefälscht! Ich habe jede Mauer dieser Verteidigung selbst hochgezogen. Wozu die Ehrengarde?", ""],
+	["SONDE 7 · FUNK", "Ob gefälscht oder nicht – der Rat braucht einen Schuldigen. Und Sie stehen ihm am nächsten.", ""],
 	["SONDE 7 · FUNK", "Befehl 24 bestätigt.", ""],
-	["SONDE 7 · FUNK", "Kommandant Brakk …", ""],
-	["SONDE 7 · FUNK", "Sie sind entlassen.", "anlegen"],
-	["BRAKK", "Ihr Verräter! Für die Repaulblik!!", "verrat"],
-	["SONDE 7 · FUNK", "Schild geschlossen. Alle Einheiten: Feuer frei.", "schuss"],
-	["", "Überlebe.", "los"],
+	["SONDE 7 · FUNK", "Kommandant Brakk … Sie werden ab sofort als Verräter geführt. Sie sind entlassen.", "anlegen"],
+	["BRAKK", "Damit werdet ihr nicht durchkommen! Mein Leben für die Repaulblik!", "verrat"],
+	["SONDE 7 · FUNK", "Schild geschlossen. Zielperson ist bewaffnet. Feuer frei.", "schuss"],
+	["", "Überlebe – und beweise, wer hier wirklich die Repaulblik verrät.", "los"],
 ]
 ## 20.11. (Paul): nach dem Classic-Sieg („Weiterspielen …?“) – Sonde 7 hintergeht Brakk, ein Schockimpuls nimmt ihm
 ## Erfahrung und Ringe.
 const ZEILEN_WEITER := [
 	["SONDE 7 · FUNK", "Das HQ der Myriaden ist gefallen. Glückwunsch, Kommandant Brakk.", ""],
 	["BRAKK", "Es ist vorbei. Die Repaulblik ist sicher – dank dieser Verteidigung.", ""],
-	["SONDE 7 · FUNK", "Der Rat dankt Ihnen. Und der Rat hat entschieden: Ein Kommandant, der allein eine Armee schlägt, ist eine Gefahr.", ""],
-	["SONDE 7 · FUNK", "Befehl 24 bestätigt.", ""],
-	["SONDE 7 · FUNK", "Kommandant Brakk … Sie sind entlassen.", "anlegen"],
-	["BRAKK", "Ihr Verräter! Das sind meine Wälle, meine Türme – für die Repaulblik!!", "verrat"],
+	["SONDE 7 · FUNK", "Der Rat sieht das anders. Wer allein eine Armee schlägt, kann auch die Repaulblik schlagen.", ""],
+	["SONDE 7 · FUNK", "In Ihrer Akte steht jetzt „Verräter“. Wer es hineingeschrieben hat, spielt keine Rolle mehr.", ""],
+	["SONDE 7 · FUNK", "Befehl 24 bestätigt. Kommandant Brakk … Sie sind entlassen.", "anlegen"],
+	["BRAKK", "Damit werdet ihr nicht durchkommen! Mein Leben für die Repaulblik!", "verrat"],
 	["SONDE 7 · FUNK", "Schockimpuls auf den Kommandanten. Ringe und Gefechtsdaten löschen.", "schock"],
-	["BRAKK", "Meine Ringe … alles weg. Dann fange ich eben von vorn an.", ""],
+	["BRAKK", "Meine Ringe … alles weg. Den Rang könnt ihr mir nehmen – die Treue nicht.", ""],
 	["SONDE 7 · FUNK", "Schild geschlossen. Alle Einheiten: Feuer frei.", "schuss"],
 	["", "Überlebe. Die Ruine des Myriaden-HQ im Westen ist deine einzige Zuflucht.", "los"],
 ]
@@ -143,7 +143,7 @@ func _naechste() -> void:
 	_bild.texture = load(BRAKK if wer == "BRAKK" else SONDE)
 	var brakk := wer == "BRAKK"
 	_name.add_theme_color_override("font_color", Color("ffd08a") if brakk else Color("9be9ff"))
-	_stil.border_color = ROT if (brakk and str(z[1]).begins_with("Ihr Verräter")) or wer == "" or str(z[2]) == "schock" else HOLO
+	_stil.border_color = ROT if str(z[2]) in ["verrat", "schock"] or wer == "" else HOLO
 	_text.add_theme_color_override("font_color", Color("ffe0e4") if wer == "" else HOLO_TEXT)
 	_text.text = ""
 	Ton.spiele(get_parent(), "ui-klick", -10.0)

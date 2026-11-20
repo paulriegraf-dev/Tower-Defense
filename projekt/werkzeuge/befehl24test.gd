@@ -255,7 +255,7 @@ func _sabotage_start(k: Kommandant, karte: Karte) -> void:
 		k.position = karte.mitte(r)
 		k.anker = k.position
 		merk["sabo"] = z
-		pruefe(o.sabotage_start(), "Sabotage: [E] an der Rückseite von %s" % str(z))
+		pruefe(o.ego_taste(spiel.ego, "F", true) if spiel.ego != null else o.sabotage_start(), "Sabotage: [F] an der Rückseite von %s" % str(z))
 		return
 	pruefe(false, "Sabotage: keine Fabrik mit Rückseite")
 	merk["sabo"] = Vector2i.ZERO

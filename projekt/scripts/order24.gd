@@ -20,7 +20,7 @@ extends Node
 ##    gefallene Truppen fallen. Der Technoclan baut gesprengte Wälle ab der Jagd nach, wenn Brakk nicht in der Nähe ist.
 ##  - Türme: Stütze sprengen (schweigt bis zum Nachbau) oder Kern leer schießen (20 s Ausfall).
 ##  - Stellungen bleiben, nur die Truppe darauf fällt; die Fabrik liefert Ersatz (Produktionszyklus produktion_sek).
-##  - Fabriken außerhalb des Schilds: Sabotage ([E] an der Rückseite halten), Zerstörung über fabrik_leben, Alarm im Umkreis,
+##  - Fabriken außerhalb des Schilds: Sabotage ([F] an der Rückseite halten), Zerstörung über fabrik_leben, Alarm im Umkreis,
 ##    Pilot aus der Batterie repariert Sabotagen.
 
 const STANDARD := {
@@ -92,7 +92,7 @@ const STANDARD := {
 	"lager_tuerme": 1,          # dazu je Lager ein Geschützturm
 	"heiltuerme": 1,            # dazu Heiltürme mit Instandsetzung
 	"fabrik_leben": 1500,       # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon)
-	"sabotage_halten": 5,       # Sekunden [E] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
+	"sabotage_halten": 5,       # Sekunden [F] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
 	"sabotage_lahm": 60,        # so lange liefert eine sabotierte Fabrik nichts
 	"praemie_sabotage": 40,
 	"alarm_radius": 6,          # Felder: bei Angriff auf eine Fabrik laufen Truppen im Umkreis hin
@@ -104,6 +104,7 @@ const STANDARD := {
 	"spreng_max": 3,            # höchstens so viele im Gepäck
 	"spreng_zuender": 3,        # Sekunden Zünder
 	"mobil_abkling": 125,       # 20.11. (Paul): Prozent Abklingzeit von Q und E (Anker, Lichttreppe, Lichtbrücke) – eher eingekesselt
+	"geschoss_tempo": 75,       # 20.11. (Paul): Prozent Tempo von Laser und Battlesphären-Schüssen auf Brakk (Plasma bleibt) – reagierbar bei vielen Schützen
 }
 const SCHILD_RADIUS := 3.2       # Felder um das Technoclan-HQ, in die Brakk nicht hineinkommt
 const SICHT_JAEGER := 7.0        # Felder: so weit sieht ein Jäger Brakk (mit freier Sicht)
@@ -1421,12 +1422,12 @@ func sprengen(z: Vector2i) -> void:
 func fabrik_an_rueckseite(fuss: Vector2) -> Vector2i:
 	for z: Vector2i in rueckseite:
 		var r: Vector2i = rueckseite[z]
-		if r != Karte.KEINE and fabrik_hp.has(z) and not lahm.has(z) and fuss.distance_to(karte.mitte(r)) <= 0.75 * Werte.ZELLE:
+		if r != Karte.KEINE and fabrik_hp.has(z) and not lahm.has(z) and fuss.distance_to(karte.mitte(r)) <= 1.0 * Werte.ZELLE:
 			return z
 	return Karte.KEINE
 
 
-## [E] gedrückt: Sabotage beginnen. false = keine Fabrik-Rückseite hier (dann gilt [E] wie sonst).
+## [F] gedrückt: Sabotage beginnen. false = keine Fabrik-Rückseite hier (dann gilt [F] wie sonst: Ringterminal).
 func sabotage_start() -> bool:
 	var k: Kommandant = spiel.kommandant
 	var z := fabrik_an_rueckseite(k.position)
@@ -1681,7 +1682,7 @@ func _ablauf(k: Kommandant) -> void:
 		_phase_vorher = p
 		if p == "sabotage":
 			spiel._einblendung.banner("BEFEHL 24", "Die Verteidigung steht – sabotiere Fabriken", Color("ffb84d"))
-			spiel.melde("Sabotage: [E] an der Rückseite einer Fabrik halten, Erdwälle mit [C] sprengen, Turmkerne zerschießen.", 7.0)
+			spiel.melde("Sabotage: [F] an der Rückseite einer Fabrik halten (roter Streifen am Boden), Erdwälle mit [C] sprengen, Turmkerne zerschießen.", 7.0)
 		elif p == "jagd" and not jagd:
 			_jagd_eroeffnen(k)
 		elif p == "vorstoss" and not jagd:
@@ -2267,7 +2268,7 @@ func _geheim_starten() -> void:
 	Ton.spiele(spiel, "alert")
 	funken([
 		["SONDE 7 · FUNK", "An alle Einheiten: Kommandant Brakk hat sich endgültig dem Feind angeschlossen.", ""],
-		["BRAKK", "Ihr habt es so gewollt. Myriaden – ab jetzt kämpft ihr mit mir.", ""],
+		["BRAKK", "Ihr habt mich zum Verräter erklärt. Dann kämpfe ich eben mit denen, die ihr fürchtet – Myriaden, folgt mir!", ""],
 		["", "Baue Myriaden-Fabriken in der Zone am HQ mit [1]. Wirf mit [C] ein Ringfeld darüber: Der Ring bestimmt, welche Myriaden sie bauen. Nimm beide Checkpoints und halte sie – dann fällt der Schild des Technoclan-HQ.", ""],
 	])
 	print("ORDER24 Überläufer bei %.0f s" % zeit)
@@ -2509,8 +2510,8 @@ func _myr_3d(hd: HdAnsicht) -> void:
 
 # ------------------------------------------------------------------ Ego-Sicht: Tasten und Anzeige (20.11.)
 
-## Aus ego_modus._aktion: [C] ist in Befehl 24 nur die Sprengladung (Brakk baut nicht), [E] an der Rückseite einer Fabrik
-## sabotiert (gehalten), sonst bleibt [E] die Lichttreppe. true = erledigt.
+## Aus ego_modus._aktion: [C] ist in Befehl 24 nur die Sprengladung (Brakk baut nicht), [F] an der Rückseite einer Fabrik
+## sabotiert (gehalten; 20.11., Paul: vorher [E] – das war zugleich die Lichttreppe). true = erledigt.
 func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 	if not laeuft or vorbei:
 		return false
@@ -2524,11 +2525,11 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 				if grund != "":
 					spiel.melde(grund, 2.0)
 			return true
-		"E":
+		"F":
 			if gedrueckt:
 				return sabotage_start()
 			if not sabo.is_empty():
-				sabotage_abbruch("[E] losgelassen")
+				sabotage_abbruch("[F] losgelassen")
 				return true
 	return false
 
@@ -2588,10 +2589,10 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 		bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.8))
 		bild.draw_rect(Rect2(r.position, Vector2(r.size.x * anteil, r.size.y)), Color("ff5a6e", 0.8))
 		bild.draw_rect(r, Color("ff5a6e"), false, 1.5)
-		Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), "Sabotage – [E] halten", 14, Color.WHITE)
+		Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), "Sabotage – [F] halten", 14, Color.WHITE)
 		y += 24.0
 	elif k != null and fabrik_an_rueckseite(k.position) != Karte.KEINE:
-		Stil.schreibe_mittig(bild, Vector2(m.x, y), "[E] halten: Fabrik sabotieren", 16, Stil.GOLD)
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), "[F] halten: Fabrik sabotieren", 16, Stil.GOLD)
 		y += 20.0
 	elif ladungen > 0 and k != null:
 		var v: Vector3 = ego._vorne()
@@ -2695,6 +2696,16 @@ func _3d_pflegen() -> void:
 		(_schild3d[0] as Node3D).scale = Vector3.ONE * maxf(0.001, schild_auf)   # 20.11.: Verrat – der Schild schließt sich
 		(_schild3d[0] as Node3D).visible = not hq_schild_aus
 	_myr_3d(hd)
+	# 20.11. (Paul): Rückseiten der Fabriken draußen sichtbar machen – dort sabotiert [F]
+	for z: Vector2i in rueckseite:
+		var r: Vector2i = rueckseite[z]
+		if r == Karte.KEINE:
+			continue
+		if not _rueck3d.has(z):
+			_rueck3d[z] = _kasten3d(hd, Vector3(0.8, 0.03, 0.8), Color("ff5a6e"), Vector3(float(r.x) + 0.5, 0.02, float(r.y) + 0.5))
+		var rm: MeshInstance3D = _rueck3d[z]
+		rm.visible = fabrik_hp.has(z) and not lahm.has(z)
+		rm.transparency = 0.45 + 0.35 * sin(float(Time.get_ticks_msec()) / 300.0)
 	# 20.11.: Sprengladungen am Boden (rot-gelbe Kästen), tickende Ladungen auf dem Wall (blinken), Trümmer, qualmende Türme
 	# t_ms von oben
 	for l: Dictionary in ladungen_boden:
@@ -2729,6 +2740,7 @@ func _3d_pflegen() -> void:
 
 
 var _truemmer3d: Array = []
+var _rueck3d := {}               # 20.11. (Paul): Fabrik -> roter Streifen an ihrer Rückseite (hier [F] halten)
 var _qualm3d := {}
 
 

@@ -373,7 +373,7 @@ Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme
   Turm, `kern_leben` 400). Leer geschossen fällt der Turm `kern_ausfall` 20 s aus (Platzhalter: grauer Qualm-Kasten darüber) und
   läuft dann von selbst wieder. Ein Heilturm mit Instandsetzung bringt ihn schon nach 8 s zurück.
 - **Stellungen** werden nicht zerstört, nur die Truppe darauf. Die Fabrik liefert im nächsten Zyklus Ersatz, der zur Stellung läuft.
-- **Fabriken draußen:** **Sabotage** – [E] an der Rückseite (Seite zum Technoclan-HQ) `sabotage_halten` 3 s halten. Wird Brakk
+- **Fabriken draußen:** **Sabotage** – [F] an der Rückseite (Seite zum Technoclan-HQ, roter Streifen am Boden; 20.11.: vorher [E], das war zugleich die Lichttreppe) `sabotage_halten` halten. Wird Brakk
   dabei getroffen oder geht er weg, bricht sie ab. Sonst ist die Fabrik `sabotage_lahm` 60 s lahm und liefert keinen Ersatz
   (Prämie `praemie_sabotage`). Woanders bleibt [E] die Lichttreppe. **Zerstörung** über `fabrik_leben` 1500 (Schüsse wirken mit
   60 %, der Ladestrahl nimmt mindestens 10 %), dann bleiben Trümmer und die Fabrik kommt nicht wieder. **Alarm:** Wird eine Fabrik

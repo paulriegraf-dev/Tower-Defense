@@ -568,7 +568,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		_zahl(l, o, "patrouille", "Streife je Fabrik", 1, 0, 6, Order24.STANDARD)
 		_zahl(l, o, "produktion_sek", "Ersatz alle (s)", 1, 1, 60, Order24.STANDARD)
 		_zahl(l, o, "fabrik_leben", "Leben Fabrik", 100, 100, 9000, Order24.STANDARD)
-		_zahl(l, o, "sabotage_halten", "Sabotage [E] (s)", 1, 1, 15, Order24.STANDARD)
+		_zahl(l, o, "sabotage_halten", "Sabotage [F] (s)", 1, 1, 15, Order24.STANDARD)
 		_zahl(l, o, "sabotage_lahm", "Sabotiert lahm (s)", 5, 5, 300, Order24.STANDARD)
 		_zahl(l, o, "alarm_radius", "Alarm-Umkreis (Felder)", 1, 0, 20, Order24.STANDARD)
 		_zahl(l, o, "pilot_verzug", "Pilot kommt nach (s)", 5, 0, 120, Order24.STANDARD)
@@ -583,6 +583,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		_zahl(l, o, "spreng_max", "Höchstens im Gepäck", 1, 1, 9, Order24.STANDARD)
 		_zahl(l, o, "spreng_zuender", "Zünder (s)", 1, 1, 10, Order24.STANDARD)
 		_zahl(l, o, "mobil_abkling", "Abklingzeit Q/E (%)", 5, 50, 300, Order24.STANDARD)
+		_zahl(l, o, "geschoss_tempo", "Geschosstempo Laser/Sphäre (%)", 5, 25, 200, Order24.STANDARD)
 		l.text("Tipp: Erdwälle gehen nur durch Sprengladungen weg und kommen nicht wieder – so bahnt sich Brakk eigene Wege.")
 	if r.has("formation"):
 		irgendwas = true

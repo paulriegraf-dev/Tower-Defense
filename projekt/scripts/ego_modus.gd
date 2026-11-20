@@ -404,6 +404,9 @@ func _input(event: InputEvent) -> void:
 			_feld_abbrechen()   # 19.11.: Ringfeld nicht setzen
 			get_viewport().set_input_as_handled()
 			return
+		if kc == KEY_F and spiel.order24 != null and spiel.order24.ego_taste(self, "F", event.pressed):
+			get_viewport().set_input_as_handled()   # 20.11. (Paul): Befehl 24 – [F] gehalten an der Rückseite sabotiert die Fabrik
+			return
 		if event.pressed and spiel.order24 != null and spiel.order24.ego_zahl(self, kc):
 			get_viewport().set_input_as_handled()   # 20.11.: Befehl 24, Überläufer – [1]–[7] Myriaden-Fabrik
 			return
@@ -425,10 +428,10 @@ func _input(event: InputEvent) -> void:
 			KEY_F:
 				# 18.11. (Paul): Gebäude im Blick ausbauen – öffnet dasselbe Menü wie ein Klick in der Übersicht
 				var z := gebaeude_im_blick()
-				if z != Karte.KEINE and spiel.werkzeug == Karte.FREI:
+				if z != Karte.KEINE and spiel.werkzeug == Karte.FREI and spiel.order24 == null:   # 20.11.: in Befehl 24 gehören die Bauten dem Feind
 					spiel._oeffne_fabrikmenue(z)
 					get_viewport().set_input_as_handled()
-				elif z == Karte.KEINE and _am_terminal():
+				elif (z == Karte.KEINE or spiel.order24 != null) and _am_terminal():
 					_terminal_auf()   # 18.11.: Lichtterminal an der Basis
 					get_viewport().set_input_as_handled()
 

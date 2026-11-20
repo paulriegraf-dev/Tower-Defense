@@ -49,6 +49,14 @@ func ist_brakk(ziel: Variant) -> bool:
 
 # ------------------------------------------------------------------ Abfeuern
 
+## 20.11. (Paul): In Befehl 24 fliegen Laser und Battlesphären-Schüsse langsamer (Regelpaket geschoss_tempo), damit man
+## gegen viele Schützen zugleich noch reagieren kann. Plasma bleibt (ist schon gut lesbar). Classic unverändert.
+func _tempo_mal(art: String) -> float:
+	if spiel == null or spiel.order24 == null or art == "plasma":
+		return 1.0
+	return spiel.order24.wf("geschoss_tempo") / 100.0
+
+
 ## Fliegendes Geschoss (`art`: laser, sph, plasma) von `von` (Mündungshöhe `von_h` in Feldern) auf Brakk.
 ## `typ` bestimmt den Schadensfaktor (Werte.BRAKK_AUSWEICH_SCHADEN), `quelle` die Schadensquelle (Statistik).
 func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: String, quelle: String) -> void:
@@ -58,7 +66,7 @@ func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: Stri
 	var w: Dictionary = Werte.BRAKK_GESCHOSS[art]
 	var ziel: Vector2 = z["pos"]
 	if vorhalt > 0.0:
-		var flug := von.distance_to(ziel) / (float(w["tempo"]) * Werte.ZELLE)
+		var flug := von.distance_to(ziel) / (float(w["tempo"]) * _tempo_mal(art) * Werte.ZELLE)
 		ziel += (z.get("v", Vector2.ZERO) as Vector2) * flug * vorhalt
 	var r :=(ziel - von).normalized() if ziel.distance_to(von) > 1.0 else Vector2.RIGHT
 	ziel += Vector2(-r.y, r.x) * zufall.randf_range(-1.0, 1.0) * Werte.BRAKK_STREUUNG * Werte.ZELLE   # Streuung quer zur Bahn
@@ -68,7 +76,7 @@ func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: Stri
 	var lang := d_ziel if boden else _bahn_ende(von, r, d_ziel)
 	var rumpf_h := float(z.get("fuss", 0.0)) + 0.5
 	var g := {"art": art, "von": von, "r": r, "s": 0.0, "lang": lang, "d_ziel": d_ziel,
-		"tempo": float(w["tempo"]) * Werte.ZELLE, "radius": float(w["radius"]) * Werte.ZELLE,
+		"tempo": float(w["tempo"]) * _tempo_mal(art) * Werte.ZELLE, "radius": float(w["radius"]) * Werte.ZELLE,
 		"h0": von_h, "h1": (float(z.get("fuss", 0.0)) if boden else rumpf_h), "boden": boden,
 		"schaden": schaden, "typ": typ, "quelle": quelle, "leucht": null}
 	abgefeuert += 1
