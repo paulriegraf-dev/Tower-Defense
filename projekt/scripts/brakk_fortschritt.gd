@@ -20,7 +20,17 @@ const FREIE_STELLUNGEN := 1           # 19.11. (Paul): … und so viele Stellung
 const ULTI_KILLS := 30               # so viele eigene Kills lädt die Ulti (Klonmaschine) auf
 ## 19.11. (Paul): Brakks Schaden nach Quelle (Werte-Fenster, [Tab], Sieg-Übersicht). Reihenfolge = Anzeige.
 const QUELLEN := {"pistole": "Pistolen", "tumble": "Tumble-Schuss", "lanze": "Ladestrahl", "saeule": "Lichtsäule", "ring": "Ringeffekte",
-	"zeitlupe": "Zeitlupe", "klinge": "Ringklinge", "absprung": "Absprung", "sonst": "Sonstiges"}
+	"zeitlupe": "Zeitlupe", "klinge": "Ringklinge", "absprung": "Absprung", "sonst": "Sonstiges",
+	## 20.11.: Schritt 6b – Quellen der neuen Anführer (Irrtürmer, Sonde 7 je Waffe)
+	"prellbolzen": "Prellbolzen", "pliplop": "PliPlop", "hack": "Hack", "aufsatz": "Aufsatz", "verbund": "Verbund",
+	"laser_hand": "Farblaser", "buendel": "Energiebündel", "doppellaser": "Doppel-Lasergewehr", "erfassung": "Zielerfassung",
+	"schrot": "Schrotflinte", "sondengewehr": "Sondengewehr", "luftschlag": "Luftschlag"}
+## 20.11.: welche Quellen je Anführer gezeigt werden (Reihenfolge = Anzeige; Brakk wie bisher)
+const QUELLEN_JE := {
+	"brakk": ["pistole", "tumble", "lanze", "saeule", "ring", "zeitlupe", "klinge", "absprung", "sonst"],
+	"irrtuermer": ["prellbolzen", "pliplop", "hack", "aufsatz", "verbund", "ring", "sonst"],
+	"sonde7": ["laser_hand", "buendel", "doppellaser", "erfassung", "schrot", "sondengewehr", "luftschlag", "ring", "sonst"],
+}
 const GEMESSEN_SEK := 5.0             # „Schaden der letzten 5 Sekunden“ im Werte-Fenster
 ## 19.11. (Paul): Der erste Schuss nach der Rolle (innerhalb „fenster“ Sekunden) ist verstärkt; tötet er einen großen
 ## Gegner (Werte.GEGNER "gross"), ist die Rolle sofort wieder bereit.
@@ -117,14 +127,42 @@ var schaden_quellen := {}               # 19.11.: Quelle -> Schaden über die Pa
 var schaden_runden := {}               # 19.11.: "Runde" -> {Quelle -> Schaden}
 var kills_runden := {}                 # 19.11.: "Runde" -> eigene Kills
 var _gemessen: Array = []              # [Zeit ms, Schaden] der letzten GEMESSEN_SEK
+var anfuehrer := "brakk"               # 20.11.: wer im Brakk-Mode spielt (Werte.ANFUEHRER_EGO)
+
+
+var alle_frei := false                # 20.11. (Schritt 5b): Szenario gibt alle Fähigkeiten frei (unabhängig von der Stufe)
+var stufen_fest := false              # 20.11. (Schritt 5b): Szenario ohne Stufenaufstieg (keine Erfahrung)
 
 
 func _init(brakk: Kommandant) -> void:
-	basis_leben = brakk.max_leben
+	anfuehrer = Werte.anfuehrer if Werte.ego_hat(Werte.anfuehrer) else "brakk"
+	basis_leben = brakk.max_leben * float(Werte.ego_af("leben"))   # 20.11.: Leben je Anführer (Brakk 1,0)
+	brakk.max_leben = basis_leben
+	brakk.leben = minf(brakk.leben, basis_leben)
+	# 20.11. (Schritt 5b): Startstufe und Stufenregel aus dem Regelpaket der Karte (Belagert: Stufe 5, alles frei, keine Stufen)
+	var r: Dictionary = Werte.KARTE_REGELN
+	alle_frei = bool(r.get("brakk_alle_faehigkeiten", false))
+	stufen_fest = not bool(r.get("brakk_stufen", true))
+	var st := clampi(int(r.get("brakk_stufe", 1)), 1, STUFE_HOECHST)
+	if st > 1:
+		stufe = st
+		erfahrung = int(ERFAHRUNG_BIS[st - 1])
+		brakk.max_leben = basis_leben + LEBEN_JE_STUFE * float(st - 1)
+		brakk.leben = brakk.max_leben
 
 
+## Brakk: ab seiner Stufe. Andere Anführer haben nur Brakks Bewegungen aus ihrer Liste „frei“ (Werte.ANFUEHRER_EGO).
 func frei(was: String) -> bool:
+	if alle_frei and anfuehrer == "brakk":
+		return true   # 20.11. (Schritt 5b): Szenario gibt alle Fähigkeiten frei
+	if anfuehrer != "brakk":
+		return (Werte.ego_af("frei") as Array).has(was)
 	return stufe >= int(AB.get(was, 1))
+
+
+## 20.11.: Quellen, die für diesen Anführer gezeigt werden.
+static func quellen(af: String) -> Array:
+	return QUELLEN_JE.get(af, QUELLEN_JE["brakk"])
 
 
 func schaden_faktor() -> float:
@@ -142,6 +180,8 @@ func anteil() -> float:
 
 ## Erfahrung dazu; steigt Brakk auf, wächst sein Leben (und er wird um den Zuwachs geheilt). Gibt die Zahl der Aufstiege zurück.
 func gib(xp: int, brakk: Kommandant) -> int:
+	if stufen_fest:
+		return 0   # 20.11.: Szenario ohne Stufen
 	# 19.11. (Paul): +15 % Erfahrung (Bruchteile werden gesammelt)
 	var roh := float(xp) * XP_MAL + _xp_rest
 	var ganz := floori(roh)
@@ -153,7 +193,7 @@ func gib(xp: int, brakk: Kommandant) -> int:
 		auf += 1
 	if auf > 0:
 		neu_frei.clear()
-		for k: String in AB:
+		for k: String in (AB if anfuehrer == "brakk" else {}):   # 20.11.: Freischaltungen gibt es nur für Brakk
 			if int(AB[k]) > stufe - auf and int(AB[k]) <= stufe:
 				neu_frei.append(k)
 		var neu := basis_leben + LEBEN_JE_STUFE * float(stufe - 1)
@@ -200,6 +240,8 @@ func ulti_rest(welle: int) -> float:
 
 ## Freie Finger (Ringplätze) auf der aktuellen Stufe.
 func finger() -> int:
+	if anfuehrer == "irrtuermer":
+		return int(Werte.IRRTUERMER["slots"])   # 20.11.: Hand und PliPlop
 	var n := 0
 	for ab: int in FINGER_AB:
 		if stufe >= ab:
@@ -228,6 +270,8 @@ func kaufe(ring: String, spiel: Node) -> String:
 	if st >= RING_PREISE.size():
 		return "Der Ring ist schon auf Stufe 3."
 	if st == 0 and ringe.size() >= finger():
+		if anfuehrer == "irrtuermer":
+			return "Beide Slots sind belegt."   # 20.11.
 		return "Kein Finger frei – der nächste ab Stufe %d." % int(FINGER_AB[ringe.size()]) if ringe.size() < FINGER_AB.size() else "Alle fünf Finger tragen schon einen Ring."
 	var preis := int(RING_PREISE[st])
 	if int(spiel.budget) < preis:
@@ -250,7 +294,8 @@ func verkaufe(ring: String, spiel: Node) -> void:
 	if not ringe.has(ring):
 		return
 	spiel.budget += erstattung(ring, int(spiel.welle))
-	ringe.erase(ring)
+	while ringe.has(ring):
+		ringe.erase(ring)   # 20.11.: beim Irrtürmer auch die Kopie im zweiten Slot
 	ring_stufen.erase(ring)
 	_bezahlt.erase(ring)
 	_gekauft_in.erase(ring)
@@ -364,7 +409,7 @@ func speichern() -> Dictionary:
 		f[ring] = [e.x, e.y]
 	return {"erfahrung": erfahrung, "stufe": stufe, "xp_rest": _xp_rest, "kill_xp": kill_xp, "ulti_ladung": ulti_ladung,
 		"ulti_ab_welle": ulti_ab_welle, "ringe": Array(ringe), "ring_stufen": ring_stufen, "bezahlt": _bezahlt,
-		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt, "schaden_quellen": schaden_quellen, "schaden_runden": schaden_runden, "kills_runden": kills_runden, "zaehler": zaehler}
+		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt, "schaden_quellen": schaden_quellen, "schaden_runden": schaden_runden, "kills_runden": kills_runden, "zaehler": zaehler, "getauscht": getauscht}
 
 
 func lade(d: Dictionary, brakk: Kommandant) -> void:
@@ -394,6 +439,7 @@ func lade(d: Dictionary, brakk: Kommandant) -> void:
 			var e: Array = fe[r]
 			felder[r] = Vector2i(int(e[0]), int(e[1]))
 	gewaehlt = clampi(int(d.get("gewaehlt", 0)), 0, maxi(0, ringe.size() - 1))
+	getauscht = bool(d.get("getauscht", false))   # 20.11.: Irrtürmer
 	schaden_quellen = d.get("schaden_quellen", {})   # 19.11.
 	schaden_runden = d.get("schaden_runden", {})
 	kills_runden = d.get("kills_runden", {})
@@ -479,6 +525,27 @@ const TITEL := [
 	["Frontkämpfer", "brakk_anteil", 0.60, "Brakk selbst machte den meisten Schaden"],
 	["Allrounder", "", 0.0, "von allem etwas"],
 ]
+## 20.11.: Titel-Regeln je Anführer (gleicher Aufbau wie TITEL; die Kennzahlen stehen in sieg_bericht).
+## Zusätzliche Kennzahlen: anteil_<Quelle> (Anteil am eigenen Schaden, Quellen wie QUELLEN), verbund_je_runde,
+## luft_anteil (Kampfzeit in der Luft).
+const TITEL_JE := {
+	"brakk": TITEL,
+	"irrtuermer": [
+		["Tüftler", "anteil_pliplop", 0.35, "der PliPlop machte mehr als ein Drittel deines Schadens"],
+		["Hacker", "anteil_hack", 0.20, "ein Fünftel deines Schadens aus gehackten Schüssen"],
+		["Verbundmeister", "verbund_je_runde", 3.0, "viele Verbund-Treffer je Runde"],
+		["Prellmeister", "anteil_prellbolzen", 0.55, "die Prellbolzen trugen die Partie"],
+		["Baumeister", "bau_anteil", 0.60, "Truppen und Türme machten den meisten Schaden"],
+		["Allrounder", "", 0.0, "von allem etwas"],
+	],
+	"sonde7": [
+		["Scharfschützin", "anteil_sondengewehr", 0.25, "ein Viertel deines Schadens mit dem Sondengewehr"],
+		["Luftschlägerin", "anteil_luftschlag", 0.25, "ein Viertel deines Schadens aus Luftschlägen"],
+		["Kommandantin", "bau_anteil", 0.60, "Truppen und Türme machten den meisten Schaden"],
+		["Himmelsläuferin", "luft_anteil", 0.35, "mehr als ein Drittel der Kämpfe in der Luft"],
+		["Allrounderin", "", 0.0, "von allem etwas"],
+	],
+}
 var zaehler := {}                      # 19.11.: rollen, anker, spruenge, saeulen, lanzen, zeitlupen, wall_sek, kampf_sek
 
 
@@ -511,8 +578,15 @@ func sieg_bericht(spiel: Node, sekunden: float) -> Dictionary:
 		"bau_anteil": (truppen + tuerme) / gesamt,
 		"brakk_anteil": brakk / gesamt,
 	}
-	var titel: Array = TITEL[TITEL.size() - 1]
-	for t: Array in TITEL:
+	# 20.11.: Kennzahlen der anderen Anführer – Anteil je Quelle am eigenen Schaden, Verbund je Runde, Zeit in der Luft
+	var eigen := maxf(1.0, schaden_gesamt())
+	for q: String in QUELLEN:
+		kennzahlen["anteil_" + q] = float(schaden_quellen.get(q, 0.0)) / eigen
+	kennzahlen["verbund_je_runde"] = float(int(zaehler.get("verbund", 0))) / float(runden)
+	kennzahlen["luft_anteil"] = float(zaehler.get("luft_sek", 0.0)) / maxf(1.0, float(zaehler.get("kampf_sek", 0.0)))
+	var regeln: Array = TITEL_JE.get(anfuehrer, TITEL)   # 20.11.: Titel je Anführer
+	var titel: Array = regeln[regeln.size() - 1]
+	for t: Array in regeln:
 		if str(t[1]) == "" or float(kennzahlen.get(t[1], 0.0)) >= float(t[2]):
 			titel = t
 			break
@@ -522,18 +596,65 @@ func sieg_bericht(spiel: Node, sekunden: float) -> Dictionary:
 		if int(kills_runden[r]) > beste_kills:
 			beste_kills = int(kills_runden[r])
 			beste_runde = int(r)
+	# 20.11.: Höhepunkte je Anführer (Brakk wie bisher)
+	var hoehepunkte: Array = [["Meiste Kills in einer Runde", "%d (Runde %d)" % [beste_kills, beste_runde] if beste_kills > 0 else "–"]]
+	match anfuehrer:
+		"irrtuermer":
+			hoehepunkte.append(["Verbund-Treffer", str(int(zaehler.get("verbund", 0)))])
+			hoehepunkte.append(["Aufsätze", str(int(zaehler.get("aufsatz", 0)))])
+		"sonde7":
+			hoehepunkte.append(["Teleports", str(int(zaehler.get("teleport", 0)))])
+			hoehepunkte.append(["Zeit in der Luft", "%d s" % roundi(float(zaehler.get("luft_sek", 0.0)))])
+		_:
+			hoehepunkte.append(["Rollen", str(int(zaehler.get("rollen", 0)))])
+			hoehepunkte.append(["Zeit auf den Wällen", "%d s" % roundi(float(zaehler.get("wall_sek", 0.0)))])
 	var ringliste: Array = []
 	for r: String in ringe:
 		ringliste.append([r, ring_stufe(r)])
 	return {
-		"stufe": stufe, "sekunden": sekunden, "runden": runden, "leben": int(spiel.leben), "max_leben": Werte.START_LEBEN,
+		"anfuehrer": anfuehrer, "stufe": stufe, "sekunden": sekunden, "runden": runden, "leben": int(spiel.leben), "max_leben": Werte.START_LEBEN,
 		"titel": titel[0], "titel_grund": titel[3], "ringe": ringliste,
 		"anteile": {"brakk": brakk, "truppen": truppen, "tuerme": tuerme},
 		"quellen": schaden_quellen.duplicate(),
-		"hoehepunkte": [
-			["Meiste Kills in einer Runde", "%d (Runde %d)" % [beste_kills, beste_runde] if beste_kills > 0 else "–"],
-			["Rollen", str(int(zaehler.get("rollen", 0)))],
-			["Zeit auf den Wällen", "%d s" % roundi(float(zaehler.get("wall_sek", 0.0)))],
-		],
+		"hoehepunkte": hoehepunkte,
 		"datum": Time.get_date_string_from_system(),
 	}
+
+
+# ------------------------------------------------------------------ Irrtürmer: zwei Ringslots (20.11.)
+
+## 20.11.: Der Irrtürmer trägt zwei Ringe – in der Hand (Slot 0) und am PliPlop (Slot 1). Derselbe Ring darf in beiden
+## stecken, muss dafür aber ein zweites Mal gekauft werden (Kopie zum halben Preis). Die Stufe gilt für beide Kopien.
+## [V] tauscht die Slots (ohne die Reihenfolge der Ringe zu ändern).
+var getauscht := false
+
+
+## Ring in Slot 0 (Hand) oder 1 (PliPlop), "" = leer.
+func slot_ring(slot: int) -> String:
+	var i := slot if not getauscht else 1 - slot
+	return ringe[i] if i >= 0 and i < ringe.size() else ""
+
+
+func kopie_preis() -> int:
+	return roundi(float(RING_PREISE[0]) * float(Werte.IRRTUERMER["kopie_anteil"]))
+
+
+## Kann der Ring als Kopie in den zweiten Slot? ("" = ja, sonst der Grund)
+func kopie_grund(ring: String, spiel: Node) -> String:
+	if anfuehrer != "irrtuermer" or not hat(ring) or ringe.count(ring) >= 2:
+		return "Keine Kopie möglich."
+	if ringe.size() >= finger():
+		return "Beide Slots sind belegt."
+	if int(spiel.budget) < kopie_preis():
+		return "Nicht genug Budget."
+	return ""
+
+
+func kaufe_kopie(ring: String, spiel: Node) -> String:
+	var grund := kopie_grund(ring, spiel)
+	if grund != "":
+		return grund
+	spiel.budget -= kopie_preis()
+	ringe.append(ring)
+	_bezahlt[ring] = int(_bezahlt.get(ring, 0)) + kopie_preis()
+	return ""

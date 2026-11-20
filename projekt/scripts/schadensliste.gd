@@ -133,7 +133,7 @@ func _male_brakk_inhalt() -> void:
 	andere.sort_custom(func(a, b): return float(a["schaden"]) > float(b["schaden"]))
 	andere = andere.slice(0, B_ANDERE)
 	var liste: Array = []
-	for q: String in BrakkFortschritt.QUELLEN:
+	for q: String in BrakkFortschritt.quellen(f.anfuehrer):   # 20.11.: Quellen je Anführer
 		if float(quellen.get(q, 0.0)) > 0.0:
 			liste.append([q, float(quellen[q])])
 	liste.sort_custom(func(a, b): return float(a[1]) > float(b[1]))
@@ -149,7 +149,7 @@ func _male_brakk_inhalt() -> void:
 	Stil.schreibe(self, Vector2(rechts - Stil.breite(summe, Stil.KLEIN), o.y + 6), summe, Stil.KLEIN, Stil.TEXT_BLASS)
 	# Brakk
 	var y := o.y + 11.0
-	Stil.schreibe(self, Vector2(o.x + 6, y + 5), "Brakk", Stil.NORMAL, Stil.GOLD)
+	Stil.schreibe(self, Vector2(o.x + 6, y + 5), "Brakk" if f.anfuehrer == "brakk" else _kurz(Anfuehrer.name(f.anfuehrer), 30.0), Stil.NORMAL, Stil.GOLD)   # 20.11.
 	var anteil := "%d %%" % roundi(100.0 * brakk / maxf(1.0, gesamt))
 	Stil.schreibe(self, Vector2(rechts - Stil.breite(anteil, Stil.NORMAL), y + 5), anteil, Stil.NORMAL, Stil.GOLD)
 	draw_rect(Rect2(o.x + 36, y + 3, 52, 4), Color(1, 1, 1, 0.07))

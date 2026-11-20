@@ -7,7 +7,7 @@ extends Control
 ## Gezeichnet im UI-Raster (640×360, zweifach skaliert) mit ui_stil.gd. Alte Fassung: _vor_uebersicht/lexikon.gd.
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
-const REITER := ["Gegner", "Truppen", "Bauten", "Regeln", "Brakk", "Ringe"]   # 19.11.: Brakk-Mode – Fähigkeiten und Ringe
+const REITER := ["Gegner", "Truppen", "Bauten", "Regeln", "Brakk", "Ringe", "Anführer"]   # 19.11.: Brakk-Mode – Fähigkeiten und Ringe; 20.11.: Anführer im Brakk-Mode
 const RAHMEN_R := Rect2(8, 8, 624, 344)
 const GITTER := Rect2(14, 36, 312, 282)
 const SPALTEN := 4
@@ -19,7 +19,7 @@ const GUT := Color("8dff8a")
 const SCHLECHT := Color("ff8a7a")
 
 var _reiter := 0
-var _wahl: Array[int] = [0, 0, 0, 0, 0, 0]
+var _wahl: Array[int] = [0, 0, 0, 0, 0, 0, 0]   # 20.11.: sieben Reiter
 var _knoten := {}             # Name des Eintrags -> gewählter Knoten im Ausbaupfad
 var _maus := Vector2(-100, -100)
 var _zeit := 0.0
@@ -151,7 +151,7 @@ func _karten_recht(i: int) -> Rect2:
 
 
 func _reiter_recht(i: int) -> Rect2:
-	return Rect2(14.0 + i * 52.5, 324.0, 50.0, 22.0)   # 19.11.: sechs Reiter (Brakk, Ringe)
+	return Rect2(14.0 + i * 44.5, 324.0, 42.5, 22.0)   # 19.11.: sechs Reiter (Brakk, Ringe); 20.11.: sieben (Anführer), schmaler
 
 
 ## Knoten des Ausbaupfads: erst die Stufen in einer Reihe, dann die Wahl auf Stufe 3 nebeneinander.
@@ -909,7 +909,28 @@ func _baue_daten() -> void:
 				"Eis: Gegner und Truppen laufen mit %d %% Tempo. Bebaubar." % roundi(W.EIS_TEMPO * 100.0),
 				"Minenfeld: Der erste Gegner darauf nimmt einmal %d Schaden, zur nächsten Runde liegt die Mine wieder. Nicht bebaubar." % roundi(W.MINE_SCHADEN)]]]},
 	]
-	_daten = [gegner, truppen, bauten, regeln, _brakk_karten(), _ring_karten()]   # 19.11.
+	regeln.append_array(_anfuehrer_karten())   # 19.11.: Anführer
+	_daten = [gegner, truppen, bauten, regeln, _brakk_karten(), _ring_karten(), _anfuehrer_ego_karten()]   # 19.11.; 20.11.: Anführer
+
+
+## 19.11.: Reiter Regeln – je Anführer eine Karte mit Perks und Nachteilen (Texte aus anfuehrer.gd).
+const ANFUEHRER_SYMBOL := {"brakk": "brakk", "irrtuermer": "turm", "sonde7": "stellung", "paul": "muenze"}
+
+func _anfuehrer_karten() -> Array:
+	var karten: Array = []
+	for a: Dictionary in Anfuehrer.LISTE:
+		var id := str(a["id"])
+		var frei := Anfuehrer.frei(id)
+		var abschnitte: Array = [["Perks", Stil.LEUCHT, a["perks"]], ["Nachteile", Stil.WARN, a["nachteile"]]]
+		if id == "paul":
+			abschnitte.append(["Aufträge (ab Runde %d, je Bauphase einer)" % Auftraege.AB_RUNDE, Stil.GOLD, Auftraege.uebersicht()])   # 20.11.
+		if not frei:
+			abschnitte.append(["Freischalten", Stil.GOLD, [Anfuehrer.freischalt_text(id)]])
+		karten.append({"name": "Anführer " + str(a["name"]), "unter": str(a["kurz"]), "marke": "Anführer" if frei else "gesperrt",
+			"marke_farbe": Stil.LEUCHT if frei else Stil.TEXT_BLASS, "bild": {"symbol": str(ANFUEHRER_SYMBOL.get(id, "brakk")), "farbe": a["farbe"]},
+			"werte": [["Rangliste", "ja" if bool(a["rangliste"]) else "nein"], ["Figur [8]", "Brakk" if id == "brakk" else "folgt"]],
+			"abschnitte": abschnitte})
+	return karten
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Fähigkeiten und Ringe (19.11.)
@@ -1036,5 +1057,135 @@ func _ring_karten() -> Array:
 				["Lichtsäule (aktiver Ring)", Stil.GOLD, [str(d.get("saeule", "normaler Einschlag"))]],
 				["Ladestrahl (aktiver Ring)", Stil.GOLD, ["; ".join(lanze) if not lanze.is_empty() else "keine Wirkung"]],
 				["Zeitlupe (aktiver Ring)", Stil.GOLD, [B.zeitlupe_text(r)]],
+				["%s: PliPlop-Pfad" % Anfuehrer.name("irrtuermer"), Stil.LEUCHT, [_pfad_text(r), "Verbund: " + _verbund_text()]],   # 20.11.
+				["%s: Hand und Erfassung" % Anfuehrer.name("sonde7"), Stil.LEUCHT, ["Farblaser in der Ringfarbe. Energiebündel und Erfassungstreffer tragen: " + "; ".join(schuss) + "."]],
 			]})
 	return karten
+
+
+
+# ------------------------------------------------------------------ Brakk-Mode: Anführer (20.11.)
+
+## 20.11.: Pfad des PliPlop mit diesem Ring – aus Werte.PLIPLOP_PFADE erzeugt.
+static func _pfad_text(ring: String) -> String:
+	var p: Dictionary = Werte.PLIPLOP_PFADE.get(ring, Werte.PLIPLOP_PFADE[""])
+	var art := ""
+	match str(p["art"]):
+		"einzel":
+			art = "ein Ziel bis %s Felder" % _z(p["weite"])
+		"mehr":
+			art = "%d Ziele bis %s Felder" % [int(p.get("ziele", 2)), _z(p["weite"])]
+		"welle":
+			art = "alle im Umkreis von %s Feldern um ihn" % _z(p["weite"])
+		"flaeche":
+			art = "Einschlag mit %s Feldern Radius, bis %s Felder" % [_z(p.get("radius", 0.6)), _z(p["weite"])]
+		"linie":
+			art = "durch alle in einer Linie, %s Felder" % _z(p["weite"])
+		"sprung":
+			art = "springt auf %d weitere" % int(p.get("spruenge", 2))
+	var zusatz: Array[String] = []
+	if p.has("bremse"):
+		zusatz.append("bremst %s s" % _z(p["bremse"]))
+	if bool(p.get("brand", false)):
+		zusatz.append("legt ein Brandfeld")
+	if p.has("schutz"):
+		zusatz.append("PliPlop nimmt %d %% weniger Schaden" % roundi(float(p["schutz"]) * 100.0))
+	return "%s: %s, %s Schaden alle %s s%s. Je Ringstufe +%d %% Schaden, dazu der Ring-Effekt." % [str(p["name"]), art, _z(p["schaden"]),
+		_z2(p["takt"]), (", " + ", ".join(zusatz)) if not zusatz.is_empty() else "", roundi(Werte.PLIPLOP_JE_STUFE * 100.0)]
+
+
+static func _verbund_text() -> String:
+	var v: Dictionary = Werte.IRRTUERMER["verbund"]
+	return "Trifft denselben Gegner innerhalb von %s s je ein Effekt beider getragenen Ringe (aus Hand, PliPlop oder Hack), nimmt er +%d %% Schaden." % [_z(v["fenster"]), roundi((float(v["bonus"]) - 1.0) * 100.0)]
+
+
+## Reiter „Anführer“: je Anführer eine Karte mit Tastenbelegung, Kit und Titeln, dazu die Fähigkeiten von Irrtürmer und
+## Sonde 7 – alle Zahlen aus Werte.ANFUEHRER_EGO, Werte.IRRTUERMER, Werte.SONDE7 und BrakkFortschritt.TITEL_JE.
+func _anfuehrer_ego_karten() -> Array:
+	var karten: Array = []
+	for id: String in Werte.ANFUEHRER_EGO:
+		var a := Anfuehrer.eintrag(id)
+		var d: Dictionary = Werte.ANFUEHRER_EGO[id]
+		var tasten: Array[String] = []
+		for t: String in Werte.EGO_TASTEN:
+			var was := str((d["tasten"] as Dictionary).get(t, ""))
+			if was != "":
+				tasten.append("%s: %s" % [str(Werte.EGO_TASTEN_NAME.get(t, t)), str(Werte.EGO_AKTIONEN.get(was, was))])
+		var titel: Array[String] = []
+		for r: Array in BrakkFortschritt.TITEL_JE.get(id, BrakkFortschritt.TITEL):
+			titel.append("%s – %s" % [str(r[0]), str(r[3])])
+		var frei := Anfuehrer.frei(id)
+		var abschnitte: Array = [["Kit", Stil.LEUCHT, d["kit"]], ["Tasten", Stil.GOLD, tasten], ["Spielstil-Titel", Stil.LEUCHT, titel]]
+		if not frei:
+			abschnitte.push_front(["Freischalten", Stil.GOLD, [Anfuehrer.freischalt_text(id) + " (im Normalmodus)"]])
+		karten.append({"name": str(a["name"]), "unter": "im Brakk-Mode", "marke": "spielbar" if frei else "gesperrt",
+			"marke_farbe": Stil.LEUCHT if frei else Stil.TEXT_BLASS, "bild": {"symbol": str(ANFUEHRER_SYMBOL.get(id, "brakk")), "farbe": a["farbe"]},
+			"werte": [["Leben", "%d %%" % roundi(float(d["leben"]) * 100.0)], ["Tempo", "%d %%" % roundi(float(d["tempo"]) * 100.0)]],
+			"abschnitte": abschnitte})
+	karten.append_array(_irrtuermer_karten())
+	karten.append_array(_sonde_karten())
+	return karten
+
+
+func _ego_karte(wer: String, name: String, unter: String, werte: Array, abschnitte: Array) -> Dictionary:
+	var a := Anfuehrer.eintrag(wer)
+	return {"name": name, "unter": unter, "marke": str(a["name"]), "marke_farbe": a["farbe"],
+		"bild": {"symbol": str(ANFUEHRER_SYMBOL.get(wer, "brakk")), "farbe": a["farbe"]}, "werte": werte, "abschnitte": abschnitte}
+
+
+func _irrtuermer_karten() -> Array:
+	var I: Dictionary = Werte.IRRTUERMER
+	var b: Dictionary = I["bolzen"]
+	var h: Dictionary = I["hack"]
+	var u: Dictionary = I["ueberladen"]
+	var au: Dictionary = I["aufsatz"]
+	var pp: Dictionary = I["pliplop"]
+	return [
+		_ego_karte("irrtuermer", "Prellbolzen", "Linksklick", [["Schaden", _z(b["schaden"])], ["alle", _z2(b["takt"]) + " s"], ["Abpraller", str(b["abpraller"])]], [
+			["Bolzen", Stil.LEUCHT, ["Fliegt durchs Fadenkreuz, prallt bis zu %d× von Mauern ab und platzt am Gegner (Fläche %s Felder). Der Ring in der Hand färbt ihn (Schaden, Takt, Effekt)." % [int(b["abpraller"]), _z(b["flaeche"])],
+				"Platzt er höchstens %s Feld vom PliPlop entfernt, stößt er Nahkämpfer im Umkreis von %s Feldern %s Felder weg." % [_z(b["stoss_naehe"]), _z(b["stoss_radius"]), _z(b["stoss"])]]]]),
+		_ego_karte("irrtuermer", "PliPlop 3cK", "rollender Begleitturm", [["Leben", "%d %%" % roundi(float(pp["leben"]) * 100.0)], ["Abstand", _z(pp["abstand"]) + " Felder"], ["zurück", _z(pp["respawn"]) + " s"]], [
+			["Gefährte", Stil.LEUCHT, ["Ab Runde 1 dabei, rollt von selbst hinter dir her. Sein Pfad kommt vom Ring im zweiten Slot (siehe Reiter Ringe), ohne Ring der Grundschuss.",
+				"Fällt er, ist er nach %s s neben dir wieder da; fällst du, fällt er mit." % _z(pp["respawn"])]],
+			["Zwei Ringslots", Stil.GOLD, ["Hand und PliPlop. Derselbe Ring in beiden Slots braucht eine Kopie für %d %% des Kaufpreises. [V] tauscht die Ringe sofort." % roundi(float(I["kopie_anteil"]) * 100.0)]]]),
+		_ego_karte("irrtuermer", "Hack", "Rechtsklick halten", [["Weite", _z(h["weite"]) + " Felder"], ["Tempo", "%d %%" % roundi(float(h["tempo"]) * 100.0)]], [
+			["Fremder Schuss", Stil.LEUCHT, ["Strahl auf Formturm, Batterie oder PliPlop: solange gehalten, schießt du dessen Schuss (Art, Schaden, Effekte) aus der Hand, der Turm feuert weiter. Kein Cooldown, beim Halten langsamer.",
+				"Funkturm: kein eigener Schuss, aber deine Bolzen fliegen schneller. Heilturm: heilt dich und den PliPlop."]]]),
+		_ego_karte("irrtuermer", "Überladen · Aufsatz", "Q · R · X", [["Überladen", _z(u["sek"]) + " s"], ["Cooldown", _z(u["abkling"]) + " s"], ["Aufsatz", _z(au["sek"]) + " s"]], [
+			["Überladen [Q]", Stil.LEUCHT, ["PliPlop oder der gehackte Turm feuert %s s lang %s-mal so schnell. Nicht während des Aufsatzes." % [_z(u["sek"]), _z(u["mal"])]]],
+			["Aufsatz [R]", Stil.GOLD, ["Einmal je Runde: der PliPlop dockt am Arm an, %s s feuerst du seinen Pfad im Takt der Hand, %d %% langsamer. Danach ist er %s s leer. Währenddessen kein Hack, kein Überladen." % [_z(au["sek"]), roundi((1.0 - float(au["tempo"])) * 100.0), _z(au["leer"])]]],
+			["Hierher! [X]", Stil.LEUCHT, ["Der PliPlop rollt zum Fadenkreuz und bleibt dort; nochmal [X]: er folgt wieder."]]]),
+		_ego_karte("irrtuermer", "Verbund", "Ring-Signatur", [["Fenster", _z(I["verbund"]["fenster"]) + " s"], ["Bonus", "+%d %%" % roundi((float(I["verbund"]["bonus"]) - 1.0) * 100.0)]], [
+			["Eine Regel", Stil.LEUCHT, [_verbund_text(), "Eigenes Treffer-Bild (zwei Ringe in den Farben beider Slots), eigene Zeile im Werte-Fenster und im Schaden nach Quelle."]]]),
+	]
+
+
+func _sonde_karten() -> Array:
+	var S: Dictionary = Werte.SONDE7
+	var sw: Dictionary = S["schweben"]
+	var ha: Dictionary = S["hand"]
+	var dl: Dictionary = S["doppellaser"]
+	var sr: Dictionary = S["schrot"]
+	var sg: Dictionary = S["sondengewehr"]
+	var ls: Dictionary = S["luftschlag"]
+	return [
+		_ego_karte("sonde7", "Düsen · Teleport", "Schweben, Schub, Teleport", [["Akku", _z(sw["akku"]) + " s"], ["lädt", _z(sw["laden"]) + " s"], ["Teleport", _z(S["teleport"]["weite"]) + " Felder"]], [
+			["Düsen", Stil.LEUCHT, ["Leertaste halten: steigen und schweben (bis %s Felder hoch), loslassen: sinken, zweimal tippen: fallen lassen. Der Akku hält %s s und lädt am Boden in %s s." % [_z(sw["hoehe"]), _z(sw["akku"]), _z(sw["laden"])],
+				"In der Luft sehen dich alle Fernkämpfer, Nahkämpfer erreichen dich nicht."]],
+			["Schub und Teleport", Stil.GOLD, ["[Shift]: kurzer Dash in Blickrichtung (%s Felder), auch in der Luft, kostet Akku." % _z(S["schub"]["felder"]),
+				"[Q]: Blink zum Fadenkreuz, durch Wände, bis %s Felder, %s s Cooldown. Nicht während des Luftschlags." % [_z(S["teleport"]["weite"]), _z(S["teleport"]["abkling"])]]]]),
+		_ego_karte("sonde7", "Hand", "Farblaser · Energiebündel", [["Laser", _z(ha["laser_schaden"]) + " / " + _z2(ha["laser_takt"]) + " s"], ["Bündel", _z(ha["buendel_schaden"])]], [
+			["Links: Farblaser", Stil.LEUCHT, ["Dauerstrahl in der Farbe des aktiven Rings. Nach %s s überhitzt er, dann %s s Pause." % [_z(ha["hitze_sek"]), _z(ha["pause"])]]],
+			["Rechts: Energiebündel", Stil.GOLD, ["Langsames Geschoss, platzt in kleiner Fläche (%s Felder) und trägt den Effekt des aktiven Rings." % _z(ha["buendel_flaeche"])]]]),
+		_ego_karte("sonde7", "Doppel-Lasergewehr", "E", [["Magazin", str(dl["magazin"])], ["Cooldown", _z(dl["abkling"]) + " s"], ["Erfassen", _liste(dl["erfassen"]).replace(", ", "/")]], [
+			["Links", Stil.LEUCHT, ["Dauerfeuer (%s Schaden), überhitzt wie der Farblaser." % _z(dl["schaden"])]],
+			["Rechts: Zielerfassung", Stil.GOLD, ["Erfasst %s Gegner (ab Stufe %s) für %s s; jeder Schuss geht reihum an das nächste erfasste Ziel (×%s) und trägt den Ring-Effekt." % [_liste(dl["erfassen"]).replace(", ", "/"), _liste(dl["erfassen_ab"]).replace(", ", "/"), _z(dl["erfassen_sek"]), _z(dl["erfassung_mal"])]]]]),
+		_ego_karte("sonde7", "Schrotflinte", "V", [["Magazin", str(sr["magazin"])], ["Cooldown", _z(sr["abkling"]) + " s"], ["Kugeln", str(sr["kugeln"])]], [
+			["Links", Stil.LEUCHT, ["Ein Schuss: %d Kugeln à %s Schaden, breit und kurz (%s Felder)." % [int(sr["kugeln"]), _z(sr["schaden"]), _z(sr["weite"])]]],
+			["Rechts", Stil.GOLD, ["Das ganze Magazin auf einmal – der Rückstoß wirft dich nach hinten oben, genau eine Mauerhöhe hoch, ohne Akku. Danach %s s Nachladen." % _z(sr["nachladen"])]]]),
+		_ego_karte("sonde7", "Sondengewehr", "X", [["Magazin", str(sg["magazin"])], ["Cooldown", _z(sg["abkling"]) + " s"], ["Schaden", _z(sg["schaden"])]], [
+			["Links", Stil.LEUCHT, ["Halten lädt (%s s), loslassen: Durchschlag durch alle Gegner in einer Linie (%s Felder)." % [_z(sg["laden"]), _z(sg["weite"])]]],
+			["Rechts: Sondenblick", Stil.GOLD, ["%s s lang Gegner im Umkreis von %s Feldern durch Wände sichtbar; so gesehene Gegner nehmen von Truppen +%d %% Schaden." % [_z(sg["blick_sek"]), _z(sg["blick_weite"]), roundi((float(sg["blick_bonus"]) - 1.0) * 100.0)]]]]),
+		_ego_karte("sonde7", "Luftschlag", "R", [["Granaten", str(ls["magazin"])], ["Dauer", _z(ls["sek"]) + " s"], ["Schaden", _z(ls["schaden"])]], [
+			["Einmal je Runde", Stil.LEUCHT, ["%s s schweben ohne Akku (steigt auf %s Felder), Granatwerfer mit %d Granaten: %s Schaden im Umkreis von %s Feldern, in der Ringfarbe. Kein Teleport währenddessen." % [_z(ls["sek"]), _z(ls["hoehe"]), int(ls["magazin"]), _z(ls["schaden"]), _z(ls["radius"])]]]]),
+	]

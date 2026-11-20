@@ -62,6 +62,7 @@ const BRAKK_STUFE1_LEBEN := 1.2           # 19.11. (Paul): Brakk-Mode – Truppe
 const BRAKK_GEL_FELD_SCHADEN := 0.75      # 19.11. (Paul): Truppen im Gel-Feld machen 25 % weniger Schaden
 var _brakk_praemie := 0.0                # Bruchteile der gedrittelten Prämie
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
+var order24: Order24 = null   # 20.11. (Schritt 5b): Brakk-Mode „Rogue“ – Order 24 (scripts/order24.gd)
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
 var endkampf := false               # letzte Runde: Gegner ohne Ende, Sieg durch Zerstören des HQ
@@ -113,6 +114,7 @@ var _im_flug := 0                   # geworfene Hunde, die noch in der Luft sind
 var _tempo_faktor := 1.0            # 1, 2 oder 3 (Taste F schaltet weiter), wird mit Werte.SPIELTEMPO multipliziert
 var _spawn_in := 0.0
 var _turm_abkling: Dictionary = {}  # Turm-Zelle -> Sekunden bis zum nächsten Schuss
+var turm_ueberladen: Dictionary = {}  # 20.11.: Brakk-Mode, Irrtürmer – Turm-Zelle -> [Ende (ms), Faktor]: feuert so lange schneller
 var _funk_welle: Dictionary = {}    # Funkturm -> Sekunden bis zur nächsten Funkwelle (nur Optik)
 var _turm_schock: Dictionary = {}    # Frost mit Schockfrost: Turm-Zelle -> Sekunden bis zum nächsten Einfrieren
 var _turm_nachschuss: Dictionary = {}   # Lanze mit Doppelstrahl: Turm-Zelle -> [Sekunden, Strahlende]
@@ -175,15 +177,15 @@ func _ready() -> void:
 	add_child(nebel)   # über Karte, Figuren und Effekten
 	Engine.time_scale = Werte.SPIELTEMPO
 	_aktualisiere_zone()
-	karte.cp_aktiv = welle >= Werte.CHECKPOINTS_AB_WELLE
-	karte.zeige_schwachstelle = welle >= Werte.SPRENGER_AB_WELLE
+	karte.cp_aktiv = Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE
+	karte.zeige_schwachstelle = Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE
 	setze_kartenmauern()   # 18.11.: vorgebaute Erdwälle der Karte (aktualisiert auch den Weg)
 	_beginne_protokoll()
 	_baue_hud()
 	var start := naechster_start
 	naechster_start = ""
 	if start == "normal":
-		_normales_spiel()   # Neustart vom Schlussbild: gleich ins normale Spiel, ohne Menü
+		_spiel_nach_regeln()   # Neustart vom Schlussbild: gleich ins normale Spiel, ohne Menü (20.11.: oder Brakk-Mode laut Karte)
 	elif start == "sandbox":
 		_menue_gewaehlt(true)   # aus dem Startmenü, nach dem Wechsel der Kartengröße
 	elif start == "tutorial":
@@ -230,17 +232,19 @@ func _menue_weg() -> void:
 func _menue_gewaehlt(mit_sandbox: bool) -> void:
 	sandbox = mit_sandbox
 	if sandbox:
+		_setze_anfuehrer("brakk")   # 19.11.: Sandbox mit Brakk
 		budget = 999999
 		_protokoll["sandbox"] = true
 		sandbox_cp_route(true)
 		melde("Sandbox: unendlich Budget, alle Bauwerke freigeschaltet.", 5.0)
 	else:
-		_normales_spiel()   # 16.11.: das Tutorial hat im Basislager ein eigenes Gebäude (Übungsplatz)
+		_spiel_nach_regeln()   # 16.11.: das Tutorial hat im Basislager ein eigenes Gebäude (Übungsplatz); 20.11.: Modus laut Karte
 	_menue_weg()
 
 
 ## Übungsplatz im Basislager: normales Spiel, Sonde 7 erklärt gleich Schritt für Schritt.
 func _tutorial_gewaehlt() -> void:
+	Werte.setze_anfuehrer("brakk")   # 19.11.: das Tutorial läuft immer mit Brakk
 	_normales_spiel()
 	tutorial = Tutorial.new()
 	tutorial.spiel = self
@@ -251,14 +255,185 @@ func _tutorial_gewaehlt() -> void:
 
 ## Normales Spiel (auch gegen ein Angriffs-Phantom): Die Basis steht jede Partie woanders.
 func _normales_spiel() -> void:
+	_setze_anfuehrer(Werte.anfuehrer)   # 19.11.: vom Startmenü gewählt (oder vom Szenario vorgegeben)
 	_kartenbauten_einrichten()      # 18.11.: vorgebaute Türme/Fabriken eines Szenarios
 	_herausforderung_einrichten()   # 18.11.: vor der Basis – die fertige Mauer steht zuerst
 	if herausforderung == "mauern_fest":
 		setze_basis(Werte.BASIS_ZELLE)   # 18.11.: am Ende des Labyrinths, damit die Gegner die ganze Mauer ablaufen
 	elif Werte.BASIS_ZUFALL and not Werte.KARTE_BASIS_FEST:
 		stelle_basis("ueberall")
+	_alarmstart_einrichten()   # 20.11. (Schritt 5b): Formation aus [H] mit Fabriken und Stellungen, angesprengt
+	_startlage_einrichten()   # 20.11.
 	_zeige_einfuehrung()
 	_starte_bauzeit()   # 18.11.: auch schon in Runde 1
+	if bool(Werte.KARTE_REGELN.get("sofort", false)) and phantom_modus == "":
+		starte_welle.call_deferred(true)   # 20.11.: Alarmstart – die erste Welle läuft gleich
+		_trupp_unterwegs.call_deferred()   # 20.11. (Schritt 5b): ein Trupp ist schon mitten auf dem Weg
+
+
+## 20.11. (Schritt 5): Normales Spiel oder – wenn das Regelpaket der Karte es sagt – der Brakk-Mode (Ego-Sicht).
+func _spiel_nach_regeln() -> void:
+	if Werte.modus() == "rogue":
+		_order24_gewaehlt()   # 20.11. (Schritt 5b)
+	elif Werte.modus() == "brakk":
+		_brakk_modus_gewaehlt()
+	else:
+		_normales_spiel()
+
+
+## 20.11. (Schritt 5): Startlage aus dem Regelpaket – beschädigte Mauer der Karte, Checkpoints schon beim Gegner.
+func _startlage_einrichten() -> void:
+	var anteil := clampf(float(Werte.KARTE_REGELN.get("mauer_leben", 100)) / 100.0, 0.05, 1.0)
+	if anteil < 1.0:
+		for z: Vector2i in Werte.MAUERN:
+			if karte.inhalt(z) == Karte.WALL:
+				karte.leben[z] = karte.max_leben(Karte.WALL) * anteil
+	if bool(Werte.KARTE_REGELN.get("cp_feind", false)) and not karte.checkpoints.is_empty():
+		karte.cp_aktiv = true
+		for i in karte.cp_feind.size():
+			karte.cp_feind[i] = true
+		karte.aktualisiere_pfad()
+		karte.queue_redraw()
+
+
+## 20.11. (Schritt 5b, Alarmstart): Regelpaket "formation" ("" = Zufall unter Werte.ALARM_FORMATIONEN, sonst der Name aus [H]).
+## Die Formation wird auf die Karte gelegt (Checkpoints und Basis wie im Plan), dazu "alarm_fabriken" Fabriken (Stufe 1,
+## reihum spezialisiert) und "alarm_stellungen" Stellungen auf den Wallfeldern mit der größten Wegabdeckung. Danach sind
+## "gesprengt" Erdwälle weg. Alles gehört zur Karte (nicht abreißbar). Nur auf Karten mit 28×14 (Größe der Pläne).
+var alarm_formation := ""   # welche Formation liegt (für Anzeige und Prüfung)
+
+func _alarmstart_einrichten() -> void:
+	var r: Dictionary = Werte.KARTE_REGELN
+	if not r.has("formation") or Werte.SPALTEN != Nachschlag.SP or Werte.ZEILEN != Nachschlag.ZE or phantom_modus != "":
+		return
+	var name := str(r["formation"])
+	if not Nachschlag.PLAENE_GROSS.has(name):
+		name = Werte.ALARM_FORMATIONEN.pick_random()
+	alarm_formation = name
+	formation_aufbauen(name, clampi(int(r.get("alarm_fabriken", 6)), 0, 12), clampi(int(r.get("alarm_stellungen", 4)), 0, 12), clampi(int(r.get("gesprengt", 6)), 0, 40))
+
+
+## 20.11. (Schritt 5b): Formation `name` aus [H] (28×14) mit ihren Checkpoints hinstellen, dazu `anzahl` Fabriken (Stufe 1,
+## reihum spezialisiert), `soll` Stellungen mit der größten Wegabdeckung und `weg_damit` gesprengte Erdwälle. Alles gehört
+## zur Karte. Alarmstart und Order 24. Gibt die Stellungen zurück.
+func formation_aufbauen(name: String, anzahl: int, soll: int, weg_damit: int) -> Array[Vector2i]:
+	var plan: Array = (Nachschlag.PLAENE_GROSS[name] as Array).duplicate()
+	if randi() % 2 == 1:
+		plan.reverse()   # mal oben, mal unten gespiegelt
+	var waelle: Array = []
+	var fabrik_felder: Array[Vector2i] = []
+	var cps: Array = [Karte.KEINE, Karte.KEINE]
+	for y in plan.size():
+		var zeile := str(plan[y])
+		for x in zeile.length():
+			var c := zeile[x]
+			var z := Vector2i(x, y)
+			if c in ["#", "S", "T", "O"] and karte.ist_bebaubar(z):
+				waelle.append([x, y, "tor" if c == "O" else ""])
+			elif c == "F" and karte.ist_bebaubar(z):
+				fabrik_felder.append(z)
+			elif c == "1" or c == "2":
+				cps[int(c) - 1] = z
+	if cps[0] != Karte.KEINE and cps[1] != Karte.KEINE:
+		setze_checkpoints(cps)
+	# Fabriken: erst die Felder des Plans, dann freie Felder nah an der Basis
+	var belegt := {}
+	for w: Array in waelle:
+		belegt[Vector2i(int(w[0]), int(w[1]))] = true
+	if fabrik_felder.size() < anzahl:
+		var frei: Array[Vector2i] = []
+		for y in Werte.ZEILEN:
+			for x in range(Werte.ZONE_SPALTEN + 4, Werte.SPALTEN):
+				var z := Vector2i(x, y)
+				if karte.ist_bebaubar(z) and not belegt.has(z) and not fabrik_felder.has(z) and not karte.ist_basis(z) and absi(y - karte.basis.y) > 1:
+					frei.append(z)
+		frei.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.distance_squared_to(karte.basis) < b.distance_squared_to(karte.basis))
+		for z: Vector2i in frei:
+			if fabrik_felder.size() >= anzahl:
+				break
+			var nah := false
+			for f: Vector2i in fabrik_felder:
+				if absi(f.x - z.x) <= 1 and absi(f.y - z.y) <= 1:
+					nah = true
+			if not nah:
+				fabrik_felder.append(z)
+	var fabriken_liste: Array = []
+	for i in mini(anzahl, fabrik_felder.size()):
+		fabriken_liste.append({"x": fabrik_felder[i].x, "y": fabrik_felder[i].y, "einheit": Werte.ALARM_TRUPPEN[i % Werte.ALARM_TRUPPEN.size()], "stufe": 1})
+	_setze_stand({"waelle": waelle, "fabriken": fabriken_liste, "batterien": []})
+	# Stellungen: Wallfelder, von denen aus die meisten Wegfelder in Reichweite liegen (mindestens 3 Felder auseinander)
+	var weg := {}
+	for z: Vector2i in karte.pfad:
+		weg[z] = true
+	for neben: Array in karte.neben_pfade:
+		for z: Vector2i in neben:
+			weg[z] = true
+	var kandidaten: Array = []
+	for z: Vector2i in karte.feld:
+		if karte.feld[z] != Karte.WALL or karte.ausbau.has(z):
+			continue
+		var n := 0
+		for w: Vector2i in weg:
+			if Vector2(w - z).length() <= Werte.STELLUNG_ABDECKUNG:
+				n += 1
+		kandidaten.append([n, z])
+	kandidaten.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) > int(b[0]))
+	var stellungen: Array[Vector2i] = []
+	for k: Array in kandidaten:
+		if stellungen.size() >= soll:
+			break
+		var z: Vector2i = k[1]
+		var zu_nah := false
+		for s: Vector2i in stellungen:
+			if Vector2(s - z).length() < 3.0:
+				zu_nah = true
+		if not zu_nah:
+			stellungen.append(z)
+			karte.baue_aus(z, Karte.STELLUNG)
+	# Gesprengt: blanke Erdwälle (keine Stellung, kein Tor, keine Turmstütze), bevorzugt am Gegnerweg
+	var blank: Array = []
+	for z: Vector2i in karte.feld:
+		if karte.feld[z] == Karte.WALL and not karte.ausbau.has(z) and not karte.stuetze_von.has(z):
+			var am_weg := 0
+			for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+				if weg.has(z + d):
+					am_weg = 1
+			blank.append([am_weg * 10 + randi() % 10, z])
+	blank.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) > int(b[0]))
+	for i in mini(weg_damit, blank.size()):
+		karte.entferne(blank[i][1] as Vector2i)
+	for z: Vector2i in karte.feld:
+		karte.fest[z] = true   # gehört zur Karte: ausbaubar, nicht abreißbar
+	karte.aktualisiere_pfad()
+	karte.queue_redraw()
+	print("FORMATION %s · %d Erdwälle · %d Fabriken · Stellungen %s · %d gesprengt" % [name, waelle.size(), fabriken_liste.size(), str(stellungen), mini(weg_damit, blank.size())])
+	return stellungen
+
+
+## 20.11. (Schritt 5b, Alarmstart): Regelpaket "trupp_unterwegs" (Typen) – dieser Trupp steht beim Start schon auf einem
+## Drittel des Gegnerwegs und läuft los, sobald die erste Welle beginnt.
+func _trupp_unterwegs() -> void:
+	var typen: Variant = Werte.KARTE_REGELN.get("trupp_unterwegs", [])
+	if not (typen is Array) or (typen as Array).is_empty() or phase != Phase.KAMPF or karte.pfad.size() < 6:
+		return
+	var i := int(karte.pfad.size() * 0.3)
+	var zelle: Vector2i = karte.pfad[i]
+	var ziel := karte.erstes_ziel()
+	for k in range(ziel, karte.checkpoints.size()):
+		var j := karte.pfad.find(karte.checkpoints[k])
+		if j >= 0 and j < i:
+			ziel = k + 1   # Checkpoints, die schon hinter ihm liegen, läuft er nicht mehr an
+	var trupp: Array = []
+	for typ: Variant in (typen as Array):
+		if not Werte.GEGNER.has(str(typ)):
+			continue
+		var g := _neuer_gegner(str(typ), zelle, ziel)
+		g.trupp = trupp
+		trupp.append(g)
+	if Werte.ZONE2.size != Vector2i.ZERO:
+		for g: Gegner in trupp:
+			_zange_route(g)
+	melde("Ein Trupp ist schon durch die Linien – er steht mitten auf dem Weg!", 6.0)
 
 
 ## 18.11.: Szenario mit vorgebauten Türmen/Fabriken (Werte.KARTE_STAND): hinstellen, nicht abreißbar (sonst gäbe der
@@ -296,6 +471,9 @@ func _zeige_einfuehrung() -> void:
 	var text := str(Werte.KARTE_REGELN.get("einfuehrung", "")).strip_edges()
 	if text == "" or DisplayServer.get_name() == "headless":
 		return
+	if brakk_modus:
+		melde("%s: %s" % [Werte.KARTE_TITEL, text], 10.0)   # 20.11.: im Brakk-Mode kein zweites Fenster über der Einsatz-Tafel
+		return
 	add_child(ModLeiste.Tafel.new(Werte.KARTE_TITEL, text, [["Los geht's", Callable()]]))
 
 
@@ -329,6 +507,7 @@ func starte_phantom_verteidigung(pfad: String) -> bool:
 		return false
 	phantom_modus = "verteidigung"
 	_angriff_pfad = pfad
+	Werte.setze_anfuehrer("brakk")   # 19.11.: gegen Angriffs-Phantome vorerst immer mit Brakk
 	_normales_spiel()
 	_protokoll["gegen_angriff"] = pfad.get_file()
 	melde("Du verteidigst gegen den Angriff von %s. Seine Welle steht jede Runde oben in der Ansage." % str(_angriff_phantom.get("spieler", "einem Phantom")), 8.0)
@@ -367,7 +546,8 @@ func starte_phantom_angriff(pfad: String) -> bool:
 		for f: Dictionary in pool:
 			if str(f["pfad"]).get_file() != pfad.get_file() and _ersatz.size() < 2:
 				_ersatz.append(f["pfad"])
-	leben = Werte.START_LEBEN
+	Werte.setze_anfuehrer(str(_phantom.get("anfuehrer", "brakk")))   # 19.11.: das Phantom verteidigt mit den Regeln seines Anführers
+	leben = Werte.start_leben()
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
 	_lade_phantom_stand()
 	_zeige_laufband()
@@ -611,7 +791,8 @@ func _ersatz_uebernimmt(neu: Dictionary) -> void:
 	_phantom = neu
 	_aktiv_pfad = str(neu.get("_pfad", ""))
 	_phantom.erase("_pfad")
-	leben = Werte.START_LEBEN
+	Werte.setze_anfuehrer(str(_phantom.get("anfuehrer", "brakk")))   # 19.11.: Ersatz-Phantom mit seinem Anführer
+	leben = Werte.start_leben()
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
 	var b: Array = _phantom["karte"].get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])
 	setze_basis(Vector2i(int(b[0]), int(b[1])))
@@ -698,7 +879,7 @@ var herausforderung := ""
 
 ## Alle Bauwerke frei (sonst gibt es in Runde 1 nur Fabriken)?
 func alles_frei() -> bool:
-	return sandbox or brakk_modus or welle >= Werte.WAELLE_AB_WELLE or herausforderung in ["keine_fabriken", "mauern_fest"]   # 18.11.: Brakk-Mode – alles ab Runde 1 (5 Gratis-Erdwälle je Runde)
+	return sandbox or brakk_modus or Werte.plan_runde(welle) >= Werte.WAELLE_AB_WELLE or herausforderung in ["keine_fabriken", "mauern_fest"]   # 18.11.: Brakk-Mode – alles ab Runde 1 (5 Gratis-Erdwälle je Runde)
 
 
 ## 18.11.: Bauwerke, die eine Karte (Regelpaket „bauten“, Szenario-Editor) einzeln sperren kann: Werkzeug -> [Schlüssel, Name].
@@ -717,11 +898,35 @@ func herausforderung_sperrt(typ: int) -> String:
 		return "Herausforderung „Keine Fabriken“: Fabriken sind gesperrt – Türme, Batterien und Brakk gehen."
 	if herausforderung == "mauern_fest" and typ == Karte.WALL:
 		return "Herausforderung „Mauern fest“: Die Mauer steht schon – bau Türme, Stellungen und Tore darauf."
+	return anfuehrer_sperrt(typ)
+
+
+## 19.11.: Was der Anführer nicht erlaubt ("" = erlaubt): gesperrte Bauwerke, Höchstzahl Fabriken, Figur auf Slot [8].
+## Für Brakk greift nichts davon.
+func anfuehrer_sperrt(typ: int) -> String:
+	var wer := Anfuehrer.name(Werte.anfuehrer)
+	if typ == Karte.KOMMANDANT and Werte.figur() != "brakk":   # Schritt 2c: hier die Figuren der anderen Anführer anschließen
+		return "Figur folgt: Die Figur von %s kommt noch." % wer
+	if BAUTEN.has(typ) and Werte.af_gesperrt(str(BAUTEN[typ][0])):
+		return "%s: %s gesperrt." % [wer, str(BAUTEN[typ][1])]
+	if typ == Karte.FABRIK and Werte.max_fabriken() > 0 and _normale_fabriken() >= Werte.max_fabriken():
+		return "%s: höchstens %d Fabriken." % [wer, Werte.max_fabriken()]
 	return ""
+
+
+## 19.11.: Anführer der Partie festlegen (Werte.anfuehrer) – ein Szenario kann ihn vorgeben (Regelpaket „anfuehrer“,
+## leer = frei wählbar). Steht auch im Protokoll (Phantome) und setzt das Startleben des Anführers.
+func _setze_anfuehrer(id: String) -> void:
+	var vorgabe := str(Werte.KARTE_REGELN.get("anfuehrer", ""))
+	Werte.setze_anfuehrer(vorgabe if vorgabe != "" else id)
+	_protokoll["anfuehrer"] = Werte.anfuehrer
+	leben = Werte.start_leben()
 
 
 ## 18.11.: Einkommen (Rundenbonus, Prämien, Erzadern) mit „Doppeltes Geld“ und dem Werte-Mod „Einkommen“ der Karte.
 func einkommen(betrag: int) -> int:
+	if not Werte.einkommen_an():
+		return 0   # 20.11.: Szenario ohne Einkommen (Rundenbonus, Prämien, Erzadern)
 	return roundi(betrag * geld_faktor() * Werte.mod_faktor("einkommen"))
 
 
@@ -744,7 +949,7 @@ func _herausforderung_einrichten() -> void:
 			setze_checkpoints(karte._zufalls_checkpoints())
 			setze_kartenmauern(Werte.MAUERN_FEST)
 	elif herausforderung == "keine_fabriken":
-		freie_waelle = Werte.STARTPAKET_WAELLE
+		freie_waelle = Werte.startpaket_waelle()   # 19.11.: je Anführer
 	melde("Herausforderung: %s – %s" % [Werte.herausforderung_name(herausforderung), Werte.herausforderung_text(herausforderung)], 9.0)
 
 
@@ -808,6 +1013,50 @@ func _fabrik_gebaut() -> bool:
 			if str(a.get("a", "")) == "bau" and str(a.get("typ", "")) == "fabrik":
 				return true
 	return false
+
+
+## 20.11. (Paul): Pauls Aufträge (scripts/auftraege.gd). `auftrag` = laufender Auftrag ({} = keiner).
+var auftrag: Dictionary = {}
+var auftrag_letzter := ""   # nie zweimal derselbe hintereinander
+
+
+func _auftrag_neu() -> void:
+	auftrag = Auftraege.neuer(self)
+	if not auftrag.is_empty():
+		var a := Auftraege.eintrag(str(auftrag["id"]))
+		melde("%s – %s" % [Auftraege.titel(auftrag), a["text"]], 9.0)
+
+
+func _auftrag_pruefen(wann: String) -> void:
+	if not auftrag.is_empty() and Auftraege.pruefe(self, auftrag, wann):
+		auftrag_letzter = str(auftrag["id"])
+		auftrag = {}
+
+
+## 19.11.: Erfolge „Ausbilder“ und „Deutscher Sparer“ beim Sieg.
+func _erfolge_zum_sieg() -> void:
+	if bool(Profil.einstellung("tutorial_fertig", false)) and _normale_fabriken() >= Erfolge.AUSBILDER_FABRIKEN:
+		for z: Vector2i in fabriken:
+			if not karte.paar.has(z) and int(fabriken[z].get("stufe", 0)) >= 3:
+				erfolg("ausbilder")
+				break
+	if bool(_protokoll.get("sparer", false)):
+		erfolg("deutscher_sparer")
+
+
+## 19.11.: Erfolg „Baumeister“ – in dieser Partie alle Formtürme gebaut (gemerkt im Protokoll, übersteht so den
+## Zwischenstand) und ein Turm steht auf Stufe 3. Geprüft beim Turmbau und beim Aufwerten.
+func _pruefe_baumeister(neue_art: String = "") -> void:
+	var formen: Array = _protokoll.get("formen", [])
+	if neue_art != "" and not formen.has(neue_art):
+		formen.append(neue_art)
+		_protokoll["formen"] = formen
+	if formen.size() < Werte.TURMARTEN.size():
+		return
+	for z: Vector2i in karte.turm_stufe:
+		if int(karte.turm_stufe[z]) >= 3:
+			erfolg("baumeister")
+			return
 
 
 var schuetze: Node = null   # 18.11.: die Truppe, deren Schuss gerade trifft (Erfolg „Einsamer Posten“)
@@ -884,7 +1133,7 @@ func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 
 ## Verteidigung gegen ein Angriffs-Phantom (oder ein Sieg im normalen Spiel) zu Ende: Bau hochladen, Duell melden.
 func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
-	if not Online.aktiv():
+	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer):   # 19.11.: Paul meldet nichts an die Rangliste
 		return
 	var vid := ""
 	if pfad != "":
@@ -1105,7 +1354,7 @@ func _abbruch_klick() -> void:
 		return
 	_abbruch_ms = Time.get_ticks_msec()
 	_btn_menue.text = "Abbrechen?"
-	melde("Partie abbrechen und zurück ins Hauptmenü? Dann nochmal auf den Knopf klicken.", ABRISS_FRIST_MS / 1000.0)
+	melde(("Test beenden und zurück in den Editor?" if SzenarioEditor.testet else "Partie abbrechen und zurück ins Hauptmenü?") + " Dann nochmal auf den Knopf klicken.", ABRISS_FRIST_MS / 1000.0)   # 20.11.
 
 
 func _zum_menue() -> void:
@@ -1152,7 +1401,7 @@ func _beginne_protokoll() -> void:
 	var cps: Array = []
 	for z in karte.checkpoints:
 		cps.append([z.x, z.y])
-	_protokoll = {"version": 1, "begonnen": Time.get_datetime_string_from_system(), "checkpoints": cps, "runden": []}
+	_protokoll = {"version": 1, "begonnen": Time.get_datetime_string_from_system(), "checkpoints": cps, "runden": [], "anfuehrer": Werte.anfuehrer}   # 19.11.: Anführer
 	_protokoll_datei = "partie-%s.json" % Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "-")
 
 
@@ -1246,7 +1495,8 @@ func _speichere_zwischenstand() -> void:
 		"basis": [karte.basis.x, karte.basis.y], "checkpoints": cps, "cp_feind": Array(karte.cp_feind),
 		"stand": Phantom._stand(_zellen_jetzt(), _schilde_jetzt()),
 		"kommandant": [kommandant.aufstellung.x, kommandant.aufstellung.y] if kommandant != null else [],
-		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad, "herausforderung": herausforderung,
+		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad, "herausforderung": herausforderung, "anfuehrer": Werte.anfuehrer,   # 19.11.
+		"auftrag": auftrag, "auftrag_letzter": auftrag_letzter,   # 20.11.
 		"protokoll": _protokoll, "protokoll_datei": _protokoll_datei, "kills": _profil_kills,
 	}
 	if brakk_modus and kommandant != null and kommandant.fortschritt != null:
@@ -1376,6 +1626,7 @@ func _lade_zwischenstand() -> void:
 		Werte.setze_grafik("hd")
 	herausforderung = str(d.get("herausforderung", ""))   # 18.11.
 	Werte.herausforderung = herausforderung
+	Werte.setze_anfuehrer(str(d.get("anfuehrer", "brakk")))   # 19.11.: alte Zwischenstände ohne Feld = Brakk
 	var passt: bool = not d.is_empty() and int(d.get("spalten", 0)) == Werte.SPALTEN and int(d.get("zeilen", 0)) == Werte.ZEILEN \
 			and str(d.get("karte", "paulland")) == Werte.karte_name
 	if passt and str(d.get("phantom_modus", "")) == "verteidigung":
@@ -1389,6 +1640,7 @@ func _lade_zwischenstand() -> void:
 	var bz: Array = d["basis"]
 	setze_basis(Vector2i(int(bz[0]), int(bz[1])))
 	_protokoll = d["protokoll"]
+	_protokoll["anfuehrer"] = Werte.anfuehrer   # 19.11.
 	_protokoll_datei = str(d["protokoll_datei"])
 	_profil_kills = d.get("kills", {})
 	_setze_stand(d["stand"])
@@ -1404,9 +1656,12 @@ func _lade_zwischenstand() -> void:
 	_naechste_bauphase()
 	leben = int(d["leben"])
 	budget = int(d["budget"])
+	var gesichert: Variant = d.get("auftrag", {})   # 20.11.: Pauls Auftrag der Bauphase (nicht neu ziehen)
+	auftrag = (gesichert as Dictionary) if gesichert is Dictionary else {}
+	auftrag_letzter = str(d.get("auftrag_letzter", ""))
 	freie_waelle = int(d.get("freie_waelle", 0))
 	variante = int(d.get("variante", 0))
-	karte.cp_aktiv = welle >= Werte.CHECKPOINTS_AB_WELLE   # _naechste_bauphase schaltet sie nur genau in dieser Runde an
+	karte.cp_aktiv = Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE   # _naechste_bauphase schaltet sie nur genau in dieser Runde an
 	var feind: Array = d.get("cp_feind", [])
 	for i in mini(feind.size(), karte.cp_feind.size()):
 		karte.cp_feind[i] = bool(feind[i])
@@ -1524,7 +1779,7 @@ func _aktualisiere_zone() -> bool:
 		hq = _neuer_zonenbau("hq", Werte.START_ZELLE)
 	for nr in Werte.ZONENBAUTEN.size():
 		var s: Dictionary = Werte.ZONENBAUTEN[nr]
-		if welle < int(s["ab_welle"]) or _zone_gebaut.has(nr):
+		if (welle if s["art"] == "laser" else Werte.plan_runde(welle)) < int(s["ab_welle"]) or _zone_gebaut.has(nr):   # 20.11.: Laser nach der echten Runde, alles andere nach dem Plan
 			continue
 		# Merken, was schon steht: Schleudern ziehen um, ihr Feld sagt also nichts mehr aus.
 		_zone_gebaut[nr] = true
@@ -1544,19 +1799,74 @@ func _neuer_zonenbau(art: String, zelle: Vector2i) -> Zonenbau:
 ## Startfeld für den nächsten Gegner: irgendwo in der Zone (verteilt, nicht gebündelt) –
 ## oder der eingenommene Checkpoint, an dem die Welle startet.
 func _spawn_zelle() -> Vector2i:
+	if not _ausgaenge.is_empty() and str(_ausgaenge[0]) == "zone2" and not Werte.ZONE2_AUSGAENGE.is_empty():
+		return Werte.ZONE2_AUSGAENGE.pick_random()   # 20.11. (Zange): zweite Hälfte des Trupps aus der zweiten Zone
 	if phantom_modus != "" or Werte.KARTE_WELLEN.has(welle):   # 18.11.: eigene Wellen eines Szenarios kommen wie geplant
 		# Phantom-Modus: jeder Trupp kommt geschlossen an seinem Ausgang heraus, damit die geplante Reihenfolge hält.
 		# 16.11.: Ein gewählter Ausgang (oben/unten) gilt immer – auch wenn ein eingenommener Checkpoint sonst der
 		# Startpunkt wäre. Nur „Mitte“ startet dann am Checkpoint.
 		var ausgang := str(_ausgaenge[0]) if not _ausgaenge.is_empty() else ""
+		if ausgang == "" and _start_zelle == Werte.START_ZELLE and not Werte.EINGAENGE.is_empty():
+			return _naechster_eingang()   # 20.11.: Karte mit Eingängen
 		if ausgang != "" or _start_zelle == Werte.START_ZELLE:
 			return Werte.AUSGAENGE.get(ausgang, Werte.START_ZELLE)
 		return _start_zelle
 	if _start_zelle != Werte.START_ZELLE:
 		return _start_zelle
-	if welle <= Werte.HAUPTLINIE_BIS:
+	if not Werte.EINGAENGE.is_empty():
+		return _naechster_eingang()   # 20.11.: Karte mit Eingängen – nur dort, abwechselnd
+	if Werte.plan_runde(welle) <= Werte.HAUPTLINIE_BIS:
 		return Werte.START_ZELLE   # die ersten Runden: alle über die Hauptlinie, nichts verteilt sich
 	return Vector2i(randi() % Werte.ZONE_SPALTEN, randi() % Werte.ZEILEN)
+
+
+## 20.11. (Schritt 5b, Zange): Jeder Trupp mit mindestens zwei Mitgliedern wird nach Köpfen halbiert; die zweite Hälfte
+## kommt gleichzeitig aus der zweiten Zone. Einzelne (Belagerungsturm) wechseln sich ab.
+func _zange_teilen() -> void:
+	var s: Array = []
+	var p: Array = []
+	var a: Array = []
+	var l: Array = []
+	var einzeln := 0
+	for i in _schlange.size():
+		var typen: Array = _schlange[i]
+		if typen.size() < 2:
+			s.append(typen)
+			p.append(_pausen[i])
+			a.append("zone2" if einzeln % 2 == 1 else str(_ausgaenge[i]))
+			l.append(_locker[i])
+			einzeln += 1
+			continue
+		var haelfte := ceili(typen.size() / 2.0)
+		s.append(typen.slice(0, haelfte))
+		p.append(_pausen[i])
+		a.append(str(_ausgaenge[i]))
+		l.append(_locker[i])
+		s.append(typen.slice(haelfte))
+		p.append(-Werte.TRUPP_PAUSE)   # gleich hinterher: beide Hälften sind zur selben Zeit unterwegs
+		a.append("zone2")
+		l.append(_locker[i])
+	_schlange = s
+	_pausen = p
+	_ausgaenge = a
+	_locker = l
+
+
+## 20.11. (Zange): Aus der zweiten Zone geht es nur über Checkpoint 2, aus der linken nur über Checkpoint 1.
+func _zange_route(g: Gegner) -> void:
+	if Werte.in_zone2(karte.zelle_bei(g.position)):
+		g._ziel = maxi(g._ziel, 1)
+	else:
+		g.ohne_cp = 1
+	g.plane_neu()
+
+
+## 20.11.: Eingänge reihum – die Gegner einer Welle teilen sich auf alle Eingänge auf.
+var _eingang_nr := 0
+
+func _naechster_eingang() -> Vector2i:
+	_eingang_nr += 1
+	return Werte.EINGAENGE[_eingang_nr % Werte.EINGAENGE.size()]
 
 
 # ------------------------------------------------------------------ Ablauf
@@ -1779,6 +2089,8 @@ func _process(delta: float) -> void:
 			if _trupp.is_empty():
 				_trupp_zelle = _spawn_zelle()   # gebündelt: der ganze Trupp startet am selben Fleck
 			var g := _neuer_gegner(typ, _trupp_zelle, _erstes_ziel)
+			if Werte.ZONE2.size != Vector2i.ZERO and karte.checkpoints.size() >= 2:
+				_zange_route(g)   # 20.11. (Zange)
 			g.trupp = _trupp
 			_trupp.append(g)
 			# In der Zone wartet der Trupp, bis er vollständig ist, und läuft dann gemeinsam los
@@ -1987,6 +2299,8 @@ func raeumen() -> bool:
 ## Aufräumen am Rundenende: Es kommt nichts mehr nach (kein Trupp, kein Wurf, kein Belagerungsturm, der Myr-Drohnen absetzt),
 ## aber es leben noch Gegner. Dann dürfen Truppen ohne Ziel ihre Stellung verlassen und den Übrigen hinterhergehen.
 func aufraeumen() -> bool:
+	if order24 != null:
+		return false   # 20.11.: Order 24 – Truppen verfolgen nur, wenn Order24 es sagt
 	if phase != Phase.KAMPF or endkampf or gegner.is_empty() or not _schlange.is_empty() or not _wurf_schlange.is_empty() or not _wurf_aktiv.is_empty() or _im_flug > 0:
 		return false
 	if gegner.size() > Werte.AUFRAEUM_HOECHSTENS_GEGNER:
@@ -2195,7 +2509,7 @@ func _tuerme_feuern(delta: float) -> void:
 				else:
 					t = 0.25
 			_turm_schock[z] = t
-		var rest: float = _turm_abkling.get(z, 0.0) - delta
+		var rest: float = _turm_abkling.get(z, 0.0) - delta * turm_takt(z)   # 20.11.: Überladen (Irrtürmer)
 		if rest <= 0.0:
 			var durch: bool = karte.turm_wert(z, "durch_waelle", false)
 			var ziel := gegner_in_reichweite(von, weite, false, Karte.KEINE if durch else z)   # Türme folgen derselben Sichtregel wie Stellungen
@@ -2394,7 +2708,7 @@ func _heilturm(z: Vector2i, delta: float) -> void:
 					_instand_zeit.erase(t)
 					effekte.flaeche(karte.mitte(t), Werte.ZELLE * 0.8, Color(art["farbe"]))
 					karte.queue_redraw()
-	var rest: float = _turm_abkling.get(z, 0.0) - delta
+	var rest: float = _turm_abkling.get(z, 0.0) - delta * turm_takt(z)   # 20.11.: Überladen (Irrtürmer)
 	if rest <= 0.0:
 		rest = float(art["abklingzeit"])
 		var m := karte.mitte(z)
@@ -2473,7 +2787,7 @@ func _batterien_feuern(delta: float) -> void:
 				if wolke != null:
 					_rauch_abkling[z] = Werte.BATTERIE_RAUCH_SEK
 					schuss(karte.mitte(z) + Vector2(0, -20), wolke, Color("d8f6ff"))
-		var rest: float = _turm_abkling.get(z, Werte.BATTERIE["abklingzeit"] * 0.5) - delta
+		var rest: float = _turm_abkling.get(z, Werte.BATTERIE["abklingzeit"] * 0.5) - delta * turm_takt(z)   # 20.11.: Überladen (Irrtürmer)
 		if rest <= 0.0 and karte.besatzung_drin(z) >= int(Werte.BATTERIE["plaetze"]):
 			var von := karte.mitte(z) + Vector2(0, -20)
 			var bestes: Gegner = null
@@ -2643,6 +2957,8 @@ func flaechenschaden(mitte: Vector2, radius: float, schaden: float, farbe: Color
 		if is_instance_valid(g):
 			var abfall := lerpf(1.0, rand, clampf(mitte.distance_to(g.position) / maxf(radius, 1.0), 0.0, 1.0))
 			g.nimm_schaden(schaden * abfall * float(deckung.get(g, 1.0)))
+	if order24 != null and (brakk_quelle != "" or schadensquelle == "fabrik:-1,-1"):
+		order24.flaeche(mitte, radius, schaden)   # 20.11.: Brakks Flächenschaden trifft in Order 24 den Technoclan
 
 
 ## Schildabfangen: Fläche und Strahlen von vorn trifft auch die, die direkt hinter einem Schildträger stehen,
@@ -2689,6 +3005,9 @@ func starte_welle(erzwingen: bool = false) -> void:
 	_schild_start = Karte.KEINE
 	_bezahlt.clear()   # ab jetzt gilt für alles Gebaute die normale Erstattung
 	_abriss_merk = Karte.KEINE
+	if budget >= Erfolge.SPARER_BUDGET and not brakk_modus and phantom_modus == "" and herausforderung == "":
+		_protokoll["sparer"] = true   # 19.11.: Erfolg „Deutscher Sparer“ (zählt beim Sieg)
+	_auftrag_pruefen("welle")   # 20.11.: Pauls Aufträge
 	phase = Phase.KAMPF
 	_merke_sitzung("Welle")   # 19.11.: Diagnose – brach die Sitzung ab?
 	karte.brut_aktualisieren()   # Brut-Boden: Stand zu Rundenbeginn
@@ -2737,7 +3056,7 @@ func starte_welle(erzwingen: bool = false) -> void:
 	if variante > 0 or welle >= Werte.WELLEN_VARIANTEN_AB:
 		_runden_eintrag()["variante"] = variante
 	_spawn_in = 1.0
-	_start_zelle = karte.start_zelle()
+	_start_zelle = karte.start_zelle() if karte.start_index() >= 0 else Werte.START_ZELLE   # 20.11.: Eingänge wählt _spawn_zelle reihum
 	_erstes_ziel = karte.erstes_ziel()
 	_turm_abkling.clear()
 	for z: Vector2i in fabriken:
@@ -2828,6 +3147,8 @@ func _lade_durchgang() -> void:
 		_pausen.append(float(pausen[i]) if i < pausen.size() else 0.0)
 		_ausgaenge.append(str(ausgaenge[i]) if i < ausgaenge.size() else "")
 		_locker.append(bool(locker[i]) if i < locker.size() else false)
+	if Werte.ZONE2.size != Vector2i.ZERO and phantom_modus == "":
+		_zange_teilen()   # 20.11. (Zange): jeden Trupp halbieren
 	_elite_nr = -1
 	if brakk_modus and welle >= Werte.BRAKK_ELITE_AB and _schlange.size() >= 2:
 		_elite_nr = randi_range(1, _schlange.size() - 1)   # nicht der erste Trupp
@@ -2847,6 +3168,8 @@ func _lade_durchgang() -> void:
 
 ## Die Welle, die als Nächstes kommt – in der Sandbox mit den dort eingestellten Gegnerzahlen.
 func naechste_welle() -> Dictionary:
+	if order24 != null:
+		return Werte.welle_aus_plan({"name": "Order 24", "trupps": []}, 1)   # 20.11.: keine Myriaden-Wellen
 	if phantom_modus == "angriff":
 		return Werte.welle_aus_plan({"name": "Dein Angriff", "trupps": _plaene.get(welle, []), "wurf_frei": true}, welle)
 	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
@@ -2924,13 +3247,13 @@ func sandbox_springe(nr: int) -> void:
 	welle = nr
 	waehle_variante()
 	_protokoll["sandbox_sprung"] = true
-	karte.cp_aktiv = welle >= Werte.CHECKPOINTS_AB_WELLE
+	karte.cp_aktiv = Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE
 	_aktualisiere_zone()
-	if welle >= Werte.SPRENGER_AB_WELLE:
+	if Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE:
 		for b in zonenbauten:
 			if b.art == "schleuder":
 				schleuder_umzug(b, true)
-	karte.zeige_schwachstelle = welle >= Werte.SPRENGER_AB_WELLE
+	karte.zeige_schwachstelle = Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE
 	endkampf = welle == Werte.LETZTE_RUNDE and phantom_modus == "angriff"   # 18.11.: sonst erst nach der Abwehr (siehe _starte_gegenangriff)
 	karte.schild = not endkampf
 	karte.zeige_angriff = endkampf
@@ -2964,13 +3287,14 @@ func _welle_geschafft() -> void:
 		for feind: bool in karte.cp_feind:
 			if not feind:
 				gehalten += 1
-	var cp_bonus := gehalten * Werte.BONUS_JE_CHECKPOINT
+	var cp_bonus := gehalten * Werte.BONUS_JE_CHECKPOINT if Werte.einkommen_an() else 0   # 20.11.: Szenario ohne Einkommen
 	# Zinsen auf das, was am Rundenende noch übrig ist
-	var zins := Werte.zinsen(budget)
-	if zins >= Werte.ZINS_STUFEN * Werte.ZINS_JE_SCHRITT:
+	var zins := Werte.zinsen(budget) if Werte.einkommen_an() else 0
+	if zins >= Werte.zins_stufen() * Werte.ZINS_JE_SCHRITT:   # 19.11.: Zinsdeckel je Anführer
 		erfolg("sparfuchs")   # 18.11.
 	var erz := erz_ertrag()
 	budget += bonus + cp_bonus + zins + erz
+	_auftrag_pruefen("ende")   # 20.11.: Pauls Aufträge
 	# 18.11.: Abrechnungskarte statt Meldezeile
 	_einblendung.abrechnung("RUNDE %d ÜBERSTANDEN" % welle, [["Rundenbonus", bonus], ["Zinsen", zins],
 		["Checkpoints %d/%d" % [gehalten, karte.checkpoints.size()], cp_bonus], ["Erzadern", erz]])
@@ -3055,19 +3379,20 @@ func _starte_gegenangriff() -> void:
 func _naechste_bauphase() -> void:
 	welle += 1
 	waehle_variante()
+	_auftrag_neu()   # 20.11.: Pauls Aufträge
 	if welle == Werte.WAELLE_AB_WELLE and not sandbox and phantom_modus != "angriff" and herausforderung in ["", "doppelt"]:
-		freie_waelle = Werte.STARTPAKET_WAELLE
+		freie_waelle = Werte.startpaket_waelle()   # 19.11.: je Anführer
 		melde("Erdwälle sind frei: Die ersten %d bekommst du geschenkt. Lenke damit den Gegnerweg um – unten rechts siehst du, wie lang er wird." % freie_waelle, 9.0)
-	if welle == Werte.CHECKPOINTS_AB_WELLE:
+	if Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE and not karte.cp_aktiv:   # 20.11.: Szenario-Wellen aus dem Pool zählen nach ihrem Plan
 		karte.cp_aktiv = true
 		karte.aktualisiere_pfad()
 	_aktualisiere_zone()
 	# Stein-Schleudern stehen in jeder Runde woanders; der neue Kreis ist in der Bauphase zu sehen
-	if welle >= Werte.SPRENGER_AB_WELLE:
+	if Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE:
 		for b in zonenbauten:
 			if b.art == "schleuder":
 				schleuder_umzug(b, true)
-	karte.zeige_schwachstelle = welle >= Werte.SPRENGER_AB_WELLE
+	karte.zeige_schwachstelle = Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE
 	if welle == Werte.LETZTE_RUNDE:
 		if phantom_modus == "angriff":
 			endkampf = true
@@ -3493,8 +3818,9 @@ func _gewonnen() -> void:
 		erfolg("unberuehrt")
 	if not _fabrik_gebaut():
 		erfolg("ohne_fabrik")
+	_erfolge_zum_sieg()   # 19.11.
 	var als_phantom := false
-	if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "":   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen
+	if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "" and Anfuehrer.ranglistenfaehig(Werte.anfuehrer):   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen; 19.11.: nicht mit Paul
 		# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
 		var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
 		var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
@@ -3706,6 +4032,16 @@ var runde_stats_welle := 0          # zu welcher Runde runde_stats gehört
 var objekt_stats: Dictionary = {}
 var schadensobjekt := Karte.KEINE   # welcher Turm gerade Schaden austeilt
 
+## 20.11.: Takt-Faktor eines Turms (Überladen des Irrtürmers im Brakk-Mode); sonst 1.
+func turm_takt(z: Vector2i) -> float:
+	if turm_ueberladen.is_empty() or not turm_ueberladen.has(z):
+		return 1.0
+	var e: Array = turm_ueberladen[z]
+	if Time.get_ticks_msec() >= int(e[0]):
+		turm_ueberladen.erase(z)
+		return 1.0
+	return float(e[1])
+
 func objekt_zaehle(z: Vector2i, art: String, menge: float) -> void:
 	if z == Karte.KEINE or menge <= 0.0:
 		return
@@ -3780,12 +4116,12 @@ func gegner_besiegt(g: Gegner) -> void:
 	if not g.klon and brakk_modus:
 		# 18.11. (Paul): Brakk-Mode – dreimal so viele Gegner, aber dieselbe Wirtschaft: je Gegner ein Drittel der Prämie
 		# (Bruchteile werden gesammelt, damit auch 2er-Prämien zählen)
-		_brakk_praemie += float(einkommen(int(g.daten["praemie"]))) / BRAKK_GEGNER_MAL * (Werte.BRAKK_ELITE_PRAEMIE if g.elite else 1.0)
+		_brakk_praemie += float(einkommen(Werte.praemie(int(g.daten["praemie"])))) / BRAKK_GEGNER_MAL * (Werte.BRAKK_ELITE_PRAEMIE if g.elite else 1.0)   # 19.11.: Elite; 19.11.: Prämie je Anführer
 		var ganz := floori(_brakk_praemie)
 		budget += ganz
 		_brakk_praemie -= float(ganz)
 	elif not g.klon:
-		budget += einkommen(int(g.daten["praemie"]))   # 18.11.: „Doppeltes Geld“, Werte-Mod
+		budget += einkommen(Werte.praemie(int(g.daten["praemie"])))   # 18.11.: „Doppeltes Geld“, Werte-Mod; 19.11.: Prämien-Faktor je Anführer
 	gegner_entfernt(g)
 
 
@@ -3812,12 +4148,42 @@ func kommandant_steuerbar() -> bool:
 ## 18.11. (Paul): Brakk-Mode – eigener Modus aus dem Startmenü. Normales Spiel auf PaulLand, für diese Partie in HD-2D
 ## (die gespeicherte Grafikwahl bleibt), Brakk steht gratis ab Runde 1 vor der Basis, die Ego-Sicht startet gleich.
 ## Keine Phantome, keine Rangliste. Zwischenstand seit 19.11. (Brakks Fortschritt dabei).
+## 20.11. (Schritt 5b): Order 24 – Brakk allein gegen die Technoclan-Verteidigung. Ego-Sicht wie im Brakk-Mode, aber
+## ohne Wellen: Order24 baut die Karte, startet nach der Einsatz-Tafel und entscheidet über Sieg und Niederlage.
+func _order24_gewaehlt() -> void:
+	brakk_modus = true
+	_tempo_faktor = Werte.BRAKK_TEMPO
+	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
+	Werte.setze_grafik("hd")   # nicht gespeichert
+	Werte.setze_anfuehrer(Werte.anfuehrer if Werte.ego_hat(Werte.anfuehrer) else "brakk")   # wie im Classic-Modus: gewählter Anführer mit Ego-Kit
+	_setze_anfuehrer(Werte.anfuehrer)
+	order24 = Order24.new()
+	add_child(order24)
+	var vorher := budget
+	order24.einrichten(self)
+	budget = vorher   # der Aufbau der Karte kostet nichts
+	_zeige_einfuehrung()
+	_menue_weg()
+	var z := order24.brakk_start()
+	_setze_kommandant(z)
+	for i in 3:
+		await get_tree().process_frame
+	if ego == null and hd != null and kommandant != null:
+		_ego_umschalten()
+
+
+## 20.11. (Schritt 5b): Ziele für Brakks Waffen in der Ego-Sicht – in Order 24 die Technoclan-Stellvertreter.
+func ego_gegner() -> Array:
+	return order24.ego_ziele() if order24 != null else gegner
+
+
 func _brakk_modus_gewaehlt() -> void:
 	brakk_modus = true
 	# 18.11.: festes Tempo – Brakk selbst läuft in Echtzeit, ein wählbares Tempo würde ihn mal stark, mal schwach machen
 	_tempo_faktor = Werte.BRAKK_TEMPO
 	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 	Werte.setze_grafik("hd")   # nicht gespeichert
+	Werte.setze_anfuehrer(Werte.anfuehrer if Werte.ego_hat(Werte.anfuehrer) else "brakk")   # 19.11.: der Brakk-Mode ist Brakk; 20.11.: oder ein anderer Anführer mit Ego-Kit (Auswahl im Startmenü)
 	_normales_spiel()
 	_menue_weg()
 	var z := _feld_vor_basis()
@@ -4327,7 +4693,7 @@ func kosten(typ: int) -> int:
 		Karte.KOMMANDANT:
 			return Werte.KOSTEN_KOMMANDANT
 		Karte.WALL:
-			return 0 if freie_waelle > 0 else Werte.KOSTEN_WALL
+			return 0 if freie_waelle > 0 else Werte.kosten_wall()   # 19.11.: Preis je Anführer
 		Karte.STELLUNG:
 			return 0 if freie_stellungen > 0 else Werte.KOSTEN_STELLUNG
 		Karte.TURM:
@@ -4345,7 +4711,7 @@ func kosten(typ: int) -> int:
 		Karte.BATTERIE:
 			return batterie_preis(_batterien())
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
-	return int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + fabrik_prozent() / 100.0, _normale_fabriken()) / 5.0)) * 5
+	return int(roundf(Werte.kosten_fabrik() * pow(1.0 + fabrik_prozent() / 100.0, _normale_fabriken()) / 5.0)) * 5   # 19.11.: Preis je Anführer
 
 
 ## 17.11.: Jede weitere Batterie kostet KOSTEN_BATTERIE_PROZENT mehr (gegen Batterie-Spam), auf 5 gerundet.
@@ -4389,7 +4755,9 @@ func truppen_limit(z: Vector2i) -> int:
 	if fabriken.has(z) and fabriken[z]["typ"] == "pilot":
 		# Pilotenfabrik: immer genug für die Batterie, mit Stufe 1 ein Reservepilot dazu
 		return int(Werte.BATTERIE["plaetze"]) + (1 if stufe >= 1 else 0)
-	var n := (Werte.MAX_JE_FABRIK_ENDKAMPF if endkampf else Werte.MAX_JE_FABRIK) + sandbox_truppen + int(Werte.mod("fabrik_truppen"))   # 18.11.: Werte-Mod
+	if Werte.truppen_fest() > 0:
+		return Werte.truppen_fest()   # 20.11.: Sonde 7 – je Fabrik genau eine Truppe, auch spezialisiert
+	var n :=(Werte.MAX_JE_FABRIK_ENDKAMPF if endkampf else Werte.MAX_JE_FABRIK) + sandbox_truppen + int(Werte.mod("fabrik_truppen")) + Werte.truppen_je_fabrik()   # 18.11.: Werte-Mod; 19.11.: je Anführer
 	n = maxi(n, 1)
 	if stufe >= 1 and not brakk_modus:   # 19.11. (Paul): Brakk-Mode – Stufe 1 gibt keine dritte Truppe (dafür +20 % Leben)
 		n += Werte.STUFE_1_TRUPPEN
@@ -4419,6 +4787,8 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 	if phantom_modus == "angriff":
 		return "Im Angriff baut der Verteidiger. Du planst die Welle im Taktikplaner [L]."
 	if typ == Karte.KOMMANDANT:
+		if herausforderung_sperrt(typ) != "":   # 19.11.: Slot [8] je Anführer (und von der Karte gesperrt)
+			return herausforderung_sperrt(typ)
 		if kommandant != null:
 			return "Brakk ist schon im Spiel – es gibt ihn nur einmal."
 		if phase != Phase.BAU:
@@ -4503,6 +4873,7 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if not still:
 		Ton.spiele(self, "tf-earth" if typ == Karte.WALL else "tf-stone")
 	var eintrag := {"a": "bau", "typ": BAU_NAMEN[typ], "x": z.x, "y": z.y}
+	Auftraege.zaehle(auftrag, "bau:" + str(BAU_NAMEN[typ]))   # 20.11.
 	if phase == Phase.KAMPF:
 		eintrag["t"] = snappedf(_kampf_sek, 0.1)   # während der Welle gebaut
 	_notiere(eintrag)
@@ -4533,6 +4904,8 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		karte.baue_aus(z, typ)
 		if typ == Karte.TURM and karte.turm_art.has(z) and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.TURMARTEN.size():
 			erfolg("formenlehre")   # 18.11.
+		if typ == Karte.TURM and karte.turm_art.has(z):
+			_pruefe_baumeister(str(karte.turm_art[z]))   # 19.11.
 		if typ == Karte.TURM and _hud:
 			_hud.formvorlage = ""   # 17.11.: gebaut – die Vorlage verschwindet wieder
 		if typ == Karte.TURM and not still:
@@ -4557,6 +4930,7 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 
 
 func _merke_bezahlt(z: Vector2i, teil: String, betrag: int) -> void:
+	Auftraege.zaehle(auftrag, "ausgaben", betrag)   # 20.11.
 	if not _bezahlt.has(z):
 		_bezahlt[z] = {}
 	_bezahlt[z][teil] = int(_bezahlt[z].get(teil, 0)) + betrag
@@ -4588,7 +4962,7 @@ func erstattung(z: Vector2i) -> int:
 			pass   # aus dem Startpaket: gratis gebaut, gibt nichts zurück
 		elif war == Karte.FABRIK:
 			# der Preis, den die zuletzt gebaute Fabrik gekostet hat
-			alt += int(roundf(Werte.KOSTEN_FABRIK * pow(1.0 + fabrik_prozent() / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
+			alt += int(roundf(Werte.kosten_fabrik() * pow(1.0 + fabrik_prozent() / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
 		else:
 			alt += kosten_bei(z, war)   # 18.11.: auf der Ruine zählt der billigere Preis
 	var ausbau: int = karte.ausbau.get(z, Karte.FREI)
@@ -4598,12 +4972,12 @@ func erstattung(z: Vector2i) -> int:
 		alt += Werte.KOSTEN_PANZER
 	if ausbau == Karte.TURM:
 		for i in maxi(0, int(karte.turm_stufe.get(z, 1)) - 1 - int(frisch_stufen.get("stufen_n", 0))):
-			alt += Werte.KOSTEN_TURM_STUFE[i]
+			alt += Werte.kosten_turm_stufen()[i]
 	if fabriken.has(stufenfeld):
-		var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if paar else Werte.KOSTEN_STUFE
+		var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if paar else Werte.kosten_stufen()
 		for i in maxi(0, int((fabriken[stufenfeld].get("ring_vorher", fabriken[stufenfeld]) as Dictionary).get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0))):   # 18.11.: Brakk-Ring – nur die bezahlte Stufe
 			alt += preise[i]
-	return voll + roundi(alt * Werte.ERSTATTUNG)
+	return voll + roundi(alt * Werte.erstattung())   # 19.11.: Anteil je Anführer
 
 
 ## Abreißen in der Bauphase (Wall samt Ausbau). Erstattung siehe erstattung().
@@ -4611,6 +4985,7 @@ func reisse_ab(z: Vector2i) -> bool:
 	if phantom_modus == "angriff" or phase != Phase.BAU or karte.inhalt(z) == Karte.FREI or karte.fest.has(z):
 		return false
 	var zurueck := erstattung(z)
+	Auftraege.zaehle(auftrag, "abriss:" + ("turm" if karte.ausbau.get(z, Karte.FREI) == Karte.TURM else str(BAU_NAMEN.get(karte.inhalt(z), ""))))   # 20.11.
 	_notiere({"a": "abriss", "x": z.x, "y": z.y})
 	_schliesse_fabrikmenue()
 	_abriss_merk = Karte.KEINE
@@ -4745,20 +5120,22 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	if karte.paar.has(z):
 		return _werte_batterie_auf(z)
 	var stufe := int(fabriken[z].get("stufe", 0))
-	if stufe >= Werte.KOSTEN_STUFE.size():
+	var preise: Array[int] = Werte.kosten_stufen()   # 19.11.: Preise je Anführer
+	if stufe >= preise.size():
 		return false
 	if brakk_modus:
 		return false   # 18.11. (Paul): Brakk-Mode – keine Fabrik-Ausbauten, alles über Brakks Ringe
 	if stufe == 2 and not (Werte.STUFE_3[fabriken[z]["typ"]] as Dictionary).has(faehigkeit):
 		return false
-	if budget < Werte.KOSTEN_STUFE[stufe]:
+	if budget < preise[stufe]:
 		melde("Nicht genug Budget.")
 		return false
-	_merke_bezahlt(z, "stufen", Werte.KOSTEN_STUFE[stufe])
-	budget -= Werte.KOSTEN_STUFE[stufe]
+	_merke_bezahlt(z, "stufen", preise[stufe])
+	budget -= preise[stufe]
 	fabriken[z]["stufe"] = stufe + 1
 	karte.fabrik_stufe[z] = stufe + 1
 	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
+	Auftraege.zaehle(auftrag, "upgrade")   # 20.11.
 	var d: Dictionary = Werte.EINHEITEN[fabriken[z]["typ"]]
 	if stufe == 2:
 		fabriken[z]["faehigkeit"] = faehigkeit
@@ -4768,7 +5145,11 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 		melde("%s Stufe 3 – %s: %s" % [d["name"], f3["name"], f3["text"]], 6.0)
 		return true
 	_notiere(eintrag)
-	if stufe == 0:
+	if stufe == 3:
+		melde("%s Stufe 4 – Elite: doppelt so viel Leben und Schaden." % d["name"], 5.0)   # 20.11.
+	elif stufe == 0 and Werte.truppen_fest() > 0:
+		melde("Spezialisiert auf %s: bleibt bei dieser Truppe." % d["name"], 4.0)   # 20.11.: Sonde 7 – weiter eine Truppe
+	elif stufe == 0:
 		melde("Spezialisiert auf %s: hält jetzt drei Truppen und bleibt bei dieser Truppe." % d["name"], 4.0)
 	else:
 		melde("%s Stufe 2: %s." % [d["name"], Werte.STUFE_2[fabriken[z]["typ"]]["text"]], 5.0)
@@ -4778,12 +5159,12 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 ## Turm aufwerten: Stufe 2 fest, Stufe 3 mit einer Fähigkeit aus Werte.TURM_STUFE_3.
 func werte_turm_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	var stufe := int(karte.turm_stufe.get(z, 1))
-	if stufe > Werte.KOSTEN_TURM_STUFE.size():
+	if stufe >= Werte.turm_max_stufe():   # 19.11.: höchste Turmstufe je Anführer (Brakk: 3)
 		return false
 	var art: String = karte.turm_art.get(z, "geschuetz")
 	if stufe == 2 and not (Werte.TURM_STUFE_3[art] as Dictionary).has(faehigkeit):
 		return false
-	var preis: int = Werte.KOSTEN_TURM_STUFE[stufe - 1]
+	var preis: int = Werte.kosten_turm_stufen()[stufe - 1]
 	if budget < preis:
 		melde("Nicht genug Budget.")
 		return false
@@ -4791,16 +5172,20 @@ func werte_turm_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	budget -= preis
 	karte.turm_stufe[z] = stufe + 1
 	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
+	Auftraege.zaehle(auftrag, "upgrade")   # 20.11.
 	var name: String = Werte.TURMARTEN[art]["name"]
 	if stufe == 2:
 		karte.turm_faehigkeit[z] = faehigkeit
 		eintrag["faehigkeit"] = faehigkeit
 		var f3: Dictionary = Werte.TURM_STUFE_3[art][faehigkeit]
 		melde("%s Stufe 3 – %s: %s" % [name, f3["name"], f3["text"]], 6.0)
+	elif stufe == 3:
+		melde("%s Stufe 4: +50 %% Schaden, +1 Reichweite, hält doppelt so viel aus." % name, 5.0)   # 20.11.
 	else:
 		melde("%s Stufe 2: %s" % [name, Werte.TURM_STUFE_2[art]["text"]], 5.0)
 	_notiere(eintrag)
 	karte.queue_redraw()
+	_pruefe_baumeister()   # 19.11.
 	return true
 
 
@@ -5312,7 +5697,7 @@ func _werkzeug_tipp(typ: int) -> String:
 		Karte.WALL:
 			if not alles_frei():
 				return "Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE
-			return "Maustaste halten = ziehen, Rechtsklick = abreißen (in dieser Bauphase Gebautes voll zurück, sonst %d %%)." % roundi(Werte.ERSTATTUNG * 100.0)
+			return "Maustaste halten = ziehen, Rechtsklick = abreißen (in dieser Bauphase Gebautes voll zurück, sonst %d %%)." % roundi(Werte.erstattung() * 100.0)
 		Karte.STELLUNG:
 			return "Ausbau eines Erdwalls. Eine Einheit steht oben, schießt weiter und über Wälle hinweg."
 		Karte.TURM:
@@ -5324,6 +5709,8 @@ func _werkzeug_tipp(typ: int) -> String:
 		Karte.PANZER:
 			return "Verstärkt einen Erdwall: Die erste Sprengung trifft nur den Wallpanzer, der Erdwall bleibt stehen. Stoppt auch die Sprengung in die Tiefe."
 		Karte.KOMMANDANT:
+			if anfuehrer_sperrt(typ) != "":
+				return anfuehrer_sperrt(typ)   # 19.11.: „Figur folgt“
 			return "Einmal pro Partie: Klick auf ein freies Feld. Er handelt selbst; anklicken = mit [WASD] steuern, [Q] Sammeln/Losschlagen, [E] Klettern, [R] Klonmaschine."
 		Karte.SPIEGEL:
 			return "Nur an Wallenden. Bodentruppen schießen über ihn um die Ecke (helle Felder)."

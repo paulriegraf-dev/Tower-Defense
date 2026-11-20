@@ -1,0 +1,8014 @@
+{
+	"art": "verteidigung",
+	"begonnen": "2026-11-19T17:32:46",
+	"ergebnis": {
+		"ausgang": "sieg",
+		"leben": 15,
+		"runde": 20
+	},
+	"format": 1,
+	"karte": {
+		"basis": [
+			21,
+			13
+		],
+		"checkpoints": [
+			[
+				13,
+				2
+			],
+			[
+				22,
+				5
+			]
+		],
+		"spalten": 28,
+		"zeilen": 14
+	},
+	"phantom_version": 2,
+	"profil": "c11363a30947257b",
+	"quelle": "partie-20261119-173246.json",
+	"runden": [
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 25,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 25,
+					"y": 3
+				}
+			],
+			"budget_vorher": 70,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 8.8,
+				"waelle": 0
+			},
+			"runde": 1,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": []
+			}
+		},
+		{
+			"aktionen": [],
+			"budget_vorher": 258,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 12.4,
+				"waelle": 0
+			},
+			"runde": 2,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": []
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 16,
+					"y": 5
+				}
+			],
+			"budget_vorher": 178,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 15.8,
+				"waelle": 0
+			},
+			"runde": 3,
+			"stand": {
+				"batterien": [],
+				"fabriken": [
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": []
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"px": 16,
+					"py": 6,
+					"typ": "batterie",
+					"x": 15,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 12,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 12,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 11,
+					"y": 3
+				},
+				{
+					"a": "einheit",
+					"typ": "scharfschuetze",
+					"x": 16,
+					"y": 5
+				}
+			],
+			"budget_vorher": 53,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 0,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 14.6,
+				"waelle": 8
+			},
+			"runde": 4,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "turm",
+					"x": 14,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 14,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 13,
+					"y": 3
+				}
+			],
+			"budget_vorher": 138,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 17.3,
+				"waelle": 8
+			},
+			"runde": 5,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 17,
+					"y": 5
+				},
+				{
+					"a": "einheit",
+					"typ": "scharfschuetze",
+					"x": 17,
+					"y": 5
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 16,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 4
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 0
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 15,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 16,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 16,
+					"y": 0
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 14,
+					"y": 4
+				}
+			],
+			"budget_vorher": 207,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 14.9,
+				"waelle": 13
+			},
+			"runde": 6,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 17,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "tor",
+					"x": 14,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "tor",
+					"x": 12,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 11,
+					"y": 1
+				}
+			],
+			"budget_vorher": 108,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 21.6,
+				"waelle": 15
+			},
+			"runde": 7,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 10,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 9,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 7,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 10,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 9,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 8,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 7,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 6,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 6,
+					"y": 1
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 7
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 15,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 15,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 15,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 15,
+					"y": 3
+				}
+			],
+			"budget_vorher": 241,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 24.2,
+				"waelle": 28
+			},
+			"runde": 8,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 0,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "panzer",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 25,
+					"y": 3
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 25,
+					"y": 2
+				}
+			],
+			"budget_vorher": 317,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 2,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 34.6,
+				"waelle": 29
+			},
+			"runde": 9,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 22,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 7
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 8
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 21,
+					"y": 10
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 10
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 11
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 23,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 24,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 25,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 26,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 17,
+					"y": 8
+				},
+				{
+					"a": "einheit",
+					"typ": "plasmawerfer",
+					"x": 17,
+					"y": 8
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 17,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 16,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 15,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 8
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 14,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 15,
+					"y": 9
+				}
+			],
+			"budget_vorher": 316,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 30.7,
+				"waelle": 46
+			},
+			"runde": 10,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 22,
+					"y": 6
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 16,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "turm",
+					"x": 14,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 14,
+					"y": 8
+				}
+			],
+			"budget_vorher": 303,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 31.4,
+				"waelle": 46
+			},
+			"runde": 11,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 0,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "panzer",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 17,
+					"y": 8
+				}
+			],
+			"budget_vorher": 324,
+			"in_runde": [
+				{
+					"a": "bau",
+					"t": 42.6,
+					"typ": "stellung",
+					"x": 14,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"t": 65.9,
+					"typ": "stellung",
+					"x": 21,
+					"y": 5
+				}
+			],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 2,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 37.6,
+				"waelle": 47
+			},
+			"runde": 12,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "durchschuss",
+					"stufe": 3,
+					"x": 16,
+					"y": 5
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 19,
+					"y": 11
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 19,
+					"y": 12
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 19,
+					"y": 13
+				}
+			],
+			"budget_vorher": 41,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 36.5,
+				"waelle": 50
+			},
+			"runde": 13,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 1,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 17,
+					"y": 8
+				},
+				{
+					"a": "bau",
+					"typ": "fabrik",
+					"x": 23,
+					"y": 9
+				},
+				{
+					"a": "einheit",
+					"typ": "scharfschuetze",
+					"x": 23,
+					"y": 9
+				}
+			],
+			"budget_vorher": 158,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 49.3,
+				"waelle": 50
+			},
+			"runde": 14,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 1,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 0,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 1,
+					"x": 23,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 21,
+					"y": 7
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 21,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"typ": "stellung",
+					"x": 21,
+					"y": 8
+				},
+				{
+					"a": "zuweisung",
+					"sx": 21,
+					"sy": 7,
+					"x": 23,
+					"y": 9
+				},
+				{
+					"a": "zuweisung",
+					"sx": 21,
+					"sy": 8,
+					"x": 23,
+					"y": 9
+				},
+				{
+					"a": "zuweisung",
+					"sx": 21,
+					"sy": 9,
+					"x": 23,
+					"y": 9
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 17,
+					"y": 5
+				}
+			],
+			"budget_vorher": 278,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 2,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 47.2,
+				"waelle": 50
+			},
+			"runde": 15,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stellungen": [
+							[
+								21,
+								7
+							],
+							[
+								21,
+								8
+							],
+							[
+								21,
+								9
+							]
+						],
+						"stufe": 1,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 14,
+					"y": 9
+				}
+			],
+			"budget_vorher": 283,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 44.4,
+				"waelle": 50
+			},
+			"runde": 16,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"stufe": 2,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stellungen": [
+							[
+								21,
+								7
+							],
+							[
+								21,
+								8
+							],
+							[
+								21,
+								9
+							]
+						],
+						"stufe": 1,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "brandfeld",
+					"stufe": 3,
+					"x": 17,
+					"y": 8
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 25,
+					"y": 3
+				},
+				{
+					"a": "zuweisung",
+					"sx": 23,
+					"sy": 6,
+					"x": 25,
+					"y": 3
+				},
+				{
+					"a": "zuweisung",
+					"sx": 21,
+					"sy": 5,
+					"x": 25,
+					"y": 3
+				},
+				{
+					"a": "zuweisung",
+					"sx": 17,
+					"sy": 9,
+					"x": 25,
+					"y": 3
+				}
+			],
+			"budget_vorher": 270,
+			"in_runde": [
+				{
+					"a": "bau",
+					"t": 17.8,
+					"typ": "stellung",
+					"x": 17,
+					"y": 9
+				},
+				{
+					"a": "bau",
+					"t": 31.2,
+					"typ": "stellung",
+					"x": 23,
+					"y": 6
+				}
+			],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 46.2,
+				"waelle": 50
+			},
+			"runde": 17,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stellungen": [
+							[
+								21,
+								7
+							],
+							[
+								21,
+								8
+							],
+							[
+								21,
+								9
+							]
+						],
+						"stufe": 1,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"stellungen": [
+							[
+								23,
+								6
+							],
+							[
+								21,
+								5
+							],
+							[
+								17,
+								9
+							]
+						],
+						"stufe": 2,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "upgrade",
+					"faehigkeit": "minigun",
+					"stufe": 3,
+					"x": 25,
+					"y": 3
+				}
+			],
+			"budget_vorher": 5,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 56.7,
+				"waelle": 50
+			},
+			"runde": 18,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stellungen": [
+							[
+								21,
+								7
+							],
+							[
+								21,
+								8
+							],
+							[
+								21,
+								9
+							]
+						],
+						"stufe": 1,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 1,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "minigun",
+						"stellungen": [
+							[
+								23,
+								6
+							],
+							[
+								21,
+								5
+							],
+							[
+								17,
+								9
+							]
+						],
+						"stufe": 3,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						7,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "panzer",
+					"x": 14,
+					"y": 4
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 20,
+					"y": 6
+				},
+				{
+					"a": "bau",
+					"typ": "turm",
+					"x": 21,
+					"y": 6
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 21,
+					"y": 6
+				},
+				{
+					"a": "upgrade",
+					"stufe": 2,
+					"x": 25,
+					"y": 2
+				}
+			],
+			"budget_vorher": 431,
+			"in_runde": [],
+			"original": {
+				"ausgang": "geschafft",
+				"checkpoints_verloren": 1,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 54.2,
+				"waelle": 50
+			},
+			"runde": 19,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stellungen": [
+							[
+								21,
+								7
+							],
+							[
+								21,
+								8
+							],
+							[
+								21,
+								9
+							]
+						],
+						"stufe": 1,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"stufe": 2,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "minigun",
+						"stellungen": [
+							[
+								23,
+								6
+							],
+							[
+								21,
+								5
+							],
+							[
+								17,
+								9
+							]
+						],
+						"stufe": 3,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						21,
+						7,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		},
+		{
+			"aktionen": [
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "panzer",
+					"x": 13,
+					"y": 3
+				},
+				{
+					"a": "bau",
+					"typ": "panzer",
+					"x": 14,
+					"y": 4
+				},
+				{
+					"a": "upgrade",
+					"faehigkeit": "feuerteam",
+					"stufe": 3,
+					"x": 25,
+					"y": 2
+				},
+				{
+					"a": "bau",
+					"typ": "wall",
+					"x": 13,
+					"y": 4
+				}
+			],
+			"budget_vorher": 520,
+			"in_runde": [],
+			"original": {
+				"ausgang": "sieg",
+				"checkpoints_verloren": 2,
+				"leben": 15,
+				"leben_verloren": 0,
+				"sekunden": 74.0,
+				"waelle": 50
+			},
+			"runde": 20,
+			"stand": {
+				"batterien": [
+					{
+						"px": 16,
+						"py": 6,
+						"stufe": 0,
+						"x": 15,
+						"y": 6
+					}
+				],
+				"fabriken": [
+					{
+						"einheit": "scharfschuetze",
+						"faehigkeit": "durchschuss",
+						"stufe": 3,
+						"x": 16,
+						"y": 5
+					},
+					{
+						"batterie": [
+							15,
+							6
+						],
+						"einheit": "pilot",
+						"stufe": 0,
+						"x": 16,
+						"y": 6
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stufe": 2,
+						"x": 17,
+						"y": 5
+					},
+					{
+						"einheit": "plasmawerfer",
+						"faehigkeit": "brandfeld",
+						"stufe": 3,
+						"x": 17,
+						"y": 8
+					},
+					{
+						"einheit": "scharfschuetze",
+						"stellungen": [
+							[
+								21,
+								7
+							],
+							[
+								21,
+								8
+							],
+							[
+								21,
+								9
+							]
+						],
+						"stufe": 1,
+						"x": 23,
+						"y": 9
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "feuerteam",
+						"stufe": 3,
+						"x": 25,
+						"y": 2
+					},
+					{
+						"einheit": "technogunner",
+						"faehigkeit": "minigun",
+						"stellungen": [
+							[
+								23,
+								6
+							],
+							[
+								21,
+								5
+							],
+							[
+								17,
+								9
+							]
+						],
+						"stufe": 3,
+						"x": 25,
+						"y": 3
+					}
+				],
+				"generatoren": [],
+				"waelle": [
+					[
+						6,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						6,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						7,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						8,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						9,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						10,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						11,
+						3,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						12,
+						3,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						3,
+						"",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						13,
+						4,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						3,
+						"turm",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						4,
+						"stellung",
+						true,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						5,
+						"tor",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						7,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						14,
+						9,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						15,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						2,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						3,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						15,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						0,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						1,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						16,
+						9,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						17,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						12,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						19,
+						13,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						20,
+						11,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						5,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						6,
+						"turm",
+						false,
+						[],
+						2,
+						""
+					],
+					[
+						21,
+						7,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						8,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						9,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						21,
+						10,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						22,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						23,
+						6,
+						"stellung",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						24,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						25,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					],
+					[
+						26,
+						6,
+						"",
+						false,
+						[],
+						1,
+						""
+					]
+				]
+			}
+		}
+	],
+	"spieler": "APAAtROXOP"
+}

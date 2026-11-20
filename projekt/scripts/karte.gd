@@ -264,7 +264,7 @@ func ist_fels(z: Vector2i) -> bool:
 
 
 func ist_bebaubar(z: Vector2i) -> bool:
-	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and not ist_basis(z) and not checkpoints.has(z) 		and not Werte.BODEN_UNBEBAUBAR.has(str(boden.get(z, "")))   # 18.11.: Sumpf, Brücke, Wald
+	return ist_frei(z) and z.x >= Werte.ZONE_SPALTEN and not Werte.in_zone2(z) and not ist_basis(z) and not checkpoints.has(z) 		and not Werte.BODEN_UNBEBAUBAR.has(str(boden.get(z, "")))   # 18.11.: Sumpf, Brücke, Wald
 
 
 ## 18.11. (Etappe 2): Gelände mit Wirkung an einem Punkt (Weltkoordinaten) bzw. Feld; "" = keins.
@@ -464,6 +464,8 @@ func erstes_ziel() -> int:
 
 func start_zelle() -> Vector2i:
 	var i := start_index()
+	if i < 0 and not Werte.EINGAENGE.is_empty():
+		return Werte.EINGAENGE[0]   # 20.11.: Karte mit Eingängen – der Hauptweg beginnt am ersten
 	return Werte.START_ZELLE if i < 0 else checkpoints[i]
 
 
@@ -593,6 +595,11 @@ func turm_wert(z: Vector2i, schluessel: String, vorgabe: Variant = null) -> Vari
 		var f: Dictionary = (Werte.TURM_STUFE_3[art] as Dictionary).get(str(turm_faehigkeit.get(z, "")), {})
 		if f.has(schluessel):
 			wert = f[schluessel]
+	if stufe >= 4 and wert != null:   # 20.11.: Stufe 4 (Irrtürmer) – großes Wertepaket
+		if schluessel == "schaden":
+			wert = float(wert) * float(Werte.TURM_STUFE_4["schaden"])
+		elif schluessel == "reichweite":
+			wert = float(wert) + float(Werte.TURM_STUFE_4["reichweite"])
 	if schluessel == "reichweite" and wert != null:
 		wert = maxf(0.5, float(wert) + anhoehe_bonus(z) + Werte.mod("turm_reichweite"))   # 18.11.: Anhöhe, Werte-Mod
 	elif schluessel == "schaden" and wert != null:
@@ -669,11 +676,12 @@ func pruefe_stuetzen() -> void:
 func turm_aktiv(z: Vector2i) -> bool:
 	if ausbau.get(z, FREI) != TURM or turm_lahm(z):
 		return false
-	return (stuetzen.get(z, []) as Array).size() >= turm_noetig(z)
+	return not Werte.stuetze_legt_still() or (stuetzen.get(z, []) as Array).size() >= turm_noetig(z)   # 19.11.: je Anführer
 
 
 func turm_lahm(z: Vector2i) -> bool:
-	return float(turm_schaden.get(z, 0.0)) >= float(Werte.TURM["leben"])
+	var leben_mal := float(Werte.TURM_STUFE_4["leben"]) if int(turm_stufe.get(z, 1)) >= 4 else 1.0   # 20.11.: Stufe 4 hält mehr aus
+	return float(turm_schaden.get(z, 0.0)) >= float(Werte.TURM["leben"]) * leben_mal
 
 
 ## Myr-Drohnen beschädigen einen Turm; ist er lahmgelegt, schweigt er bis zum Ende der Runde.
@@ -801,13 +809,18 @@ func gegner_weg(gegner_typ: String, von: Vector2i, nach: Vector2i = KEINE) -> Ar
 
 ## Ganzer Weg der nächsten Welle: vom Start durch alle folgenden Checkpoints bis zur Basis.
 func _route(gegner_typ: String) -> Array[Vector2i]:
+	if Werte.ZONE2.size != Vector2i.ZERO and start_index() < 0:
+		return _route_ab(gegner_typ, start_zelle(), 1)   # 20.11. (Zange): die linke Hälfte läuft nur über Checkpoint 1
 	return _route_ab(gegner_typ, start_zelle())
 
 
-func _route_ab(gegner_typ: String, von: Vector2i) -> Array[Vector2i]:
+## 20.11.: `ohne` = dieser Checkpoint wird ausgelassen, `ab` = erster Checkpoint (-1 = wie die nächste Welle)
+func _route_ab(gegner_typ: String, von: Vector2i, ohne: int = -1, ab: int = -1) -> Array[Vector2i]:
 	var a := _astar_gegner[gegner_typ] as AStarGrid2D
 	var weg: Array[Vector2i] = [von]
-	for i in range(erstes_ziel(), checkpoints.size() + 1):
+	for i in range(erstes_ziel() if ab < 0 else ab, checkpoints.size() + 1):
+		if i == ohne:
+			continue
 		var teil := a.get_id_path(von, ziel_zelle(i))
 		for j in range(1, teil.size()):
 			weg.append(teil[j])
@@ -832,7 +845,13 @@ func aktualisiere_pfad() -> void:
 	_stuecke_gueltig = false
 	# Gegner kommen über die ganze Höhe der Zone: zusätzlich den Weg vom oberen und unteren Rand zeigen
 	neben_pfade.clear()
-	if start_index() < 0:
+	if Werte.ZONE2.size != Vector2i.ZERO:
+		for z2: Vector2i in Werte.ZONE2_AUSGAENGE.slice(0, 1):   # 20.11. (Zange): Weg aus der zweiten Zone über Checkpoint 2
+			neben_pfade.append(_route_ab("hund", z2, -1, maxi(erstes_ziel(), mini(1, checkpoints.size()))))
+	elif start_index() < 0 and not Werte.EINGAENGE.is_empty():
+		for e in range(1, Werte.EINGAENGE.size()):   # 20.11.: Weg vom zweiten Eingang
+			neben_pfade.append(_route_ab("hund", Werte.EINGAENGE[e]))
+	elif start_index() < 0:
 		neben_pfade.append(_route_ab("hund", Vector2i(0, 1)))
 		neben_pfade.append(_route_ab("hund", Vector2i(0, Werte.ZEILEN - 2)))
 	# Fußweg der eigenen Truppen zum HQ: der kürzeste ab irgendeiner Fabrik
@@ -2138,7 +2157,7 @@ func _zeichne_boden_neu() -> void:
 			var z := Vector2i(x, y)
 			var h := hash(z * 7 + Vector2i(3, 11))
 			var mitte := (Vector2(z) + Vector2(0.5, 0.5)) * zg
-			if x < Werte.ZONE_SPALTEN:
+			if x < Werte.ZONE_SPALTEN or Werte.in_zone2(z):   # 20.11. (Zange): zweite Zone mit demselben Boden
 				_ci.draw_set_transform(mitte, (h % 4) * PI / 2.0, Vector2.ONE)
 				_ci.draw_texture_rect_region(fels, Rect2(-zg / 2, -zg / 2, zg, zg), Rect2(MYR_KACHELN[(h >> 3) % 2] * 32, 0, 32, 32))
 				_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -4,6 +4,7 @@ var touch_richtung := Vector2.ZERO   # 17.11.: Joystick am Handy, -1..1
 var ego := false                     # 18.11.: Ego-Sicht – der Spieler steuert und schießt selbst (ego_modus.gd)
 var fortschritt: BrakkFortschritt = null   # 18.11.: Brakk-Mode – Stufen, Ringe, Ulti (brakk_fortschritt.gd)
 var unverwundbar := 0.0              # 18.11.: Brakk-Mode – Tumble: so lange (Sekunden) prallt alles ab
+var luft := false                    # 20.11.: Brakk-Mode – Sonde 7 schwebt (setzt ego_sonde.gd)
 ## Kommandant Brakk: einmal pro Partie. Angeklickt mit WASD gesteuert, sonst handelt er selbst (16.11.):
 ##   im Kampf geht er auf Gegner nahe seinem Posten los, ohne Gegner kehrt er zum Posten zurück (wo man ihn zuletzt hingestellt hat).
 ## Schießt von selbst auf den vordersten Gegner.
@@ -170,15 +171,16 @@ func reichweite_jetzt() -> float:
 
 
 func am_boden() -> bool:
-	return not gefallen and not oben
+	return not gefallen and not oben and not luft
 
 
 func bodentruppe() -> bool:
 	return am_boden()
 
 
+## 20.11.: in der Luft (Sonde 7 schwebt) zielen Fernkämpfer auf sie wie auf eine Stellung – Nahkämpfer erreichen sie nicht.
 func in_stellung() -> bool:
-	return not gefallen and oben
+	return not gefallen and (oben or luft)
 
 
 # ------------------------------------------------------------ Fähigkeiten

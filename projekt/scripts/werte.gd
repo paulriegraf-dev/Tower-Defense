@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 41          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 43          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -305,6 +305,10 @@ static func einheit_daten(typ: String, stufe: int, faehigkeit: String = "") -> D
 		d["leben"] = float(d["leben"]) * BOLLWERK_LEBEN
 		d["schaden"] = float(d["schaden"]) * BOLLWERK_SCHADEN
 		d["reichweite"] = BOLLWERK_REICHWEITE
+	if stufe >= 4:   # 20.11.: Elite (Fabrik-Stufe 4, Sonde 7)
+		d["leben"] = float(d["leben"]) * float(ELITE["leben"])
+		d["schaden"] = float(d["schaden"]) * float(ELITE["schaden"])
+		d["elite"] = true
 	# 18.11. (Stufe 1): Werte-Mods einer eigenen Karte
 	d["leben"] = float(d["leben"]) * mod_faktor("truppen_leben")
 	d["schaden"] = float(d["schaden"]) * mod_faktor("truppen_schaden")
@@ -462,6 +466,264 @@ const TURM := {
 	"abklingzeit": 0.9,
 }
 
+# --- Anführer (19.11.) --------------------------------------------------------------------------
+## 19.11.: Schritt 2b – vier Anführer, einer wird vor der Partie gewählt (Liste und Texte: scripts/anfuehrer.gd).
+## Der laufende steht in `anfuehrer` (beim Partiestart gesetzt; Zwischenstand, Protokoll und Phantome tragen ihn mit).
+## ANFUEHRER_STANDARD sind die Regeln wie bisher (= Brakk). ANFUEHRER_WERTE überschreibt je Anführer einzelne
+## Schlüssel; was fehlt, gilt wie Standard. Die Haken im Spiel fragen nur die Funktionen unten ab – für Brakk
+## liefern sie genau die alten Zahlen.
+static var anfuehrer := "brakk"
+const ANFUEHRER_STANDARD := {
+	"preis_wall": 1.0,             # Faktor auf KOSTEN_WALL
+	"preis_fabrik": 1.0,           # Faktor auf KOSTEN_FABRIK (die erste; jede weitere wie gewohnt teurer)
+	"preis_fabrik_stufe": 1.0,     # Faktor auf KOSTEN_STUFE (Fabrik-Stufen, nicht die Batterie)
+	"preis_turm_stufe": 1.0,       # Faktor auf KOSTEN_TURM_STUFE
+	"max_fabriken": 0,             # höchstens so viele Fabriken (0 = unbegrenzt; Pilotenfabriken zählen nicht)
+	"turm_max_stufe": 3,           # höchste Turmstufe (mehr als 3 gibt es nicht)
+	"truppen_je_fabrik": 0,        # so viele Truppen je Fabrik mehr (negativ = weniger, mindestens 1)
+	"stuetze_legt_still": true,    # fehlt einem Turm eine Stütze, schweigt er
+	"zins_stufen": ZINS_STUFEN,    # Zinsdeckel: so viele Schritte zählen (je ZINS_JE_SCHRITT)
+	"praemie_faktor": 1.0,         # Faktor auf die Prämie je besiegtem Gegner
+	"erstattung": ERSTATTUNG,      # Anteil beim Abriss von Älterem
+	"start_leben": 0,              # so viele Leben mehr zu Beginn (auf das Startleben der Karte)
+	"startpaket_waelle": STARTPAKET_WAELLE,   # so viele Erdwälle gratis, sobald sie frei sind
+	"gesperrt": [],                # Bauwerke, die dieser Anführer nicht hat (Schlüssel wie main.gd BAUTEN, z. B. "generator")
+	"figur": "brakk",              # Figur auf Slot [8] ("" = folgt in Schritt 2c, Slot gesperrt)
+	"truppen_fest": 0,             # 20.11.: jede Fabrik hält genau so viele Truppen, auch spezialisiert und im Gegenangriff (0 = wie gewohnt)
+	"fabrik_max_stufe": 3,         # 20.11.: höchste Fabrikstufe (4 = Elite, siehe ELITE)
+	"auftraege": false,            # 20.11.: Pauls Aufträge (scripts/auftraege.gd)
+}
+## 20.11. (Paul): Perks der drei neuen Anführer. Brakk bleibt leer = alles wie bisher.
+const ANFUEHRER_WERTE := {
+	"brakk": {},
+	"irrtuermer": {"figur": "", "max_fabriken": 3, "turm_max_stufe": 4, "preis_turm_stufe": 0.75, "stuetze_legt_still": false,
+		"startpaket_waelle": 12, "preis_fabrik_stufe": 1.2},
+	"sonde7": {"figur": "", "preis_fabrik": 0.5, "truppen_fest": 1, "preis_fabrik_stufe": 0.75, "fabrik_max_stufe": 4,
+		"turm_max_stufe": 2, "gesperrt": ["generator"]},
+	"paul": {"figur": "", "zins_stufen": 10, "praemie_faktor": 1.5, "erstattung": 1.0, "start_leben": -5, "preis_wall": 1.5,
+		"auftraege": true},
+}
+## 20.11.: Stufe 4 (nur mit passendem Anführer). Preise vor dem Faktor des Anführers.
+const KOSTEN_STUFE_4: int = 600          # Fabrik Stufe 4: Elite-Truppe (Sonde 7)
+const KOSTEN_TURM_STUFE_4: int = 450     # Turm Stufe 4: großes Wertepaket (Irrtürmer)
+const ELITE := {"leben": 2.0, "schaden": 2.0, "groesse": 1.3, "farbe": Color(1.0, 0.86, 0.45)}   # Elite-Truppe: doppelt so stark, größer, golden
+const TURM_STUFE_4 := {"schaden": 1.5, "reichweite": 1.0, "leben": 2.0}   # ×Schaden, +Reichweite, ×Leben gegen Drohnen
+
+
+## Anführer festlegen; unbekannt oder leer (alte Dateien) = Brakk.
+static func setze_anfuehrer(id: String) -> void:
+	anfuehrer = id if ANFUEHRER_WERTE.has(id) else "brakk"
+
+
+## Wert des laufenden Anführers (sonst Standard).
+static func af(schluessel: String) -> Variant:
+	var eigen: Dictionary = ANFUEHRER_WERTE.get(anfuehrer, {})
+	return eigen.get(schluessel, ANFUEHRER_STANDARD[schluessel])
+
+
+static func _af_preis(preis: int, schluessel: String) -> int:
+	var f := float(af(schluessel))
+	return preis if f == 1.0 else roundi(preis * f)
+
+
+static func _af_preise(preise: Array[int], schluessel: String) -> Array[int]:
+	var f := float(af(schluessel))
+	if f == 1.0:
+		return preise
+	var aus: Array[int] = []
+	for p: int in preise:
+		aus.append(roundi(p * f / 5.0) * 5)
+	return aus
+
+
+static func kosten_wall() -> int:
+	return _af_preis(KOSTEN_WALL, "preis_wall")
+
+
+static func kosten_fabrik() -> int:
+	return _af_preis(KOSTEN_FABRIK, "preis_fabrik")
+
+
+static func kosten_stufen() -> Array[int]:
+	if fabrik_max_stufe() < 4:
+		return _af_preise(KOSTEN_STUFE, "preis_fabrik_stufe")
+	var mit_4: Array[int] = KOSTEN_STUFE.duplicate()   # 20.11.: Stufe 4 (Elite)
+	mit_4.append(KOSTEN_STUFE_4)
+	return _af_preise(mit_4, "preis_fabrik_stufe")
+
+
+static func kosten_turm_stufen() -> Array[int]:
+	if turm_max_stufe() < 4:
+		return _af_preise(KOSTEN_TURM_STUFE, "preis_turm_stufe")
+	var mit_4: Array[int] = KOSTEN_TURM_STUFE.duplicate()   # 20.11.: Stufe 4 (Wertepaket)
+	mit_4.append(KOSTEN_TURM_STUFE_4)
+	return _af_preise(mit_4, "preis_turm_stufe")
+
+
+static func turm_max_stufe() -> int:
+	return clampi(int(af("turm_max_stufe")), 1, 4)
+
+
+static func fabrik_max_stufe() -> int:
+	return clampi(int(af("fabrik_max_stufe")), 1, 4)
+
+
+static func truppen_fest() -> int:
+	return int(af("truppen_fest"))
+
+
+static func auftraege_an() -> bool:
+	return bool(af("auftraege"))
+
+
+static func max_fabriken() -> int:
+	return int(af("max_fabriken"))
+
+
+static func truppen_je_fabrik() -> int:
+	return int(af("truppen_je_fabrik"))
+
+
+static func stuetze_legt_still() -> bool:
+	return bool(af("stuetze_legt_still"))
+
+
+static func zins_stufen() -> int:
+	return int(af("zins_stufen"))
+
+
+static func praemie(betrag: int) -> int:
+	var f := float(af("praemie_faktor"))
+	return betrag if f == 1.0 else roundi(betrag * f)
+
+
+static func erstattung() -> float:
+	return float(af("erstattung"))
+
+
+static func start_leben() -> int:
+	return maxi(1, START_LEBEN + int(af("start_leben")))
+
+
+static func startpaket_waelle() -> int:
+	return int(af("startpaket_waelle"))
+
+
+static func af_gesperrt(bau: String) -> bool:
+	return (af("gesperrt") as Array).has(bau)
+
+
+static func figur() -> String:
+	return str(af("figur"))
+
+
+# --- Anführer Ego (20.11.) ----------------------------------------------------------------------
+## 20.11.: Schritt 6b – Anführer im Brakk-Mode (Ego-Sicht). Gleicher Wert `anfuehrer` wie im Normalmodus, beim Start des
+## Brakk-Mode gesetzt. Hier stehen nur die Ego-Daten; Name, Initiale, Farbe und Freischalt-Erfolg kommen aus anfuehrer.gd.
+## Die Anführer werden nur ausgetauscht: keine Perks aus dem Normalmodus. Ringe sind für alle das Build-System.
+##   tasten: Taste -> Aktion. Tasten: links, rechts (Maus), Q, E, R, V, X, C, shift, leertaste. Die Steuerung liest
+##           ego_modus.gd einmal; je Anführer zählt nur diese Belegung (Brakk: genau wie bisher).
+##   leben, tempo: Faktor auf Brakks Leben (Werte.KOMMANDANT) bzw. Lauftempo in der Ego-Sicht.
+##   frei: Brakks Bewegungsfähigkeiten, die dieser Anführer auch hat (Brakk selbst: Stufen aus BrakkFortschritt.AB).
+##   kit: drei Zeilen für Auswahlbild und Übersicht.
+## Alle Zahlen sind Startwerte (Paul spielt es).
+const ANFUEHRER_EGO := {
+	"brakk": {"leben": 1.0, "tempo": 1.0, "frei": [],
+		"tasten": {"links": "pistolen", "rechts": "lanze", "Q": "anker", "E": "treppe", "R": "ulti", "V": "zeitlupe", "X": "saeule",
+			"C": "feld", "shift": "tumble", "leertaste": "sprung"},
+		"kit": ["Zwei Pistolen, Ladestrahl, Lichtsäule", "Lichttreppe, Anker, Rolle, Doppelsprung", "Ring-Signatur: Zeitlupe je Ring"]},
+	"irrtuermer": {"leben": 0.9, "tempo": 1.0, "frei": ["tumble"],
+		"tasten": {"links": "prellbolzen", "rechts": "hack", "Q": "ueberladen", "E": "treppe", "R": "aufsatz", "V": "ringtausch", "X": "hierher",
+			"C": "feld", "shift": "tumble", "leertaste": "sprung"},
+		"kit": ["Prellbolzen und Hack auf Türme", "Begleitturm PliPlop rollt mit", "Ring-Signatur: zwei Ringslots + Verbund"]},
+	"sonde7": {"leben": 0.8, "tempo": 1.05, "frei": [],
+		"tasten": {"links": "hand_links", "rechts": "hand_rechts", "Q": "teleport", "E": "doppellaser", "R": "luftschlag", "V": "schrot", "X": "sondengewehr",
+			"C": "feld", "shift": "schub", "leertaste": "schweben"},
+		"kit": ["Schwebt mit Düsen, Schub und Teleport", "Ruft vier Waffen mit Magazin", "Ring-Signatur: Hand und Erfassungstreffer"]},
+}
+## Namen der Aktionen (Übersicht, Reiter „Anführer“).
+const EGO_AKTIONEN := {
+	"pistolen": "Pistolen", "lanze": "Ladestrahl (halten)", "anker": "Lichtanker", "treppe": "Lichttreppe / -brücke", "ulti": "Klonmaschine",
+	"zeitlupe": "Zeitlupe", "saeule": "Lichtsäule", "feld": "Ringfeld (Bauphase)", "tumble": "Rolle", "sprung": "Springen",
+	"prellbolzen": "Prellbolzen", "hack": "Hack (halten)", "ueberladen": "Überladen", "aufsatz": "Aufsatz", "ringtausch": "Ringtausch",
+	"hierher": "Hierher! / Folgen",
+	"hand_links": "Farblaser / linke Waffe", "hand_rechts": "Energiebündel / rechte Waffe", "teleport": "Teleport", "doppellaser": "Doppel-Lasergewehr",
+	"luftschlag": "Luftschlag", "schrot": "Schrotflinte", "sondengewehr": "Sondengewehr", "schub": "Schub", "schweben": "Schweben (halten)",
+}
+## Reihenfolge der Tasten in Übersicht und Auswahl.
+const EGO_TASTEN: Array[String] = ["links", "rechts", "Q", "E", "R", "V", "X", "C", "shift", "leertaste"]
+const EGO_TASTEN_NAME := {"links": "Linksklick", "rechts": "Rechtsklick", "shift": "Shift", "leertaste": "Leertaste"}
+
+
+## 20.11.: Irrtürmer – Mauern und Gefährte (scripts/ego_irrtuermer.gd, scripts/pliplop.gd). Felder in Feldern, Zeiten in
+## Sekunden (Echtzeit). Schaden des Prellbolzens und des PliPlop wächst mit der Stufe wie Brakks (BrakkFortschritt.schaden_faktor).
+const IRRTUERMER := {
+	"slots": 2,                    # Ringslots: Hand und PliPlop
+	"kopie_anteil": 0.5,           # derselbe Ring ein zweites Mal (für den anderen Slot) kostet so viel vom Kaufpreis
+	"bolzen": {"schaden": 13.0, "takt": 0.42, "tempo": 15.0, "weite": 14.0, "abpraller": 2, "flaeche": 0.6,   # 20.11. (Paul): Schaden vorher 16 – Irrtürmer war in den Bot-Partien am stärksten
+		"stoss_naehe": 1.0, "stoss_radius": 1.6, "stoss": 1.2},   # platzt er so nah am PliPlop, stößt er Nahkämpfer im Umkreis so weit weg
+	"hack": {"weite": 4.0, "tempo": 0.6, "mal": 1.0},   # Reichweite, Lauftempo beim Halten, Faktor auf den Schaden des gehackten Schusses
+	"ueberladen": {"sek": 6.0, "abkling": 15.0, "mal": 2.0},
+	"aufsatz": {"sek": 8.0, "tempo": 0.7, "leer": 10.0},   # einmal je Runde; danach ist der PliPlop so lange leer
+	"verbund": {"fenster": 2.0, "bonus": 1.3},             # Effekte beider Ringe innerhalb des Fensters: +30 % Schaden
+	"pliplop": {"leben": 0.6, "abstand": 1.5, "tempo": 3.4, "respawn": 10.0, "nah_schaden": 1.0},   # Leben: Anteil vom Irrtürmer
+}
+## Pfad des PliPlop je getragenem Ring (Stufe des Rings = Stufe des Pfads; je Stufe über 1 „je_stufe“ mehr Schaden).
+## art: einzel (ein Ziel), mehr (mehrere Ziele), welle (alle im Umkreis um den PliPlop), flaeche (Einschlag am Ziel),
+## linie (durch alle in einer Linie), sprung (springt weiter). Zusätze: bremse (s), brand (Brandfeld), schutz (PliPlop nimmt
+## weniger Schaden), ziele, spruenge, radius. Der Ring-Effekt (BrakkFortschritt.RINGE brakk_stufen) kommt bei jedem Treffer dazu.
+const PLIPLOP_JE_STUFE := 0.25
+const PLIPLOP_PFADE := {
+	"": {"name": "Grundschuss", "art": "einzel", "schaden": 12.0, "takt": 1.0, "weite": 4.0},
+	"plasmagel": {"name": "Schockwelle", "art": "welle", "schaden": 9.0, "takt": 1.6, "weite": 2.0, "bremse": 1.0},
+	"laser": {"name": "Flak", "art": "flaeche", "schaden": 8.0, "takt": 0.35, "weite": 5.0, "radius": 0.6},
+	"markierung": {"name": "Nagler", "art": "einzel", "schaden": 38.0, "takt": 1.5, "weite": 6.0},
+	"durchschuss": {"name": "Bohrer", "art": "linie", "schaden": 18.0, "takt": 1.2, "weite": 5.0},
+	"feuerteam": {"name": "Repetierer", "art": "einzel", "schaden": 5.0, "takt": 0.2, "weite": 4.0},
+	"minigun": {"name": "Kreisel", "art": "mehr", "schaden": 8.0, "takt": 0.5, "weite": 3.5, "ziele": 3},
+	"bollwerk": {"name": "Prellschild", "art": "einzel", "schaden": 10.0, "takt": 1.0, "weite": 3.5, "schutz": 0.3},
+	"abpraller": {"name": "Bogenblitz", "art": "sprung", "schaden": 12.0, "takt": 1.1, "weite": 4.0, "spruenge": 3},
+	"brandfeld": {"name": "Brandmörser", "art": "flaeche", "schaden": 12.0, "takt": 2.0, "weite": 5.0, "radius": 1.0, "brand": true},
+}
+
+
+## 20.11.: Sonde 7 – Luft und Schützin (scripts/ego_sonde.gd). Felder in Feldern, Zeiten in Sekunden (Echtzeit).
+## Schaden wächst mit der Stufe wie Brakks (BrakkFortschritt.schaden_faktor). Ring-Signatur: der aktive Ring (Mausrad)
+## färbt die Hand (Laserfarbe, Effekt des Energiebündels) und die Erfassungstreffer; gerufene Waffen bekommen vom Ring nur
+## ihr Geschossbild. Waffen: [Taste] ruft sie mit vollem Magazin, leer löst sie sich auf (dann Cooldown), dieselbe Taste
+## steckt sie vorzeitig weg (Rest verfällt, Cooldown läuft).
+const SONDE7 := {
+	"schweben": {"akku": 5.0, "laden": 4.0, "steigen": 2.6, "sinken": 1.4, "hoehe": 3.2, "doppel": 0.3},   # laden: leer → voll am Boden
+	"schub": {"felder": 3.0, "dauer": 0.25, "akku": 1.0, "abkling": 1.2},
+	"teleport": {"weite": 6.0, "abkling": 8.0},
+	"hand": {"laser_schaden": 5.0, "laser_takt": 0.1, "hitze_sek": 3.0, "pause": 1.5, "weite": 12.0,
+		"buendel_schaden": 34.0, "buendel_takt": 0.9, "buendel_tempo": 7.0, "buendel_flaeche": 0.7},
+	"doppellaser": {"magazin": 40, "abkling": 10.0, "schaden": 9.0, "takt": 0.12, "hitze_sek": 3.0, "weite": 12.0,
+		"erfassen": [4, 6, 8], "erfassen_ab": [1, 4, 7], "erfassen_sek": 6.0, "erfassung_mal": 1.4},   # erfassen: Ziele ab Stufe erfassen_ab
+	"schrot": {"magazin": 8, "abkling": 12.0, "schaden": 9.0, "kugeln": 8, "streuung": 16.0, "weite": 4.5, "takt": 0.7, "nachladen": 2.0},
+	"sondengewehr": {"magazin": 4, "abkling": 12.0, "laden": 0.8, "schaden": 80.0, "weite": 6.0, "blick_sek": 6.0, "blick_bonus": 1.25, "blick_weite": 14.0},
+	"luftschlag": {"magazin": 8, "sek": 8.0, "schaden": 70.0, "radius": 1.5, "takt": 0.5, "tempo": 9.0, "hoehe": 2.4},   # hoehe: dorthin steigt sie
+}
+## Welche Taste ruft welche Waffe (Reihenfolge = Anzeige); Belegung steht in ANFUEHRER_EGO.
+const SONDE7_WAFFEN: Array[String] = ["doppellaser", "schrot", "sondengewehr", "luftschlag"]
+const SONDE7_WAFFEN_NAME := {"": "Hand", "doppellaser": "Doppel-Lasergewehr", "schrot": "Schrotflinte", "sondengewehr": "Sondengewehr", "luftschlag": "Luftschlag"}
+
+
+## Anführer, die es im Brakk-Mode gibt (Brakk, Irrtürmer, Sonde 7).
+static func ego_hat(id: String) -> bool:
+	return ANFUEHRER_EGO.has(id)
+
+
+## Ego-Wert des laufenden Anführers (unbekannt = Brakk).
+static func ego_af(schluessel: String) -> Variant:
+	var d: Dictionary = ANFUEHRER_EGO.get(anfuehrer, ANFUEHRER_EGO["brakk"])
+	return d[schluessel]
+
+
+## Aktion auf einer Taste ("" = nicht belegt).
+static func ego_taste(taste: String) -> String:
+	return str((ego_af("tasten") as Dictionary).get(taste, ""))
+
 # --- Grafik: Klassisch, Neu (2D) oder HD-2D (Startmenü, 16.11.) -------------------------------
 # Neu = Stil der HD-2D-Stilprobe in der 2D-Ansicht: neue Türme mit Upgrade-Stufen, Tech-Mauer, Stellungs-Haltungen,
 # Upgrade-Figuren mit Schuss-Animation, Gegner auf Truppen-Pixelgröße umgerechnet, PixelFX-Effekte und Todeseffekte.
@@ -574,12 +836,23 @@ static func setze_karte(gross: bool) -> void:
 ## (Phantom-Modus), Basis, Checkpoint-Bereichen, Gelände (Fels, Wasser) und vorgebauten Erdwällen.
 ## „paulland“ ist die Hauptkarte (dieselben Werte wie setze_karte(true)); nur auf ihr gibt es Phantome und Rangliste.
 const KARTEN: Array[String] = ["paulland", "felsenpass"]
+## 20.11. (Schritt 5): mitgelieferte Szenarien (karten/<name>.json) – Spielen → Szenarien, im Editor „Neu aus Vorlage“.
+## Zählen nicht für Rangliste und Phantome (wie jede Karte außer PaulLand).
+const SZENARIEN: Array[String] = ["szenario_belagert", "szenario_zange", "szenario_alarmstart", "szenario_letzter_posten", "szenario_rueckeroberung"]
 static var karte_name := "paulland"
 static var KARTE_TITEL := "PaulLand"
 static var KARTE_BASIS_FEST := false        # Basis immer auf BASIS_ZELLE statt zufällig
 static var KARTE_CP_FEST := false           # Checkpoints immer auf CHECKPOINTS statt zufällig
 static var GELAENDE: Dictionary = {}        # Feld -> "fels" (versperrt Weg, Bauen und Sicht) / "wasser" (Weg und Bauen)
 static var MAUERN: Array[Vector2i] = []     # vorgebaute Erdwälle: ausbaubar, nicht abreißbar
+## 20.11.: Eingänge (Karten-Datei „eingaenge“, 0–2 Randfelder, auch oben/unten/rechts): Gegner kommen nur dort heraus und
+## teilen sich auf. Leer = wie bisher verteilt aus der ganzen Zone (PaulLand). Ein eingenommener Checkpoint geht weiter vor.
+const EINGAENGE_MAX: int = 2
+static var EINGAENGE: Array[Vector2i] = []
+## 20.11. (Schritt 5b, Zange): zweite Gegnerzone (Rechteck in Feldern, leer = keine) und ihre Ausgänge. Aus ihr kommt je Trupp
+## die zweite Hälfte; sie läuft nur über Checkpoint 2, die Hälfte aus der linken Zone nur über Checkpoint 1.
+static var ZONE2 := Rect2i()
+static var ZONE2_AUSGAENGE: Array[Vector2i] = []
 static var MAUERN_FEST: Array[Vector2i] = []   # fertige Mauer für die Herausforderung „Mauern fest“
 
 ## 18.11. (Etappe 2): Gelände mit Wirkung – begehbar, aber mit Regeln (nur auf eigenen Karten aus dem Szenario-Editor).
@@ -624,6 +897,11 @@ static func herausforderung_text(schluessel: String) -> String:
 	return ""
 
 
+## 20.11. (Zange): liegt das Feld in der zweiten Gegnerzone?
+static func in_zone2(z: Vector2i) -> bool:
+	return ZONE2.size != Vector2i.ZERO and ZONE2.has_point(z)
+
+
 static func ist_hauptkarte() -> bool:
 	return karte_gross and karte_name == "paulland"
 
@@ -633,6 +911,9 @@ static func ist_hauptkarte() -> bool:
 const EIGENE_KARTEN := "user://karten/"
 static var KARTE_REGELN: Dictionary = {}    # Regelpaket der Karte (siehe _setze_regeln); leer = Standard
 static var KARTE_WELLEN: Dictionary = {}    # eigene Wellen: Runde (int) -> Trupps im Format von WELLEN
+## 20.11. (Schritt 5b): Wellen eines Szenarios aus dem Wellenpool: Runde (int) -> {"plan": Nummer in WELLEN, "name", "ansage",
+## "leben" (Leben-Faktor)}. Die Gegner kommen dann wie im normalen Spiel (verteilt), nicht geschlossen wie bei eigenen Wellen.
+static var KARTE_PLAN_WELLEN: Dictionary = {}
 static var KARTE_STAND: Dictionary = {}     # vorgebaute Türme/Fabriken im Format von Phantom._stand (leer = nichts)
 
 
@@ -735,6 +1016,16 @@ static func uebernimm_karte(name: String, k: Dictionary) -> void:
 	for art: String in ["fels", "wasser"]:
 		for z: Vector2i in _felder(k.get(art, [])):
 			GELAENDE[z] = art
+	EINGAENGE = _felder(k.get("eingaenge", []))   # 20.11.: Eingänge der Gegner (leer = aus der ganzen Zone wie bisher)
+	ZONE2 = Rect2i()
+	ZONE2_AUSGAENGE = []
+	var z2: Variant = k.get("zone2", {})
+	if z2 is Dictionary and ((z2 as Dictionary).get("rechteck", []) as Array).size() == 4:
+		var r: Array = (z2 as Dictionary)["rechteck"]
+		ZONE2 = Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3]))   # 20.11. (Zange): zweite Gegnerzone
+		ZONE2_AUSGAENGE = _felder((z2 as Dictionary).get("ausgaenge", []))
+		if ZONE2_AUSGAENGE.is_empty():
+			ZONE2_AUSGAENGE = [ZONE2.position]
 	MAUERN = _felder(k.get("mauern", []))
 	MAUERN_FEST = _felder(k.get("mauern_fest", []))
 	BODEN = {}
@@ -756,11 +1047,14 @@ static func _setze_regeln(k: Dictionary) -> void:
 	if ziel() == "endlos":
 		LETZTE_RUNDE = ENDLOS_RUNDEN   # 18.11.: endlos – es gibt keine letzte Runde
 	KARTE_WELLEN = {}
+	KARTE_PLAN_WELLEN = {}
 	var w: Variant = k.get("wellen", {})
 	if w is Dictionary:
 		for nr: Variant in w:
 			if w[nr] is Array and not (w[nr] as Array).is_empty():
 				KARTE_WELLEN[int(nr)] = (w[nr] as Array).duplicate(true)
+			elif w[nr] is Dictionary and WELLEN.has(int((w[nr] as Dictionary).get("plan", 0))):
+				KARTE_PLAN_WELLEN[int(nr)] = (w[nr] as Dictionary).duplicate(true)   # 20.11.: Welle aus dem Pool
 	var s: Variant = k.get("stand", {})
 	KARTE_STAND = (s as Dictionary).duplicate(true) if s is Dictionary else {}
 
@@ -837,6 +1131,25 @@ static func ziel_text(schluessel: String) -> String:
 		if z[0] == schluessel:
 			return str(z[2])
 	return ""
+
+
+## 20.11. (Schritt 5): Startlage und Modus aus dem Regelpaket (fehlt ein Schlüssel, gilt das Gewohnte).
+## regeln: {"modus": "normal"/"brakk", "einkommen": true/false, "mauer_leben": Prozent der vorgebauten Erdwälle,
+##          "cp_feind": beide Checkpoints schon beim Gegner, "sofort": die erste Welle läuft gleich los}
+const MODI: Array = [["normal", "Normal"], ["brakk", "Brakk-Ego"]]
+## 20.11. (Schritt 5b, Alarmstart): nur die vollen, gut ausgebauten Formationen aus [H] (Nachschlag.PLAENE_GROSS)
+const ALARM_FORMATIONEN: Array[String] = ["2-kamm", "3-zitadelle", "7-kamm-mit-kern", "8-riegel-und-schlauch", "9-dicker-schlauch"]
+const ALARM_TRUPPEN: Array[String] = ["technogunner", "scharfschuetze", "plasmawerfer"]   # Fabriken reihum spezialisiert
+const STELLUNG_ABDECKUNG: float = 3.5   # so weit (Felder) zählt ein Wegfeld zur Abdeckung einer Stellung (Wahl der Felder)
+const MAUER_LEBEN_STUFEN: Array[int] = [100, 75, 50, 25]
+
+
+static func modus() -> String:
+	return str(KARTE_REGELN.get("modus", "normal"))
+
+
+static func einkommen_an() -> bool:
+	return bool(KARTE_REGELN.get("einkommen", true))
 
 
 static func bauzeit() -> int:
@@ -1372,11 +1685,35 @@ const WELLEN := {
 
 ## Eine Welle: was kommt, in welcher Reihenfolge, was wird geworfen. `variante` und `wurf_nr` gibt es nur noch der alten Aufrufe wegen.
 static func welle(nr: int, _variante: int = 0, _wurf_nr: int = -1) -> Dictionary:
-	return welle_aus_plan(wellen_plan(nr), nr)
+	var w := welle_aus_plan(wellen_plan(nr), plan_runde(nr))
+	var p: Dictionary = KARTE_PLAN_WELLEN.get(nr, {})
+	if p.has("leben"):
+		w["leben_faktor"] = clampf(float(p["leben"]), 0.1, 20.0)   # 20.11.: das Szenario setzt die Zähigkeit selbst
+	return w
+
+
+## 20.11. (Schritt 5b): Zu welcher Runde des normalen Spiels gehört Runde `nr`? Bei einer Welle aus dem Pool die Nummer ihres
+## Plans – danach richten sich Checkpoints, Schleudern, Wurf-Schleuder, Sprenger und Grund-Leben. Sonst `nr` selbst.
+static func plan_runde(nr: int) -> int:
+	var p: Dictionary = KARTE_PLAN_WELLEN.get(nr, {})
+	return maxi(nr, int(p.get("plan", nr))) if not p.is_empty() else nr
+
+
+## 20.11. (Schritt 5b): Ansage in der Bauphase vor Runde `nr`: Text der Szenario-Welle, sonst die neuen Gegner des normalen Spiels.
+static func ansage(nr: int) -> String:
+	if KARTE_PLAN_WELLEN.has(nr):
+		return str((KARTE_PLAN_WELLEN[nr] as Dictionary).get("ansage", ""))
+	return str(NEUHEITEN.get(nr, ""))
 
 
 ## 18.11.: Entworfener Plan der Runde. Die letzte Runde der Karte ist immer der Gegenangriff (Plan 20), auch bei 10 oder 15 Runden.
 static func wellen_plan(nr: int) -> Dictionary:
+	if KARTE_PLAN_WELLEN.has(nr):
+		var p: Dictionary = KARTE_PLAN_WELLEN[nr]
+		var plan: Dictionary = (WELLEN[int(p["plan"])] as Dictionary).duplicate()
+		if str(p.get("name", "")) != "":
+			plan["name"] = str(p["name"])   # 20.11.: das Szenario gibt der Welle einen eigenen Namen
+		return plan
 	if ziel() != "gegenangriff":
 		# 18.11.: ohne Gegenangriff keine Schleifen-Welle – nach Runde 19 kehren die späten Pläne 10–19 wieder
 		if nr <= STANDARD_RUNDEN - 1:
@@ -1447,10 +1784,14 @@ static func endkampf_anteil() -> float:
 
 
 static func endkampf_leben() -> float:
+	if KARTE_REGELN.has("endkampf_leben"):
+		return clampf(float(KARTE_REGELN["endkampf_leben"]), 0.1, 20.0)   # 20.11.: vom Szenario vorgegeben
 	return snappedf(ENDKAMPF_LEBEN * endkampf_anteil(), 0.1)
 
 
 static func hq_leben() -> float:
+	if KARTE_REGELN.has("hq_leben"):
+		return clampf(float(KARTE_REGELN["hq_leben"]), 50.0, 99999.0)   # 20.11.: vom Szenario vorgegeben
 	return snappedf(HQ_LEBEN * endkampf_anteil(), 50.0)
 
 
@@ -1460,7 +1801,7 @@ static func stellung_bonus(daten: Dictionary) -> float:
 
 
 static func zinsen(budget: int) -> int:
-	return mini(int(budget / float(ZINS_SCHRITT)), ZINS_STUFEN) * ZINS_JE_SCHRITT
+	return mini(int(budget / float(ZINS_SCHRITT)), zins_stufen()) * ZINS_JE_SCHRITT   # 19.11.: Zinsdeckel je Anführer
 
 
 static func wellen_bonus(nr: int) -> int:

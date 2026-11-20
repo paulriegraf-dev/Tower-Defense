@@ -67,6 +67,7 @@ class Flaeche extends Control:
 
 func _init() -> void:
 	layer = 100
+	process_mode = Node.PROCESS_MODE_ALWAYS   # 20.11.: die Übersicht pausiert das Spiel – das Menü muss sich trotzdem ausblenden (sonst „friert“ es ein)
 	# 19.11.: Hintergrund hinter der Menüfläche – mit sicheren Rändern (iPhone) ist sie etwas kleiner als das Bild
 	_grund = ColorRect.new()
 	_grund.color = Color("0b0e14")
@@ -130,7 +131,7 @@ func _baue() -> void:
 				# 18.11. (Paul): Reihenfolge nach Wichtigkeit
 				["Spielen", _zeige.bind("spielen"), "", LICHT],
 				["Phantom-Modus", _zeige.bind("phantom"), "", Stil.TEXT],
-				["Brakk-Mode", _brakk_mode, "", Stil.TEXT],
+				["Brakk-Mode", _zeige.bind("brakk"), "", Stil.TEXT],   # 20.11. (Schritt 5b): Unterseite Classic / Rogue
 				["Sandbox", _zeige.bind("sandbox"), "", Stil.TEXT],
 				["Herausforderungen", _zeige.bind("herausforderung"), "", Stil.TEXT],
 				["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT],
@@ -141,6 +142,23 @@ func _baue() -> void:
 			if runde > 0:
 				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie" + (" im Brakk-Mode" if bool(spiel.lies_zwischenstand().get("brakk_modus", false)) else ""), KUPFER_HELL])   # 19.11.: auch Brakk-Mode
 				_eintraege[1][3] = Stil.TEXT
+		"brakk":
+			# 20.11. (Schritt 5b): Classic = der bisherige Brakk-Mode, Rogue = Order 24
+			_eintraege = [
+				["Classic", _brakk_mode, "20 Runden gegen die Myriaden in der Ego-Sicht – wie bisher", LICHT],
+				["Rogue · Order 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL],
+				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
+			]
+		"rogue":
+			# 20.11. (Schritt 5b): Order 24 mit Standardwerten oder eine eigene Rogue-Karte aus dem Editor
+			_eintraege = [["Order 24 · Standardwerte", _rogue_los.bind("szenario_order24"), _karten_text("szenario_order24"), LICHT]]
+			for kname: String in Werte.eigene_karten():
+				var rg: Variant = Werte.karten_daten(kname).get("regeln", {})
+				if rg is Dictionary and str((rg as Dictionary).get("modus", "")) == "rogue":
+					_eintraege.append(["Eigene: " + _karten_titel(kname), _rogue_los.bind(kname), _karten_text(kname), Stil.TEXT])
+			if _eintraege.size() == 1:
+				_eintraege.append(["Eigene Karte laden", _zeige.bind("rogue"), "noch keine – im Editor (Sandbox → Szenario bauen → Szenarien) aus der Vorlage Order 24 speichern", Stil.TEXT_BLASS])
+			_eintraege.append(["Zurück", _zeige.bind("brakk"), "", Stil.TEXT_BLASS])
 		"sandbox":
 			# 18.11.: Sandbox als Unterseite – spielen wie bisher oder eigene Karte bauen
 			_eintraege = [
@@ -151,18 +169,30 @@ func _baue() -> void:
 		"herausforderung":
 			# 18.11.: weitere Karten und Herausforderungen – zählt nicht für Rangliste und Phantome (außer PaulLand ohne Herausforderung)
 			var haupt := _wahl_karte == "paulland" and _wahl_herausforderung == ""
+			var vorgabe := _karten_anfuehrer(_wahl_karte)   # 19.11.: Szenario gibt den Anführer vor
 			_eintraege = [
-				["Los geht's", _starte.bind(true, "normal", _wahl_karte, _wahl_herausforderung), "wie „Spielen“ – zählt für Rangliste und Phantome" if haupt else "zählt nicht für Rangliste und Phantome", LICHT],
+				["Los geht's", _herausforderung_los, ("wie „Spielen“ – zählt für Rangliste und Phantome" if haupt else "zählt nicht für Rangliste und Phantome") + (" · Anführer: " + Anfuehrer.name(vorgabe) if vorgabe != "" else ""), LICHT],
 				["Karte: " + _karten_titel(_wahl_karte), _naechste_karte, _karten_text(_wahl_karte), Stil.TEXT],
 				["Herausforderung: " + Werte.herausforderung_name(_wahl_herausforderung), _naechste_herausforderung, Werte.herausforderung_text(_wahl_herausforderung), Stil.TEXT],
+				["Szenarien", _zeige.bind("szenarien"), "fünf besondere Lagen (Belagert, Zange, Alarmstart …)", Stil.TEXT],   # 20.11. (Paul): unter Herausforderungen, nicht unter Spielen
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
+		"anfuehrer":
+			# 19.11.: je Anführer ein Eintrag (gezeichnet als Kachel, siehe _male_anfuehrer), dazu „Zurück“
+			for a: Dictionary in _af_liste():
+				_eintraege.append([str(a["name"]), _anfuehrer_gewaehlt.bind(str(a["id"])), "", Stil.TEXT, _af_schieben])
+			_eintraege.append(["Zurück", func() -> void: _zeige(_af_zurueck), "", Stil.TEXT_BLASS])
 		"spielen":
 			_eintraege = [
 				["Los geht's", _los, "20 Runden gegen die Myriaden" + (" · mit Tutorial" if _tutorial else ""), LICHT],
 				["Tutorial: " + ("an" if _tutorial else "aus"), _tutorial_umschalten, "Sonde 7 erklärt Schritt für Schritt", Stil.TEXT],
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
+		"szenarien":
+			# 20.11. (Schritt 5): mitgelieferte Szenarien; rechts der Steckbrief der gewählten Karte
+			for kname: String in Werte.SZENARIEN:
+				_eintraege.append([_karten_titel(kname), _szenario_los.bind(kname), "", Stil.TEXT])   # Beschreibung steht rechts im Steckbrief
+			_eintraege.append(["Zurück", _zeige.bind("herausforderung"), "", Stil.TEXT_BLASS])
 		"phantom":
 			var on := Online.bereit()
 			var nv := (Online.listen["verteidigung"] as Array).size() if on else Phantom.liste("verteidigung", true).size()
@@ -184,7 +214,7 @@ func _baue() -> void:
 			else:
 				_eintraege = [
 					["Name: " + _name_text(), _starte_eingabe, "Enter bestätigt · bis 16 Zeichen" if _tippt() else "zum Ändern klicken", LICHT],
-					["Statistik" if _profil_brakk else "Brakk-Mode", _profil_brakk_umschalten, "zurück zur Statistik" if _profil_brakk else "Siege, Ringe, Titel und der letzte Sieg", Stil.TEXT],   # 19.11.
+					["Brakk-Mode · " + Anfuehrer.name(_profil_af) if _profil_brakk else "Brakk-Mode", _profil_brakk_umschalten, _profil_brakk_text(), Stil.TEXT],   # 19.11.; 20.11.: je Anführer getrennt, ein Klick blättert weiter
 					["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 				]
 		"grafik":
@@ -265,12 +295,199 @@ static func _anzahl(n: int, eins: String, mehr: String, keins: String) -> String
 
 
 func _los() -> void:
-	_starte(true, "tutorial" if _tutorial else "normal")
+	if _tutorial:
+		Werte.setze_anfuehrer("brakk")   # 19.11.: das Tutorial läuft immer mit Brakk
+		_starte(true, "tutorial")
+		return
+	_zeige_anfuehrer("spielen", _starte.bind(true, "normal"))   # 19.11.: erst den Anführer wählen
+
+
+## 19.11.: Herausforderungen → Los: gibt das Szenario den Anführer vor, gleich los, sonst erst wählen.
+func _herausforderung_los() -> void:
+	var start := _starte.bind(true, "normal", _wahl_karte, _wahl_herausforderung)
+	var vorgabe := _karten_anfuehrer(_wahl_karte)
+	if vorgabe != "":
+		Werte.setze_anfuehrer(vorgabe)
+		start.call()
+		return
+	_zeige_anfuehrer("herausforderung", start)
+
+
+## 20.11.: Szenario starten – mit seiner Herausforderung; Anführer wie bei den Herausforderungen (vorgegeben oder Wahl).
+func _szenario_los(kname: String) -> void:
+	var regeln: Variant = Werte.karten_daten(kname).get("regeln", {})
+	var hf := str((regeln as Dictionary).get("herausforderung", "")) if regeln is Dictionary else ""
+	var start := _starte.bind(true, "normal", kname, hf)
+	var vorgabe := _karten_anfuehrer(kname)
+	if vorgabe != "":
+		Werte.setze_anfuehrer(vorgabe)
+		start.call()
+		return
+	_zeige_anfuehrer("szenarien", start)
+
+
+## Anführer, den eine Karte im Regelpaket vorgibt ("" = frei wählbar).
+static func _karten_anfuehrer(kname: String) -> String:
+	var regeln: Variant = Werte.karten_daten(kname).get("regeln", {})
+	if regeln is Dictionary and str((regeln as Dictionary).get("modus", "normal")) == "brakk":
+		return "brakk"   # 20.11.: Szenario im Brakk-Mode – Brakk ist der Anführer
+	var id := str((regeln as Dictionary).get("anfuehrer", "")) if regeln is Dictionary else ""
+	return Anfuehrer.gueltig(id) if id != "" else ""
+
+
+# ------------------------------------------------------------------ Anführerwahl (19.11.)
+
+## Spielen → Los (und Herausforderungen → Los): vier Kacheln mit Porträt, Perks und Nachteilen. Gesperrte zeigen ein
+## Fragezeichen und den Erfolg, der sie freischaltet (beim versteckten nur den Tipp). Die Wahl merkt sich das Profil.
+const AF_Y := 66.0
+const AF_H := 238.0
+const AF_ZURUECK := Rect2(20, 314, 110, 20)
+var _af_zurueck := "spielen"     # Seite, auf die „Zurück“ führt
+var _af_start: Callable          # startet die Partie, sobald ein Anführer gewählt ist
+var _af_ego := false             # 20.11.: Auswahl vor dem Brakk-Mode (nur Anführer mit Ego-Kit)
+
+
+## 20.11.: Anführer dieser Auswahl – vor dem Brakk-Mode nur die mit Ego-Kit (Werte.ANFUEHRER_EGO).
+func _af_liste() -> Array:
+	if not _af_ego:
+		return Anfuehrer.LISTE
+	var liste: Array = []
+	for a: Dictionary in Anfuehrer.LISTE:
+		if Werte.ego_hat(str(a["id"])):
+			liste.append(a)
+	return liste
+
+
+## Wählbar? Freigeschaltet über den Erfolg; vor dem Brakk-Mode am Handy vorerst nur Brakk (20.11.).
+func _af_frei(id: String) -> bool:
+	return Anfuehrer.frei(id) and not _af_handy_gesperrt(id)
+
+
+func _af_handy_gesperrt(id: String) -> bool:
+	return _af_ego and id != "brakk" and Touch.ohne_maus()
+
+
+func _zeige_anfuehrer(zurueck: String, start: Callable, ego: bool = false) -> void:
+	_af_zurueck = zurueck
+	_af_start = start
+	_af_ego = ego
+	_zeige("anfuehrer")
+	var letzter := Anfuehrer.gueltig(str(Profil.einstellung("anfuehrer_ego" if ego else "anfuehrer", "brakk")))
+	for i in _af_liste().size():
+		if str(_af_liste()[i]["id"]) == letzter and _af_frei(letzter):
+			_wahl = i
+
+
+func _af_kachel(i: int) -> Rect2:
+	var n := maxi(1, _af_liste().size())   # 20.11.: vor dem Brakk-Mode drei breitere Kacheln
+	var w := (600.0 - float(n - 1) * 8.0) / float(n)
+	return Rect2(roundf(20.0 + i * (w + 8.0)), AF_Y, roundf(w), AF_H)
+
+
+func _anfuehrer_gewaehlt(id: String) -> void:
+	if _af_handy_gesperrt(id):
+		_meldung = "%s: Am Handy noch nicht spielbar." % Anfuehrer.name(id)   # 20.11.
+		return
+	if not _af_frei(id):
+		_meldung = "%s ist noch gesperrt – %s." % [Anfuehrer.name(id), Anfuehrer.freischalt_text(id)]
+		return
+	Werte.setze_anfuehrer(id)
+	Profil.setze_einstellung("anfuehrer_ego" if _af_ego else "anfuehrer", id)
+	if _af_start.is_valid():
+		_af_start.call()
+
+
+## ← → wechseln die Kachel (die Liste kennt sonst nur ↑ ↓).
+func _af_schieben(d: int, _umlauf: bool) -> void:
+	var n := _af_liste().size()
+	if _wahl < n:
+		_wahl = posmod(_wahl + (1 if d > 0 else -1), n)
+
+
+func _male_anfuehrer(ci: Control) -> void:
+	if _af_ego:   # 20.11.: vor dem Brakk-Mode
+		Stil.schreibe(ci, Vector2(20, 30), "ANFÜHRER FÜR DEN BRAKK-MODE", Stil.GROSS, LICHT)
+		Stil.schreibe(ci, Vector2(20, 48), "Du spielst ihn selbst in der Ego-Sicht. Ringe sind für alle das Build-System.", Stil.KLEIN, Stil.TEXT_BLASS)
+	else:
+		Stil.schreibe(ci, Vector2(20, 30), "ANFÜHRER WÄHLEN", Stil.GROSS, LICHT)
+		Stil.schreibe(ci, Vector2(20, 48), "Seine Perks gelten ab Runde 1. Seine Figur kaufst du wie Brakk mit [8].", Stil.KLEIN, Stil.TEXT_BLASS)
+	for i in _af_liste().size():
+		_male_af_kachel(ci, i, _af_liste()[i])
+	var zr := AF_ZURUECK
+	var an := _wahl == _af_liste().size()
+	Stil.platte(ci, zr, 3.0, Color(LICHT, 0.12) if an else Color(0.05, 0.06, 0.09, 0.85), LICHT if an else Stil.RAHMEN)
+	Stil.schreibe_mittig(ci, zr.get_center(), "Zurück", Stil.NORMAL, Color.WHITE if an else Stil.TEXT_BLASS)
+	if _meldung != "":
+		Stil.absatz(ci, Vector2(144, 318), _meldung, 476.0, Stil.KLEIN, Stil.WARN)
+
+
+func _male_af_kachel(ci: Control, i: int, a: Dictionary) -> void:
+	var r := _af_kachel(i)
+	var id := str(a["id"])
+	var frei := _af_frei(id)
+	var an := i == _wahl
+	var farbe: Color = a["farbe"]
+	Stil.platte(ci, r, 4.0, Color(0.05, 0.06, 0.09, 0.92), (LICHT if frei else Stil.RAHMEN_HELL) if an else Stil.RAHMEN)
+	if an:
+		ci.draw_rect(Rect2(r.position.x + 10.0, r.position.y + 2.0, r.size.x - 20.0, 1.0), LICHT)   # Lichtkante oben
+	var x := r.position.x + 8.0
+	var weite := r.size.x - 16.0
+	# Porträt (Platzhalter): Initiale auf einer Metallplatte mit Nieten
+	var p := Rect2(roundf(r.get_center().x - 28.0), r.position.y + 10.0, 56.0, 56.0)
+	Stil.platte(ci, p, 4.0, Stil.METALL, Stil.RAHMEN_HELL)
+	ci.draw_rect(Rect2(p.position + Vector2(4, 4), p.size - Vector2(8, 8)), Color(farbe, 0.08 if frei else 0.03))
+	for ecke: Vector2 in [Vector2(5, 5), Vector2(p.size.x - 7, 5), Vector2(5, p.size.y - 7), Vector2(p.size.x - 7, p.size.y - 7)]:
+		ci.draw_rect(Rect2(p.position + ecke, Vector2(2, 2)), Stil.RAHMEN_HELL)
+	if frei:
+		Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), str(a["initiale"]), 28, farbe)
+	else:
+		Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), str(a["initiale"]), 28, Color(Stil.TEXT_BLASS, 0.25))
+		ci.draw_rect(Rect2(p.position + Vector2(3, 3), p.size - Vector2(6, 6)), Color(0.02, 0.03, 0.05, 0.55))
+		Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), "?", 28, Stil.TEXT)
+	var y := p.end.y + 10.0
+	Stil.schreibe_mittig(ci, Vector2(r.get_center().x, y), str(a["name"]).to_upper(), Stil.NORMAL, farbe if frei else Stil.TEXT_BLASS)
+	y += 10.0
+	if _af_handy_gesperrt(id):
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, y), "Am Handy noch nicht spielbar", Stil.KLEIN, Stil.WARN)   # 20.11.
+		y += 10.0
+	elif not frei:
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, y), Anfuehrer.freischalt_text(id), Stil.KLEIN, Stil.GOLD)
+		y += 10.0
+	if _af_ego:
+		# 20.11.: vor dem Brakk-Mode – drei Zeilen Kit aus Werte.ANFUEHRER_EGO statt Perks und Nachteilen
+		Stil.schreibe(ci, Vector2(x, y + 3.0), "KIT", Stil.KLEIN, LICHT)
+		y += 9.0
+		for t: String in Werte.ANFUEHRER_EGO[id]["kit"]:
+			y = _af_absatz(ci, x, y, "+ " + t, weite, Stil.TEXT)
+		return
+	y = _af_absatz(ci, x, y, str(a["kurz"]), weite, Stil.TEXT_BLASS) + 4.0
+	Stil.schreibe(ci, Vector2(x, y + 3.0), "PERKS", Stil.KLEIN, LICHT)
+	y += 9.0
+	for t: String in a["perks"]:
+		y = _af_absatz(ci, x, y, "+ " + t, weite, Stil.TEXT)
+	y += 4.0
+	Stil.schreibe(ci, Vector2(x, y + 3.0), "NACHTEILE", Stil.KLEIN, Stil.WARN)
+	y += 9.0
+	for t: String in a["nachteile"]:
+		y = _af_absatz(ci, x, y, "– " + t, weite, Stil.TEXT_BLASS)
+	if not bool(a["rangliste"]):
+		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 9.0), "nicht ranglistenfähig", Stil.KLEIN, KUPFER_HELL)
+
+
+## Absatz in einer Kachel; gibt das y darunter zurück.
+func _af_absatz(ci: Control, x: float, y: float, text: String, weite: float, farbe: Color) -> float:
+	Stil.absatz(ci, Vector2(x, y), text, weite, Stil.KLEIN, farbe)
+	return y + Stil.absatz_groesse(text, weite, Stil.KLEIN).y + 1.0
 
 
 ## 18.11.: Brakk-Mode – am PC mit Maus und Tastatur, am Handy mit Touch-Steuerung (ego_touch.gd).
 func _brakk_mode() -> void:
-	_starte(true, "brakk")
+	_zeige_anfuehrer("brakk", _starte.bind(true, "brakk"), true)   # 20.11.: erst den Anführer wählen (Brakk, Irrtürmer, Sonde 7)
+
+
+## 20.11. (Schritt 5b): Order 24 auf einer Rogue-Karte (Regelpaket modus "rogue" – main.gd startet dann Order24).
+func _rogue_los(kname: String) -> void:
+	_zeige_anfuehrer("rogue", _starte.bind(true, "normal", kname, ""), true)   # Anführerwahl wie im Classic-Modus
 
 
 ## Startet einen Modus. Gespielt wird auf der großen Karte (Paul 16.11.); nur aufgezeichnete Bauten (Phantom
@@ -673,11 +890,11 @@ func _abschnitt(ci: Control, x: float, rechts: float, y: float, titel: String, f
 ## 18.11.: Zweite Tafel im Profil – Erfolge als Raster aus Symbolen. Nicht freigeschaltet grau, versteckte als „???“.
 ## Maus über einem Symbol: Name und Bedingung unten in der Tafel.
 const ERFOLGE_TAFEL := Rect2(LISTE_X - 6.0, 200, 300, 136)
-const ERFOLGE_SPALTEN := 7
+const ERFOLGE_SPALTEN := 8   # 19.11.: 8 statt 7 Spalten – 22 Erfolge passen so in drei Reihen
 
 func _erfolg_feld(i: int) -> Rect2:
-	var p := ERFOLGE_TAFEL.position + Vector2(12.0 + (i % ERFOLGE_SPALTEN) * 40.0, 26.0 + (i / ERFOLGE_SPALTEN) * 28.0)
-	return Rect2(p, Vector2(36, 24))
+	var p := ERFOLGE_TAFEL.position + Vector2(12.0 + (i % ERFOLGE_SPALTEN) * 35.0, 26.0 + (i / ERFOLGE_SPALTEN) * 28.0)
+	return Rect2(p, Vector2(32, 24))
 
 
 func _male_erfolge(ci: Control) -> void:
@@ -865,7 +1082,14 @@ func _process(delta: float) -> void:
 
 
 func _zeile(i: int) -> Rect2:
+	if _seite == "anfuehrer":   # 19.11.: Kacheln statt Zeilen
+		return _af_kachel(i) if i < _af_liste().size() else AF_ZURUECK
 	return Rect2(LISTE_X, LISTE_Y + i * ZEILE_H, BREITE, ZEILE_H - 4.0)
+
+
+## 19.11.: Esc / Rechtsklick – von der Anführerwahl zurück auf die Seite davor, sonst ins Hauptmenü.
+func _zurueck() -> void:
+	_zeige(_af_zurueck if _seite == "anfuehrer" else "haupt")
 
 
 func _input(event: InputEvent) -> void:
@@ -918,7 +1142,7 @@ func _input(event: InputEvent) -> void:
 				(_eintraege[_wahl][1] as Callable).call()
 		KEY_ESCAPE, KEY_BACKSPACE:
 			if _seite != "haupt" and not event.echo:
-				_zeige("haupt")
+				_zurueck()   # 19.11.
 		_:
 			return
 	get_viewport().set_input_as_handled()
@@ -954,10 +1178,10 @@ func _maus_eingabe(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_klick()
-		if event.button_index == MOUSE_BUTTON_LEFT and _seite != "profil" and _profil_rect().has_point((event as InputEventMouseButton).position):
+		if event.button_index == MOUSE_BUTTON_LEFT and _seite != "profil" and _seite != "anfuehrer" and _profil_rect().has_point((event as InputEventMouseButton).position):
 			_zeige("profil")
 			return
-		if event.button_index == MOUSE_BUTTON_LEFT and TC_ADRESSE != "" and _tc_rect().has_point((event as InputEventMouseButton).position):
+		if event.button_index == MOUSE_BUTTON_LEFT and TC_ADRESSE != "" and _seite != "anfuehrer" and _tc_rect().has_point((event as InputEventMouseButton).position):
 			_oeffne_tc()
 			return
 		if _tippt() and event.button_index == MOUSE_BUTTON_LEFT and not _zeile(0).has_point((event as InputEventMouseButton).position):
@@ -965,10 +1189,10 @@ func _maus_eingabe(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_RIGHT and _seite != "haupt":
 			for i in _eintraege.size():
 				var e: Array = _eintraege[i]
-				if _zeile(i).has_point((event as InputEventMouseButton).position) and e.size() > 4:
+				if _zeile(i).has_point((event as InputEventMouseButton).position) and e.size() > 4 and _seite != "anfuehrer":
 					(e[4] as Callable).call(-10, true)   # Rechtsklick auf eine Lautstärke: leiser
 					return
-			_zeige("haupt")
+			_zurueck()   # 19.11.
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			for i in _eintraege.size():
 				if _zeile(i).has_point((event as InputEventMouseButton).position):
@@ -991,6 +1215,11 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(hg, Rect2(0, 0, 640, 360), false)
 	else:
 		ci.draw_rect(Rect2(0, 0, 640, 360), Color("10141c"))
+	if _seite == "anfuehrer":   # 19.11.: eigene Seite – Kacheln über die ganze Breite
+		ci.draw_rect(Rect2(0, 0, 640, 360), Color(0.03, 0.04, 0.06, 0.72))
+		_male_anfuehrer(ci)
+		Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))
+		return
 	# links abdunkeln, damit die Liste gut lesbar ist
 	for k in 40:
 		ci.draw_rect(Rect2(k * 8.0, 0, 8, 360), Color(0.03, 0.04, 0.06, 0.8 * (1.0 - k / 40.0)))
@@ -1001,7 +1230,7 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
 	else:
 		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox"}[_seite]
+	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "anfuehrer": "Anführer", "szenarien": "Szenarien", "brakk": "Brakk-Mode", "rogue": "Rogue"}[_seite]
 	if unter != "":
 		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
 	# Liste
@@ -1026,6 +1255,8 @@ func _male(ci: Control) -> void:
 		_male_rangliste(ci)
 	elif _seite == "herausforderung":
 		_male_kartenbild(ci, _wahl_karte)
+	elif _seite == "szenarien" and _wahl < Werte.SZENARIEN.size():
+		_male_kartenbild(ci, Werte.SZENARIEN[_wahl])   # 20.11.
 	elif _seite == "grafik":
 		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
 	elif _seite == "profil":
@@ -1260,24 +1491,45 @@ func _male_lageplan(ci: Control, t: float) -> void:
 ## 19.11. (Paul): Abschnitt „Brakk-Mode“ im Profil – Siege, höchste Stufe, Lieblingsring, häufigster Titel und die
 ## Übersicht des letzten Siegs zum Nachschauen (BrakkSieg.male_bericht).
 var _profil_brakk := false
+var _profil_af := "brakk"        # 20.11.: welcher Anführer im Abschnitt Brakk-Mode gezeigt wird
 
 
+## 19.11.: Statistik ↔ Brakk-Mode; 20.11.: im Brakk-Mode blättert derselbe Eintrag durch die Anführer (Brakk → Irrtürmer →
+## Sonde 7) und danach zurück zur Statistik – so bleibt die Liste bei drei Einträgen.
 func _profil_brakk_umschalten() -> void:
-	_profil_brakk = not _profil_brakk
+	var ids: Array = Werte.ANFUEHRER_EGO.keys()
+	if not _profil_brakk:
+		_profil_brakk = true
+		_profil_af = str(ids[0])
+	else:
+		var i := ids.find(_profil_af) + 1
+		if i >= ids.size():
+			_profil_brakk = false
+		else:
+			_profil_af = str(ids[i])
 	_zeige("profil")
+
+
+func _profil_brakk_text() -> String:
+	if not _profil_brakk:
+		return "Siege, Ringe, Titel und der letzte Sieg"
+	var ids: Array = Werte.ANFUEHRER_EGO.keys()
+	var i := ids.find(_profil_af) + 1
+	return "weiter: " + Anfuehrer.name(str(ids[i])) if i < ids.size() else "zurück zur Statistik"
 
 
 func _male_profil_brakk(ci: Control) -> void:
 	var r := Rect2(LISTE_X - 6.0, 204, 624.0 - (LISTE_X - 6.0), 138)
 	Stil.platte(ci, Rect2(TAFEL.position, Vector2(TAFEL.size.x, 128)), 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
+	var s := Profil.ego_s(_profil_af)   # 20.11.: je Anführer getrennt (Brakk: die alten Schlüssel)
 	var x := TAFEL.position.x + 12.0
 	var y := TAFEL.position.y + 14.0
-	Stil.schreibe(ci, Vector2(x, y), "BRAKK-MODE", Stil.NORMAL, Stil.GOLD)
-	var ring := Profil.brakk_meist("brakk_ringe")
-	var titel := Profil.brakk_meist("brakk_titel")
+	Stil.schreibe(ci, Vector2(x, y), "BRAKK-MODE · " + Anfuehrer.name(_profil_af).to_upper(), Stil.NORMAL, Stil.GOLD)
+	var ring := Profil.brakk_meist("brakk_ringe" + s)
+	var titel := Profil.brakk_meist("brakk_titel" + s)
 	var werte := [
-		["SIEGE", str(Profil.stat("brakk_siege")), Stil.GOLD],
-		["HÖCHSTE STUFE", str(Profil.stat("brakk_stufe")) if Profil.stat("brakk_stufe") > 0 else "–", LICHT],
+		["SIEGE", str(Profil.stat("brakk_siege" + s)), Stil.GOLD],
+		["HÖCHSTE STUFE", str(Profil.stat("brakk_stufe" + s)) if Profil.stat("brakk_stufe" + s) > 0 else "–", LICHT],
 		["LIEBLINGSRING", str(BrakkFortschritt.RINGE.get(ring[0], {}).get("name", "–")).trim_suffix("ring") if not ring.is_empty() else "–", Stil.TEXT],
 		["HÄUFIGSTER TITEL", str(titel[0]) if not titel.is_empty() else "–", Stil.TEXT]]
 	var kb := (TAFEL.size.x - 24.0 - 4.0) / 2.0
@@ -1288,6 +1540,6 @@ func _male_profil_brakk(ci: Control) -> void:
 		Stil.schreibe_mittig(ci, Vector2(kr.get_center().x, kr.position.y + 26.0), werte[i][0], Stil.KLEIN, Stil.TEXT_BLASS)
 	# letzter Sieg
 	Stil.platte(ci, r, 4.0, Color(0.05, 0.06, 0.09, 0.88), Stil.RAHMEN)
-	var b: Dictionary = Profil.einstellung("brakk_letzter_sieg", {})
+	var b: Dictionary = Profil.einstellung("brakk_letzter_sieg" + s, {})
 	Stil.schreibe(ci, r.position + Vector2(12, 12), "LETZTER SIEG" + (" · " + str(b.get("datum", "")) if not b.is_empty() else ""), Stil.KLEIN, Stil.LEUCHT)
 	BrakkSieg.male_bericht(ci, Rect2(r.position + Vector2(12, 18), r.size - Vector2(24, 22)), b, true)

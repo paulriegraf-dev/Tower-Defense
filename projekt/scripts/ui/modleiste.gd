@@ -162,6 +162,26 @@ func knoepfe(liste: Array) -> void:
 	_y += 15.0
 
 
+## 20.11. (Schritt 5b): Karte (Kachel) mit Titel, einem Satz und Kurzzeilen; Klick ruft `aktion`. `hervor` = gerade offen.
+func kachel(titel: String, satz: String, zeilen: Array, aktion: Callable, hervor: bool = false) -> void:
+	var weite := breite - 22.0
+	var hs := Stil.absatz_groesse(satz, weite, Stil.KLEIN).y if satz != "" else 0.0
+	var h := 14.0 + hs + float(zeilen.size()) * 9.0 + 4.0
+	var r := Rect2(6, _y, breite - 12.0, h)
+	var drueber := r.has_point(_maus)
+	Stil.platte(self, r, 2.0, Color(farbe, 0.16) if drueber or hervor else Stil.METALL_TIEF, farbe if hervor else (Stil.LEUCHT if drueber else Stil.RAHMEN))
+	Stil.schreibe(self, Vector2(11, _y + 7.0), titel, Stil.NORMAL, farbe)
+	var y := _y + 13.0
+	if satz != "":
+		Stil.absatz(self, Vector2(11, y), satz, weite, Stil.KLEIN, Stil.TEXT)
+		y += hs + 1.0
+	for z: Variant in zeilen:
+		Stil.schreibe(self, Vector2(11, y + 4.0), "· " + str(z), Stil.KLEIN, Stil.TEXT_BLASS)
+		y += 9.0
+	_knoepfe.append([r, aktion, Callable()])
+	_y += h + 3.0
+
+
 static func schritt(d: int) -> int:
 	return d * (5 if Input.is_key_pressed(KEY_SHIFT) else 1)
 

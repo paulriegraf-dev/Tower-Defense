@@ -73,6 +73,8 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 	_sprite = Figur.new()
 	add_child(_sprite)
 	_sprite.einrichten(daten)
+	if bool(daten.get("elite", false)):
+		_sprite.scale *= float(Werte.ELITE["groesse"])   # 20.11.: Elite etwas größer
 	if Werte.grafik_neu and Werte.NEU_HALTUNG.has(typ):
 		# Neue Grafik: in der Stellung kniend bzw. liegend, die Brüstung verdeckt die Beine
 		_sprite.setze_haltung(Werte.NEU_HALTUNG[typ])
@@ -89,6 +91,8 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 func _suche_posten() -> void:
 	var hier := karte.zelle_bei(position)
 	var fund := karte.finde_posten(hier, self)
+	if spiel.order24 != null and not spiel.order24.darf_in_stellung(self):
+		fund = {}   # 20.11.: Order 24 – nur ein Teil besetzt Stellungen, Jäger nie
 	if spiel.im_endkampf() and not ist_pilot and not spiel.endkampf_stellung_frei(self):
 		fund = {}   # letzte Runde: nur die zusätzlichen Truppen greifen an, die normale Besatzung bleibt in den Stellungen (17.11.)
 	_punkte.clear()
@@ -209,7 +213,7 @@ func _process(delta: float) -> void:
 	_treffer -= delta
 	if not _ausstehend.is_empty():
 		_ausstehende_treffer(delta)
-	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else Color.WHITE)
+	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else (Werte.ELITE["farbe"] as Color if bool(daten.get("elite", false)) else Color.WHITE))   # 20.11.: Elite golden
 	if ausgewaehlt:
 		queue_redraw()
 	if sturm_bis > 0.0:
@@ -387,6 +391,14 @@ func _im_tor() -> bool:
 func _waehle_marschziel() -> void:
 	var hier := karte.zelle_bei(position)
 	_marschziel = Karte.KEINE
+	if spiel.order24 != null:
+		# 20.11.: Order 24 – nur Jäger und Vorstoß laufen; alle anderen bleiben, wo sie sind (schießen nur auf Sicht)
+		var o24_ziel: Vector2i = spiel.order24.marschziel(self)
+		if o24_ziel != Karte.KEINE:
+			_marschziel = o24_ziel
+			if hier != o24_ziel:
+				_plane_zur_zelle(o24_ziel)
+		return
 	# Jeder verlorene Checkpoint bekommt seine eigene Truppe: alle durchgehen, nicht nur den nächsten.
 	# Nur die zugeteilte Truppe geht. Steht sie schon auf dem Checkpoint, bleibt sie dort, auch wenn Gegner näher kommen.
 	var cp := Karte.KEINE

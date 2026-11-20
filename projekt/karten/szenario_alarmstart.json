@@ -1,0 +1,202 @@
+{
+	"angriff": [
+		1,
+		6
+	],
+	"ausgaenge": {
+		"mitte": [
+			0,
+			6
+		],
+		"oben": [
+			1,
+			1
+		],
+		"unten": [
+			1,
+			12
+		]
+	},
+	"basis": [
+		26,
+		7
+	],
+	"basis_fest": true,
+	"beschreibung": "Eine fertige Formation aus [H], angesprengt. Ein Trupp ist schon unterwegs, keine Bauphase vor Runde 1, keine neuen Erdwälle.",
+	"checkpoint_bereiche": [
+		[
+			6,
+			1,
+			9,
+			12
+		],
+		[
+			12,
+			1,
+			11,
+			12
+		]
+	],
+	"checkpoints": [
+		[
+			7,
+			6
+		],
+		[
+			13,
+			6
+		]
+	],
+	"checkpoints_fest": true,
+	"fels": [],
+	"hq": [
+		0,
+		6
+	],
+	"mauern": [],
+	"mauern_fest": [],
+	"name": "Alarmstart",
+	"regeln": {
+		"alarm_fabriken": 6,
+		"alarm_stellungen": 4,
+		"anfuehrer": "",
+		"bauten": {
+			"wall": false
+		},
+		"einfuehrung": "Alarm! Die Verteidigung steht, aber angesprengt – und ein Trupp ist schon durch. Keine neuen Erdwälle: Stellungen, Türme und Fabrikausbau, sofort.",
+		"endkampf_leben": 1.4,
+		"formation": "",
+		"gesprengt": 6,
+		"herausforderung": "",
+		"hq_leben": 1000,
+		"runden": 10,
+		"sofort": true,
+		"start_budget": 250,
+		"start_leben": 15,
+		"trupp_unterwegs": [
+			"schild",
+			"fahne",
+			"hund",
+			"hund",
+			"hund",
+			"hund",
+			"hund"
+		]
+	},
+	"schleuder_plaetze": [
+		[
+			1,
+			0
+		],
+		[
+			1,
+			1
+		],
+		[
+			1,
+			2
+		],
+		[
+			1,
+			3
+		],
+		[
+			1,
+			4
+		],
+		[
+			1,
+			9
+		],
+		[
+			1,
+			10
+		],
+		[
+			1,
+			11
+		],
+		[
+			1,
+			12
+		],
+		[
+			1,
+			13
+		]
+	],
+	"spalten": 28,
+	"stand": {},
+	"wasser": [],
+	"wellen": {
+		"1": {
+			"ansage": "",
+			"leben": 1.2,
+			"name": "Überfall",
+			"plan": 6
+		},
+		"2": {
+			"ansage": "Zwei Fahnentrupps direkt hintereinander.",
+			"leben": 1.4,
+			"name": "Nachschub",
+			"plan": 7
+		},
+		"3": {
+			"ansage": "Sprenger suchen die Lücken, die schon da sind.",
+			"leben": 1.6,
+			"name": "Sprengmeister",
+			"plan": 8
+		},
+		"4": {
+			"ansage": "Ein dickes Rudel als Köder, dahinter Sprenger.",
+			"leben": 1.8,
+			"name": "Köder",
+			"plan": 9
+		},
+		"5": {
+			"ansage": "Die Wurf-Schleuder wirft über deine Wälle.",
+			"leben": 2,
+			"name": "Über die Mauer",
+			"plan": 10
+		},
+		"6": {
+			"ansage": "Rauchwerfer blenden die Stellungen.",
+			"leben": 2.2,
+			"name": "Dunst",
+			"plan": 11
+		},
+		"7": {
+			"ansage": "Drei Rauchwerfer vorneweg, sechs Sphären dahinter.",
+			"leben": 2.4,
+			"name": "Nebelwand",
+			"plan": 12
+		},
+		"8": {
+			"ansage": "Ein Belagerungsturm dockt an.",
+			"leben": 2.6,
+			"name": "Der Turm",
+			"plan": 13
+		},
+		"9": {
+			"ansage": "Vier Fahnentrupps in Folge.",
+			"leben": 2.8,
+			"name": "Fahnensturm",
+			"plan": 15
+		},
+		"10": {
+			"ansage": "Letzte Runde: Welle abwehren, dann fällt der Schild – zerstört das HQ.",
+			"name": "Sturm auf das HQ",
+			"plan": 20
+		}
+	},
+	"zeilen": 14,
+	"zonenbauten_zeilen": [
+		3,
+		10,
+		10,
+		3,
+		3,
+		7,
+		10
+	]
+}

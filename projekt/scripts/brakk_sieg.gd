@@ -43,7 +43,8 @@ func _draw() -> void:
 	var a := clampf(_t * 3.0, 0.0, 1.0)
 	draw_rect(Rect2(-40, -40, 720, 440), Color(0.02, 0.03, 0.05, 0.55 * a))
 	Stil.platte(self, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.94), Stil.GOLD)
-	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), "SIEG", Stil.GROSS, Stil.GOLD)
+	var af := str(bericht.get("anfuehrer", "brakk"))   # 20.11.: der Anführer steht mit drauf (Brakk wie bisher)
+	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), "SIEG" + ("" if af == "brakk" else " · " + Anfuehrer.name(af).to_upper()), Stil.GROSS, Stil.GOLD)
 	male_bericht(self, Rect2(TAFEL.position + Vector2(10, 28), TAFEL.size - Vector2(20, 64)), bericht)
 	for k: Array in [[KNOPF_NOCHMAL, "Nochmal"], [KNOPF_MENUE, "Hauptmenü"]]:
 		var r: Rect2 = k[0]
@@ -63,6 +64,7 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 		Stil.schreibe(ci, r.position + Vector2(4, 8), "Noch kein Sieg im Brakk-Mode.", Stil.NORMAL, Stil.TEXT_BLASS)
 		return
 	var links := r.position.x
+	var af := str(b.get("anfuehrer", "brakk"))   # 20.11.: Quellen und Namen je Anführer
 	var mitte := r.position.x + r.size.x * 0.5
 	var y := r.position.y + 6.0
 	# Kennzahlen als drei Kacheln
@@ -108,7 +110,7 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 	var gesamt := maxf(1.0, float(an.get("brakk", 0.0)) + float(an.get("truppen", 0.0)) + float(an.get("tuerme", 0.0)))
 	Stil.schreibe(ci, Vector2(bx, by), "Schaden der Partie", Stil.KLEIN, Stil.LEUCHT)
 	by += 11.0
-	for z: Array in [["Brakk", "brakk", Stil.GOLD], ["Truppen", "truppen", Stil.LEUCHT], ["Türme", "tuerme", Color("bfa3ff")]]:
+	for z: Array in [[Anfuehrer.name(af), "brakk", Stil.GOLD], ["Truppen", "truppen", Stil.LEUCHT], ["Türme", "tuerme", Color("bfa3ff")]]:
 		var v := float(an.get(z[1], 0.0))
 		Stil.schreibe(ci, Vector2(bx, by), str(z[0]), Stil.KLEIN, Stil.TEXT)
 		var anteil := "%d %%" % roundi(100.0 * v / gesamt)
@@ -117,7 +119,7 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 		ci.draw_rect(Rect2(bx + 40.0, by - 2.0, (bw - 64.0) * v / gesamt, 5.0), Color(z[2], 0.75))
 		by += 11.0
 	by += 4.0
-	Stil.schreibe(ci, Vector2(bx, by), "Brakks Schaden je Quelle", Stil.KLEIN, Stil.LEUCHT)
+	Stil.schreibe(ci, Vector2(bx, by), "Brakks Schaden je Quelle" if af == "brakk" else "Schaden je Quelle · " + Anfuehrer.name(af), Stil.KLEIN, Stil.LEUCHT)
 	by += 11.0
 	var q: Dictionary = b.get("quellen", {})
 	var brakk := 0.0
@@ -126,7 +128,7 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 		brakk += float(q[k])
 		spitze = maxf(spitze, float(q[k]))
 	var gezeigt := 0
-	var reihe: Array = BrakkFortschritt.QUELLEN.keys()
+	var reihe: Array = BrakkFortschritt.quellen(af).duplicate()
 	if kompakt:
 		reihe.sort_custom(func(a: String, c: String) -> bool: return float(q.get(a, 0.0)) > float(q.get(c, 0.0)))   # nur die größten
 	for k: String in reihe:

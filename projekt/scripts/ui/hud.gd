@@ -333,6 +333,8 @@ func aktualisiere(_delta: float) -> void:
 		_runde_text += "  ·  Bauzeit %d s" % ceili(float(s.bauzeit_rest))   # 18.11.: Bauzeit-Limit
 	if s.herausforderung != "":
 		_runde_text += "  ·  " + Werte.herausforderung_name(s.herausforderung)   # 18.11.
+	if not (s.auftrag as Dictionary).is_empty():
+		_runde_text += "  ·  " + Auftraege.titel(s.auftrag)   # 20.11.: Pauls Auftrag
 	_welle_zeile = ""
 	_welle_zusatz = ""
 	_gruppen = []
@@ -360,7 +362,7 @@ func aktualisiere(_delta: float) -> void:
 	# Ansage: neue Gegner (normales Spiel) bzw. der Plan des Angreifers (Phantom-Verteidigung)
 	_neu_text = ""
 	if _bauphase and s.phantom_modus == "":
-		_neu_text = Werte.NEUHEITEN.get(s.welle, "")
+		_neu_text = Werte.ansage(s.welle)   # 20.11.: Szenario-Wellen bringen ihre eigene Ansage
 	elif _bauphase and s.phantom_modus == "verteidigung" and not s._phantom_trupps(s.welle).is_empty():
 		_neu_text = "Plan des Angreifers: " + Phantom.plan_text(s._phantom_trupps(s.welle))
 
@@ -411,7 +413,11 @@ func _aktualisiere_kacheln() -> void:
 			k.preis_farbe = Stil.LEUCHT
 		if typ == Karte.TURM:
 			k.preis = ""   # 17.11.: Türme und Generator kosten verschieden – kein Preis an der Kachel
-		if typ == Karte.KOMMANDANT and s.kommandant != null:
+		if typ == Karte.KOMMANDANT and Werte.figur() != "brakk":
+			k.preis = "folgt"   # 19.11.: Figur des Anführers kommt in Schritt 2c – Slot [8] bis dahin gesperrt
+			k.preis_farbe = Stil.TEXT_BLASS
+			aus = true
+		elif typ == Karte.KOMMANDANT and s.kommandant != null:
 			k.preis = "im Feld"
 			k.preis_farbe = Stil.TEXT_BLASS
 			aus = true
@@ -516,7 +522,7 @@ func _ordne_an() -> void:
 	if not _angreifer:
 		w += 14.0 + Stil.breite(_budget_text, Stil.GROSS) + 8.0
 		if _bauphase:
-			w += Werte.ZINS_STUFEN * 6.0 + 4.0 + Stil.breite("+%d" % _zins, Stil.NORMAL) + 4.0
+			w += Werte.zins_stufen() * 6.0 + 4.0 + Stil.breite("+%d" % _zins, Stil.NORMAL) + 4.0   # 19.11.: Zinsdeckel je Anführer
 	else:
 		w += Stil.breite("Verteidigung", Stil.NORMAL) + 6.0
 	_status.position = Vector2(RAND, RAND)
@@ -818,14 +824,14 @@ func _male_status(ci: Control) -> void:
 	x += Stil.schreibe(ci, Vector2(x, y), _budget_text, Stil.GROSS, Stil.GOLD) + 8.0
 	if not _bauphase:
 		return
-	for i in Werte.ZINS_STUFEN:
+	for i in Werte.zins_stufen():
 		var r := Rect2(Vector2(x + i * 6.0, y - 2.5), Vector2(5, 5))
 		ci.draw_rect(r, Stil.RAHMEN)
 		if (i + 1) * Werte.ZINS_JE_SCHRITT <= _zins:
 			ci.draw_rect(r.grow(-1.0), Stil.GOLD)
 		else:
 			ci.draw_rect(r.grow(-1.0), Stil.METALL_TIEF)
-	x += Werte.ZINS_STUFEN * 6.0 + 4.0
+	x += Werte.zins_stufen() * 6.0 + 4.0
 	Stil.schreibe(ci, Vector2(x, y), "+%d" % _zins, Stil.NORMAL, Stil.GOLD)
 
 
@@ -1196,7 +1202,7 @@ func _hauptseite() -> void:
 		["Weiter", pause_aus],
 		["Sicher? Nochmal tippen" if fragt and _sicher_was == "neustart" else neu, _nachfragen.bind("neustart")],
 		["Einstellungen", _einstellungsseite],
-		["Sicher? Nochmal tippen" if fragt and _sicher_was == "menue" else "Hauptmenü", _nachfragen.bind("menue")],
+		["Sicher? Nochmal tippen" if fragt and _sicher_was == "menue" else ("Zurück in den Editor" if SzenarioEditor.testet else "Hauptmenü"), _nachfragen.bind("menue")],   # 20.11.: beim Szenario-Test ausdrücklich
 	])
 
 

@@ -41,6 +41,7 @@ func _initialize() -> void:
 func _neuer_lauf() -> void:
 	if spiel != null:
 		spiel.queue_free()
+	Werte.setze_anfuehrer(str(partie.get("anfuehrer", "brakk")))   # 19.11.: mit dem Anführer der Partie (alte = Brakk)
 	spiel = load("res://main.tscn").instantiate()
 	root.add_child(spiel)
 	spiel.protokoll_an = false

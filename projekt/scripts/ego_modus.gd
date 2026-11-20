@@ -144,6 +144,7 @@ var _vorschau: Node3D = null     # Vorschau des Ringfelds unter dem Fadenkreuz
 const FELD_WEITE := 12.0         # so weit (Felder) wirft der Ring sein Feld
 # 18.11.: Handy – Touch-Steuerung (ego_touch.gd). Liegt das Fadenkreuz auf einem Gegner, drückt Brakk selbst ab (Paul: zielen musst du), ohne Hitze.
 var touch: EgoTouch = null
+var kit: EgoKit = null              # 20.11.: Schritt 6b – Kit eines anderen Anführers (Irrtürmer, Sonde 7); Brakk: null
 var _auto_ziel: Gegner = null
 var _auto_r := Vector3.ZERO
 const AUTO_RADIUS := 0.45        # so nah (Felder) muss die Blicklinie an der Gegnermitte vorbeigehen – etwas großzügiger als ein Schuss (0,34)
@@ -179,6 +180,12 @@ func starten(p_spiel: Node) -> void:
 		brakk.fortschritt = BrakkFortschritt.new(brakk)   # 18.11.: Stufen und Ringe für diese Partie
 		spiel.freie_waelle += BrakkFortschritt.FREIE_WAELLE
 		spiel.freie_stellungen += BrakkFortschritt.FREIE_STELLUNGEN
+	if brakk.fortschritt != null:
+		match brakk.fortschritt.anfuehrer:   # 20.11.: Schritt 6b – andere Anführer bringen ihr Kit mit (Brakk: keins)
+			"irrtuermer":
+				kit = EgoIrrtuermer.new(self)
+			"sonde7":
+				kit = EgoSonde.new(self)
 	_baue_oberflaeche()
 	_baue_berge_ringsum()   # 18.11.: Kulisse auch links, rechts und vorn
 	for n: String in ["_sandbox_leiste", "_zoom_grund"]:
@@ -196,10 +203,15 @@ func starten(p_spiel: Node) -> void:
 		add_child(touch)
 		spiel.melde("Brakk-Mode: links laufen · rechts wischen zum Zielen · Fadenkreuz auf dem Gegner: Brakk schießt · Fähigkeit tippen oder halten und ziehen", 10.0)
 		return
+	if kit != null:
+		spiel.melde("Brakk-Mode mit %s: WASD + Maus · [F] ausbauen, an der Basis Ringe · [I] Übersicht → Anführer · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
+		return
 	spiel.melde("Brakk-Mode: WASD + Maus · Klick schießt · Leertaste springt · [E] Lichttreppe · [F] ausbauen, an der Basis Ringe · Enter: Welle" + ("" if spiel.brakk_modus else " · [G] zurück"), 10.0)
 
 
 func beenden() -> void:
+	if kit != null:
+		kit.beenden()   # 20.11.
 	if _zeitlupe > 0.0:
 		_zeitlupe_aus()   # 18.11.: das Spieltempo nicht in der Zeitlupe hängen lassen
 	if _stop_vorher >= 0.0:
@@ -359,7 +371,7 @@ func _input(event: InputEvent) -> void:
 					spiel.melde("Zu weit weg – geh näher heran (höchstens %d Felder)." % int(BAU_REICHWEITE), 2.5)
 					get_viewport().set_input_as_handled()
 				return
-			_feuer = b.pressed
+			_aktion("links", b.pressed)   # 20.11.: Belegung je Anführer (Brakk: Pistolen)
 			get_viewport().set_input_as_handled()
 		elif b.pressed and (b.button_index == MOUSE_BUTTON_WHEEL_UP or b.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 			_rad(-1 if b.button_index == MOUSE_BUTTON_WHEEL_UP else 1, b.factor if b.factor > 0.0 else 1.0)   # 18.11.
@@ -374,54 +386,29 @@ func _input(event: InputEvent) -> void:
 				if b.pressed:
 					spiel.werkzeug = Karte.FREI   # Werkzeug weglegen (kein Abriss in der Ego-Sicht)
 			else:
-				_lanze_taste(b.pressed)   # 18.11.: Ladestrahl laden / abfeuern
+				_aktion("rechts", b.pressed)   # 18.11.: Ladestrahl laden / abfeuern; 20.11.: Belegung je Anführer
 			get_viewport().set_input_as_handled()
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if _feld_zielt and (event as InputEventKey).keycode == KEY_ESCAPE:
+	if event is InputEventKey and not event.echo:
+		var kc := (event as InputEventKey).keycode
+		if event.pressed and _feld_zielt and kc == KEY_ESCAPE:
 			_feld_abbrechen()   # 19.11.: Ringfeld nicht setzen
 			get_viewport().set_input_as_handled()
 			return
-		match (event as InputEventKey).keycode:
+		# 20.11.: Schritt 6b – Fähigkeiten und Bewegung über die Tastenbelegung des Anführers (Werte.ANFUEHRER_EGO)
+		var taste := str(TASTEN.get(kc, ""))
+		if taste != "":
+			if _aktion(taste, event.pressed):
+				get_viewport().set_input_as_handled()
+			return
+		if not event.pressed:
+			return
+		match kc:
 			KEY_B:
 				if spiel.brakk_modus:
 					get_viewport().set_input_as_handled()   # 18.11. (Paul): keine Bauleiste im Brakk-Mode
-			KEY_X:
-				if spiel.brakk_modus:
-					_saeule_x()   # 18.11.: Lichtsäule zielen / abbrechen
-					get_viewport().set_input_as_handled()
-			KEY_V:
-				if spiel.brakk_modus:
-					_zeitlupe_start()   # 18.11.: Zeitlupe
-					get_viewport().set_input_as_handled()
-			KEY_C:
-				_wirf_feld()   # 18.11.: Ringfeld werfen
-				get_viewport().set_input_as_handled()
-			KEY_SHIFT:
-				_tumble_start()   # 18.11.
-				get_viewport().set_input_as_handled()
-			KEY_R:
-				if brakk.fortschritt != null:
-					_ulti()   # 18.11.: im Brakk-Mode die Ulti
-					get_viewport().set_input_as_handled()
-			KEY_Q:
-				if spiel.brakk_modus:
-					_anker_start()   # 18.11. (Paul): Lichtanker statt Sammeln – Brakk spielt allein
-					get_viewport().set_input_as_handled()
-			KEY_SPACE:
-				_leertaste()
-				get_viewport().set_input_as_handled()
 			KEY_ENTER, KEY_KP_ENTER:
 				spiel.starte_welle()
-				get_viewport().set_input_as_handled()
-			KEY_E:
-				# 18.11. (Paul): [E] wirft die Lichttreppe – hinauf auf den Wall vor Brakk bzw. hinunter (statt 2× Leertaste)
-				if _klettern < 0.0:
-					if brakk.oben:
-						if not _versuche_bruecke():   # 18.11.: Blick auf einen anderen Wall – Lichtbrücke
-							_versuche_absteigen(true)
-					else:
-						_versuche_klettern(true)
 				get_viewport().set_input_as_handled()
 			KEY_F:
 				# 18.11. (Paul): Gebäude im Blick ausbauen – öffnet dasselbe Menü wie ein Klick in der Übersicht
@@ -473,6 +460,91 @@ func _gebaeude_name(z: Vector2i) -> String:
 	return "Fabrik"
 
 
+## 20.11.: Schritt 6b – die Tasten des gemeinsamen Sockels; was sie tun, sagt die Belegung des Anführers.
+const TASTEN := {KEY_Q: "Q", KEY_E: "E", KEY_R: "R", KEY_V: "V", KEY_X: "X", KEY_C: "C", KEY_SHIFT: "shift", KEY_SPACE: "leertaste"}
+
+
+## Taste (oder Maustaste) gedrückt / losgelassen: Aktion laut Belegung. Erst darf das Kit des Anführers, dann die
+## gemeinsamen Aktionen (Brakks Fähigkeiten, Bewegung, Ringfeld). true = erledigt.
+func _aktion(taste: String, gedrueckt: bool) -> bool:
+	var was := str((Werte.ANFUEHRER_EGO[anfuehrer()]["tasten"] as Dictionary).get(taste, ""))
+	if was == "":
+		return false
+	if kit != null and kit.aktion(was, gedrueckt):
+		return true
+	return _brakk_aktion(was, gedrueckt)
+
+
+## Brakks Aktionen (und die gemeinsamen Bewegungen) – genau wie vor dem 20.11. auf den festen Tasten.
+func _brakk_aktion(was: String, gedrueckt: bool) -> bool:
+	match was:
+		"pistolen":
+			_feuer = gedrueckt
+			return true
+		"lanze":
+			_lanze_taste(gedrueckt)   # 18.11.: Ladestrahl laden / abfeuern
+			return true
+	if not gedrueckt:
+		return false
+	match was:
+		"saeule":
+			if not spiel.brakk_modus:
+				return false
+			_saeule_x()   # 18.11.: Lichtsäule zielen / abbrechen
+		"zeitlupe":
+			if not spiel.brakk_modus:
+				return false
+			_zeitlupe_start()   # 18.11.: Zeitlupe
+		"feld":
+			_wirf_feld()   # 18.11.: Ringfeld werfen
+		"tumble":
+			_tumble_start()   # 18.11.
+		"ulti":
+			if brakk.fortschritt == null:
+				return false
+			_ulti()   # 18.11.: im Brakk-Mode die Ulti
+		"anker":
+			if not spiel.brakk_modus:
+				return false
+			_anker_start()   # 18.11. (Paul): Lichtanker statt Sammeln – Brakk spielt allein
+		"sprung":
+			_leertaste()
+		"treppe":
+			# 18.11. (Paul): [E] wirft die Lichttreppe – hinauf auf den Wall vor Brakk bzw. hinunter (statt 2× Leertaste)
+			if _klettern < 0.0:
+				if brakk.oben:
+					if not _versuche_bruecke():   # 18.11.: Blick auf einen anderen Wall – Lichtbrücke
+						_versuche_absteigen(true)
+				else:
+					_versuche_klettern(true)
+		_:
+			return false
+	return true
+
+
+## 20.11.: Wer gerade spielt (ohne Brakk-Mode-Fortschritt immer Brakk).
+func anfuehrer() -> String:
+	return brakk.fortschritt.anfuehrer if brakk.fortschritt != null else "brakk"
+
+
+## 20.11.: Hat der Anführer diese Aktion auf irgendeiner Taste?
+func hat_aktion(was: String) -> bool:
+	return (Werte.ANFUEHRER_EGO[anfuehrer()]["tasten"] as Dictionary).values().has(was)
+
+
+## Ist die Taste mit dieser Belegung gerade gedrückt? (für Aktionen, die man hält)
+func taste_gehalten(taste: String) -> bool:
+	match taste:
+		"links":
+			return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		"rechts":
+			return Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	for k: int in TASTEN:
+		if str(TASTEN[k]) == taste:
+			return Input.is_physical_key_pressed(k as Key)
+	return false
+
+
 ## Leertaste springt nur noch (18.11.: Klettern liegt auf [E]).
 func _leertaste() -> void:
 	if _klettern >= 0.0:
@@ -506,6 +578,8 @@ func _process(delta: float) -> void:
 			_liegt = true
 			_feuer = false
 			_respawn = BrakkFortschritt.RESPAWN_SEK   # 19.11. (Paul): kleiner Respawn-Timer, dann an der Basis
+			if kit != null:
+				kit.gefallen()   # 20.11.: z. B. der PliPlop fällt mit
 			if _haken >= 0.0:
 				_haken_los()
 			if _zeitlupe > 0.0:
@@ -598,12 +672,18 @@ func _process(delta: float) -> void:
 		_tumble_weiter(echt)
 	else:
 		_gehen(echt if frei else 0.0)
-		_fallen(echt)
+		if kit == null or not kit.vor_fallen(echt):   # 20.11.: z. B. Schweben (Sonde 7)
+			_fallen(echt)
 		_flug_weiter(echt)   # 19.11.: Schwung aus Seil und Absprung
 	if _haken >= 0.0 and _anker < 0.0 and _klettern < 0.0:
 		_haken_weiter(echt)   # 19.11.: Lichtanker hängt
 	if _feuer and frei and _takt <= 0.0 and _klettern < 0.0 and _lanze < 0.0 and not _saeule_zielt and not _feld_zielt:
-		_schiess()
+		if kit != null:
+			kit.schuss()   # 20.11.: Grundschuss des Anführers
+		else:
+			_schiess()
+	if kit != null:
+		kit.weiter(echt, frei)   # 20.11.: Kit des Anführers
 	_kamera()
 	_brakk_verstecken()
 	_verstecke()
@@ -640,7 +720,7 @@ func _gehen(dt: float) -> void:
 		return
 	r = r.limit_length(1.0) if touch != null else r.normalized()
 	var schwung := lerpf(1.0, SCHWUNG_MAL, clampf(_schwung / 0.3, 0.0, 1.0)) if _schwung > 0.0 else 1.0   # 19.11.: Nachschwung, klingt zum Ende aus
-	var v := (_vorne() * r.y + _rechts() * r.x) * TEMPO * schwung * dt
+	var v := (_vorne() * r.y + _rechts() * r.x) * TEMPO * float(Werte.ANFUEHRER_EGO[anfuehrer()]["tempo"]) * (kit.tempo_faktor() if kit != null else 1.0) * schwung * dt   # 20.11.: Tempo je Anführer
 	_lauf = Vector2(v.x, v.z) / dt   # 19.11.: für Absprung und Schwingen
 	var schritt := Vector2(v.x, v.z) * Werte.ZELLE
 	_luft_schritt(Vector2(schritt.x, 0.0))   # 19.11.: hoch genug in der Luft landet Brakk auf einem Wall
@@ -843,7 +923,7 @@ func _auto_zielen() -> void:
 	var von := hd.kamera.global_position
 	var blick := _blick()
 	var bester := INF
-	for g: Gegner in spiel.gegner:
+	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot:
 			continue
 		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
@@ -892,7 +972,7 @@ func _schiess() -> void:
 	var bis := _strahl_bis(von, r, SCHUSS_WEITE)
 	# 18.11.: alle Gegner auf der Linie, nach Abstand – der Durchschlagring trifft bis zu drei davon
 	var linie: Array = []
-	for g: Gegner in spiel.gegner:
+	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot:
 			continue
 		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
@@ -1414,38 +1494,41 @@ func _male_bild() -> void:
 	var wpx := maxf(2.0, floorf(g.y / _waffen_teiler))   # 18.11.: ein Bildpunkt der Waffe in Bildschirmpunkten
 	var ts := Vector2(_tex_pistole.get_size()) * wpx
 	var wipp := Vector2(cos(_gang * 0.5) * 3.0, absf(sin(_gang * 0.5)) * 4.0) if _geht else Vector2.ZERO
-	# rechte Pistole
-	var r_rueck := float(_rueckstoss[1])
-	var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * wpx + (_sway + Vector2(0, 7.0 * _delle)) * wpx   # 19.11.: Sway und Landungsdelle
-	r_pos.y += ts.y * 1.1 * _klinge_auf   # 19.11.: Ringklinge – die rechte Pistole steckt weg
-	_waffe(_tex_pistole, r_pos, ts, -_neigung, float(_blitz[1]) > 0.0, wpx, false, _glut(), float(_gesperrt[1]) > 0.0)
-	# linke Hand: Pistole (gespiegelt) oder Ring – beim Wechsel taucht die eine ab und die andere auf
-	var l_rueck := float(_rueckstoss[0])
-	var ab := clampf(_ring * 2.0, 0.0, 1.0)              # Pistole sinkt
-	var auf := clampf(_ring * 2.0 - 1.0, 0.0, 1.0)       # Ring kommt
-	var l_basis := Vector2(g.x * 0.20 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + Vector2(-wipp.x, wipp.y) + (_sway * 0.8 + Vector2(0, 7.0 * _delle)) * wpx
-	if ab < 1.0:
-		var lp := l_basis + Vector2(-l_rueck * 2.0, l_rueck * 6.0) * wpx + Vector2(0, ab * ts.y)
-		_waffe(_tex_pistole_links, lp, ts, _neigung, float(_blitz[0]) > 0.0, wpx, true, _glut(), float(_gesperrt[0]) > 0.0)
-	if auf > 0.0:
-		var rs := Vector2(_tex_ring.get_size()) * wpx
-		var rp := Vector2(g.x * 0.22 - rs.x * 0.5, g.y - rs.y + 4.0 * wpx) + Vector2(-wipp.x, wipp.y) + Vector2(0, (1.0 - auf) * rs.y)
-		if _saeule_ziel != Vector2.INF or _saeule_zielt:
-			var tw := Time.get_ticks_msec() / 1000.0 * 9.0
-			rp += Vector2(cos(tw), sin(tw)) * 2.0 * wpx   # die Hand kreist mit
-		if brakk.fortschritt != null and brakk.fortschritt.wechsel_rest > 0.0:
-			# 18.11. (Paul): Ringwechsel – die Hand rüttelt kurz (abklingend), solange schießt nur rechts
-			var w := brakk.fortschritt.wechsel_rest / BrakkFortschritt.WECHSEL_SEK
-			var tt := Time.get_ticks_msec() / 1000.0
-			rp += Vector2(sin(tt * 47.0) * 3.0, cos(tt * 39.0) * 2.0 - 4.0 * w) * wpx * w
-		_bild.draw_texture_rect(_tex_ring, Rect2(rp.round(), rs), false)
-		# Ring leuchtet (pulsiert)
-		var puls := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 120.0)
-		var mitte := rp + _ring_licht * wpx
-		_bild.draw_circle(mitte, 5.0 * wpx, Color(LICHT, 0.18 * puls * auf))
-		_bild.draw_circle(mitte, 2.5 * wpx, Color(LICHT, 0.35 * puls * auf))
-		_ringe_auf_hand(rp, wpx, auf)   # 18.11.
-		_finger_wirbel(rp, wpx, auf)   # 18.11.: Lichtsäule
+	if kit != null:
+		kit.male_waffen(g, wpx)   # 20.11.: Waffen des Anführers statt Brakks Pistolen
+	else:
+		# rechte Pistole
+		var r_rueck := float(_rueckstoss[1])
+		var r_pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + wipp + Vector2(r_rueck * 2.0, r_rueck * 6.0) * wpx + (_sway + Vector2(0, 7.0 * _delle)) * wpx   # 19.11.: Sway und Landungsdelle
+		r_pos.y += ts.y * 1.1 * _klinge_auf   # 19.11.: Ringklinge – die rechte Pistole steckt weg
+		_waffe(_tex_pistole, r_pos, ts, -_neigung, float(_blitz[1]) > 0.0, wpx, false, _glut(), float(_gesperrt[1]) > 0.0)
+		# linke Hand: Pistole (gespiegelt) oder Ring – beim Wechsel taucht die eine ab und die andere auf
+		var l_rueck := float(_rueckstoss[0])
+		var ab := clampf(_ring * 2.0, 0.0, 1.0)              # Pistole sinkt
+		var auf := clampf(_ring * 2.0 - 1.0, 0.0, 1.0)       # Ring kommt
+		var l_basis := Vector2(g.x * 0.20 - ts.x * 0.5, g.y - ts.y + 12.0 * wpx) + Vector2(-wipp.x, wipp.y) + (_sway * 0.8 + Vector2(0, 7.0 * _delle)) * wpx
+		if ab < 1.0:
+			var lp := l_basis + Vector2(-l_rueck * 2.0, l_rueck * 6.0) * wpx + Vector2(0, ab * ts.y)
+			_waffe(_tex_pistole_links, lp, ts, _neigung, float(_blitz[0]) > 0.0, wpx, true, _glut(), float(_gesperrt[0]) > 0.0)
+		if auf > 0.0:
+			var rs := Vector2(_tex_ring.get_size()) * wpx
+			var rp := Vector2(g.x * 0.22 - rs.x * 0.5, g.y - rs.y + 4.0 * wpx) + Vector2(-wipp.x, wipp.y) + Vector2(0, (1.0 - auf) * rs.y)
+			if _saeule_ziel != Vector2.INF or _saeule_zielt:
+				var tw := Time.get_ticks_msec() / 1000.0 * 9.0
+				rp += Vector2(cos(tw), sin(tw)) * 2.0 * wpx   # die Hand kreist mit
+			if brakk.fortschritt != null and brakk.fortschritt.wechsel_rest > 0.0:
+				# 18.11. (Paul): Ringwechsel – die Hand rüttelt kurz (abklingend), solange schießt nur rechts
+				var w := brakk.fortschritt.wechsel_rest / BrakkFortschritt.WECHSEL_SEK
+				var tt := Time.get_ticks_msec() / 1000.0
+				rp += Vector2(sin(tt * 47.0) * 3.0, cos(tt * 39.0) * 2.0 - 4.0 * w) * wpx * w
+			_bild.draw_texture_rect(_tex_ring, Rect2(rp.round(), rs), false)
+			# Ring leuchtet (pulsiert)
+			var puls := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 120.0)
+			var mitte := rp + _ring_licht * wpx
+			_bild.draw_circle(mitte, 5.0 * wpx, Color(LICHT, 0.18 * puls * auf))
+			_bild.draw_circle(mitte, 2.5 * wpx, Color(LICHT, 0.35 * puls * auf))
+			_ringe_auf_hand(rp, wpx, auf)   # 18.11.
+			_finger_wirbel(rp, wpx, auf)   # 18.11.: Lichtsäule
 	if _frei():   # 18.11.: bei offenem Menü kein Fadenkreuz und kein Hinweis darüber
 		_fadenkreuz(g, px)
 	_rand_an()   # 19.11.: Leisten in die sichere Fläche (iPhone: Notch, Home-Balken) – Fadenkreuz und Waffen nicht
@@ -1464,6 +1547,8 @@ func _male_bild() -> void:
 	_klinge_bild(g, wpx)   # 19.11.: Ringklinge über den Leisten (nur während der Zeitlupe mit Durchschlagring)
 	_respawn_bild(g)   # 19.11.: Countdown, solange Brakk liegt
 	_zeitlupe_bild(g)
+	if kit != null:
+		kit.male_oben(g)   # 20.11.
 	if brakk.fortschritt != null:
 		_wurf_warnung()   # 18.11.: Steine auf Brakk
 		_gefahr_bild(g)
@@ -1471,8 +1556,11 @@ func _male_bild() -> void:
 		touch.male(_bild)   # 18.11.: Handy – Stick und Knöpfe statt Leisten
 		return
 	_rand_an()
-	_faehigkeiten(g)   # 18.11.: Symbole mit Abklingzeit
-	_ringleiste(g)   # 18.11.: getragene Ringe
+	if kit != null:
+		kit.male_leisten(g)   # 20.11.: Fähigkeiten und Ringe des Anführers
+	else:
+		_faehigkeiten(g)   # 18.11.: Symbole mit Abklingzeit
+		_ringleiste(g)   # 18.11.: getragene Ringe
 	_rand_aus()
 
 
@@ -1605,17 +1693,21 @@ func _fadenkreuz(g: Vector2, px: float) -> void:
 		if not nah:
 			Stil.schreibe_mittig(_bild, m + Vector2(0, s + 10.0 * px), "zu weit", 18, f)
 		return
-	_hitze_anzeige(m, px)   # 18.11.
+	if kit == null:
+		_hitze_anzeige(m, px)   # 18.11.; 20.11.: andere Anführer zeigen ihre eigene Hitze
+	var treppe_an := hat_aktion("treppe")   # 20.11.: nur wer die Lichttreppe hat
 	var gb := gebaeude_im_blick()   # 18.11.: Hinweis zum Ausbauen
 	if gb != Karte.KEINE:
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[F] %s ausbauen" % _gebaeude_name(gb)), 18, LICHT)
-	elif not brakk.oben and _klettern < 0.0 and brakk.e_rest <= 0.0 and not _treppe_ziel().is_empty():
+	elif treppe_an and not brakk.oben and _klettern < 0.0 and brakk.e_rest <= 0.0 and not _treppe_ziel().is_empty():
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[E] Lichttreppe"), 18, LICHT)   # 18.11.
-	elif brakk.oben and _klettern < 0.0 and _bruecke == null and not _bruecke_ziel().is_empty():
+	elif treppe_an and brakk.oben and _klettern < 0.0 and _bruecke == null and not _bruecke_ziel().is_empty():
 		var bt := "[E] Lichtbrücke" if _bruecke_cd <= 0.0 else "Lichtbrücke in %.0f s" % ceilf(_bruecke_cd)
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t(bt), 18, LICHT if _bruecke_cd <= 0.0 else Stil.TEXT_BLASS)   # 18.11.
-	elif brakk.oben and _klettern < 0.0 and _bruecke == null and brakk.e_rest <= 0.0:
+	elif treppe_an and brakk.oben and _klettern < 0.0 and _bruecke == null and brakk.e_rest <= 0.0:
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[E] Lichttreppe hinunter"), 18, LICHT)   # 19.11.: statt der Vorschau-Bahn nur der Hinweis
+	elif kit != null and kit.hinweis() != "":
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), kit.hinweis(), 18, LICHT)   # 20.11.
 	elif _am_terminal():
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[F] Lichtterminal – Ringe kaufen"), 18, LICHT)
 	var l := 3.0 * px
@@ -1660,7 +1752,7 @@ func _male_minikarte() -> void:
 	if karte.basis != Karte.KEINE:
 		ci.draw_rect(Rect2(o + Vector2(karte.basis) * zelle, Vector2(zelle, zelle)), LICHT)
 	var k := zelle / float(Werte.ZELLE)
-	for gg: Gegner in spiel.gegner:
+	for gg: Gegner in spiel.ego_gegner():
 		if is_instance_valid(gg) and not gg._tot:
 			var p := o + Vector2(gg.position.x, gg.position.y - Werte.KARTE_OBEN) * k
 			ci.draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), Color("ff5a6e"))
@@ -1972,7 +2064,7 @@ func _lanze_feuer() -> void:
 	spiel.schadensquelle = "fabrik:-1,-1"
 	spiel.brakk_quelle = "lanze"   # 19.11.
 	spiel.schuss_herkunft = brakk.position
-	for g: Gegner in spiel.gegner.duplicate():
+	for g: Gegner in spiel.ego_gegner().duplicate():
 		if not is_instance_valid(g) or g._tot:
 			continue
 		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
@@ -2146,6 +2238,8 @@ func _ringleiste(g: Vector2) -> void:
 
 ## Steht Brakk in der Bauphase an der Basis? Dann öffnet [F] das Lichtterminal.
 func _am_terminal() -> bool:
+	if spiel.order24 != null:
+		return brakk.fortschritt != null and not brakk.oben and spiel.order24.am_terminal(_fuss2d())   # 20.11.: Ringterminal in Order 24, auch im Kampf
 	if brakk.fortschritt == null or spiel.phase != 0 or karte.basis == Karte.KEINE or brakk.oben:
 		return false
 	return _fuss2d().distance_to(karte.mitte(karte.basis)) <= 2.5 * Werte.ZELLE
@@ -2189,6 +2283,11 @@ func _kaufe(ring: String) -> void:
 		var st := brakk.fortschritt.ring_stufe(ring)
 		spiel.melde(("%s angesteckt." if st == 1 else "%s auf Stufe " + str(st) + ".") % str(BrakkFortschritt.RINGE[ring]["name"]), 2.5)
 
+## 20.11.: Irrtürmer – Kopie eines Rings für den zweiten Slot.
+func _kaufe_kopie(ring: String) -> void:
+	var grund := brakk.fortschritt.kaufe_kopie(ring, spiel)
+	spiel.melde(grund if grund != "" else "%s als Kopie für den zweiten Slot." % str(BrakkFortschritt.RINGE[ring]["name"]), 2.5)
+
 
 func _verkaufe(ring: String) -> void:
 	brakk.fortschritt.verkaufe(ring, spiel)
@@ -2211,7 +2310,8 @@ func _male_terminal() -> void:
 	ci.draw_rect(Rect2(o, Vector2(w, h)), Color(0.05, 0.06, 0.1, 0.96))
 	ci.draw_rect(Rect2(o, Vector2(w, h)), LICHT, false, 2.0)
 	Stil.schreibe(ci, o + Vector2(18, 24), "LICHTTERMINAL", 26, LICHT)
-	Stil.schreibe(ci, o + Vector2(230, 24), "Ringe für Brakks linke Hand", 18, Stil.TEXT_BLASS)
+	var irr := f.anfuehrer == "irrtuermer"   # 20.11.
+	Stil.schreibe(ci, o + Vector2(230, 24), "Ringe für Hand und PliPlop" if irr else ("Ringe für die Hand von " + Anfuehrer.name(f.anfuehrer) if f.anfuehrer != "brakk" else "Ringe für Brakks linke Hand"), 18, Stil.TEXT_BLASS)
 	var bud := "Budget %d" % int(spiel.budget)
 	Stil.schreibe(ci, o + Vector2(w - 18.0 - Stil.breite(bud, 22), 24), bud, 22, Stil.GOLD)
 	var zu := Rect2(o + Vector2(w - 150.0, h - 44.0), Vector2(132, 30))
@@ -2221,8 +2321,8 @@ func _male_terminal() -> void:
 	# links: Finger
 	var lx := o.x + 18.0
 	var ly := o.y + 58.0
-	Stil.schreibe(ci, Vector2(lx, ly), "Brakks Finger (Stufe %d)" % f.stufe, 18, Stil.GOLD)
-	for i in 5:
+	Stil.schreibe(ci, Vector2(lx, ly), "Ringslots: Hand und PliPlop" if irr else "Brakks Finger (Stufe %d)" % f.stufe, 18, Stil.GOLD)
+	for i in (f.finger() if irr else 5):   # 20.11.: Irrtürmer – zwei Slots
 		var r := Rect2(lx, ly + 18.0 + i * 62.0, 270.0, 56.0)
 		ci.draw_rect(r, Color(1, 1, 1, 0.04))
 		var mi := Vector2(r.position.x + 28.0, r.get_center().y)
@@ -2240,7 +2340,12 @@ func _male_terminal() -> void:
 			Stil.schreibe(ci, Vector2(r.position.x + 56.0, r.get_center().y), "frei", 18, Stil.TEXT_BLASS)
 		else:
 			Stil.schreibe(ci, Vector2(r.position.x + 56.0, r.get_center().y), "ab Stufe %d" % int(BrakkFortschritt.FINGER_AB[i]), 18, Color(0.4, 0.42, 0.47))
-	Stil.absatz(ci, Vector2(lx, ly + 340.0), "Alle getragenen Ringe stärken Brakks Pistolen. Der aktive Ring (Mausrad) bestimmt die Fähigkeiten; [C] setzt in der Bauphase sein Feld (2×2) – Fabriken darin bauen seine Truppe.", 270.0, 14, Stil.TEXT_BLASS)
+	var erklaerung := "Alle getragenen Ringe stärken Brakks Pistolen. Der aktive Ring (Mausrad) bestimmt die Fähigkeiten; [C] setzt in der Bauphase sein Feld (2×2) – Fabriken darin bauen seine Truppe."
+	if irr:
+		erklaerung = "Zwei Slots: der Ring in der Hand färbt die Prellbolzen, der am PliPlop bestimmt seinen Pfad. Derselbe Ring in beiden Slots braucht eine Kopie (halber Preis). [V] tauscht, [C] setzt das Feld."   # 20.11.
+	elif f.anfuehrer == "sonde7":
+		erklaerung = "Der aktive Ring (Mausrad) färbt Farblaser und Energiebündel und die Treffer der Zielerfassung; gerufene Waffen bekommen nur sein Geschossbild. [C] setzt in der Bauphase sein Feld (2×2)."   # 20.11.
+	Stil.absatz(ci, Vector2(lx, ly + 340.0), erklaerung, 270.0, 14, Stil.TEXT_BLASS)
 	# rechts: alle Ringe
 	var rx := o.x + 310.0
 	var rw := w - 330.0
@@ -2270,6 +2375,14 @@ func _male_terminal() -> void:
 			var knopf := "Kaufen %d" % preis if st == 0 else "Stufe %d: %d" % [st + 1, preis]
 			Stil.schreibe_mittig(ci, kb.get_center(), knopf, 16, Stil.GOLD if geht else Stil.TEXT_BLASS)
 			_knoepfe.append([kb, _kaufe.bind(ring)])
+			if f.anfuehrer == "irrtuermer" and f.hat(ring) and f.ringe.count(ring) < 2:
+				# 20.11.: Irrtürmer – derselbe Ring als Kopie für den zweiten Slot (halber Kaufpreis)
+				var kk := Rect2(kb.position.x - 112.0, kb.position.y, 104.0, 26.0)
+				var kgeht := f.kopie_grund(ring, spiel) == ""
+				ci.draw_rect(kk, Color(Stil.GOLD, 0.15) if kgeht else Color(0, 0, 0, 0.2))
+				ci.draw_rect(kk, Stil.GOLD if kgeht else Stil.TEXT_BLASS, false, 1.5)
+				Stil.schreibe_mittig(ci, kk.get_center(), "Kopie %d" % f.kopie_preis(), 16, Stil.GOLD if kgeht else Stil.TEXT_BLASS)
+				_knoepfe.append([kk, _kaufe_kopie.bind(ring)])
 		if st > 0:
 			Stil.schreibe(ci, Vector2(r.position.x + 52.0, r.position.y + zh * 0.6), "St. %d" % st, 14, farbe)
 		i2 += 1
@@ -2660,6 +2773,9 @@ func _fliessende_runden(dt: float) -> void:
 
 
 func _countdown_anzeige(g: Vector2) -> void:
+	if spiel.order24 != null and spiel.phase == 1:
+		_order24_anzeige(g)
+		return
 	if _countdown < 0.0:
 		return
 	var rest := ceili(_countdown)
@@ -2672,6 +2788,22 @@ func _countdown_anzeige(g: Vector2) -> void:
 	var anteil := clampf(_countdown / (COUNTDOWN_ERSTE if int(spiel.welle) <= 1 else COUNTDOWN), 0.0, 1.0)
 	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * anteil, 3)), farbe)
 	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "[Enter] jetzt" if touch == null else "antippen: jetzt", 14, Stil.TEXT_BLASS)
+
+
+## 20.11. (Schritt 5b): Order 24 – Restzeit, Phase und Beute oben in der Mitte.
+func _order24_anzeige(g: Vector2) -> void:
+	var o: Order24 = spiel.order24
+	var rest := ceili(o.restzeit())
+	var farbe := Stil.WARN if o.jagd else Stil.GOLD
+	var m := Vector2(g.x / 2.0, 116.0)
+	var r := Rect2(m.x - 170.0, m.y - 18.0, 340.0, 36.0)
+	_bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
+	_bild.draw_rect(r, farbe, false, 2.0)
+	Stil.schreibe_mittig(_bild, m + Vector2(0, -2), "Order 24 · %d:%02d" % [rest / 60, rest % 60], 20, farbe)
+	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * clampf(o.zeit / maxf(1.0, o.wf("ueberleben_sek")), 0.0, 1.0), 3)), farbe)
+	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "%s · Budget %d" % [o.phase_text(), int(spiel.budget)], 14, Stil.TEXT_BLASS)
+	if o.am_terminal(_fuss2d()) and (_terminal == null or not _terminal.visible):
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 52), "[F] Ringterminal", 16, Stil.GOLD)
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Überhitzen (18.11.)
@@ -3163,7 +3295,7 @@ func _saeule_ausloesen(p: Vector2) -> void:
 ## Ein Einschlag: Schaden im Kreis (Kills geben Erfahrung), Lichtsäule, Funke, Wackeln. Gibt die getroffenen Gegner zurück.
 func _einschlag(p: Vector2, radius: float, schaden: float, wucht: float, quelle: String = "saeule") -> Array:
 	var getroffen: Array = []
-	for g: Gegner in spiel.gegner:
+	for g: Gegner in spiel.ego_gegner():
 		if is_instance_valid(g) and not g._tot and g.position.distance_to(p) <= radius and not spiel._geschuetzt(g):
 			getroffen.append(g)
 	spiel.schadensquelle = "fabrik:-1,-1"
@@ -3202,7 +3334,7 @@ func _einschlaege_weiter(dt: float) -> void:
 		var p: Vector2 = _wirbel_saeule[0]
 		spiel.schadensquelle = "fabrik:-1,-1"
 		spiel.brakk_quelle = "saeule"
-		for g: Gegner in spiel.gegner.duplicate():
+		for g: Gegner in spiel.ego_gegner().duplicate():
 			if is_instance_valid(g) and not g._tot and g.position.distance_to(p) <= SAEULE_RADIUS * Werte.ZELLE * 0.8 and not spiel._geschuetzt(g):
 				g.nimm_schaden(SAEULE_SCHADEN * 0.12 * _faehigkeit_faktor() * _gel_bonus(g, true))
 				if g._tot:
@@ -3220,7 +3352,7 @@ func _saeule_sprung(p: Vector2, schon: Array) -> void:
 	for i in 3:
 		var bester: Gegner = null
 		var beste := 4.0 * Werte.ZELLE
-		for g: Gegner in spiel.gegner:
+		for g: Gegner in spiel.ego_gegner():
 			if is_instance_valid(g) and not g._tot and not getroffen.has(g) and g.position.distance_to(von) < beste and not spiel._geschuetzt(g):
 				beste = g.position.distance_to(von)
 				bester = g
@@ -3276,7 +3408,7 @@ func _brakk_sprung(erstes: Gegner, spruenge: int, schaden: float) -> void:
 	for i in spruenge:
 		var bester: Gegner = null
 		var beste := Werte.ABPRALLER_WEITE * Werte.ZELLE
-		for g: Gegner in spiel.gegner:
+		for g: Gegner in spiel.ego_gegner():
 			if is_instance_valid(g) and not g._tot and not getroffen.has(g) and not spiel._geschuetzt(g) and punkt.distance_to(g.position) < beste:
 				beste = punkt.distance_to(g.position)
 				bester = g
@@ -3402,7 +3534,7 @@ func _treffer_merken(dt: float) -> void:
 		_trauma = minf(1.0, _trauma + 0.1 + verlust)
 		var quelle := Vector2.INF
 		var beste := INF
-		for g: Gegner in spiel.gegner:
+		for g: Gegner in spiel.ego_gegner():
 			if is_instance_valid(g) and not g._tot:
 				var d := g.position.distance_to(brakk.position)
 				if d < beste and d < 5.0 * Werte.ZELLE:
@@ -3969,6 +4101,8 @@ func _prozent(faktor: float) -> String:
 
 ## {"zeilen": [[Schlüssel, Name, Zahl, [[Bonus, Farbe], …]], …], "zusatz": [[Text, Farbe], …]}
 func _werte_zeilen() -> Dictionary:
+	if kit != null:
+		return kit.werte_zeilen()   # 20.11.: Werte-Fenster des Anführers
 	var f := brakk.fortschritt
 	var schuss := SCHUSS_SCHADEN * f.schuss_schaden()
 	var her: Array = []
@@ -4128,7 +4262,7 @@ func _zl_beginn() -> void:
 			while spiel.effekte.blase_rauch_weg(_fuss2d(), r) != null and weg < 20:
 				weg += 1
 			var bis := Time.get_ticks_msec() + int(_zl_wert("brandfeld", "sperre") * 1000.0)
-			for g: Gegner in spiel.gegner:
+			for g: Gegner in spiel.ego_gegner():
 				if is_instance_valid(g) and not g._tot and g.position.distance_to(_fuss2d()) <= r:
 					g.heilsperre_bis = bis
 			spiel.effekte.welle(_fuss2d(), r, farbe, "funk", 0.9)
@@ -4210,7 +4344,7 @@ func _zl_sog() -> void:
 		return
 	var r := _zl_wert("minigun", "radius") * Werte.ZELLE
 	var zug := _zl_wert("minigun", "zug") * Werte.ZELLE
-	for g: Gegner in spiel.gegner:
+	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot or BrakkFortschritt.gross(g) or g.position.distance_to(p) > r:
 			continue
 		if hd.ist_hoch(karte.zelle_bei(g.position)):
@@ -4256,7 +4390,7 @@ func _klinge_ziele() -> Array:
 	var weite := _zl_wert("durchschuss", "weite") * Werte.ZELLE
 	var halb := deg_to_rad(_zl_wert("durchschuss", "bogen") / 2.0)
 	var vorne := Vector2(_vorne().x, _vorne().z)
-	for g: Gegner in spiel.gegner:
+	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot or spiel._geschuetzt(g):
 			continue
 		var d := g.position - _fuss2d()
@@ -4441,7 +4575,9 @@ func _wieder_da() -> void:
 	_lichtplattform()
 	_trauma = minf(1.0, _trauma + 0.3)
 	Ton.spiele(spiel, "alert", -4.0)
-	spiel.melde("Brakk ist zurück – an der Basis.", 2.5)
+	spiel.melde("%s ist zurück – an der Basis." % Anfuehrer.name(anfuehrer()), 2.5)
+	if kit != null:
+		kit.wieder_da()   # 20.11.
 
 
 ## Großer Hinweis mit Countdown, solange Brakk liegt.

@@ -1,0 +1,224 @@
+{
+	"angriff": [
+		1,
+		6
+	],
+	"ausgaenge": {
+		"mitte": [
+			0,
+			6
+		],
+		"oben": [
+			1,
+			1
+		],
+		"unten": [
+			1,
+			12
+		]
+	},
+	"basis": [
+		24,
+		7
+	],
+	"basis_fest": true,
+	"beschreibung": "1500 Budget, kein Einkommen: acht schwere Wellen, am Ende der Sturm auf das HQ.",
+	"checkpoint_bereiche": [
+		[
+			6,
+			1,
+			9,
+			12
+		],
+		[
+			12,
+			1,
+			11,
+			12
+		]
+	],
+	"checkpoints": [
+		[
+			8,
+			6
+		],
+		[
+			17,
+			7
+		]
+	],
+	"checkpoints_fest": false,
+	"fels": [
+		[
+			14,
+			0
+		],
+		[
+			14,
+			1
+		],
+		[
+			14,
+			2
+		],
+		[
+			14,
+			3
+		],
+		[
+			14,
+			10
+		],
+		[
+			14,
+			11
+		],
+		[
+			14,
+			12
+		],
+		[
+			14,
+			13
+		],
+		[
+			19,
+			5
+		],
+		[
+			19,
+			6
+		],
+		[
+			20,
+			5
+		]
+	],
+	"hq": [
+		0,
+		6
+	],
+	"mauern": [],
+	"mauern_fest": [],
+	"name": "Belagert",
+	"regeln": {
+		"anfuehrer": "",
+		"bauten": {},
+		"brakk_alle_faehigkeiten": true,
+		"brakk_stufe": 5,
+		"brakk_stufen": false,
+		"einfuehrung": "Die Versorgung ist abgeschnitten. 1500 Budget – mehr kommt nicht. Acht Wellen, jede härter als die letzte, am Ende der Sturm auf das HQ.",
+		"einkommen": false,
+		"endkampf_leben": 1.6,
+		"herausforderung": "",
+		"hq_leben": 1000,
+		"runden": 8,
+		"start_budget": 1500,
+		"start_leben": 15,
+		"ziel": "gegenangriff"
+	},
+	"schleuder_plaetze": [
+		[
+			1,
+			0
+		],
+		[
+			1,
+			1
+		],
+		[
+			1,
+			2
+		],
+		[
+			1,
+			3
+		],
+		[
+			1,
+			4
+		],
+		[
+			1,
+			9
+		],
+		[
+			1,
+			10
+		],
+		[
+			1,
+			11
+		],
+		[
+			1,
+			12
+		],
+		[
+			1,
+			13
+		]
+	],
+	"spalten": 28,
+	"stand": {},
+	"wasser": [],
+	"wellen": {
+		"1": {
+			"ansage": "Die Vorhut: ein Fahnentrupp und zwei Sphären – ab der ersten Runde mit Checkpoints und Schleuder.",
+			"leben": 1.6,
+			"name": "Die Vorhut",
+			"plan": 6
+		},
+		"2": {
+			"ansage": "Sprengtrupp: zwei Sprenger suchen die dünnste Stelle deiner Mauer.",
+			"leben": 1.8,
+			"name": "Sprengtrupp",
+			"plan": 8
+		},
+		"3": {
+			"ansage": "Köder: zehn Hunde vorneweg, 20 Sekunden später die Sprenger. Erster Schildträger.",
+			"leben": 2,
+			"name": "Köder",
+			"plan": 9
+		},
+		"4": {
+			"ansage": "Über die Mauer: die Wurf-Schleuder wirft Hunde hinter deine Wälle.",
+			"leben": 2.2,
+			"name": "Über die Mauer",
+			"plan": 10
+		},
+		"5": {
+			"ansage": "Dunst: Rauchwerfer blenden deine Stellungen, Türme schießen weiter.",
+			"leben": 2.4,
+			"name": "Dunst",
+			"plan": 11
+		},
+		"6": {
+			"ansage": "Der Turm: ein Belagerungsturm dockt an und setzt Myr-Drohnen ab. Dazu ein Schwarmgeist.",
+			"leben": 2.6,
+			"name": "Der Turm",
+			"plan": 13
+		},
+		"7": {
+			"ansage": "Fahnensturm: vier Fahnentrupps kurz hintereinander, einer kommt geflogen.",
+			"leben": 2.8,
+			"name": "Fahnensturm",
+			"plan": 15
+		},
+		"8": {
+			"ansage": "Sturm auf das HQ: erst die Welle abwehren, dann fällt der Schild – zerstört das HQ der Myriaden.",
+			"name": "Sturm auf das HQ",
+			"plan": 20
+		}
+	},
+	"zeilen": 14,
+	"zonenbauten_zeilen": [
+		3,
+		10,
+		10,
+		3,
+		3,
+		7,
+		10
+	]
+}

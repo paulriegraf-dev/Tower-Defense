@@ -12,9 +12,9 @@ extends Node
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
 const GROESSEN := [[20, 10], [28, 14], [36, 16]]
-const RUNDEN := [10, 15, 20]
+const RUNDEN := [8, 10, 15, 20]   # 20.11.: 8 für kurze Szenarien (Belagert)
 const WERKZEUGE := [["fels", "Fels"], ["wasser", "Wasser"], ["wall", "Erdwall"], ["fest", "Mauer fest"],
-	["turm", "Turm"], ["fabrik", "Fabrik"], ["basis", "Basis"], ["cp0", "Checkpoint 1"], ["cp1", "Checkpoint 2"]]
+	["turm", "Turm"], ["fabrik", "Fabrik"], ["basis", "Basis"], ["cp0", "Checkpoint 1"], ["cp1", "Checkpoint 2"], ["eingang", "Eingang"]]
 ## 18.11. (Etappe 2): Gelände mit Wirkung – begehbar, mit Regeln (Werte, Abschnitt „Gelände mit Wirkung“)
 const BODEN_WERKZEUGE := [["anhoehe", "Anhöhe"], ["sumpf", "Sumpf"], ["bruecke", "Brücke"], ["ruine", "Ruine"], ["wald", "Wald"], ["erz", "Erzader"], ["eis", "Eis"], ["minen", "Minenfeld"]]
 const ZIEHEN := ["fels", "wasser", "wall", "fest", "anhoehe", "sumpf", "bruecke", "ruine", "wald", "erz", "eis", "minen"]   # diese Werkzeuge malen beim Ziehen weiter
@@ -29,6 +29,7 @@ const TIPPS := {
 	"basis": "Klick setzt die Basis (3×2 Felder). Fest oder zufällig siehe unten.",
 	"cp0": "Checkpoint 1 (näher am Gegner). Fest: Klick. Bereich: Rechteck ziehen.",
 	"cp1": "Checkpoint 2. Fest: Klick. Bereich: Rechteck ziehen.",
+	"eingang": "Eingang: Klick auf ein Randfeld (auch oben, unten, rechts). Höchstens 2 – die Gegner teilen sich auf. Ohne Eingang kommen sie wie gewohnt aus der ganzen Zone. Rechtsklick entfernt.",
 	"anhoehe": "Anhöhe: +1 Reichweite für Truppen, Stellungen und Türme darauf – auch für Gegner. Bebaubar.",
 	"sumpf": "Sumpf: Gegner und Truppen laufen mit 70 % Tempo (mit Frost nie unter 45 %). Nicht bebaubar.",
 	"bruecke": "Brücke: nur auf Wasser. Begehbar, nicht bebaubar – ein Durchgang, den niemand zumauert.",
@@ -44,6 +45,7 @@ const FEST_FARBE := Color("b07cff")
 
 static var entwurf: Dictionary = {}     # die Karte, an der gerade gebaut wird
 static var datei := ""                   # Name unter user://karten/ (ohne .json); "" = noch nie gespeichert
+static var letzter_reiter := "szenarien"   # 20.11. (Schritt 5b): der Editor öffnet im zuletzt benutzten Reiter (anfangs „Szenarien“)
 static var testet := false               # läuft gerade „Szenario testen“? Dann führt „Hauptmenü“ zurück in den Editor
 
 var spiel: Node
@@ -51,6 +53,7 @@ var _leiste: ModLeiste
 var _ebene: CanvasLayer
 var _marken: Marken
 var _reiter := "karte"
+var _sz_ansicht := "vorlagen"           # 20.11. (Schritt 5b): Reiter Szenarien – vorlagen / eigene / schrauben
 var _werkzeug := "fels"
 var _strich := 0                         # 1 = malt, -1 = radiert, 0 = nichts
 var _letzte := Karte.KEINE
@@ -74,7 +77,7 @@ var _rueckgaengig: Array[String] = []    # 18.11.: frühere Stände des Entwurfs
 static func neuer_entwurf(spalten: int = 28, zeilen: int = 14) -> Dictionary:
 	var d := Werte.karten_vorlage(spalten, zeilen)
 	d["regeln"] = {"start_budget": Werte.STANDARD_BUDGET, "start_leben": Werte.STANDARD_LEBEN, "runden": Werte.STANDARD_RUNDEN,
-		"bauten": {}, "herausforderung": "", "einfuehrung": ""}
+		"bauten": {}, "herausforderung": "", "einfuehrung": "", "anfuehrer": ""}   # 19.11.: anfuehrer "" = frei wählbar
 	d["wellen"] = {}
 	d["stand"] = {}
 	return d
@@ -177,6 +180,7 @@ func einrichten(s: Node) -> void:
 	_leiste.inhalt = _baue_leiste
 	_leiste.vor_klick = _merke_stand   # 18.11.: jeder Klick in der Leiste ist ein Schritt für „Rückgängig“
 	_leiste.breite = 156.0
+	_reiter = letzter_reiter
 	_leiste.oben = 6.0
 	_ebene.add_child(_leiste)
 	var streifen := Meldung.new()
@@ -215,9 +219,12 @@ func _process(_delta: float) -> void:
 # ------------------------------------------------------------ Leiste
 
 func _baue_leiste(l: ModLeiste) -> void:
-	l.kopf("Szenario: " + str(entwurf.get("name", "")).left(18))
-	l.reiter([["karte", "Karte"], ["regeln", "Regeln"], ["mods", "Mods"], ["wellen", "Wellen"], ["datei", "Datei"]], _reiter, _zeige_reiter)
+	l.breite = 236.0 if _reiter == "szenarien" else 176.0   # 20.11.: sechs Reiter; die Kacheln brauchen Platz
+	l.kopf("Szenario: " + str(entwurf.get("name", "")).left(26))
+	l.reiter([["szenarien", "Szenarien"], ["karte", "Karte"], ["regeln", "Regeln"], ["mods", "Mods"], ["wellen", "Wellen"], ["datei", "Datei"]], _reiter, _zeige_reiter)
 	match _reiter:
+		"szenarien":
+			_leiste_szenarien(l)
 		"karte":
 			_leiste_karte(l)
 		"regeln":
@@ -232,6 +239,7 @@ func _baue_leiste(l: ModLeiste) -> void:
 
 func _zeige_reiter(r: String) -> void:
 	_reiter = r
+	letzter_reiter = r
 	if r == "wellen":
 		_zeige_plan()
 
@@ -305,6 +313,36 @@ func _leiste_regeln(l: ModLeiste) -> void:
 	l.chips(hf, str(r.get("herausforderung", "")), func(h: String) -> void:
 		r["herausforderung"] = h
 		_geaendert())
+	# 19.11.: Anführer vorgeben (Regelpaket „anfuehrer“, leer = frei wählbar)
+	l.abschnitt("Anführer")
+	var af: Array = [["", "frei"]]
+	for a: Dictionary in Anfuehrer.LISTE:
+		af.append([a["id"], a["name"]])
+	l.chips(af, str(r.get("anfuehrer", "")), func(id: String) -> void:
+		r["anfuehrer"] = id
+		_geaendert())
+	# 20.11. (Schritt 5): Modus und Startlage
+	l.abschnitt("Modus")
+	l.chips(Werte.MODI, str(r.get("modus", "normal")), func(m: String) -> void:
+		r["modus"] = m
+		_geaendert())
+	l.abschnitt("Startlage")
+	l.schalter("Einkommen (Bonus, Zinsen, Prämien)", bool(r.get("einkommen", true)), func() -> void:
+		r["einkommen"] = not bool(r.get("einkommen", true))
+		_geaendert())
+	l.schalter("Checkpoints schon beim Gegner", bool(r.get("cp_feind", false)), func() -> void:
+		r["cp_feind"] = not bool(r.get("cp_feind", false))
+		_geaendert())
+	l.schalter("Erste Welle läuft sofort", bool(r.get("sofort", false)), func() -> void:
+		r["sofort"] = not bool(r.get("sofort", false))
+		_geaendert())
+	l.abschnitt("Erdwälle der Karte (Leben in Runde 1)")
+	var stufen: Array = []
+	for p: int in Werte.MAUER_LEBEN_STUFEN:
+		stufen.append([p, "%d %%" % p])
+	l.chips(stufen, int(r.get("mauer_leben", 100)), func(p: int) -> void:
+		r["mauer_leben"] = p
+		_geaendert())
 
 
 ## 18.11. (Stufe 1 und 2): Spielziel, Bauzeit und Werte-Mods (Werte.ZIELE, Werte.BAUZEITEN, Werte.MODS).
@@ -372,12 +410,193 @@ func _leiste_wellen(l: ModLeiste) -> void:
 	l.text("Im Planer: Einheit unten anklicken = in den Trupp, Kärtchen ziehen = Pause, „Vorlage“ = entworfene Welle. Würfe zielen selbst.")
 
 
+# ------------------------------------------------------------ Reiter Szenarien (20.11., Schritt 5b)
+
+const VORLAGEN_EXTRA := ["szenario_order24"]   # neben Werte.SZENARIEN (die stehen auch im Startmenü)
+
+
+func _leiste_szenarien(l: ModLeiste) -> void:
+	l.chips([["vorlagen", "Neu aus Vorlage"], ["eigene", "Eigene"], ["schrauben", "Stellschrauben"]], _sz_ansicht, func(a: String) -> void:
+		_sz_ansicht = a)
+	match _sz_ansicht:
+		"vorlagen":
+			l.text("Klick öffnet die Vorlage als neues eigenes Szenario (Speichern legt es an).")
+			for kn: String in Werte.SZENARIEN + VORLAGEN_EXTRA:
+				var k := Werte.karten_daten(kn)
+				l.kachel(str(k.get("name", kn)), _satz(k), kurzzeilen(k), _frage_vorlage.bind(kn))
+		"eigene":
+			var eigene := Werte.eigene_karten()
+			if eigene.is_empty():
+				l.text("Noch keine eigenen Szenarien – „Neu aus Vorlage“ öffnen und im Reiter Datei speichern.")
+			for kn: String in eigene:
+				var k := Werte.karten_daten(kn)
+				l.kachel(str(k.get("name", kn)), _satz(k), kurzzeilen(k), _frage_laden.bind(kn), kn == datei)
+		"schrauben":
+			_stellschrauben(l)
+
+
+## Erster Satz der Beschreibung.
+static func _satz(k: Dictionary) -> String:
+	var b := str(k.get("beschreibung", "")).strip_edges()
+	var ende := b.find(". ")
+	return b.left(ende + 1) if ende > 0 else b
+
+
+## Kurzzeilen einer Karte: Regeln (Startgeld, Runden, Einschränkungen) und Truppenverhalten.
+static func kurzzeilen(k: Dictionary) -> Array:
+	var r: Dictionary = k.get("regeln", {}) if k.get("regeln", {}) is Dictionary else {}
+	var aus: Array = []
+	var modus := str(r.get("modus", "normal"))
+	if modus == "rogue":
+		var o: Dictionary = r.get("order24", {}) if r.get("order24", {}) is Dictionary else {}
+		var sek := int(o.get("ueberleben_sek", Order24.STANDARD["ueberleben_sek"]))
+		aus.append("Brakk-Mode Rogue · %d:%02d überstehen · Beute zu Beginn %d" % [sek / 60, sek % 60, int(r.get("start_budget", 0))])
+		aus.append("Truppen: Jagd ab %d s, %d %% in %d Gruppen%s" % [int(o.get("jagd_start", 90)), int(o.get("jagd_anteil", 60)), int(o.get("jaeger_gruppen", 3)), ", Vorstoß zum HQ" if bool(o.get("vorstoss", true)) else ""])
+		return aus
+	aus.append("Startgeld %d · %d Runden%s%s" % [int(r.get("start_budget", Werte.STANDARD_BUDGET)), int(r.get("runden", Werte.STANDARD_RUNDEN)), "" if bool(r.get("einkommen", true)) else " · kein Einkommen", " · Brakk-Ego" if modus == "brakk" else ""])
+	var gesperrt: PackedStringArray = []
+	var b: Variant = r.get("bauten", {})
+	if b is Dictionary:
+		for schl: Variant in b:
+			if not bool((b as Dictionary)[schl]):
+				gesperrt.append(str(schl).capitalize())
+	if not gesperrt.is_empty():
+		aus.append("Gesperrt: " + ", ".join(gesperrt))
+	var w: Variant = k.get("wellen", {})
+	var pool := 0
+	if w is Dictionary:
+		for nr: Variant in w:
+			if (w as Dictionary)[nr] is Dictionary:
+				pool += 1
+	if k.has("zone2"):
+		aus.append("Truppen: jeder Trupp teilt sich auf zwei Zonen")
+	elif r.has("formation"):
+		aus.append("Truppen: Formation steht, %d Wälle gesprengt, ein Trupp unterwegs" % int(r.get("gesprengt", 6)))
+	elif bool(r.get("cp_feind", false)):
+		aus.append("Truppen: Wellen starten an den Checkpoints")
+	elif pool > 0:
+		aus.append("Truppen: %d Wellen aus dem Pool, schwerer als normal" % pool)
+	else:
+		aus.append("Truppen: Wellen wie im normalen Spiel")
+	return aus
+
+
+## Regelpaket-Werte der offenen Karte als Zahlfelder mit kurzem Tipp – je nach Art der Karte.
+func _stellschrauben(l: ModLeiste) -> void:
+	var r: Dictionary = entwurf["regeln"]
+	var irgendwas := false
+	if str(r.get("modus", "")) == "rogue":
+		irgendwas = true
+		if not (r.get("order24", {}) is Dictionary):
+			r["order24"] = {}
+		var o: Dictionary = r["order24"]
+		l.abschnitt("Order 24 – Zeit und Jagd")
+		_zahl(l, o, "ueberleben_sek", "Überleben (s)", 30, 60, 1800, Order24.STANDARD)
+		_zahl(l, o, "jagd_start", "Jagd ab (s)", 10, 0, 900, Order24.STANDARD)
+		_zahl(l, o, "jagd_anteil", "Jäger (%)", 5, 0, 100, Order24.STANDARD)
+		_zahl(l, o, "jaeger_gruppen", "Jägergruppen", 1, 1, 4, Order24.STANDARD)
+		_zahl(l, o, "stellung_anteil", "In Stellungen (%)", 5, 0, 100, Order24.STANDARD)
+		l.text("Tipp: Brakk entkommt mit Rolle, Anker und Lichttreppe – früh jagen und viele Gruppen machen es eng.")
+		l.schalter("Vorstoß zum Myriaden-HQ", bool(o.get("vorstoss", true)), func() -> void:
+			o["vorstoss"] = not bool(o.get("vorstoss", true))
+			_geaendert())
+		_zahl(l, o, "vorstoss_sek", "HQ halten (s)", 2, 2, 120, Order24.STANDARD)
+		_zahl(l, o, "brakk_schaden", "Schaden an Brakk (%)", 5, 5, 300, Order24.STANDARD)
+		l.abschnitt("Karte, Hilfen und Beute")
+		var karten: Array = [["", "Zufall"], ["phantom", "Phantom"]]
+		for f: String in Werte.ALARM_FORMATIONEN:
+			karten.append([f, str(Nachschlag.TEXTE[f][0])])
+		l.chips(karten, str(o.get("karte", "")), func(a: String) -> void:
+			o["karte"] = a
+			_geaendert())
+		_zahl(l, o, "fabriken_aussen", "Fabriken außen", 1, 0, 8, Order24.STANDARD)
+		_zahl(l, o, "fabriken_innen", "Fabriken im Schild", 1, 0, 6, Order24.STANDARD)
+		_zahl(l, o, "medkit_zahl", "Med-Kits", 1, 0, 8, Order24.STANDARD)
+		_zahl(l, o, "medkit_takt", "Med-Kits neu (s)", 10, 10, 300, Order24.STANDARD)
+		_zahl(l, o, "medkit_heilung", "Heilung (%)", 5, 5, 100, Order24.STANDARD)
+		_zahl(l, o, "praemie_fabrik", "Prämie Fabrik", 10, 0, 999, Order24.STANDARD)
+		_zahl(l, o, "praemie_stellung", "Prämie Stellung", 5, 0, 999, Order24.STANDARD)
+		_zahl(l, o, "praemie_wall", "Prämie Erdwall", 5, 0, 999, Order24.STANDARD)
+		l.text("Tipp: Beute kauft Ringe am Ringterminal – höhere Prämien machen Brakk schneller stark.")
+	if r.has("formation"):
+		irgendwas = true
+		l.abschnitt("Alarmstart – Formation und Lage")
+		var f_liste: Array = [["", "Zufall"]]
+		for f: String in Werte.ALARM_FORMATIONEN:
+			f_liste.append([f, str(Nachschlag.TEXTE[f][0])])
+		l.chips(f_liste, str(r.get("formation", "")), func(a: String) -> void:
+			r["formation"] = a
+			_geaendert())
+		var std := {"alarm_fabriken": 6, "alarm_stellungen": 4, "gesprengt": 6}
+		_zahl(l, r, "alarm_fabriken", "Fabriken (Stufe 1)", 1, 0, 12, std)
+		_zahl(l, r, "alarm_stellungen", "Stellungen", 1, 0, 12, std)
+		_zahl(l, r, "gesprengt", "Gesprengte Erdwälle", 1, 0, 40, std)
+		var trupp: Array = r.get("trupp_unterwegs", []) if r.get("trupp_unterwegs", []) is Array else []
+		l.zeile("Trupp unterwegs: Hunde", str(trupp.count("hund")), func(d: int) -> void:
+			var t: Array = (r.get("trupp_unterwegs", []) as Array).duplicate() if r.get("trupp_unterwegs", []) is Array else []
+			if d > 0:
+				t.append("hund")
+			elif t.has("hund"):
+				t.erase("hund")
+			r["trupp_unterwegs"] = t
+			_geaendert())
+		l.text("Tipp: Gesprengte Felder liegen am Gegnerweg – mehr davon heißt kürzere Wege in Runde 1.")
+	var w: Variant = entwurf.get("wellen", {})
+	var pool: Array = []
+	if w is Dictionary:
+		for nr: Variant in w:
+			if (w as Dictionary)[nr] is Dictionary:
+				pool.append(int(nr))
+	pool.sort()
+	if not pool.is_empty():
+		irgendwas = true
+		l.abschnitt("Wellen aus dem Pool (Plan und Zähigkeit)")
+		_zahl(l, r, "start_budget", "Startgeld", 50, 0, 99990, {"start_budget": Werte.STANDARD_BUDGET})
+		for nr: int in pool:
+			var p: Dictionary = (w as Dictionary)[str(nr)]
+			l.zeile("R%d Plan %s" % [nr, str((Werte.WELLEN[clampi(int(p.get("plan", 1)), 1, Werte.STANDARD_RUNDEN)] as Dictionary)["name"]).left(16)], str(int(p.get("plan", 1))), func(d: int) -> void:
+				p["plan"] = clampi(int(p.get("plan", 1)) + d, 1, Werte.STANDARD_RUNDEN)
+				_geaendert())
+			if int(p.get("plan", 1)) < Werte.STANDARD_RUNDEN:
+				l.zeile("   „%s“ Leben" % str(p.get("name", "")).left(16), "×%.1f" % float(p.get("leben", 1.0)), func(d: int) -> void:
+					p["leben"] = snappedf(clampf(float(p.get("leben", 1.0)) + 0.1 * d, 0.5, 9.0), 0.1)
+					_geaendert())
+		_zahl_f(l, r, "endkampf_leben", "HQ-Sturm Leben", 0.1, 0.5, 9.0, 2.2)
+		_zahl(l, r, "hq_leben", "HQ-Leben", 50, 100, 9999, {"hq_leben": 1500})
+		l.text("Tipp: Der Plan sagt, was kommt (Nummer im Wellenpool, 20 = HQ-Sturm), die Zähigkeit, wie viel sie aushalten.")
+	if entwurf.has("zone2"):
+		irgendwas = true
+		l.abschnitt("Zange")
+		l.text("Zweite Zone rechts unten: Jeder Trupp teilt sich, die Hälften laufen über Checkpoint 1 bzw. 2.")
+	if not irgendwas:
+		l.text("Diese Karte hat keine besonderen Stellschrauben. Startgeld, Runden und Bauten stehen im Reiter Regeln; Vorlagen mit Stellschrauben: Belagert, Alarmstart, Order 24.")
+
+
+## Ganzzahl im Regelpaket mit −/+ (Umschalt = 5 Schritte). `std` liefert den Standardwert.
+func _zahl(l: ModLeiste, d: Dictionary, schl: String, beschr: String, schritt: int, mini_: int, maxi_: int, std: Dictionary) -> void:
+	var wert := int(d.get(schl, std.get(schl, 0)))
+	l.zeile(beschr, str(wert), func(r: int) -> void:
+		d[schl] = clampi(int(d.get(schl, std.get(schl, 0))) + ModLeiste.schritt(r) * schritt, mini_, maxi_)
+		_geaendert(), d.has(schl) and int(d[schl]) != int(std.get(schl, 0)))
+
+
+func _zahl_f(l: ModLeiste, d: Dictionary, schl: String, beschr: String, schritt: float, mini_: float, maxi_: float, std: float) -> void:
+	l.zeile(beschr, "×%.1f" % float(d.get(schl, std)), func(r: int) -> void:
+		d[schl] = snappedf(clampf(float(d.get(schl, std)) + float(ModLeiste.schritt(r)) * schritt, mini_, maxi_), 0.1)
+		_geaendert())
+
+
 func _leiste_datei(l: ModLeiste) -> void:
+
 	l.knoepfe([["Prüfen", _pruefe_knopf], ["Speichern", _speichern]])
 	l.knoepfe([["Szenario testen", _testen, Stil.GOLD]])
 	l.text(("Datei: " + datei) if datei != "" else "Noch nicht gespeichert.")
 	l.knoepfe([["Exportieren", _exportieren], ["Neu", _frage_neu, Stil.WARN]])
 	l.text("Import: eine exportierte .json-Datei ins Fenster ziehen.")
+	# 20.11. (Schritt 5b): die Vorlagen stehen als Karten im Reiter Szenarien
+	l.knopf("Neu aus Vorlage → Szenarien", func() -> void:
+		_zeige_reiter("szenarien")
+		_sz_ansicht = "vorlagen")
 	var eigene := Werte.eigene_karten()
 	if not eigene.is_empty():
 		l.abschnitt("Laden (Rechtsklick löscht)")
@@ -472,6 +691,9 @@ func _male(z: Vector2i) -> void:
 
 func _male_feld(z: Vector2i) -> void:
 	var karte: Karte = spiel.karte
+	if _werkzeug == "eingang" or (_strich == -1 and Werte.EINGAENGE.has(z)):
+		_setze_eingang(z, _strich == 1)   # 20.11.: auch am linken Rand der Zone
+		return
 	if z.x < Werte.ZONE_SPALTEN:
 		spiel.melde("In der Zone des Gegners (links) liegt nichts – dort stehen HQ und Schleudern.", 3.0)
 		return
@@ -570,6 +792,34 @@ func _male_feld(z: Vector2i) -> void:
 	_geaendert()
 
 
+## 20.11.: Eingang setzen (nur Randfelder, frei von Fels/Wasser/Bauten; ein dritter ersetzt den ältesten) oder entfernen.
+func _setze_eingang(z: Vector2i, setzen: bool) -> void:
+	var karte: Karte = spiel.karte
+	var liste: Array[Vector2i] = Werte.EINGAENGE.duplicate()
+	if not setzen:
+		liste.erase(z)
+	else:
+		var rand := z.x == 0 or z.y == 0 or z.x == Werte.SPALTEN - 1 or z.y == Werte.ZEILEN - 1
+		if not rand:
+			spiel.melde("Ein Eingang liegt am Kartenrand.", 2.5)
+			return
+		if karte.gelaende.has(z) or karte.feld.has(z) or karte.ist_basis(z) or karte.checkpoints.has(z):
+			spiel.melde("Der Eingang braucht ein freies Feld.", 2.5)
+			return
+		if liste.has(z):
+			return
+		liste.append(z)
+		if liste.size() > Werte.EINGAENGE_MAX:
+			liste.pop_front()
+	var roh: Array = []
+	for e: Vector2i in liste:
+		roh.append([e.x, e.y])
+	entwurf["eingaenge"] = roh
+	Werte.EINGAENGE = liste
+	karte.aktualisiere_pfad()
+	_geaendert()
+
+
 func _radiere(z: Vector2i) -> void:
 	var karte: Karte = spiel.karte
 	if karte.gelaende.has(z):
@@ -654,6 +904,7 @@ func _zuruck() -> void:
 func _stelle_her(d: Dictionary) -> void:
 	var karte: Karte = spiel.karte
 	entwurf = d
+	Werte.EINGAENGE = Werte._felder(d.get("eingaenge", []))   # 20.11.
 	for z: Vector2i in karte.gelaende.keys():
 		karte.setze_gelaende(z, "")
 	for z: Vector2i in karte.boden.keys():
@@ -730,6 +981,11 @@ func _sammle() -> void:
 	# vorgebaute Türme/Fabriken: der ganze Bau (die Erdwälle sind die Stützen der Türme)
 	entwurf["stand"] = Phantom._stand(spiel._zellen_jetzt(), {}) if bauten else {}
 	var wellen := {}
+	var alt: Variant = entwurf.get("wellen", {})
+	if alt is Dictionary:
+		for nr: Variant in alt:
+			if (alt as Dictionary)[nr] is Dictionary:
+				wellen[str(nr)] = ((alt as Dictionary)[nr] as Dictionary).duplicate(true)   # 20.11.: Pool-Wellen bleiben
 	for nr: int in _plaene:
 		if not (_plaene[nr] as Array).is_empty() and nr <= int(entwurf["regeln"].get("runden", Werte.STANDARD_RUNDEN)):
 			wellen[str(nr)] = (_plaene[nr] as Array).duplicate(true)
@@ -786,6 +1042,13 @@ func pruefe() -> bool:
 		var stueck := _erreichbar(s)
 		var wo := " (mit „Mauern fest“)" if mit_fest else ""
 		var vorher := _meldungen.size()
+		# 20.11.: jeder Eingang braucht einen eigenen Weg zur Basis (und liegt nicht auf Fels, Wasser oder einer Mauer)
+		for e in Werte.EINGAENGE.size():
+			var ez := Werte.EINGAENGE[e]
+			var einzeln: Array[Vector2i] = [ez]
+			if s.has(ez) or (basis_ok and not _erreichbar(s, einzeln).has(karte.basis)):
+				_fehler[ez] = true
+				_meldungen.append("Kein Weg von Eingang %d zur Basis%s." % [e + 1, wo])
 		if basis_ok and not stueck.has(karte.basis):
 			_fehler[karte.basis] = true
 			_meldungen.append("Kein Weg zur Basis%s." % wo)
@@ -838,9 +1101,14 @@ func pruefe() -> bool:
 
 
 ## Alle Felder, die von einem der drei Startpunkte am Zonenrand erreichbar sind (vier Richtungen, `sperre` gesperrt).
-func _erreichbar(sperre: Dictionary) -> Dictionary:
+## 20.11.: Mit Eingängen starten die Gegner nur dort (`starts` = andere Startpunkte, z. B. ein einzelner Eingang).
+func _erreichbar(sperre: Dictionary, starts: Array[Vector2i] = []) -> Dictionary:
 	var stueck := {}
 	var offen: Array[Vector2i] = [Vector2i(0, 1), Werte.START_ZELLE, Vector2i(0, Werte.ZEILEN - 2)]
+	if not starts.is_empty():
+		offen = starts.duplicate()
+	elif not Werte.EINGAENGE.is_empty():
+		offen = Werte.EINGAENGE.duplicate()
 	for z: Vector2i in offen:
 		stueck[z] = true
 	while not offen.is_empty():
@@ -886,6 +1154,7 @@ func _testen() -> void:
 	Werte.karte_name = datei
 	Werte.speichere_einstellungen()
 	Werte.herausforderung = str(entwurf["regeln"].get("herausforderung", ""))
+	Werte.setze_anfuehrer(str(entwurf["regeln"].get("anfuehrer", "")))   # 19.11.: vorgegeben, sonst Brakk
 	spiel.naechster_start = "normal"
 	Ladebild.lade(spiel.get_tree())
 
@@ -968,6 +1237,16 @@ func _frage_neu() -> void:
 			entwurf = neuer_entwurf()
 			datei = ""
 			_neu_aufbauen()], ["Abbrechen", Callable()]]))
+
+
+## 20.11.: Ein mitgeliefertes Szenario als Vorlage öffnen (nicht gespeichert – „Speichern“ legt eine eigene Karte an).
+func _frage_vorlage(kname: String) -> void:
+	var titel := str(Werte.karten_daten(kname).get("name", kname))
+	spiel.add_child(ModLeiste.Tafel.new("Neu aus Vorlage", "„%s“ als Vorlage öffnen? Nicht gespeicherte Änderungen gehen verloren." % titel,
+		[["Öffnen", func() -> void:
+			_oeffne(kname)
+			datei = ""
+			entwurf["name"] = titel + " (eigene)"], ["Abbrechen", Callable()]]))
 
 
 func _frage_groesse(schluessel: String) -> void:
@@ -1191,6 +1470,13 @@ class Marken extends Node2D:
 			var a := Vector2i(mini(ed._bereich_von.x, ed._bereich_bis.x), mini(ed._bereich_von.y, ed._bereich_bis.y))
 			var e := Vector2i(maxi(ed._bereich_von.x, ed._bereich_bis.x), maxi(ed._bereich_von.y, ed._bereich_bis.y))
 			draw_rect(Rect2(karte.mitte(a) - Vector2(zz, zz) / 2.0, Vector2(e - a + Vector2i.ONE) * zz), Color(1, 1, 1, 0.25))
+		# 20.11.: Eingänge
+		for i in Werte.EINGAENGE.size():
+			var em := karte.mitte(Werte.EINGAENGE[i])
+			var er := Rect2(em - Vector2(zz, zz) / 2.0, Vector2(zz, zz)).grow(-4.0)
+			draw_rect(er, Color(Stil.KUPFER, 0.35))
+			draw_rect(er, Stil.KUPFER, false, 3.0)
+			draw_string(schrift, em - Vector2(30, -6), "E%d" % (i + 1), HORIZONTAL_ALIGNMENT_CENTER, 60, 20, Color.WHITE)
 		# Basis: fest oder zufällig
 		var bm := karte.mitte(karte.basis) + Vector2(0, -zz * 1.25)
 		var b_text := "Basis fest" if bool(ed.entwurf.get("basis_fest", false)) else "Basis zufällig"

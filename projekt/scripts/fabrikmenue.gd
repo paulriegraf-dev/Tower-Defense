@@ -344,7 +344,7 @@ func _baue_fabrik() -> void:
 	var f: Dictionary = spiel.fabriken[zelle]
 	var stufe := int(f.get("stufe", 0))
 	var bauphase: bool = spiel.ausbau_moeglich()   # Bauphase – oder die letzte Runde, dort geht Ausbauen auch während des Angriffs
-	var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if f["typ"] == "pilot" else Werte.KOSTEN_STUFE
+	var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if f["typ"] == "pilot" else Werte.kosten_stufen()   # 19.11.: je Anführer
 	var naechste := stufe < preise.size()
 	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe]
 	var stand := "%s|%d|%s|%s|%s|%s|%d|%d" % [f["typ"], stufe, bauphase, kann_zahlen, spiel.schilde.size(), f.get("ziel", "erste"), spiel.zugewiesen(zelle).size(), spiel.budget / 25]
@@ -375,13 +375,14 @@ func _baue_fabrik() -> void:
 		_chips("", tw, true)   # ohne Überschrift: passen so in eine Zeile
 		if not bauphase:
 			_zeile("In der Welle gilt das Umstellen für die nächste Truppe.", Stil.KLEIN, Stil.TEXT_BLASS)
-	_pfad(["Grund", "Spezial", "Stufe 2", "Fähigkeit"], stufe + 1)
+	_pfad(["Grund", "Spezial", "Stufe 2", "Fähigkeit"] + (["Elite"] if Werte.fabrik_max_stufe() >= 4 else []), stufe + 1)   # 20.11.: Stufe 4
 	if spiel.brakk_modus:
 		# 18.11. (Paul): im Brakk-Mode keine Ausbauten – Truppe und Stufe kommen über Brakks Ringfelder
 		var ring := str(f.get("ring", ""))
 		_zeile("Im Feld des Rings: baut %s auf Stufe %d." % [d["name"], stufe] if ring != "" else "Brakk-Mode: keine Ausbauten. Ein Ringfeld (Lichtterminal an der Basis, [C] in der Bauphase) gibt Fabriken Truppe und Stufe.", Stil.KLEIN, Stil.LEUCHT)
 	elif stufe == 0:
-		_upgrade_knopf = _karte_breit("Spezialisieren", preise[0], "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr." % d["name"],
+		var spezial_text := "Bleibt bei %s. Umstellen geht danach nicht mehr." if Werte.truppen_fest() > 0 else "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr."   # 20.11.: Sonde 7
+		_upgrade_knopf = _karte_breit("Spezialisieren", preise[0], spezial_text % d["name"],
 			spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
 	elif stufe == 1:
 		_upgrade_knopf = _karte_breit("Stufe 2", preise[1], Werte.STUFE_2[f["typ"]]["text"], spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
@@ -390,6 +391,10 @@ func _baue_fabrik() -> void:
 	else:
 		var w3: Dictionary = Werte.STUFE_3[f["typ"]][str(f.get("faehigkeit", ""))]
 		_karte_breit(w3["name"], 0, w3["text"], null, true, true, true, w3["stark"], w3["schwach"])
+		if stufe == 3 and naechste:   # 20.11.: Stufe 4 – Elite (Sonde 7)
+			_upgrade_knopf = _karte_breit("Elite", preise[3], "Die Truppe wird zur Elite: doppelt so viel Leben und Schaden, größer, golden.", spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
+		elif stufe >= 4:
+			_zeile("Elite: doppelt so viel Leben und Schaden.", Stil.KLEIN, Stil.GOLD)
 	if naechste and not bauphase:
 		_zeile("Ausbauen geht nur zwischen den Wellen.", Stil.KLEIN, Stil.TEXT_BLASS)
 	_fertig()
@@ -401,8 +406,8 @@ func _baue_turm() -> void:
 	var art: String = k.turm_art.get(zelle, "geschuetz")
 	var stufe := int(k.turm_stufe.get(zelle, 1))
 	var bauphase: bool = spiel.ausbau_moeglich()
-	var preise: Array[int] = Werte.KOSTEN_TURM_STUFE
-	var naechste := stufe - 1 < preise.size()
+	var preise: Array[int] = Werte.kosten_turm_stufen()   # 19.11.: Preise und höchste Stufe je Anführer
+	var naechste := stufe < Werte.turm_max_stufe()
 	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe - 1]
 	var stand := "turm|%s|%d|%s|%s|%s" % [art, stufe, bauphase, kann_zahlen, k.turm_aktiv(zelle)]
 	if stand == _stand:
@@ -417,17 +422,21 @@ func _baue_turm() -> void:
 	_stats_zeile()
 	if not k.turm_aktiv(zelle):
 		_zeile("Schweigt gerade: Stütze fehlt oder lahmgelegt.", Stil.KLEIN, Stil.WARN)
-	_pfad(["Stufe 1", "Stufe 2", "Fähigkeit"], stufe)
-	if stufe == 1:
+	_pfad(["Stufe 1", "Stufe 2", "Fähigkeit"] + (["Stufe 4"] if Werte.turm_max_stufe() >= 4 else []), stufe)   # 20.11.: Stufe 4
+	if stufe == 1 and naechste:
 		_upgrade_knopf = _karte_breit("Stufe 2", preise[0], Werte.TURM_STUFE_2[art]["text"], spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
-	elif stufe == 2:
+	elif stufe == 2 and naechste:
 		_zeile("Stufe 2: " + str(Werte.TURM_STUFE_2[art]["text"]), Stil.KLEIN, Stil.LEUCHT)
 		_faehigkeiten(Werte.TURM_STUFE_3[art], preise[1], spiel.werte_auf, kann_zahlen, not bauphase or not kann_zahlen)
-	else:
+	elif stufe >= 2:
 		_zeile("Stufe 2: " + str(Werte.TURM_STUFE_2[art]["text"]), Stil.KLEIN, Stil.LEUCHT)
 		var w3: Dictionary = Werte.TURM_STUFE_3[art].get(str(k.turm_faehigkeit.get(zelle, "")), {})
 		if not w3.is_empty():
 			_karte_breit(w3["name"], 0, w3["text"], null, true, true, true, w3["stark"], w3["schwach"])
+		if stufe == 3 and naechste:   # 20.11.: Stufe 4 – großes Wertepaket (Irrtürmer)
+			_upgrade_knopf = _karte_breit("Stufe 4", preise[2], "+50 % Schaden, +1 Reichweite, hält doppelt so viel gegen Drohnen aus.", spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
+		elif stufe >= 4:
+			_zeile("Stufe 4: +50 % Schaden, +1 Reichweite.", Stil.KLEIN, Stil.GOLD)
 	if naechste and not bauphase:
 		_zeile("Ausbauen geht nur zwischen den Wellen.", Stil.KLEIN, Stil.TEXT_BLASS)
 	_fertig()

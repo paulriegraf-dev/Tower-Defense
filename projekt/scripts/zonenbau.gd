@@ -71,7 +71,7 @@ func _process(delta: float) -> void:
 		if art == "schleuder":
 			_pruefe_bedroht()
 		return
-	if art == "schleuder" and spiel.welle >= Werte.SPRENGER_AB_WELLE:
+	if art == "schleuder" and Werte.plan_runde(spiel.welle) >= Werte.SPRENGER_AB_WELLE:
 		# Platzwechsel während der Runde: hinfahren, dabei wird nicht geworfen
 		if _faehrt:
 			_sprite.bewegt(true)

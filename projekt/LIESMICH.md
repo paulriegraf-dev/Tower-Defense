@@ -208,6 +208,31 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 - Fähigkeiten mit Ziel (Treppe/Brücke, Anker, Säule): **kurz tippen** = dort, wohin das Fadenkreuz zeigt; **halten und ziehen** = zielen mit Vorschau am Ziel (Raute, rotes Kreuz mit Grund, wenn nichts passt), loslassen = auslösen, auf „✕“ ziehen = abbrechen.
 - „Bauen“ oben links klappt die Bauliste auf (Eintrag tippen = wählen, nochmal = weglegen), der goldene Knopf baut am Fadenkreuz; derselbe Knopf heißt „Ausbauen“ vor einem Gebäude und „Ringe“ am Lichtterminal. Countdown antippen = Welle jetzt.
 
+### Weitere Anführer im Brakk-Mode (20.11., Schritt 6b)
+
+Vor dem Brakk-Mode wählst du den Anführer (Brakk, Irrtürmer, Sonde 7; drei Kacheln mit Initiale, Name und drei Zeilen Kit). Spielbar nur, wenn er im Normalmodus freigeschaltet ist (Erfolg „Baumeister“ → Irrtürmer, „Ausbilder“ → Sonde 7), sonst Fragezeichen. **Am Handy sind die beiden neuen vorerst nicht wählbar** („Am Handy noch nicht spielbar“), Brakk bleibt wie bisher. Die Anführer werden nur ausgetauscht – keine Perks aus dem Normalmodus. Ringe bleiben für alle das Build-System (Lichtterminal, Ringfeld [C]); je Anführer gibt es genau eine Ring-Signatur. Fällt der Anführer: Respawn wie bei Brakk.
+- **Gemeinsamer Sockel:** [C] Ringfeld/Bauen, Q/E/R/V/X Fähigkeiten, Shift und Leertaste Bewegung, Maus zielt. Die Tasten liest `ego_modus.gd` einmal; je Anführer zählt nur die Belegung in `Werte.ANFUEHRER_EGO` (dort auch Leben-/Tempo-Faktor und Kit-Zeilen). Brakks Aktionen laufen wie vorher. Das Kit der anderen steckt in `scripts/ego_irrtuermer.gd` bzw. `scripts/ego_sonde.gd` (Grundgerüst `scripts/ego_kit.gd`).
+- **Irrtürmer – Mauern und Gefährte** (`Werte.IRRTUERMER`, `Werte.PLIPLOP_PFADE`, `scripts/pliplop.gd`): Begleitturm **PliPlop 3cK** ab Runde 1, rollt mit (1,5 Felder), eigenes Leben (60 %), fällt er, ist er nach 10 s wieder da, fällt der Irrtürmer, fällt er mit. **Zwei Ringslots** (Hand, PliPlop), derselbe Ring im zweiten Slot als Kopie zum halben Preis. Pfad des PliPlop je Ring: Gel Schockwelle · Glut Flak · Ziel Nagler · Durchschlag Bohrer · Takt Repetierer · Wirbel Kreisel · Wall Prellschild · Sprung Bogenblitz · Brand Brandmörser (Ringstufe = Pfadstufe). Linksklick **Prellbolzen** (2 Abpraller, kleine Fläche, stößt Nahkämpfer vom PliPlop weg) · Rechtsklick halten **Hack** (Formturm, Batterie oder PliPlop: dessen Schuss aus der Hand, 4 Felder, langsamer) · Q **Überladen** · X **Hierher!/Folgen** · V **Ringtausch** · R **Aufsatz** (einmal je Runde) · E Lichttreppe, Shift Rolle wie Brakk. **Verbund:** Effekte beider Ringe am selben Gegner innerhalb von 2 s → +30 % Schaden, eigenes Treffer-Bild.
+- **Sonde 7 – Luft und Schützin** (`Werte.SONDE7`): Leertaste halten schweben (Akku 5 s, lädt am Boden in 4 s), loslassen sinken, doppelt fallen lassen; in der Luft zielen alle Fernkämpfer auf sie. Shift **Schub**, Q **Teleport** (6 Felder, durch Wände). Hand: links Farblaser in Ringfarbe (Hitze), rechts Energiebündel mit Ring-Effekt. Rufwaffen mit Magazin (leer → weg, dann Cooldown; dieselbe Taste steckt vorzeitig weg): E **Doppel-Lasergewehr** (Zielerfassung 4/6/8 Ziele), V **Schrotflinte** (rechts alles auf einmal, Rückstoß genau eine Mauerhöhe), X **Sondengewehr** (Durchschlag; Sondenblick: Truppen +25 %), R **Luftschlag** (einmal je Runde, Granaten).
+- **Übersicht [I]:** Reiter „Anführer“ (Tasten, Kit, Titel, alle Fähigkeiten) und im Reiter „Ringe“ je Ring ein Abschnitt für Irrtürmer und Sonde 7 – aus den Tabellen erzeugt. **Werte-Fenster:** Irrtürmer beide Ringe, Hack, Verbund; Sonde 7 Waffe und Magazin.
+- **Sieg und Profil:** Schaden nach Quelle je Anführer (`BrakkFortschritt.QUELLEN_JE`), Spielstil-Titel je Anführer (`BrakkFortschritt.TITEL_JE`), Profil → Brakk-Mode mit Umschalter „Anführer“ (Brakk behält die alten Schlüssel).
+- **Platzhalter:** PliPlop = Gefechtsturm (`gef_frames.png`) in der Ringfarbe getönt; Prellbolzenwerfer = Brakks gezeichnete Pistole umgefärbt; Hack-Handschuh = Brakks Ringhand; Sonde 7s Handschuhe und vier Waffen aus Code (`ego_sonde.gd`); Porträts = Initiale auf Metallplatte; Verbund-Treffer = Lichtringe. Die Grafikliste für PixelLab steht unten.
+- **Balance:** alle Zahlen sind Startwerte (Bot-Partien bis Runde 10, siehe Bericht vom 20.11.); Paul spielt es.
+
+**Grafikliste für PixelLab (ab 30.11.)** – Ego-Bilder von hinten unten wie `assets/neu/ego/pistole.png`:
+| Bild | Größe | Einzelbilder | Blick |
+|---|---|---|---|
+| Irrtürmer: rechte Hand mit Prellbolzenwerfer | 64×96 | Ruhe, Schuss, Nachladen | von hinten, Lauf nach vorn oben |
+| Irrtürmer: Hack-Handschuh (links) | 48×72 | Ruhe, Hack (leuchtet) | von hinten |
+| Hack-Strahl | 16×64 (kachelbar) | 4 (Flimmern) | – |
+| PliPlop 3cK je Pfad (Grundschuss + 9 Ringe) | 68×68 | je 8 Richtungen × Ruhe/Schuss | Draufsicht schräg wie `gef_frames.png` |
+| Aufsatz-Pose (PliPlop am Arm) | 96×96 | Ruhe, Schuss | von hinten |
+| Irrtürmer-Figur (statt Technoclan-Platzhalter) | 64×64 | 8 Richtungen | wie Brakk |
+| Sonde 7: Hand (zwei Handschuhe), Doppel-Lasergewehr, Schrotflinte, Sondengewehr, Granatwerfer | 64×96 | je Ruhe, Schuss, Nachladen | von hinten |
+| Sonde 7: Flug-Pose | 64×64 | 4 (Düsen flackern) | von hinten |
+| Porträts Irrtürmer und Sonde 7 | 56×56 (×2 gezeichnet) | 1 | von vorn |
+| Verbund-Treffer | 48×48 | 6 | – |
+
 ## Karten (18.11.)
 
 Karten sind Daten: `karten/<name>.json` (Größe, HQ, Zonenbauten, Schleuderplätze, Ausgänge für den Phantom-Modus, Basis fest/zufällig, Checkpoint-Bereiche oder feste Checkpoints, Gelände `fels`/`wasser`, vorgebaute Erdwälle `mauern`, dazu `mauern_fest` für die Herausforderung „Mauern fest“). Geladen in `Werte.lade_karte()`.
@@ -230,6 +255,77 @@ Startmenü → **Sandbox** → „Sandbox spielen“ (wie bisher) oder **„Szen
 - **Speicherort:** `user://karten/eigen_<name>.json` (gleiches Format wie `karten/`). Eigene Karten erscheinen unter **Herausforderungen** in der Kartenwahl („(eigene)“) und bringen ihre Herausforderung mit; sie zählen nicht für Rangliste und Phantome. Der Zwischenstand merkt sich die Karte.
 - **Teilen:** Exportierte Datei ins Fenster ziehen = Import (im Editor und im Startmenü, PC und Browser, `files_dropped`). Die Datei wird geprüft (`Werte.karte_gueltig`) und als neue eigene Karte abgelegt.
 - Code: `scripts/szenario_editor.gd` (Editor, Prüfung, Datei), `scripts/ui/modleiste.gd` (Mod-HUD und Fenster `ModLeiste.Tafel`), Regeln im Spiel: `main.gd` → `BAUTEN`, `herausforderung_sperrt`, `_kartenbauten_einrichten`, `_zeige_einfuehrung`, `naechste_welle`.
+
+### Eingänge, Modus, Startlage und Szenarien (20.11., Schritt 4/5)
+
+- **Eingänge** (Reiter Karte → Werkzeug „Eingang“): Klick auf ein Randfeld setzt Eingang E1/E2 (auch oben, unten, rechts; ein dritter ersetzt den ältesten), Rechtsklick entfernt. Mit Eingängen kommen die Gegner-Trupps reihum nur dort heraus; ein eingenommener Checkpoint geht weiter vor. Weganzeige: Hauptweg ab E1, Nebenweg ab E2. Die Prüfung verlangt von jedem Eingang einen Weg zur Basis. Ohne Eingänge alles wie bisher (PaulLand, Felsenpass). Datei: `eingaenge`, Code: `Werte.EINGAENGE`, `main._spawn_zelle`/`_naechster_eingang`, `karte.start_zelle`/`aktualisiere_pfad`.
+- **Regelpaket** (Reiter Regeln): **Modus** Normal / Brakk-Ego (`regeln.modus` – die Karte startet dann im Brakk-Mode, Anführer Brakk), **Startlage**: Einkommen an/aus (`einkommen` – aus: kein Rundenbonus, keine Zinsen, kein Checkpoint-Bonus, keine Prämien/Erzadern), Checkpoints schon beim Gegner (`cp_feind`), erste Welle läuft sofort (`sofort`), Leben der Erdwälle der Karte in Runde 1 (`mauer_leben` 100/75/50/25 %, danach heilen sie wie alles). Runden jetzt auch 8. Code: `main._spiel_nach_regeln`, `_startlage_einrichten`, `einkommen()`.
+- **Fünf Szenarien** (`karten/szenario_*.json`, Liste `Werte.SZENARIEN`), im Menü unter **Herausforderungen → Szenarien** (rechts der Steckbrief), im Editor als **„Neu aus Vorlage“** (Reiter Datei; gespeichert wird als neue eigene Karte). Zählen nicht für Rangliste und Phantome.
+  - **Belagert:** 1500 Budget, kein Einkommen, 8 Runden überleben.
+  - **Zange:** Eingänge links und rechts, Basis in der Mitte, Checkpoints fest.
+  - **Alarmstart:** zwei Mauerlinien der Karte mit Lücken, angesprengt (50 %), zwei vorgebaute Fabriken, die erste Welle läuft sofort.
+  - **Letzter Posten:** Brakk-Mode, keine Fabriken und Batterien, 15 Runden.
+  - **Rückeroberung:** Basis nah am HQ, beide Checkpoints (hinter der Basis) schon beim Gegner.
+  Die Szenarien sind erste Entwürfe zum Ausprobieren – Balance nur grob.
+
+**Schritt 5b (20.11.) – Szenarien ausgebaut.** Alle Zahlen stehen als Startwerte im Regelpaket der Karte.
+- **Wellen aus dem Pool** (`wellen` in der Karten-Datei): Eine Runde kann statt einer Trupp-Liste auf einen Plan aus `WELLEN` verweisen:
+  `{"plan": 9, "name": "Köder", "ansage": "…", "leben": 2.0}`. Die Gegner kommen dann verteilt wie im normalen Spiel. Checkpoints,
+  Schleudern, Wurf-Schleuder, Sprenger-Ziele und Grund-Leben richten sich nach der Nummer des Plans (`Werte.plan_runde`), die Laser
+  nach der echten Runde. Die Ansage steht in der Bauphase davor (`Werte.ansage`). `regeln.endkampf_leben` und `regeln.hq_leben`
+  legen den HQ-Sturm fest.
+- **Belagert:** 1500 Budget, kein Einkommen, 8 Runden: Vorhut (Plan 6, ×1,6) · Sprengtrupp (8, ×1,8) · Köder (9, ×2,0) ·
+  Über die Mauer (10, ×2,2) · Dunst (11, ×2,4) · Der Turm (13, ×2,6) · Fahnensturm (15, ×2,8) · Sturm auf das HQ (Plan 20,
+  Gegner ×1,6, HQ 1000). Im Brakk-Mode (Modus Brakk-Ego im Editor): `brakk_stufe` 5, `brakk_alle_faehigkeiten`, `brakk_stufen: false`
+  (keine Erfahrung). Ringe kauft man aus den 1500.
+- **Zange:** `zone2` = zweite Gegnerzone (`rechteck` und `ausgaenge`, hier rechts unten). Jeder Trupp wird nach Köpfen halbiert,
+  die zweite Hälfte kommt gleichzeitig aus Zone 2 und läuft nur über Checkpoint 2, die linke Hälfte nur über Checkpoint 1.
+  Einzelne (Belagerungsturm) wechseln sich ab. Code: `main._zange_teilen`/`_zange_route`, `Gegner.ohne_cp`, `Werte.ZONE2`.
+- **Alarmstart:** `formation` ("" = Zufall unter Kamm, Zitadelle, Kamm mit Kern, Riegel und Schlauch, Dicker Schlauch) legt die
+  Formation aus [H] mit ihren Checkpoints auf die Karte, dazu `alarm_fabriken` (6, Stufe 1, reihum spezialisiert) und
+  `alarm_stellungen` (4, auf den Wallfeldern mit der größten Wegabdeckung). `gesprengt` (6) blanke Erdwälle am Weg sind weg.
+  `trupp_unterwegs` (Schildträger, Fahne, 5 Hunde) steht beim Start schon auf einem Drittel des Wegs. Keine Bauphase vor Runde 1,
+  keine neuen Erdwälle, 10 Runden (Pool 6–15, ×1,2 bis ×2,8, HQ-Sturm ×1,4 und HQ 1000). Code: `main._alarmstart_einrichten`,
+  `_trupp_unterwegs`.
+- **Letzter Posten:** nur Erdwälle und Türme (und Brakk).
+- Prüfen: `godot --headless --path . --fixed-fps 60 -s werkzeuge/szenariotest.gd -- szenario_belagert …` spielt mit einem einfachen
+  Bot bis zum Ende (schreibt in user:// – vorher sichern).
+
+### Order 24 – Brakk-Mode Rogue (20.11., Schritt 5b)
+
+Startmenü → **Brakk-Mode → Rogue · Order 24** (Standardwerte oder eine eigene Karte mit Modus „rogue“). Der Technoclan hat sich gegen
+Brakk gewandt: Brakk ist allein, die Technoclan-Verteidigung ist der Gegner. Übersteht er die Zeit, ist es ein Sieg (Abspann mit
+Sabotage-Zahlen); fällt er, ist es vorbei (kein Wiedererscheinen). Karte `karten/szenario_order24.json`, Code `scripts/order24.gd`.
+- **Karte:** Formation aus [H] oder ein Verteidigungs-Phantom aus dem Pool (Zufall, im Editor fest wählbar), dazu Fabriken mit
+  Stellungen davor und eine Batterie. Um das Technoclan-HQ liegt ein Schild (violette Kuppel, Platzhalter): Brakk kommt nicht hinein,
+  die Fabriken darin sind unerreichbar. Die Fabriken produzieren die ganze Zeit.
+- **Verhalten:** Brakk steht für die Verteidigung als unsichtbarer Gegner in der Gegnerliste. Zielwahl, Sichtregel und das Schießen über
+  Wälle laufen also wie in Runde 20. Phase 1 **Streifzug**: Wer Brakk sieht, schießt, niemand verfolgt ihn. Phase 2 **Jagd**
+  (ab `jagd_start`, Banner „Order 24: Jagd eröffnet“): `jagd_anteil` % der Truppen verlassen Stellungen und Fabriken und jagen in
+  `jaeger_gruppen` Gruppen. Jede Gruppe läuft auf einen eigenen Anflugpunkt um Brakk (einkreisen). Verliert sie ihn aus der Sicht,
+  läuft sie zum letzten bekannten Ort und streift dann umher. **Vorstoß:** Ein Viertel der Jäger läuft zum Myriaden-HQ. Halten sie es
+  `vorstoss_sek` lang, steht dort ein zweites Technoclan-HQ mit Schild und 2 Fabriken, und die Jagd wird um 15 % enger.
+- **Brakks Waffen:** Sie treffen Technoclan-Truppen, Fabriken und Erdwälle (über Stellvertreter, `spiel.ego_gegner()`). Prämien gibt es
+  für eine zerstörte Fabrik, eine geleerte Stellung und einen gesprengten Erdwall. Das **Ringterminal** (pink, 2×2, Platzhalter):
+  Darauf stehen, dann öffnet [F] das Lichtterminal, auch im Kampf. **Med-Kits** (weiße Kästen, Platzhalter) liegen in Winkeln
+  zwischen Erdwällen, heilen `medkit_heilung` % und liegen alle `medkit_takt` s wieder. Bauen kann Brakk hier nicht.
+- **Stellschrauben** (Regelpaket `regeln.order24`, im Editor unter Szenarien → Stellschrauben): `ueberleben_sek` 480, `jagd_start` 90,
+  `jagd_anteil` 60, `jaeger_gruppen` 3, `stellung_anteil` 70, `vorstoss` an, `vorstoss_sek` 20, `brakk_schaden` 25 (Prozent des Schadens
+  der Verteidigung, der bei Brakk ankommt), `medkit_zahl` 4, `medkit_takt` 60, `medkit_heilung` 40, `fabriken_aussen` 3,
+  `fabriken_innen` 3, Prämien 120 / 40 / 15, `karte` (""/Formation/"phantom"). Dazu im Regelpaket `start_budget` 300 und
+  `brakk_stufe` 4 (Rolle und Anker sind frei).
+- Prüfen: `godot --headless --path . --fixed-fps 60 -s werkzeuge/order24test.gd -- <Läufe> [Überlebenszeit] [Jagdbeginn]` (Bot-Brakk
+  weicht aus und sabotiert; Protokoll `ORDER24 …` und `JAGD …` mit den Wegen der Gruppen und dem Schaden an Brakk je Quelle).
+
+### Menü und Editor (20.11., Schritt 5b)
+- **Brakk-Mode** im Startmenü hat jetzt zwei Unterpunkte: **Classic** (der bisherige Brakk-Mode) und **Rogue · Order 24**. Die Szenarien
+  stehen weiter unter Herausforderungen (Paul, 20.11.).
+- **Editor, Reiter „Szenarien“** (erster Reiter, der Editor öffnet darin – Sandbox → Szenario bauen = zwei Klicks): „Neu aus Vorlage“
+  als Karten (Name, ein Satz, Kurzzeilen zu Regeln und Truppenverhalten), „Eigene“ (Klick öffnet zum Bearbeiten) und
+  „Stellschrauben“. Dort stehen die Regelpaket-Werte der offenen Karte als Zahlfelder mit Tipp: für Order 24 Zeit, Jagd, Karte,
+  Med-Kits und Prämien, für Alarmstart Formation, Fabriken, Stellungen, gesprengte Felder und Hunde im Trupp, für Belagert
+  Startgeld, je Welle Plan und Zähigkeit sowie den HQ-Sturm. Gespeichert wird mit der Karte (Reiter Datei). Die Pool-Wellen bleiben
+  beim Speichern erhalten.
 
 ### Gelände mit Wirkung (18.11., Etappe 2)
 
@@ -262,7 +358,25 @@ Reiter **Mods** im Szenario-Editor, nur für eigene Karten (PaulLand, Rangliste 
 
 ## Erfolge (18.11.)
 
-19 Erfolge als heimliches Tutorial: Sie lenken auf Mechaniken, die man sonst übersieht (Formtürme, Wachposten, Checkpoints zurückholen, Panzerung, Feldlazarett, Kuppel, Zuweisung, Zinsen, Klonmaschine …). Drei sind versteckt („???“): Schildträger von hinten, Runde 20 ohne Lebensverlust, Sieg ohne Fabrik (Batterien zählen nicht). Freischalten zeigt oben eine Einblendung mit Symbol und spielt einen Ton; im Profil (Startmenü oben rechts) steht die Tafel „Erfolge x/19“. In der Sandbox gibt es keine Erfolge. Gespeichert im Profil (`user://profil.json`, Schlüssel `erfolge` und `formen`). Liste und Texte: `scripts/erfolge.gd`. Belohnungen sind vorbereitet: Jeder Eintrag hat ein leeres Feld `belohnung`, ausgegeben wird in `Erfolge._gib_belohnung()`.
+22 Erfolge (19.11.: dazu Baumeister, Ausbilder und der versteckte Deutsche Sparer – sie schalten Anführer frei, siehe unten) als heimliches Tutorial: Sie lenken auf Mechaniken, die man sonst übersieht (Formtürme, Wachposten, Checkpoints zurückholen, Panzerung, Feldlazarett, Kuppel, Zuweisung, Zinsen, Klonmaschine …). Drei sind versteckt („???“): Schildträger von hinten, Runde 20 ohne Lebensverlust, Sieg ohne Fabrik (Batterien zählen nicht). Freischalten zeigt oben eine Einblendung mit Symbol und spielt einen Ton; im Profil (Startmenü oben rechts) steht die Tafel „Erfolge x/19“. In der Sandbox gibt es keine Erfolge. Gespeichert im Profil (`user://profil.json`, Schlüssel `erfolge` und `formen`). Liste und Texte: `scripts/erfolge.gd`. Belohnungen sind vorbereitet: Jeder Eintrag hat ein leeres Feld `belohnung`, ausgegeben wird in `Erfolge._gib_belohnung()`.
+
+## Anführer (19.11., Schritt 2b – Gerüst)
+
+Vor jeder Partie wird ein Anführer gewählt: **Spielen → Los** (und **Herausforderungen → Los**) öffnet die Anführerwahl mit vier Kacheln (Porträt als Platzhalter: Initiale auf Metallplatte, Name, Kurzbeschreibung, Perks, Nachteile; ← → oder Maus, Esc/Rechtsklick zurück). Seine Perks gelten ab Runde 1. Das **Tutorial läuft immer mit Brakk**, ebenso Sandbox und „Verteidigen“ gegen Angriffs-Phantome (vorerst). Im Brakk-Mode gibt es eine eigene Wahl (20.11., siehe „Weitere Anführer im Brakk-Mode“). Die letzte Wahl merkt sich das Profil.
+- **Brakk** – alles wie bisher, keine Sonderfälle im Code. **Irrtürmer** (Türme) ← Erfolg „Baumeister“ (in einer Partie alle fünf Formtürme, einer auf Stufe 3). **Sonde 7** (Infanterie, MG-Nester) ← „Ausbilder“ (Tutorial bis zum Ende und ein Sieg mit mindestens 6 Fabriken, eine auf Stufe 3). **Paul** (Wirtschaft, Aufträge; Spaß, nicht ranglistenfähig) ← versteckt „Deutscher Sparer“ (im normalen Spiel eine Runde mit mindestens 1000 Budget begonnen und gewonnen); in der Wahl steht bei ihm nur der Tipp.
+- Gesperrte Anführer: Fragezeichen über dem Porträt, darunter der Erfolg. Figuren der drei neuen Anführer folgen in Schritt 2c; bis dahin ist Slot **[8]** bei ihnen gesperrt („folgt“), Brakk ist nur mit Anführer Brakk kaufbar.
+- **Perks (20.11., Balance grob – Zahlen in `ANFUEHRER_WERTE`):**
+  - **Irrtürmer:** Türme bis **Stufe 4** (450 × 0,75: +50 % Schaden, +1 Reichweite, doppelt so zäh gegen Drohnen – `TURM_STUFE_4`), Turm-Stufen 25 % billiger, Türme schießen auch ohne Stütze, 12 Gratis-Erdwälle. Nachteile: höchstens 3 Fabriken, Fabrik-Stufen 20 % teurer.
+  - **Sonde 7:** alle Fabriken 50 % billiger, Fabrik-Stufen 25 % billiger, Fabrik-**Stufe 4 = Elite** (600 × 0,75: die Truppe hat doppelt Leben und Schaden, ist größer und golden – `ELITE`). Nachteile: je Fabrik genau 1 Truppe (auch spezialisiert und im Gegenangriff), Türme nur bis Stufe 2, kein Schildgenerator.
+  - **Paul:** Zinsen bis 100, Prämien ×1,5, Abriss gibt immer 100 % zurück, **Aufträge**. Nachteile: 10 statt 15 Leben, Erdwälle 15. Nicht ranglistenfähig.
+- **Pauls Aufträge** (`scripts/auftraege.gd`): ab Runde 2 je Bauphase einer (nie zweimal derselbe), oben in der Rundenanzeige und als Meldung. **Angebote** bringen Budget (Großeinkauf: 250 ausgeben, Turmfieber, Gründerzeit, Modernisierung, Mauerbau, Gut gepanzert, Umzug: Fabrik abreißen +150, Saubere Arbeit: kein Leben verlieren, Grundbesitz: beide Checkpoints halten). **Pflichten** strafen, wenn man sie verfehlt (Abrissbirne: 4 Erdwälle abreißen, Sparverbot: Welle mit höchstens 100 Budget starten, Steuerprüfung: die Hälfte ausgeben, Turmtausch, Werksschließung) – Strafe Leben (nie das letzte) oder ein Viertel des Budgets. Geprüft beim Start der Welle bzw. am Rundenende; der Zwischenstand merkt sich den Auftrag. Liste auch in der Übersicht [I] auf Pauls Karte.
+- **Übersicht [I] → Regeln:** je Anführer eine Karte mit Perks, Nachteilen und Freischaltung.
+- **Buchführung:** Partieprotokoll, Zwischenstand, Verteidigungs-Phantome (und damit die Daten in der Rangliste) tragen `anfuehrer`; fehlt das Feld (alte Dateien), gilt Brakk. Ein Phantom verteidigt mit den Regeln seines Anführers. Partien mit **Paul** erzeugen keine Phantome und melden nichts an die Rangliste. `werkzeuge/replay.gd` spielt mit dem Anführer der Partie.
+- **Szenarien:** `regeln.anfuehrer` im Regelpaket gibt den Anführer vor (leer = frei wählbar); im Szenario-Editor Reiter Regeln → „Anführer“. Dann entfällt die Wahl, die Kartenwahl zeigt ihn an.
+- **Code:** Liste und Texte `scripts/anfuehrer.gd`; Zahlen in `werte.gd` Block „Anführer“: `ANFUEHRER_STANDARD` (= Brakk) und `ANFUEHRER_WERTE` je Anführer (nur Abweichungen eintragen), laufender Anführer `Werte.anfuehrer`. **Haken** (Abfrage-Funktionen in `werte.gd`, für Brakk genau die alten Zahlen): Preis Erdwall `kosten_wall()`, Fabrik `kosten_fabrik()`, Fabrik-/Turm-Stufen `kosten_stufen()`/`kosten_turm_stufen()`, höchste Turmstufe `turm_max_stufe()`, Höchstzahl Fabriken `max_fabriken()`, Truppen je Fabrik `truppen_je_fabrik()` (in `main.truppen_limit`), Stützenverlust legt Turm still `stuetze_legt_still()` (in `karte.turm_aktiv`), Zinsdeckel `zins_stufen()`, Prämien `praemie()`, Abriss `erstattung()`, Startleben `start_leben()`, Gratis-Erdwälle `startpaket_waelle()`, gesperrte Bauwerke `af_gesperrt()` und Figur auf [8] `figur()` – beide über `main.anfuehrer_sperrt()` (hängt an `herausforderung_sperrt`). Der Anführer wird in `main._setze_anfuehrer()` gesetzt (aus `_normales_spiel`).
+- **Prüfen, dass Brakk unverändert bleibt:** `replay.gd` und `angrifftest.gd` streuen von Lauf zu Lauf, auch mit festem `seed()` – das Spiel nutzt Uhrzeit und eigene Zufallsgeneratoren. Darum Ausgang über mehrere Läufe vergleichen (alter Stand gegen sich selbst streut genauso) und die Haken-Funktionen direkt prüfen: für Brakk müssen sie die Konstanten liefern.
+- Online (nur zur Info, Datenbank nicht geändert): Das Feld steckt in `daten` jedes Phantoms. Eine eigene Spalte für Filter/Anzeige ginge ohne Änderung der Hochlade-Funktion mit
+  `alter table phantome add column anfuehrer text generated always as (coalesce(daten->>'anfuehrer', 'brakk')) stored;` – danach `anfuehrer` in `Online.FELDER` aufnehmen.
 
 ## Bauprotokoll und Nachspielen
 Das Spiel schreibt jede Partie mit: was in welcher Runde wohin gebaut, abgerissen oder umgestellt wurde, wo die

@@ -218,20 +218,28 @@ static func zeilen() -> Array:
 	return z
 
 
+## 20.11.: Schlüssel-Zusatz je Anführer im Brakk-Mode – Brakk behält die alten Schlüssel ("brakk_siege" …), die anderen
+## bekommen „_<id>“ angehängt („brakk_siege_sonde7“ …).
+static func ego_s(anfuehrer: String) -> String:
+	return "" if anfuehrer == "brakk" or anfuehrer == "" else "_" + anfuehrer
+
+
 ## 19.11. (Paul): Sieg im Brakk-Mode – Siege, höchste Stufe, Ringe und Titel zählen, die Übersicht des letzten Siegs merken.
+## 20.11.: je Anführer getrennt (bericht["anfuehrer"]).
 static func brakk_sieg(bericht: Dictionary) -> void:
 	_lade()
-	_plus("brakk_siege")
-	_max("brakk_stufe", int(bericht.get("stufe", 1)))
-	var ringe: Dictionary = _d.get("e_brakk_ringe", {})
+	var s := ego_s(str(bericht.get("anfuehrer", "brakk")))
+	_plus("brakk_siege" + s)
+	_max("brakk_stufe" + s, int(bericht.get("stufe", 1)))
+	var ringe: Dictionary = _d.get("e_brakk_ringe" + s, {})
 	for e: Array in bericht.get("ringe", []):
 		ringe[str(e[0])] = int(ringe.get(str(e[0]), 0)) + 1
-	_d["e_brakk_ringe"] = ringe
-	var titel: Dictionary = _d.get("e_brakk_titel", {})
+	_d["e_brakk_ringe" + s] = ringe
+	var titel: Dictionary = _d.get("e_brakk_titel" + s, {})
 	var t := str(bericht.get("titel", ""))
 	titel[t] = int(titel.get(t, 0)) + 1
-	_d["e_brakk_titel"] = titel
-	_d["e_brakk_letzter_sieg"] = bericht
+	_d["e_brakk_titel" + s] = titel
+	_d["e_brakk_letzter_sieg" + s] = bericht
 	_speichere()
 
 

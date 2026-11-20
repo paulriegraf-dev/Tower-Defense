@@ -54,6 +54,7 @@ var markiert := 0.0                 # Sekunden: von einem Scharfschützen markie
 var markier_faktor := Werte.MARKIERUNG_FAKTOR   # 19.11.: so viel mehr Schaden nimmt er markiert (Brakks Zielring: weniger)
 var markiert_brakk := false          # 19.11.: die Markierung kommt von Brakks Zielring – Brakks eigene Treffer zählen dann nicht mit
 var gebremst := 0.0                 # Sekunden: von Plasmagel verlangsamt
+var sondenblick_bis := 0            # 20.11.: Brakk-Mode – von Sonde 7s Sondenblick gesehen bis dahin (ms): Truppen +25 %
 var frost_tempo := 1.0              # 19.11.: wie stark der letzte Frostpuls bremst (Stufe 2 stärker)
 var gefroren := 0.0                 # Sekunden: vom Frostturm verlangsamt (schwächer als Plasmagel)
 var eingefroren := 0.0              # Sekunden: Schockfrost – steht ganz still
@@ -68,6 +69,7 @@ var _letzte_frei := Karte.KEINE    # 17.11.: letztes freie Feld, auf dem er stan
 var ohne_treffer := 0.0           # Sekunden seit dem letzten Treffer (Aufräumen: niemand erreicht ihn mehr)
 var draussen := 0.0               # Sekunden außerhalb der Zone (16.11.: frisch Gestartete zählen beim Aufräumen nicht)
 var blick := Vector2.RIGHT          # Laufrichtung (Schildträger: dorthin zeigt sein Schild)
+var ohne_cp := -1                   # 20.11. (Zange): diesen Checkpoint läuft er nicht an (-1 = alle)
 # Brakk-Mode (19.11.): Elite-Trupp, Durchbrechen, Sprung der Hunde
 var elite := false
 var _aufgehalten := 0.0             # so lange kämpft er schon gegen dieselbe Bodentruppe
@@ -84,7 +86,7 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	daten = Werte.gegner_daten(typ)   # 18.11.: mit den Werte-Mods einer eigenen Karte
 	rolle = daten["rolle"]
 	leben_faktor = p_leben_faktor
-	var grund := Werte.GEGNER_GRUND_LEBEN if int(spiel.welle) >= Werte.GRUND_LEBEN_AB_RUNDE else 0.0   # Grund-Leben erst ab Runde 6
+	var grund := Werte.GEGNER_GRUND_LEBEN if Werte.plan_runde(int(spiel.welle)) >= Werte.GRUND_LEBEN_AB_RUNDE else 0.0   # Grund-Leben erst ab Runde 6
 	max_leben = (float(daten["leben"]) + grund) * leben_faktor
 	leben = max_leben
 	var v := Werte.VERSATZ * Werte.ZELLE
@@ -270,6 +272,8 @@ func kommender_weg(hoechstens: int) -> Array[Vector2i]:
 			return felder
 	var von: Vector2i = felder[-1] if not felder.is_empty() else karte.zelle_bei(position)
 	for k in range(_ziel + 1, karte.checkpoints.size() + 1):
+		if k == ohne_cp:
+			continue
 		var stueck: Array[Vector2i] = karte.gegner_weg("hund", von, karte.ziel_zelle(k))
 		for i in range(1, stueck.size()):
 			felder.append(stueck[i])
@@ -291,8 +295,10 @@ func rest_weg() -> int:
 func plane_neu() -> void:
 	# Schon eingenommene Checkpoints muss niemand mehr ablaufen: direkt zum nächsten offenen.
 	# Der letzte Checkpoint ist Pflicht (14.11.): Zur Basis geht es immer über ihn, auch wenn er schon eingenommen ist.
+	if _ziel == ohne_cp:
+		_ziel += 1   # 20.11. (Zange): Checkpoint der anderen Hälfte auslassen
 	if karte.cp_aktiv:
-		while _ziel < karte.checkpoints.size() - 1 and karte.cp_feind[_ziel]:
+		while _ziel < karte.checkpoints.size() - 1 and (karte.cp_feind[_ziel] or _ziel == ohne_cp):
 			_ziel += 1
 	_weg = karte.gegner_weg(typ, karte.zelle_bei(position), karte.ziel_zelle(_ziel))
 	_index = 1
@@ -701,6 +707,8 @@ func nimm_schaden(menge: float, dauer: bool = false) -> void:
 		menge *= markier_faktor
 	if sproede > 0.0:
 		menge *= float(Werte.TURM_STUFE_3["frost"]["sproede"]["sproede"])
+	if sondenblick_bis > 0 and spiel.schadensquelle.begins_with("fabrik:") and spiel.schadensquelle != "fabrik:-1,-1" and Time.get_ticks_msec() < sondenblick_bis:
+		menge *= float(Werte.SONDE7["sondengewehr"]["blick_bonus"])   # 20.11.: Brakk-Mode – Sondenblick von Sonde 7: Truppen treffen härter
 	var von_hinten := false   # 18.11.: Erfolg „Von hinten“
 	if rolle == "schild" and spiel.schuss_herkunft != Vector2.INF:
 		var zu: Vector2 = spiel.schuss_herkunft - position

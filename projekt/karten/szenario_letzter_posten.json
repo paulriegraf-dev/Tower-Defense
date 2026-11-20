@@ -1,0 +1,173 @@
+{
+	"angriff": [
+		1,
+		6
+	],
+	"ausgaenge": {
+		"mitte": [
+			0,
+			6
+		],
+		"oben": [
+			1,
+			1
+		],
+		"unten": [
+			1,
+			12
+		]
+	},
+	"basis": [
+		24,
+		7
+	],
+	"basis_fest": true,
+	"beschreibung": "Nur Erdwälle und Türme – keine Fabriken, Batterien, Generatoren oder Stellungen. Gespielt im Brakk-Mode.",
+	"checkpoint_bereiche": [
+		[
+			6,
+			1,
+			9,
+			12
+		],
+		[
+			12,
+			1,
+			11,
+			12
+		]
+	],
+	"checkpoints": [
+		[
+			8,
+			6
+		],
+		[
+			17,
+			7
+		]
+	],
+	"checkpoints_fest": false,
+	"fels": [],
+	"hq": [
+		0,
+		6
+	],
+	"mauern": [
+		[
+			15,
+			4
+		],
+		[
+			15,
+			5
+		],
+		[
+			15,
+			6
+		],
+		[
+			15,
+			7
+		],
+		[
+			15,
+			8
+		],
+		[
+			15,
+			9
+		],
+		[
+			14,
+			4
+		],
+		[
+			16,
+			4
+		],
+		[
+			14,
+			9
+		],
+		[
+			16,
+			9
+		]
+	],
+	"mauern_fest": [],
+	"name": "Letzter Posten",
+	"regeln": {
+		"anfuehrer": "brakk",
+		"bauten": {
+			"batterie": false,
+			"fabrik": false,
+			"generator": false,
+			"panzer": false,
+			"stellung": false,
+			"tor": false
+		},
+		"einfuehrung": "Der letzte Posten. Keine Fabrik schickt Nachschub – du und deine Türme, sonst niemand.",
+		"herausforderung": "",
+		"modus": "brakk",
+		"runden": 15,
+		"start_budget": 300,
+		"start_leben": 15
+	},
+	"schleuder_plaetze": [
+		[
+			1,
+			0
+		],
+		[
+			1,
+			1
+		],
+		[
+			1,
+			2
+		],
+		[
+			1,
+			3
+		],
+		[
+			1,
+			4
+		],
+		[
+			1,
+			9
+		],
+		[
+			1,
+			10
+		],
+		[
+			1,
+			11
+		],
+		[
+			1,
+			12
+		],
+		[
+			1,
+			13
+		]
+	],
+	"spalten": 28,
+	"stand": {},
+	"wasser": [],
+	"wellen": {},
+	"zeilen": 14,
+	"zonenbauten_zeilen": [
+		3,
+		10,
+		10,
+		3,
+		3,
+		7,
+		10
+	]
+}

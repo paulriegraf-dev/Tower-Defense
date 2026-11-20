@@ -31,7 +31,14 @@ const LISTE: Array[Dictionary] = [
 	{"id": "von_hinten", "name": "Von hinten", "text": "Einen Schildträger mit einem Treffer von hinten erledigt.", "symbol": "tor", "versteckt": true, "belohnung": ""},
 	{"id": "unberuehrt", "name": "Unberührt", "text": "In Runde 20 kein Leben verloren und gewonnen.", "symbol": "herz", "versteckt": true, "belohnung": ""},
 	{"id": "ohne_fabrik", "name": "Ohne Nachschub", "text": "Gewonnen, ohne eine Fabrik zu bauen (Batterien zählen nicht).", "symbol": "fabrik", "versteckt": true, "belohnung": ""},
+	## 19.11.: drei Erfolge, die später Anführer freischalten (Schritt 2b)
+	{"id": "baumeister", "name": "Baumeister", "text": "In einer Partie alle fünf Formtürme gebaut, einen davon auf Stufe 3.", "symbol": "turm", "versteckt": false, "belohnung": ""},
+	{"id": "ausbilder", "name": "Ausbilder", "text": "Tutorial abgeschlossen und mit mindestens 6 Fabriken gewonnen, eine davon auf Stufe 3.", "symbol": "fabrik", "versteckt": false, "belohnung": ""},
+	{"id": "deutscher_sparer", "name": "Deutscher Sparer", "text": "Eine Runde mit mindestens 1000 Budget begonnen und die Partie gewonnen.", "symbol": "muenze", "versteckt": true, "belohnung": ""},
 ]
+## 19.11.: Schwellen der neuen Erfolge
+const AUSBILDER_FABRIKEN := 6        # so viele Fabriken beim Sieg (Pilotenfabriken zählen nicht)
+const SPARER_BUDGET := 1000          # mit so viel Budget eine Runde beginnen (normales Spiel)
 
 static var _ebene: Erfolge = null
 var _schlange: Array[Dictionary] = []

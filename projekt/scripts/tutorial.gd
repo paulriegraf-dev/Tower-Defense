@@ -203,6 +203,7 @@ func _weiter() -> void:
 
 func _naechster() -> void:
 	if _index >= _schritte.size() - 1:
+		Profil.setze_einstellung("tutorial_fertig", true)   # 19.11.: bis zum Ende durchgespielt (Erfolg „Ausbilder“)
 		beenden()
 		return
 	_index += 1
