@@ -207,7 +207,7 @@ func _ueberladen_spell(wo: Vector2, turm: Vector2i, sek: float, bis: int) -> voi
 		for e: Einheit in ego._truppen_um(wo, 2.0):
 			e.ring_schild = e.max_leben * w / 100.0
 			e.ring_schild_bis = ende
-			ego.spiel.effekte.welle(e.position, Werte.ZELLE * 0.55, Color("9fe8ff"), "heil", 0.8)
+			ego.spiel.effekte.welle(e.position, Werte.ZELLE * 0.55, hand_farbe(), "heil", 0.8)
 	w = spell_w("ueberladen", "bremswelle")
 	if w > 0.0:
 		bremse_umkreis(wo, 2.0, w)
@@ -1007,7 +1007,7 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 		# rechte Hand: Prellbolzenwerfer (Platzhalter aus Code), getönt in der Farbe des Handrings
 		var ts := Vector2(_tex_werfer.get_size()) * wpx * 1.3
 		var pos := Vector2(g.x * 0.80 - ts.x * 0.5, g.y - ts.y + 10.0 * wpx) + wipp + schwank + Vector2(_rueck * 2.0, _rueck * 6.0) * wpx
-		bild.draw_texture_rect(_tex_werfer, Rect2(pos.round(), ts), false)
+		bild.draw_texture_rect(_werferbild(), Rect2(pos.round(), ts), false)
 		var mund := pos + Vector2(ts.x * 0.5, 4.0 * wpx)
 		bild.draw_circle(mund, 3.0 * wpx, Color(hand_farbe(), 0.5 + 0.3 * sin(Time.get_ticks_msec() / 120.0)))
 		if _blitz > 0.0:
@@ -1121,6 +1121,25 @@ func werte_zeilen() -> Dictionary:
 
 
 # ------------------------------------------------------------------ Platzhalter-Grafik
+
+var _werfer_je_ring := {}
+
+## 20.11. (Paul): Werfer mit Leuchtadern in der Farbe des Handrings (ohne Ring gelb).
+func _werferbild() -> Texture2D:
+	var r := hand_ring()
+	if r == "":
+		return _tex_werfer
+	if not _werfer_je_ring.has(r):
+		var img := _male_werfer()
+		var gelb := Color("ffd34d")
+		var ziel := hand_farbe()
+		for y in img.get_height():
+			for x in img.get_width():
+				if img.get_pixel(x, y).is_equal_approx(gelb):
+					img.set_pixel(x, y, ziel)
+		_werfer_je_ring[r] = ImageTexture.create_from_image(img)
+	return _werfer_je_ring[r]
+
 
 ## Prellbolzenwerfer (rechte Hand): Brakks gezeichnete Pistole, umgefärbt in Kupfer und Gelb (Irrtürmer-Farbe).
 static func _male_werfer() -> Image:

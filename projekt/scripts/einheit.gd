@@ -498,6 +498,19 @@ func _feuere_auf(ziel: Node2D) -> void:
 	spiel.schadensquelle = "fabrik:%d,%d" % [fabrik_zelle.x, fabrik_zelle.y]   # Schadensliste: alles von hier zählt für die Fabrik
 	spiel.schuetze = self   # 18.11.: für den Erfolg „Einsamer Posten“
 	spiel.schuss_herkunft = position
+	if zustand == Zustand.AUF_POSTEN and Werte.mg_stellung():
+		# 20.11. (Paul): MG-Stellung – das Nest schießt mit seinen eigenen Werten, die Truppe ist nur Besatzung
+		_laser_ziel = null
+		if ziel == null or _abkling > 0.0:
+			return
+		var p: float = spiel.mg_feuer(self, ziel, posten_zelle)
+		if p > 0.0:
+			_abkling = p
+			letztes_ziel = ziel
+			letzter_schuss = spiel.spielzeit()
+			_sprite.flip_h = ziel.position.x < position.x
+			_sprite.angriff(minf(p, float(daten["angriff_dauer"])))
+		return
 	# Im Rauch sieht die Einheit nichts – außer mit Klarsicht (Scharfschütze ab Stufe 2) oder auf ein markiertes Ziel.
 	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (in_stellung() and spiel.peilung(posten_zelle)) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
 	if ziel == null or blind:
@@ -533,8 +546,6 @@ func _feuere_auf(ziel: Node2D) -> void:
 	if _abkling > 0.0:
 		return
 	var pause: float = daten["abklingzeit"]
-	if zustand == Zustand.AUF_POSTEN and Werte.mg_stellung():
-		pause /= float(Werte.MG_STELLUNG["takt"])   # 20.11. (Nachtrag): MG-Stellung (Sonde 7)
 	if faehigkeit == "feuerteam":
 		# je mehr Feuerteam-Schützen gerade Gegner auf derselben Kachel beschießen, desto kürzer die Pause –
 		# 17.11.: der Bonus baut sich über einige Schüsse auf (Anlauf) und verfällt bei einer Feuerpause
@@ -775,7 +786,9 @@ func nimm_schaden(menge: float) -> void:
 
 ## Reichweite in Feldern, so wie sie gerade gilt (in der Stellung mit Bonus).
 func reichweite_jetzt() -> float:
-	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) + (float(Werte.MG_STELLUNG["reichweite"]) if Werte.mg_stellung() else 0.0) if zustand == Zustand.AUF_POSTEN else _hoehe())   # 20.11. (Nachtrag): MG-Stellung
+	if zustand == Zustand.AUF_POSTEN and Werte.mg_stellung():
+		return spiel.mg_reichweite(posten_zelle)   # 20.11. (Paul): MG-Stellung – die Reichweite hängt am Nest
+	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else _hoehe())
 
 
 ## 18.11.: Anhöhe – mehr Reichweite am Boden (in der Stellung rechnet posten_bonus sie ein). Auch für Brakk.

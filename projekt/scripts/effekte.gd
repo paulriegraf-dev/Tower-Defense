@@ -454,6 +454,13 @@ func _male_boden() -> void:
 		_zeichne_brand(b[0], b[1], b[2], jetzt)
 	for b in _gele:
 		_zeichne_gel(b[0], b[1], b[2], jetzt)
+	var sp := get_parent()
+	if sp != null and sp.has_method("mg_huelsen_punkte"):
+		# 20.11. (Paul): MG-Stellung, Hülsenregen – liegende Hülsen als kleine goldene Stäbchen
+		for p: Vector2 in sp.mg_huelsen_punkte():
+			var q := p.round()
+			_boden.draw_rect(Rect2(q + Vector2(-3, -1), Vector2(6, 3)), Color("6b4a12"))
+			_boden.draw_rect(Rect2(q + Vector2(-2, -1), Vector2(4, 2)), Color("ffd34d"))
 
 
 func _karte() -> Karte:

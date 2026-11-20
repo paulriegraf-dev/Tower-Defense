@@ -134,6 +134,12 @@ static func bild_info(k: Karte, z: Vector2i, p_blick: int, p_schuss: float, alph
 		b["anker"] = Platzhalter.TT_ANKER
 		b["quelle"] = Rect2(Vector2.ZERO, Vector2(Platzhalter.TT_GROESSE))
 		return b
+	if art == "pliplop":   # 20.11. (Paul): PliPlop 3cK als Turm, Platzhalter aus Code, Aufsatz je Pfad, 8 Richtungen
+		var ring := str(Werte.PLIPLOP_TURM.get(faehigkeit, {}).get("ring", ""))
+		b["bild"] = Platzhalter.pliplop(ring)
+		b["anker"] = Platzhalter.PP_ANKER
+		b["quelle"] = Rect2(0, clampi(p_blick, 0, 7) * Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE)
+		return b
 	if art == "lanze":
 		var bildname := "lanze"
 		if stufe == 2:

@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 48          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 49          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -397,6 +397,11 @@ const TURMARTEN := {
 	"truppen": {"name": "Truppenturm", "form": "Zwei Nachbarwälle", "nachbarn": 2, "farbe": "c9a6ff",
 		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 0.0, "werkschutz": 2, "nachschub": 1.0, "leben_mal": 1.0,
 		"text": "Schießt nicht. Hält bis zu 2 Werkschutz-Truppen (Technogunner), die nachkommen, wenn eine fällt. Nur Irrtürmer."},
+	# 20.11. (Paul): PliPlop 3cK – nur der Irrtürmer (Werte.pliplop()), ohne Formvorschrift auf einem einzelnen Erdwall ohne
+	# Nachbarn, mehrere erlaubt. Ab Stufe 2 ein Pfad (Werte.PLIPLOP_TURM).
+	"pliplop": {"name": "PliPlop 3cK", "form": "Einzelwall", "nachbarn": 0, "farbe": "7fe0ff",
+		"reichweite": 2.0, "schaden": 8.0, "abklingzeit": 0.8,
+		"text": "Kleiner Turm ohne Formvorschrift: ein einzelner Erdwall ohne Nachbarwälle reicht, mehrere sind erlaubt. Schwacher Einzelschuss; ab Stufe 2 ein Pfad: Flak, Schockwelle oder Nagler. Nur Irrtürmer."},
 }
 # Turmupgrades (Klick auf den Turm), wie bei den Fabriken: Stufe 2 fest, auf Stufe 3 eine von zwei Fähigkeiten.
 const FORMTUERME_ZAHL := 5   # 20.11. (Nachtrag): Baumeister und Formenlehre zählen die fünf Formtürme (ohne Truppenturm)
@@ -408,8 +413,10 @@ const TURM_STUFE_2 := {
 	"lanze": {"schaden": 80.0, "text": "Stärkerer Strahl: 80 statt 45 Schaden."},   # 19.11.: vorher 65
 	"heil": {"heilung": 14.0, "text": "Heilt mehr: 14 statt 8 Leben."},   # 19.11.: vorher 12
 	"truppen": {"werkschutz": 3, "text": "Hält 3 statt 2 Werkschutz-Truppen, sie kommen mit dem Wertepaket (Stufe 2)."},   # 20.11. (Nachtrag)
+	"pliplop": {"text": "Pfad wählen: Flak, Schockwelle oder Nagler."},   # 20.11. (Paul): Werte stehen in PLIPLOP_TURM
 }
 const TURM_STUFE_3 := {
+	"pliplop": {},   # 20.11. (Paul): der PliPlop wählt seinen Pfad schon auf Stufe 2 (PLIPLOP_TURM)
 	"truppen": {   # 20.11. (Nachtrag): Truppenturm (Irrtürmer)
 		"nachschub": {"name": "Schneller Nachschub", "nachschub": 2.0, "text": "Werkschutz kommt doppelt so schnell nach.",
 			"stark": "lange Gefechte, viele Verluste", "schwach": "nicht stärker, solange keiner fällt"},
@@ -506,14 +513,15 @@ const ANFUEHRER_STANDARD := {
 	"truppen_fest": 0,             # 20.11.: jede Fabrik hält genau so viele Truppen, auch spezialisiert und im Gegenangriff (0 = wie gewohnt)
 	"fabrik_max_stufe": 3,         # 20.11.: höchste Fabrikstufe (4 = Elite, siehe ELITE)
 	"auftraege": false,            # 20.11.: Pauls Aufträge (scripts/auftraege.gd)
-	"mg_stellung": false,          # 20.11. (Nachtrag): Stellungen sind MG-Stellungen (MG_STELLUNG)
+	"mg_stellung": false,          # 20.11. (Nachtrag): Stellungen sind MG-Stellungen (MG_NEST)
 	"truppenturm": false,          # 20.11. (Nachtrag): Formturm „Truppenturm“ auf geraden Wällen (TURMARTEN.truppen)
+	"pliplop": false,              # 20.11. (Paul): PliPlop 3cK als Turm (Werte.PLIPLOP_TURM)
 }
 ## 20.11. (Paul): Perks der drei neuen Anführer. Brakk bleibt leer = alles wie bisher.
 const ANFUEHRER_WERTE := {
 	"brakk": {},
 	"irrtuermer": {"figur": "", "max_fabriken": 3, "turm_max_stufe": 4, "preis_turm_stufe": 0.75, "stuetze_legt_still": false,
-		"startpaket_waelle": 12, "preis_fabrik_stufe": 1.2, "truppenturm": true},
+		"startpaket_waelle": 12, "preis_fabrik_stufe": 1.2, "truppenturm": true, "pliplop": true},
 	"sonde7": {"figur": "", "preis_fabrik": 0.5, "truppen_fest": 1, "preis_fabrik_stufe": 0.75, "fabrik_max_stufe": 4, "mg_stellung": true,
 		"turm_max_stufe": 2, "gesperrt": ["generator"]},
 	"paul": {"figur": "", "zins_stufen": 10, "praemie_faktor": 1.5, "erstattung": 1.0, "start_leben": -5, "preis_wall": 1.5,
@@ -526,9 +534,8 @@ const ELITE := {"leben": 1.5, "schaden": 1.4, "groesse": 1.3, "farbe": Color(1.0
 const TURM_STUFE_4 := {"schaden": 1.2, "reichweite": 0.5, "leben": 2.0}   # ×Schaden, +Reichweite, ×Leben gegen Drohnen – 20.11. (Paul, Nachtrag): +20 %, +0,5 (vorher ×1,5, +1); dazu beide Stufe-3-Fähigkeiten
 
 
-## 20.11. (Paul, Nachtrag): MG-Stellung (Sonde 7, Normalmodus) – jede Stellung ist ein MG-Nest: die Truppe darin schießt
-## schneller und etwas weiter. Sonst wie eine normale Stellung (die Truppe darf sie verlassen). Eine Stufe.
-const MG_STELLUNG := {"takt": 1.5, "reichweite": 0.5}   # Schussrate ×, Reichweite + (nur in der Stellung)
+## 20.11. (Paul, Nachtrag): MG-Stellung (Sonde 7, Normalmodus) – jede Stellung ist ein MG-Nest. Sonst wie eine normale
+## Stellung (die Truppe darf sie verlassen). Werte und Ausbau: MG_NEST, MG_AUSBAU, MG_SONDER (weiter unten).
 
 
 static func mg_stellung() -> bool:
@@ -537,6 +544,113 @@ static func mg_stellung() -> bool:
 
 static func truppenturm() -> bool:
 	return bool(af("truppenturm"))
+
+
+## 20.11. (Paul): MG-Stellung ausbaubar (Sonde 7). Die Werte hängen am Nest, nicht an der Truppe: Wer darin sitzt, ist nur
+## Besatzung – billige, nicht ausgebaute Truppen reichen. Stufe 1 und 2 je eine von zwei Richtungen, Stufe 3 eine
+## Sonderform, die aus den beiden vorher gewählten folgt (Vorbild: BTD6-Crosspaths, Kingdom-Rush-Gimmicks, DRG-Overclocks).
+const MG_NEST := {"schaden": 9.0, "abklingzeit": 0.55, "reichweite": 3.0, "farbe": "ffd34d"}   # Grund-Nest (Stufe 0)
+const KOSTEN_MG_STUFE: Array[int] = [50, 100, 225]
+const MG_AUSBAU := [
+	{
+		"takt": {"name": "Takt", "takt": 1.5, "text": "Feuert 50 % schneller.", "stark": "viele kleine Gegner", "schwach": "Schildträger, zähe Ziele"},
+		"wucht": {"name": "Wucht", "schaden": 1.5, "text": "50 % mehr Schaden je Schuss.", "stark": "zähe Ziele", "schwach": "große Rudel"},
+	},
+	{
+		"streuung": {"name": "Streuung", "splitter": 0.6, "splitter_anteil": 0.4, "text": "Treffer splittern: 40 % Schaden an alle im Umkreis von 0,6 Feldern.", "stark": "Trupps im Gang", "schwach": "einzelne Ziele"},
+		"lafette": {"name": "Lafette", "reichweite": 1.5, "text": "+1,5 Felder Reichweite.", "stark": "lange Gänge, frühes Feuer", "schwach": "kein Mehrschaden"},
+	},
+]
+## Stufe 3: je Kombination zwei Sonderformen. Schlüssel = "<Stufe 1>+<Stufe 2>".
+const MG_SONDER := {
+	"takt+streuung": {
+		"sperrfeuer": {"name": "Sperrfeuer", "bremse_tempo": 0.6, "bremse_sek": 1.2, "text": "Jeder Treffer bremst alle im Splitterkreis 1,2 s auf 60 % Tempo.", "stark": "Rudel, Fahnensturm", "schwach": "kein Mehrschaden"},
+		"huelsenregen": {"name": "Hülsenregen", "chance": 0.35, "sek": 6.0, "stolpern": 0.6, "hoechst": 8, "text": "Leere Hülsen bleiben 6 s liegen. Wer darüberläuft, rutscht aus und steht 0,6 s.", "stark": "Engstellen vor dem Nest", "schwach": "nur, wo das Nest hintrifft"},
+	},
+	"takt+lafette": {
+		"leuchtspur": {"name": "Leuchtspur", "jeder": 5, "text": "Jeder 5. Schuss markiert sein Ziel: Alle Truppen treffen es härter.", "stark": "zusammen mit Truppen", "schwach": "allein wenig"},
+		"kuehlkreislauf": {"name": "Kühlkreislauf", "takt": 1.25, "nachbar": 0.15, "funk": 2.0, "text": "Feuert 25 % schneller, MG-Nester bis 1,5 Felder daneben 15 % schneller (mit Funkturm in Reichweite doppelt).", "stark": "Nester in einer Reihe", "schwach": "einzelnes Nest"},
+	},
+	"wucht+streuung": {
+		"splittergurt": {"name": "Splittergurt", "radius": 1.0, "anteil": 0.6, "text": "Wen das Nest tötet, zerplatzt: 60 % Schaden an alle im Umkreis von 1 Feld.", "stark": "dichte Trupps", "schwach": "zähe Einzelziele"},
+		"ladeschuss": {"name": "Ladeschuss", "sek": 6.0, "radius": 1.1, "mal": 4.0, "text": "Alle 6 s ein Plasma-Mörser über die Mauer auf die dichteste Gruppe in Reichweite (vierfacher Schaden).", "stark": "Haufen hinter Wällen", "schwach": "langsam, verstreute Gegner"},
+	},
+	"wucht+lafette": {
+		"railgun": {"name": "Railgun-Lauf", "breite": 0.3, "abpraller": 1, "text": "Schüsse durchschlagen alle in einer Linie und prallen einmal an einem Erdwall ab.", "stark": "lange gerade Gänge", "schwach": "verwinkelte Wege"},
+		"ausguck": {"name": "Ausguck", "gross": 1.5, "text": "Sieht durch Rauch und trifft große Gegner (Belagerungsturm, Schwarmgeist …) 50 % härter.", "stark": "Rauchwerfer, große Ziele", "schwach": "Rudel"},
+	},
+}
+
+
+## Werte eines MG-Nests auf Stufe `stufe` (0–3) mit den Wahlen `wahl` (Stufe 1, 2, 3).
+static func mg_werte(stufe: int, wahl: Array) -> Dictionary:
+	var d := {"schaden": float(MG_NEST["schaden"]), "abklingzeit": float(MG_NEST["abklingzeit"]), "reichweite": float(MG_NEST["reichweite"]),
+		"splitter": 0.0, "splitter_anteil": 0.0, "sonder": "", "s": {}}
+	if stufe >= 1 and wahl.size() >= 1:
+		var a: Dictionary = MG_AUSBAU[0].get(str(wahl[0]), {})
+		d["abklingzeit"] = float(d["abklingzeit"]) / float(a.get("takt", 1.0))
+		d["schaden"] = float(d["schaden"]) * float(a.get("schaden", 1.0))
+	if stufe >= 2 and wahl.size() >= 2:
+		var b: Dictionary = MG_AUSBAU[1].get(str(wahl[1]), {})
+		d["reichweite"] = float(d["reichweite"]) + float(b.get("reichweite", 0.0))
+		d["splitter"] = float(b.get("splitter", 0.0))
+		d["splitter_anteil"] = float(b.get("splitter_anteil", 0.0))
+	if stufe >= 3 and wahl.size() >= 3:
+		var s: Dictionary = mg_sonder_wahl(wahl).get(str(wahl[2]), {})
+		d["sonder"] = str(wahl[2])
+		d["s"] = s
+		d["abklingzeit"] = float(d["abklingzeit"]) / float(s.get("takt", 1.0))
+	return d
+
+
+## Die zwei Sonderformen, die nach den Wahlen auf Stufe 1 und 2 offenstehen.
+static func mg_sonder_wahl(wahl: Array) -> Dictionary:
+	if wahl.size() < 2:
+		return {}
+	return MG_SONDER.get("%s+%s" % [str(wahl[0]), str(wahl[1])], {})
+
+
+## 20.11. (Paul): Sonde 7 – die Spezialisierung entfällt, die erste Ausbaustufe führt gleich auf Stufe 2 (etwas teurer).
+const SONDE7_DIREKT_FAKTOR := 1.25
+
+static func fabrik_direkt_stufe_2() -> bool:
+	return truppen_fest() > 0
+
+
+static func preis_direkt_stufe_2() -> int:
+	return roundi(kosten_stufen()[1] * SONDE7_DIREKT_FAKTOR / 5.0) * 5
+
+
+## 20.11. (Paul): PliPlop 3cK als Turm im Normalmodus (Irrtürmer): ohne Formvorschrift auf einem einzelnen Erdwall ohne
+## Nachbarn, mehrere erlaubt. Stufe 2 = Pfad wählen (Flak, Schockwelle, Nagler), Stufe 3 und 4 verstärken den Pfad.
+const KOSTEN_PLIPLOP: int = 100
+const KOSTEN_PLIPLOP_STUFE: Array[int] = [80, 160, 320]
+## Je Pfad die Werte auf Stufe 2, 3, 4 (überschreiben TURMARTEN.pliplop).
+const PLIPLOP_TURM := {
+	"flak": {"name": "Flak", "ring": "laser", "text": "Splittergranaten: Schaden an alle im Umkreis des Ziels.", "stark": "Rudel, Trupps", "schwach": "zähe Einzelziele",
+		"stufen": [
+			{"schaden": 12.0, "abklingzeit": 1.1, "radius": 0.8, "reichweite": 2.5, "text": "Granaten mit 0,8 Feldern Umkreis, 12 Schaden."},
+			{"schaden": 18.0, "abklingzeit": 1.0, "radius": 1.0, "reichweite": 2.5, "text": "Größerer Umkreis (1 Feld), 18 Schaden."},
+			{"schaden": 26.0, "abklingzeit": 0.9, "radius": 1.2, "reichweite": 3.0, "nachbrand": 0.5, "text": "Umkreis 1,2 Felder, 26 Schaden, Splitter brennen nach (halber Schaden)."}]},
+	"schockwelle": {"name": "Schockwelle", "ring": "plasmagel", "text": "Kein Schaden: markiert alle in Reichweite und stößt Nahkämpfer zurück.", "stark": "zusammen mit Truppen, Engstellen", "schwach": "allein kein Schaden",
+		"stufen": [
+			{"schaden": 0.0, "abklingzeit": 3.0, "reichweite": 2.0, "mark_sek": 2.0, "stoss": 0.6, "text": "Alle 3 s: markiert 2 s, stößt 0,6 Felder zurück."},
+			{"schaden": 0.0, "abklingzeit": 2.6, "reichweite": 2.5, "mark_sek": 3.0, "stoss": 0.8, "text": "Alle 2,6 s, Reichweite 2,5: markiert 3 s, stößt 0,8 Felder zurück."},
+			{"schaden": 0.0, "abklingzeit": 2.2, "reichweite": 3.0, "mark_sek": 4.0, "stoss": 1.0, "bremse": 1.5, "text": "Alle 2,2 s, Reichweite 3: markiert 4 s, stößt 1 Feld zurück und bremst 1,5 s."}]},
+	"nagler": {"name": "Nagler", "ring": "markierung", "text": "Einzelziel: Jeder Treffer am selben Gegner macht 10 % mehr Schaden.", "stark": "Belagerungsturm, Schwarmgeist", "schwach": "Rudel",
+		"stufen": [
+			{"schaden": 10.0, "abklingzeit": 0.5, "reichweite": 2.5, "je_treffer": 0.10, "hoechst": 1.0, "text": "10 Schaden alle 0,5 s, +10 % je Treffer am selben Ziel (bis doppelt)."},
+			{"schaden": 13.0, "abklingzeit": 0.45, "reichweite": 3.0, "je_treffer": 0.12, "hoechst": 1.5, "text": "13 Schaden, +12 % je Treffer (bis 2,5-fach), Reichweite 3."},
+			{"schaden": 16.0, "abklingzeit": 0.4, "reichweite": 3.5, "je_treffer": 0.15, "hoechst": 2.0, "text": "16 Schaden, +15 % je Treffer (bis dreifach), Reichweite 3,5."}]},
+}
+
+
+static func pliplop() -> bool:
+	return bool(af("pliplop"))
+
+
+static func kosten_pliplop_stufen() -> Array[int]:
+	return _af_preise(KOSTEN_PLIPLOP_STUFE, "preis_turm_stufe")
 
 
 ## 20.11. (Nachtrag): Texte zu Stufe 4 aus den Werten (Fabrikmenü, Meldungen, Anführer-Perks).

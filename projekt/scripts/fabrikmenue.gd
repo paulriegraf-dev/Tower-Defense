@@ -40,7 +40,7 @@ func _ready() -> void:
 
 
 func oeffne(z: Vector2i) -> void:
-	if not spiel.fabriken.has(z) and not _ist_turm(z) and not _ist_generator(z):
+	if not spiel.fabriken.has(z) and not _ist_turm(z) and not _ist_generator(z) and not _ist_mg(z):
 		return
 	zelle = z
 	_stand = ""
@@ -61,6 +61,11 @@ func _ist_generator(z: Vector2i) -> bool:
 	return spiel.karte.inhalt(z) == Karte.GENERATOR
 
 
+## 20.11. (Paul): MG-Stellung (Sonde 7) – das Nest hat einen eigenen Ausbau.
+func _ist_mg(z: Vector2i) -> bool:
+	return Werte.mg_stellung() and spiel.karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG
+
+
 func taste(code: int) -> void:
 	if not visible:
 		return
@@ -74,7 +79,7 @@ func taste(code: int) -> void:
 func _process(_delta: float) -> void:
 	if not visible:
 		return
-	if not spiel.fabriken.has(zelle) and not _ist_turm(zelle) and not _ist_generator(zelle):
+	if not spiel.fabriken.has(zelle) and not _ist_turm(zelle) and not _ist_generator(zelle) and not _ist_mg(zelle):
 		schliesse()
 		return
 	_baue()
@@ -118,7 +123,7 @@ func _objekt_text(z: Vector2i) -> String:
 
 
 func _stats_text() -> String:
-	if _ist_turm(zelle) or _ist_generator(zelle):
+	if _ist_turm(zelle) or _ist_generator(zelle) or _ist_mg(zelle):
 		return _objekt_text(zelle)
 	var g: Dictionary = spiel.gesamt_stats.get(_quelle(), {})
 	var text := "%d Truppen · %d Schaden · %d Kills" % [spiel.truppen_limit(zelle), roundi(float(g.get("schaden", 0.0))), int(g.get("kills", 0))]
@@ -313,7 +318,11 @@ func _faehigkeiten(wahl: Dictionary, preis: int, aktion: Callable, zahlbar: bool
 
 
 func _baue() -> void:
-	if _ist_turm(zelle):
+	if _ist_mg(zelle):
+		_baue_mg()
+	elif _ist_turm(zelle) and str(spiel.karte.turm_art.get(zelle, "")) == "pliplop":
+		_baue_pliplop()
+	elif _ist_turm(zelle):
 		_baue_turm()
 	elif _ist_generator(zelle):
 		_baue_generator()
@@ -375,13 +384,22 @@ func _baue_fabrik() -> void:
 		_chips("", tw, true)   # ohne Überschrift: passen so in eine Zeile
 		if not bauphase:
 			_zeile("In der Welle gilt das Umstellen für die nächste Truppe.", Stil.KLEIN, Stil.TEXT_BLASS)
-	_pfad(["Grund", "Spezial", "Stufe 2", "Fähigkeit"] + (["Elite"] if Werte.fabrik_max_stufe() >= 4 else []), stufe + 1)   # 20.11.: Stufe 4
+	if Werte.fabrik_direkt_stufe_2():   # 20.11. (Paul): Sonde 7 – ohne Spezialisierung
+		_pfad(["Grund", "Stufe 2", "Fähigkeit"] + (["Elite"] if Werte.fabrik_max_stufe() >= 4 else []), maxi(1, stufe))
+	else:
+		_pfad(["Grund", "Spezial", "Stufe 2", "Fähigkeit"] + (["Elite"] if Werte.fabrik_max_stufe() >= 4 else []), stufe + 1)   # 20.11.: Stufe 4
 	if spiel.brakk_modus:
 		# 18.11. (Paul): im Brakk-Mode keine Ausbauten – Truppe und Stufe kommen über Brakks Ringfelder
 		var ring := str(f.get("ring", ""))
 		_zeile("Im Feld des Rings: baut %s auf Stufe %d." % [d["name"], stufe] if ring != "" else "Brakk-Mode: keine Ausbauten. Ein Ringfeld (Lichtterminal an der Basis, [C] in der Bauphase) gibt Fabriken Truppe und Stufe.", Stil.KLEIN, Stil.LEUCHT)
+	elif stufe == 0 and Werte.fabrik_direkt_stufe_2():
+		# 20.11. (Paul): Sonde 7 – ohne Spezialisierung gleich auf Stufe 2
+		var pd := Werte.preis_direkt_stufe_2()
+		var zahlbar_d: bool = spiel.budget >= pd
+		_upgrade_knopf = _karte_breit("Stufe 2", pd, "Bleibt bei %s. %s" % [d["name"], Werte.STUFE_2[f["typ"]]["text"]],
+			spiel.werte_auf.bind(zelle), zahlbar_d, not bauphase or not zahlbar_d)
 	elif stufe == 0:
-		var spezial_text := "Bleibt bei %s. Umstellen geht danach nicht mehr." if Werte.truppen_fest() > 0 else "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr."   # 20.11.: Sonde 7
+		var spezial_text := "Bleibt bei %s und hält drei statt zwei Truppen. Umstellen geht danach nicht mehr."
 		_upgrade_knopf = _karte_breit("Spezialisieren", preise[0], spezial_text % d["name"],
 			spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
 	elif stufe == 1:
@@ -442,6 +460,95 @@ func _baue_turm() -> void:
 	_fertig()
 
 
+## 20.11. (Paul): MG-Stellung (Sonde 7) – Ausbau am Nest. Stufe 1 und 2 je eine von zwei Richtungen, Stufe 3 die
+## Sonderform, die aus beiden folgt. Die Truppe darin ist nur Besatzung.
+func _baue_mg() -> void:
+	var k: Karte = spiel.karte
+	var stufe := int(k.mg_stufe.get(zelle, 0))
+	var wahl: Array = k.mg_wahl.get(zelle, [])
+	var bauphase: bool = spiel.ausbau_moeglich()
+	var naechste := stufe < 3
+	var preis: int = Werte.KOSTEN_MG_STUFE[stufe] if naechste else 0
+	var kann_zahlen: bool = naechste and spiel.budget >= preis
+	var besetzt: bool = k.posten.has(zelle)
+	var stand := "mg|%d|%s|%s|%s|%s" % [stufe, "|".join(PackedStringArray(wahl)), bauphase, kann_zahlen, besetzt]
+	if stand == _stand:
+		return
+	_stand = stand
+	_leeren()
+	var w := Werte.mg_werte(stufe, wahl)
+	_kopf("MG-Stellung", "Stufe %d" % stufe)
+	_zeile("Schaden %s alle %s s · Reichweite %s. Die Werte hängen am Nest – jede Truppe darin schießt so." % [
+		str(snappedf(float(w["schaden"]), 0.1)).replace(".", ","), str(snappedf(float(w["abklingzeit"]), 0.01)).replace(".", ","),
+		str(snappedf(float(spiel.mg_reichweite(zelle)), 0.1)).replace(".", ",")], Stil.KLEIN, Stil.TEXT_BLASS)
+	if not besetzt:
+		_zeile("Unbesetzt: Eine Truppe aus einer Fabrik muss hinauf.", Stil.KLEIN, Stil.WARN)
+	_stats_zeile()
+	var namen: Array = ["Nest"]
+	for i in 3:
+		var n := "Stufe %d" % (i + 1) if i < 2 else "Sonder"
+		if i < wahl.size():
+			var quelle: Dictionary = Werte.MG_AUSBAU[i] if i < 2 else Werte.mg_sonder_wahl(wahl)
+			n = str(quelle.get(str(wahl[i]), {}).get("name", n)).split(" ")[0]
+		namen.append(n)
+	_pfad(namen, stufe + 1)
+	for i in wahl.size():
+		var q: Dictionary = Werte.MG_AUSBAU[i] if i < 2 else Werte.mg_sonder_wahl(wahl)
+		var e: Dictionary = q.get(str(wahl[i]), {})
+		if not e.is_empty():
+			_zeile("%s: %s" % [e["name"], e["text"]], Stil.KLEIN, Stil.GOLD if i == 2 else Stil.LEUCHT)
+	if naechste:
+		var auswahl: Dictionary = Werte.MG_AUSBAU[stufe] if stufe < 2 else Werte.mg_sonder_wahl(wahl)
+		_faehigkeiten(auswahl, preis, spiel.werte_auf, kann_zahlen, not bauphase or not kann_zahlen)
+		if not bauphase:
+			_zeile("Ausbauen geht nur zwischen den Wellen.", Stil.KLEIN, Stil.TEXT_BLASS)
+	_fertig()
+
+
+## 20.11. (Paul): PliPlop 3cK (Irrtürmer) – Stufe 2 wählt den Pfad (Flak, Schockwelle, Nagler), Stufe 3 und 4 verstärken ihn.
+func _baue_pliplop() -> void:
+	var k: Karte = spiel.karte
+	var stufe := int(k.turm_stufe.get(zelle, 1))
+	var pfad := str(k.turm_faehigkeit.get(zelle, ""))
+	var bauphase: bool = spiel.ausbau_moeglich()
+	var preise: Array[int] = Werte.kosten_pliplop_stufen()
+	var naechste := stufe < 4
+	var kann_zahlen: bool = naechste and spiel.budget >= preise[stufe - 1]
+	var stand := "pp|%d|%s|%s|%s|%s" % [stufe, pfad, bauphase, kann_zahlen, k.turm_aktiv(zelle)]
+	if stand == _stand:
+		return
+	_stand = stand
+	_leeren()
+	if stufe == 1:
+		BREITE = BREITE_DREI
+	var d: Dictionary = Werte.TURMARTEN["pliplop"]
+	_kopf(str(d["name"]), "Stufe %d" % stufe)
+	_zeile("Schaden %s alle %s s · Reichweite %s" % [str(snappedf(float(k.turm_wert(zelle, "schaden")), 0.1)).replace(".", ","),
+		str(snappedf(float(k.turm_wert(zelle, "abklingzeit")), 0.01)).replace(".", ","), str(snappedf(float(k.turm_wert(zelle, "reichweite")), 0.1)).replace(".", ",")] \
+		if pfad != "schockwelle" else "Kein Schaden · alle %s s · Reichweite %s" % [str(snappedf(float(k.turm_wert(zelle, "abklingzeit")), 0.01)).replace(".", ","),
+		str(snappedf(float(k.turm_wert(zelle, "reichweite")), 0.1)).replace(".", ",")], Stil.KLEIN, Stil.TEXT_BLASS)
+	_stats_zeile()
+	if not k.turm_aktiv(zelle):
+		_zeile("Schweigt gerade: lahmgelegt.", Stil.KLEIN, Stil.WARN)
+	var p: Dictionary = Werte.PLIPLOP_TURM.get(pfad, {})
+	_pfad(["Grund", str(p.get("name", "Pfad")), "Stufe 3", "Stufe 4"], stufe)
+	if stufe == 1:
+		var wahl := {}
+		for name: String in Werte.PLIPLOP_TURM:
+			var e: Dictionary = Werte.PLIPLOP_TURM[name]
+			wahl[name] = {"name": e["name"], "text": "%s %s" % [e["text"], e["stufen"][0]["text"]], "stark": e["stark"], "schwach": e["schwach"]}
+		_faehigkeiten(wahl, preise[0], spiel.werte_auf, kann_zahlen, not bauphase or not kann_zahlen)
+	else:
+		_zeile("%s: %s" % [p["name"], p["text"]], Stil.KLEIN, Stil.LEUCHT)
+		_zeile("Jetzt: " + str(p["stufen"][stufe - 2]["text"]), Stil.KLEIN, Stil.GOLD if stufe >= 4 else Stil.LEUCHT)
+		if naechste:
+			_upgrade_knopf = _karte_breit("Stufe %d" % (stufe + 1), preise[stufe - 1], str(p["stufen"][stufe - 1]["text"]),
+				spiel.werte_auf.bind(zelle), kann_zahlen, not bauphase or not kann_zahlen)
+	if naechste and not bauphase:
+		_zeile("Ausbauen geht nur zwischen den Wellen.", Stil.KLEIN, Stil.TEXT_BLASS)
+	_fertig()
+
+
 ## Batterie mit Pilotenfabrik: feste Stufen statt Truppenwahl.
 func _baue_batterie(stufe: int, bauphase: bool, naechste: bool, kann_zahlen: bool) -> void:
 	_kopf("Batterie", "Stufe %d" % stufe)
@@ -474,6 +581,8 @@ func _baue_batterie(stufe: int, bauphase: bool, naechste: bool, kann_zahlen: boo
 
 ## Reichweite des Gebäudes in Feldern (für den Abstand; 0 = keine).
 func _reichweite() -> float:
+	if _ist_mg(zelle):
+		return float(spiel.mg_reichweite(zelle))
 	if _ist_turm(zelle):
 		return float(spiel.karte.turm_wert(zelle, "reichweite"))
 	if spiel.karte.paar.has(zelle):

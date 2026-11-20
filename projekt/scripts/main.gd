@@ -592,6 +592,10 @@ func _setze_stand(stand: Dictionary) -> void:
 					karte.turm_stufe[Vector2i(int(w[0]), int(w[1]))] = int(w[5])
 					if w.size() > 6 and str(w[6]) != "":
 						karte.turm_faehigkeit[Vector2i(int(w[0]), int(w[1]))] = str(w[6])
+				if art == "stellung" and w.size() > 6 and int(w[5]) > 1:   # 20.11. (Paul): MG-Stellung – Stufe und Wahlen
+					var mz := Vector2i(int(w[0]), int(w[1]))
+					karte.mg_stufe[mz] = int(w[5]) - 1
+					karte.mg_wahl[mz] = Array(str(w[6]).split("|", false))
 				if art == "magnet" and w.size() > 4 and (w[4] as Array).size() == 2:
 					karte.magnet_richtung[Vector2i(int(w[0]), int(w[1]))] = Vector2i(int(w[4][0]), int(w[4][1]))
 	for f: Dictionary in stand["fabriken"]:
@@ -1027,19 +1031,19 @@ func _fabrik_gebaut() -> bool:
 
 ## 20.11. (Paul): Pauls Aufträge (scripts/auftraege.gd). `auftrag` = laufender Auftrag ({} = keiner).
 var auftrag: Dictionary = {}
-var auftrag_letzter := ""   # nie zweimal derselbe hintereinander
+var auftrag_letzter := ""   # Kennungen der letzten Runde (mit Komma) – nie gleich noch einmal
+var gratis_fabriken := 0    # 20.11. (Paul): Sachpreis aus Aufträgen – so viele Fabriken kosten nichts
 
 
 func _auftrag_neu() -> void:
 	auftrag = Auftraege.neuer(self)
 	if not auftrag.is_empty():
-		var a := Auftraege.eintrag(str(auftrag["id"]))
-		melde("%s – %s" % [Auftraege.titel(auftrag), a["text"]], 9.0)
+		melde("%s für diese Runde – die Liste steht oben links." % Auftraege.titel(auftrag), 7.0)
 
 
 func _auftrag_pruefen(wann: String) -> void:
 	if not auftrag.is_empty() and Auftraege.pruefe(self, auftrag, wann):
-		auftrag_letzter = str(auftrag["id"])
+		auftrag_letzter = Auftraege.kennungen(auftrag)
 		auftrag = {}
 
 
@@ -1061,7 +1065,7 @@ func _pruefe_baumeister(neue_art: String = "") -> void:
 	if neue_art != "" and not formen.has(neue_art):
 		formen.append(neue_art)
 		_protokoll["formen"] = formen
-	if formen.filter(func(a: Variant) -> bool: return str(a) != "truppen").size() < Werte.FORMTUERME_ZAHL:   # 20.11. (Nachtrag): ohne Truppenturm
+	if formen.filter(func(a: Variant) -> bool: return not str(a) in ["truppen", "pliplop"]).size() < Werte.FORMTUERME_ZAHL:   # 20.11. (Nachtrag): ohne Truppenturm
 		return
 	for z: Vector2i in karte.turm_stufe:
 		if int(karte.turm_stufe[z]) >= 3:
@@ -1507,7 +1511,7 @@ func _speichere_zwischenstand() -> void:
 		"stand": Phantom._stand(_zellen_jetzt(), _schilde_jetzt()),
 		"kommandant": [kommandant.aufstellung.x, kommandant.aufstellung.y] if kommandant != null else [],
 		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad, "herausforderung": herausforderung, "anfuehrer": Werte.anfuehrer,   # 19.11.
-		"auftrag": auftrag, "auftrag_letzter": auftrag_letzter,   # 20.11.
+		"auftrag": auftrag, "auftrag_letzter": auftrag_letzter, "gratis_fabriken": gratis_fabriken,   # 20.11.
 		"protokoll": _protokoll, "protokoll_datei": _protokoll_datei, "kills": _profil_kills,
 	}
 	if brakk_modus and kommandant != null and kommandant.fortschritt != null:
@@ -1590,6 +1594,9 @@ func _zellen_jetzt() -> Dictionary:
 		if typ == Karte.WALL:
 			var w := {"typ": "wall", "ausbau": str(namen.get(karte.ausbau.get(z, -1), "")), "panzer": karte.panzer.has(z),
 				"stufe": int(karte.turm_stufe.get(z, 1)), "faehigkeit": str(karte.turm_faehigkeit.get(z, ""))}
+			if karte.mg_stufe.has(z):   # 20.11. (Paul): MG-Stellung – Stufe + 1 und Wahlen im selben Feld wie beim Turm
+				w["stufe"] = int(karte.mg_stufe[z]) + 1
+				w["faehigkeit"] = "|".join(PackedStringArray(karte.mg_wahl.get(z, [])))
 			if karte.magnet_richtung.has(z):
 				var r: Vector2i = karte.magnet_richtung[z]
 				w["richtung"] = [r.x, r.y]
@@ -1671,6 +1678,9 @@ func _lade_zwischenstand() -> void:
 	var gesichert: Variant = d.get("auftrag", {})   # 20.11.: Pauls Auftrag der Bauphase (nicht neu ziehen)
 	auftrag = (gesichert as Dictionary) if gesichert is Dictionary else {}
 	auftrag_letzter = str(d.get("auftrag_letzter", ""))
+	gratis_fabriken = int(d.get("gratis_fabriken", 0))
+	if not auftrag.has("liste"):
+		auftrag = {}   # Spielstand im alten Format (ein einzelner Auftrag)
 	freie_waelle = int(d.get("freie_waelle", 0))
 	variante = int(d.get("variante", 0))
 	karte.cp_aktiv = Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE   # _naechste_bauphase schaltet sie nur genau in dieser Runde an
@@ -2189,6 +2199,7 @@ func _process(delta: float) -> void:
 	_kampf_sek += delta
 	_braende_wirken(delta)
 	_tuerme_feuern(delta)
+	_mg_huelsen_wirken(delta)   # 20.11. (Paul): MG-Stellung, Hülsenregen
 	_magnete_ziehen(delta)
 	_batterien_feuern(delta)
 	_checkpoints_halten(delta)
@@ -2528,6 +2539,9 @@ func _tuerme_feuern(delta: float) -> void:
 			continue
 		if art_name == "truppen":
 			_truppenturm(z, delta)   # 20.11. (Nachtrag): schießt nicht, hält Werkschutz
+			continue
+		if art_name == "pliplop":
+			_pliplop_turm(z, delta)   # 20.11. (Paul): PliPlop 3cK (Irrtürmer)
 			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
 		schadensquelle = "turm:" + art_name
@@ -4879,6 +4893,8 @@ func kosten(typ: int) -> int:
 			return Werte.KOSTEN_GENERATOR
 		Karte.BATTERIE:
 			return batterie_preis(_batterien())
+	if gratis_fabriken > 0:
+		return 0   # 20.11. (Paul): Gratis-Fabrik aus einem Auftrag
 	# Fabriken werden teurer, je mehr schon stehen (Pilotenfabriken gehören zur Batterie und zählen nicht mit)
 	return int(roundf(Werte.kosten_fabrik() * pow(1.0 + fabrik_prozent() / 100.0, _normale_fabriken()) / 5.0)) * 5   # 19.11.: Preis je Anführer
 
@@ -5025,6 +5041,8 @@ func bau_hindernis(z: Vector2i, typ: int) -> String:
 ## 18.11.: Preis an einem bestimmten Feld – ein Erdwall auf einer Ruine ist billiger.
 func kosten_bei(z: Vector2i, typ: int) -> int:
 	var preis := kosten(typ)
+	if typ == Karte.TURM and karte.ausbau.get(z, Karte.FREI) != Karte.TURM and karte.turm_form(z) == "pliplop":
+		return Werte.KOSTEN_PLIPLOP   # 20.11. (Paul): PliPlop 3cK
 	if typ == Karte.WALL and preis > 0 and karte.boden.get(z, "") == "ruine":
 		return mini(preis, Werte.RUINE_KOSTEN_WALL)
 	return preis
@@ -5044,6 +5062,9 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if typ == Karte.STELLUNG and freie_stellungen > 0:
 		freie_stellungen -= 1
 		_gratis_stellung[z] = true
+	if typ == Karte.FABRIK and gratis_fabriken > 0:
+		gratis_fabriken -= 1   # 20.11. (Paul): Gratis-Fabrik aus einem Auftrag (gibt beim Abriss nichts zurück)
+		_gratis[z] = true
 	_merke_bezahlt(z, "panzer" if typ == Karte.PANZER else ("ausbau" if _ist_ausbau(typ) else "bau"), preis)
 	budget -= preis
 	if not still:
@@ -5078,7 +5099,7 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		karte.magnet_richtung[z] = r
 	if _ist_ausbau(typ):
 		karte.baue_aus(z, typ)
-		if typ == Karte.TURM and karte.turm_art.has(z) and str(karte.turm_art[z]) != "truppen" and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.FORMTUERME_ZAHL:
+		if typ == Karte.TURM and karte.turm_art.has(z) and not str(karte.turm_art[z]) in ["truppen", "pliplop"] and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.FORMTUERME_ZAHL:
 			erfolg("formenlehre")   # 18.11.
 		if typ == Karte.TURM and karte.turm_art.has(z):
 			_pruefe_baumeister(str(karte.turm_art[z]))   # 19.11.
@@ -5134,8 +5155,8 @@ func erstattung(z: Vector2i) -> int:
 	if not frisch_bau.has("bau"):
 		if paar:
 			alt += batterie_preis(maxi(0, _batterien() - 1))   # der Preis der zuletzt gebauten Batterie
-		elif war == Karte.WALL and _gratis.has(z):
-			pass   # aus dem Startpaket: gratis gebaut, gibt nichts zurück
+		elif (war == Karte.WALL or war == Karte.FABRIK) and _gratis.has(z):
+			pass   # aus dem Startpaket bzw. einem Auftrag: gratis gebaut, gibt nichts zurück
 		elif war == Karte.FABRIK:
 			# der Preis, den die zuletzt gebaute Fabrik gekostet hat
 			alt += int(roundf(Werte.kosten_fabrik() * pow(1.0 + fabrik_prozent() / 100.0, maxi(0, _normale_fabriken() - 1)) / 5.0)) * 5
@@ -5143,16 +5164,23 @@ func erstattung(z: Vector2i) -> int:
 			alt += kosten_bei(z, war)   # 18.11.: auf der Ruine zählt der billigere Preis
 	var ausbau: int = karte.ausbau.get(z, Karte.FREI)
 	if ausbau != Karte.FREI and not frisch_bau.has("ausbau") and not (ausbau == Karte.STELLUNG and _gratis_stellung.has(z)):
-		alt += kosten(ausbau)
+		alt += Werte.KOSTEN_PLIPLOP if ausbau == Karte.TURM and karte.turm_art.get(z, "") == "pliplop" else kosten(ausbau)   # 20.11. (Paul): PliPlop
 	if karte.panzer.has(z) and not frisch_bau.has("panzer"):
 		alt += Werte.KOSTEN_PANZER
 	if ausbau == Karte.TURM:
+		var tp: Array[int] = Werte.kosten_pliplop_stufen() if karte.turm_art.get(z, "") == "pliplop" else Werte.kosten_turm_stufen()   # 20.11. (Paul)
 		for i in maxi(0, int(karte.turm_stufe.get(z, 1)) - 1 - int(frisch_stufen.get("stufen_n", 0))):
-			alt += Werte.kosten_turm_stufen()[i]
+			alt += tp[i]
+	if ausbau == Karte.STELLUNG:
+		for i in maxi(0, int(karte.mg_stufe.get(z, 0)) - int(frisch_stufen.get("stufen_n", 0))):
+			alt += Werte.KOSTEN_MG_STUFE[i]   # 20.11. (Paul): MG-Stellung
 	if fabriken.has(stufenfeld):
 		var preise: Array[int] = Werte.KOSTEN_BATTERIE_STUFE if paar else Werte.kosten_stufen()
-		for i in maxi(0, int((fabriken[stufenfeld].get("ring_vorher", fabriken[stufenfeld]) as Dictionary).get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0))):   # 18.11.: Brakk-Ring – nur die bezahlte Stufe
+		var n_alt := maxi(0, int((fabriken[stufenfeld].get("ring_vorher", fabriken[stufenfeld]) as Dictionary).get("stufe", 0)) - int(frisch_stufen.get("stufen_n", 0)))   # 18.11.: Brakk-Ring – nur die bezahlte Stufe
+		for i in n_alt:
 			alt += preise[i]
+		if not paar and Werte.fabrik_direkt_stufe_2() and n_alt >= 2:
+			alt += Werte.preis_direkt_stufe_2() - preise[0] - preise[1]   # 20.11. (Paul): Sonde 7 – Stufe 1 und 2 in einem Kauf
 	return voll + roundi(alt * Werte.erstattung())   # 19.11.: Anteil je Anführer
 
 
@@ -5211,6 +5239,10 @@ func _waehle_aus(maus: Vector2, z: Vector2i) -> bool:
 		_auswahl.queue_redraw()
 	_auswahl = null
 	karte.auswahl = Karte.KEINE
+	if Werte.mg_stellung() and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG and phase != Phase.ENDE and phantom_modus != "angriff":
+		karte.auswahl = z   # 20.11. (Paul): MG-Stellung – Klick öffnet den Ausbau des Nests (Reichweite wie bei einem Turm)
+		_oeffne_fabrikmenue(z)
+		return true
 	var beste := 34.0
 	for e in einheiten:
 		var d := maus.distance_to(e.position + Vector2(0, -8))
@@ -5291,6 +5323,8 @@ func stelle_um(z: Vector2i, neu: String) -> void:
 func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	if ausbau_moeglich() and karte.ausbau.get(z, Karte.FREI) == Karte.TURM:
 		return werte_turm_auf(z, faehigkeit)
+	if karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG and Werte.mg_stellung():
+		return werte_mg_auf(z, faehigkeit)   # 20.11. (Paul): MG-Stellung (Sonde 7)
 	if not ausbau_moeglich() or not fabriken.has(z):
 		return false
 	if karte.paar.has(z):
@@ -5303,14 +5337,20 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 		return false   # 18.11. (Paul): Brakk-Mode – keine Fabrik-Ausbauten, alles über Brakks Ringe
 	if stufe == 2 and not (Werte.STUFE_3[fabriken[z]["typ"]] as Dictionary).has(faehigkeit):
 		return false
-	if budget < preise[stufe]:
+	# 20.11. (Paul): Sonde 7 – die Spezialisierung entfällt, der erste Ausbau führt gleich auf Stufe 2 (etwas teurer)
+	var direkt := stufe == 0 and Werte.fabrik_direkt_stufe_2()
+	var preis: int = Werte.preis_direkt_stufe_2() if direkt else preise[stufe]
+	if budget < preis:
 		melde("Nicht genug Budget.")
 		return false
-	_merke_bezahlt(z, "stufen", preise[stufe])
-	budget -= preise[stufe]
-	fabriken[z]["stufe"] = stufe + 1
-	karte.fabrik_stufe[z] = stufe + 1
-	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
+	_merke_bezahlt(z, "stufen", preis)
+	if direkt:
+		_bezahlt[z]["stufen_n"] = int(_bezahlt[z].get("stufen_n", 0)) + 1   # zählt als zwei Stufen
+	budget -= preis
+	var neu_stufe := 2 if direkt else stufe + 1
+	fabriken[z]["stufe"] = neu_stufe
+	karte.fabrik_stufe[z] = neu_stufe
+	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": neu_stufe}
 	Auftraege.zaehle(auftrag, "upgrade")   # 20.11.
 	var d: Dictionary = Werte.EINHEITEN[fabriken[z]["typ"]]
 	if stufe == 2:
@@ -5323,8 +5363,8 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	_notiere(eintrag)
 	if stufe == 3:
 		melde("%s Stufe 4 – Elite: %s." % [d["name"], Werte.elite_text()], 5.0)   # 20.11.; Nachtrag: Text aus den Werten
-	elif stufe == 0 and Werte.truppen_fest() > 0:
-		melde("Spezialisiert auf %s: bleibt bei dieser Truppe." % d["name"], 4.0)   # 20.11.: Sonde 7 – weiter eine Truppe
+	elif direkt:
+		melde("%s gleich auf Stufe 2: %s." % [d["name"], Werte.STUFE_2[fabriken[z]["typ"]]["text"]], 5.0)   # 20.11. (Paul): Sonde 7
 	elif stufe == 0:
 		melde("Spezialisiert auf %s: hält jetzt drei Truppen und bleibt bei dieser Truppe." % d["name"], 4.0)
 	else:
@@ -5334,6 +5374,8 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 
 ## Turm aufwerten: Stufe 2 fest, Stufe 3 mit einer Fähigkeit aus Werte.TURM_STUFE_3.
 func werte_turm_auf(z: Vector2i, faehigkeit: String = "") -> bool:
+	if karte.turm_art.get(z, "") == "pliplop":
+		return _werte_pliplop_auf(z, faehigkeit)   # 20.11. (Paul): PliPlop 3cK
 	var stufe := int(karte.turm_stufe.get(z, 1))
 	if stufe >= Werte.turm_max_stufe():   # 19.11.: höchste Turmstufe je Anführer (Brakk: 3)
 		return false
@@ -5994,3 +6036,354 @@ func _knopf(eltern: Control, x: float, breite: float, aktion: Callable, umschalt
 	b.pressed.connect(aktion)
 	eltern.add_child(b)
 	return b
+
+
+# ------------------------------------------------------------------ 20.11. (Paul): MG-Stellung ausbaubar (Sonde 7)
+# Das Nest schießt mit seinen eigenen Werten (Werte.MG_NEST, MG_AUSBAU, MG_SONDER); die Truppe darin ist nur Besatzung.
+
+var _mg_schuesse := {}        # Nest -> Schusszähler (Leuchtspur)
+var _mg_ladung := {}          # Nest -> Spielzeit des letzten Ladeschusses
+var _mg_huelsen: Array = []   # [Position, Restzeit, Nest] – Hülsenregen
+
+
+func mg_werte(z: Vector2i) -> Dictionary:
+	var wahl: Array = karte.mg_wahl.get(z, [])
+	return Werte.mg_werte(int(karte.mg_stufe.get(z, 0)), wahl)
+
+
+func mg_reichweite(z: Vector2i) -> float:
+	var w := mg_werte(z)
+	return maxf(0.5, float(w["reichweite"]) + (Werte.WACHPOSTEN_BONUS if karte.ist_wachposten(z) else 0.0) + karte.anhoehe_bonus(z) + Werte.mod("truppen_reichweite"))
+
+
+## Kühlkreislauf: MG-Nester in der Nähe eines Nests mit Kühlkreislauf feuern schneller (Faktor ≥ 1).
+func _mg_takt(z: Vector2i) -> float:
+	var f := 1.0
+	var s: Dictionary = Werte.MG_SONDER["takt+lafette"]["kuehlkreislauf"]
+	for n: Vector2i in karte.mg_stufe:
+		if n == z or int(karte.mg_stufe[n]) < 3 or karte.ausbau.get(n, Karte.FREI) != Karte.STELLUNG:
+			continue
+		var w: Array = karte.mg_wahl.get(n, [])
+		if w.size() < 3 or str(w[2]) != "kuehlkreislauf" or Vector2(n - z).length() > 1.5:
+			continue
+		var bonus := float(s["nachbar"]) * (float(s["funk"]) if funk_faktor(n) < 1.0 else 1.0)
+		f = maxf(f, 1.0 + bonus)
+	return f
+
+
+## Ein Schuss des MG-Nests auf `z` mit der Truppe `e` als Besatzung. Rückgabe: Pause bis zum nächsten Schuss (0 = kein Schuss).
+func mg_feuer(e: Einheit, ziel: Node2D, z: Vector2i) -> float:
+	if not is_instance_valid(ziel):
+		return 0.0
+	var w := mg_werte(z)
+	var sonder := str(w["sonder"])
+	var s: Dictionary = w["s"]
+	var g_ziel: Gegner = ziel as Gegner
+	if im_rauch(e.position) and sonder != "ausguck" and not peilung(z) and not (g_ziel != null and g_ziel.markiert > 0.0):
+		return 0.0   # im Rauch sieht das Nest nichts – außer mit Ausguck oder Peilsender
+	var pause := float(w["abklingzeit"]) / _mg_takt(z) * funk_faktor(z)
+	if e.sturm_bis > 0.0:
+		pause *= float(Werte.KOMMANDANT["sturm_feuer"])
+	var farbe := Color(Werte.MG_NEST["farbe"])
+	var von := e.position + Vector2(14 * (-1 if ziel.position.x < e.position.x else 1), -10)
+	schadensquelle = "fabrik:%d,%d" % [e.fabrik_zelle.x, e.fabrik_zelle.y]
+	schuetze = e
+	schuss_herkunft = e.position
+	var schaden := float(w["schaden"]) * Werte.mod_faktor("truppen_schaden")
+	Ton.am_ort(self, Ton.fuer_truppe(e.daten), e.position)
+	if brakk_geschosse != null and brakk_geschosse.ist_brakk(ziel):
+		brakk_geschosse.schiesse("laser", von, 0.45, schaden, "technogunner", schadensquelle)
+		return pause
+	if g_ziel == null:
+		schuss(von, ziel.position, farbe)
+		ziel.call("nimm_schaden", schaden)
+		return pause
+	if sonder == "ausguck" and BrakkFortschritt.gross(g_ziel):
+		schaden *= float(s["gross"])
+	# Railgun-Lauf: durch alle in einer Linie, einmal an einem Erdwall abgeprallt
+	if sonder == "railgun":
+		_mg_railgun(z, von, g_ziel.position, mg_reichweite(z) * Werte.ZELLE, schaden, farbe, float(s["breite"]) * Werte.ZELLE)
+		return pause
+	schuss(von, g_ziel.position + Vector2(0, 4), farbe)
+	var vorher := g_ziel.leben
+	g_ziel.nimm_schaden(schaden)
+	objekt_zaehle(z, "schaden", minf(schaden, maxf(0.0, vorher)))
+	var ort := g_ziel.position
+	var getoetet := g_ziel._tot or g_ziel.leben <= 0.0
+	if getoetet:
+		objekt_zaehle(z, "kills", 1.0)
+	# Streuung: Splitter an alle rund ums Ziel
+	var splitter := float(w["splitter"]) * Werte.ZELLE
+	if splitter > 0.0:
+		for g in gegner.duplicate():
+			if not is_instance_valid(g) or g == g_ziel or _geschuetzt(g) or g.position.distance_to(ort) > splitter:
+				continue
+			g.nimm_schaden(schaden * float(w["splitter_anteil"]))
+			if sonder == "sperrfeuer":
+				g.frost_tempo = minf(g.frost_tempo, float(s["bremse_tempo"])) if g.gefroren > 0.0 else float(s["bremse_tempo"])
+				g.gefroren = maxf(g.gefroren, float(s["bremse_sek"]))
+	if sonder == "sperrfeuer" and not getoetet and is_instance_valid(g_ziel):
+		g_ziel.frost_tempo = minf(g_ziel.frost_tempo, float(s["bremse_tempo"])) if g_ziel.gefroren > 0.0 else float(s["bremse_tempo"])
+		g_ziel.gefroren = maxf(g_ziel.gefroren, float(s["bremse_sek"]))
+	match sonder:
+		"huelsenregen":
+			var eigene := _mg_huelsen.filter(func(h: Array) -> bool: return h[2] == z).size()
+			if randf() < float(s["chance"]) and eigene < int(s["hoechst"]):
+				var p := ort + Vector2(randf_range(-0.25, 0.25), randf_range(-0.2, 0.2)) * Werte.ZELLE
+				_mg_huelsen.append([p, float(s["sek"]), z])
+				effekte.flaeche(p, Werte.ZELLE * 0.18, Color("ffd34d"))
+		"leuchtspur":
+			var n := int(_mg_schuesse.get(z, 0)) + 1
+			_mg_schuesse[z] = n
+			if n % int(s["jeder"]) == 0 and not getoetet and is_instance_valid(g_ziel):
+				strahl(von, ort, Color(1.0, 0.85, 0.3), 2.0)
+				g_ziel.markiert = Werte.MARKIERUNG_SEK
+				g_ziel.markier_faktor = Werte.MARKIERUNG_FAKTOR
+				g_ziel.markiert_brakk = false
+		"splittergurt":
+			if getoetet:
+				flaechenschaden(ort, float(s["radius"]) * Werte.ZELLE, schaden * float(s["anteil"]), farbe)
+		"ladeschuss":
+			if spielzeit() - float(_mg_ladung.get(z, -100.0)) >= float(s["sek"]):
+				var dicht := _mg_dichteste(e.position, mg_reichweite(z) * Werte.ZELLE, float(s["radius"]) * Werte.ZELLE)
+				if dicht != null:
+					_mg_ladung[z] = spielzeit()
+					var punkt := dicht.position
+					effekte.batterie_schuss(von, punkt, float(s["radius"]) * Werte.ZELLE)
+					get_tree().create_timer(Effekte.BOLZEN_FLUG, false).timeout.connect(
+						func() -> void: flaechenschaden(punkt, float(s["radius"]) * Werte.ZELLE, schaden * float(s["mal"]), Color("9be37b")))
+	return pause
+
+
+## Mitte der dichtesten Gegnergruppe in Reichweite (ohne Sichtprüfung: der Mörser geht über die Mauer).
+func _mg_dichteste(von: Vector2, weite: float, radius: float) -> Gegner:
+	var bestes: Gegner = null
+	var meiste := 0
+	for g in gegner:
+		if _geschuetzt(g) or von.distance_to(g.position) > weite:
+			continue
+		var n := 0
+		for h in gegner:
+			if g.position.distance_to(h.position) <= radius:
+				n += 1
+		if n > meiste:
+			meiste = n
+			bestes = g
+	return bestes
+
+
+## Railgun-Lauf: gerade Linie bis zur Reichweite; trifft sie vorher einen Erdwall (nicht den eigenen), prallt sie einmal ab.
+func _mg_railgun(z: Vector2i, von: Vector2, ziel: Vector2, weite: float, schaden: float, farbe: Color, breite: float) -> void:
+	var richtung := (ziel - von).normalized()
+	var start := von
+	var rest := weite
+	var getroffen: Array = []
+	for abschnitt in 2:
+		var ende := start + richtung * rest
+		var schritt := 4.0
+		var s := 0.0
+		var prall := false
+		var alt_zelle := karte.zelle_bei(start)
+		while s < rest:
+			s = minf(rest, s + schritt)
+			var p := start + richtung * s
+			var zelle := karte.zelle_bei(p)
+			if zelle != alt_zelle and zelle != z and karte.inhalt(zelle) == Karte.WALL and s > Werte.ZELLE * 0.6:
+				ende = p - richtung * schritt
+				var d := zelle - alt_zelle
+				if d.x != 0:
+					richtung.x = -richtung.x
+				if d.y != 0:
+					richtung.y = -richtung.y
+				prall = abschnitt == 0
+				break
+			alt_zelle = zelle
+		strahl(start, ende, farbe, 3.0)
+		for g in gegner.duplicate():
+			if not is_instance_valid(g) or _geschuetzt(g) or getroffen.has(g):
+				continue
+			var nah := Geometry2D.get_closest_point_to_segment(g.position, start, ende)
+			if nah.distance_to(g.position) <= breite:
+				getroffen.append(g)
+				var vorher: float = g.leben
+				g.nimm_schaden(schaden)
+				objekt_zaehle(z, "schaden", minf(schaden, maxf(0.0, vorher)))
+				if g._tot:
+					objekt_zaehle(z, "kills", 1.0)
+		rest -= start.distance_to(ende)
+		start = ende
+		if not prall or rest <= Werte.ZELLE * 0.3:
+			break
+
+
+## Hülsenregen: wer über liegende Hülsen läuft, rutscht aus (einmal je Hülse).
+func _mg_huelsen_wirken(delta: float) -> void:
+	if _mg_huelsen.is_empty():
+		return
+	var s: Dictionary = Werte.MG_SONDER["takt+streuung"]["huelsenregen"]
+	var weg: Array = []
+	for h: Array in _mg_huelsen:
+		h[1] = float(h[1]) - delta
+		if float(h[1]) <= 0.0:
+			weg.append(h)
+			continue
+		for g in gegner:
+			if is_instance_valid(g) and not g._tot and g.eingefroren <= 0.0 and g.position.distance_to(h[0]) <= Werte.ZELLE * 0.22 \
+					and not bool(g.daten.get("flug", false)) and not BrakkFortschritt.gross(g):
+				g.eingefroren = float(s["stolpern"])
+				weg.append(h)
+				effekte.fx("treffer_c", h[0], 0.35, false)
+				break
+	for h: Array in weg:
+		_mg_huelsen.erase(h)
+
+
+## Die Hülsen liegen als kleine goldene Punkte am Boden (in der Karte gezeichnet).
+func mg_huelsen_punkte() -> Array:
+	var aus: Array = []
+	for h: Array in _mg_huelsen:
+		aus.append(h[0])
+	return aus
+
+
+## MG-Nest ausbauen: Stufe 1 und 2 je eine von zwei Richtungen, Stufe 3 eine Sonderform.
+func werte_mg_auf(z: Vector2i, wahl: String) -> bool:
+	if not ausbau_moeglich() or not Werte.mg_stellung() or karte.ausbau.get(z, Karte.FREI) != Karte.STELLUNG:
+		return false
+	wahl = wahl.get_slice("|", wahl.get_slice_count("|") - 1)   # Protokoll/Replay: die ganze Kette, gültig ist die letzte Wahl
+	var stufe := int(karte.mg_stufe.get(z, 0))
+	if stufe >= 3:
+		return false
+	var alt: Array = karte.mg_wahl.get(z, [])
+	var moeglich: Dictionary = Werte.MG_AUSBAU[stufe] if stufe < 2 else Werte.mg_sonder_wahl(alt)
+	if not moeglich.has(wahl):
+		return false
+	var preis: int = Werte.KOSTEN_MG_STUFE[stufe]
+	if budget < preis:
+		melde("Nicht genug Budget.")
+		return false
+	_merke_bezahlt(z, "stufen", preis)
+	budget -= preis
+	var neu: Array = alt.duplicate()
+	neu.append(wahl)
+	karte.mg_wahl[z] = neu
+	karte.mg_stufe[z] = stufe + 1
+	# Im Protokoll wie ein Turm-Upgrade: Stufe + 1 und die Wahlen als Kette (so liest es auch Phantom._stand)
+	_notiere({"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 2, "faehigkeit": "|".join(PackedStringArray(neu))})
+	Auftraege.zaehle(auftrag, "upgrade")
+	melde("MG-Stellung Stufe %d – %s: %s" % [stufe + 1, moeglich[wahl]["name"], moeglich[wahl]["text"]], 5.0)
+	karte.queue_redraw()
+	return true
+
+
+# ------------------------------------------------------------------ 20.11. (Paul): PliPlop 3cK als Turm (Irrtürmer)
+
+var _pp_nagel := {}   # Turm -> [Gegner, Treffer in Folge] (Nagler)
+
+
+## Stufe 1 -> 2 wählt den Pfad, Stufe 3 und 4 verstärken ihn.
+func _werte_pliplop_auf(z: Vector2i, pfad: String) -> bool:
+	var stufe := int(karte.turm_stufe.get(z, 1))
+	if stufe >= 4:
+		return false
+	if stufe == 1 and not Werte.PLIPLOP_TURM.has(pfad):
+		return false
+	var preis: int = Werte.kosten_pliplop_stufen()[stufe - 1]
+	if budget < preis:
+		melde("Nicht genug Budget.")
+		return false
+	_merke_bezahlt(z, "stufen", preis)
+	budget -= preis
+	karte.turm_stufe[z] = stufe + 1
+	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
+	if stufe == 1:
+		karte.turm_faehigkeit[z] = pfad
+		eintrag["faehigkeit"] = pfad
+	Auftraege.zaehle(auftrag, "upgrade")
+	var p: Dictionary = Werte.PLIPLOP_TURM[str(karte.turm_faehigkeit[z])]
+	melde("PliPlop 3cK Stufe %d – %s: %s" % [stufe + 1, p["name"], p["stufen"][stufe - 1]["text"]], 5.0)
+	_notiere(eintrag)
+	karte.queue_redraw()
+	return true
+
+
+func _pliplop_turm(z: Vector2i, delta: float) -> void:
+	var rest: float = _turm_abkling.get(z, 0.0) - delta * turm_takt(z)
+	if rest > 0.0:
+		_turm_abkling[z] = rest
+		return
+	var pfad := str(karte.turm_faehigkeit.get(z, ""))
+	var stufe := int(karte.turm_stufe.get(z, 1))
+	var werte: Dictionary = Werte.PLIPLOP_TURM[pfad]["stufen"][clampi(stufe - 2, 0, 2)] if Werte.PLIPLOP_TURM.has(pfad) else {}
+	schadensquelle = "turm:pliplop"
+	schuetze = null
+	schadensobjekt = z
+	var weite := float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
+	var von := karte.mitte(z) + Vector2(0, -12)
+	schuss_herkunft = von
+	var schaden := float(karte.turm_wert(z, "schaden"))
+	var farbe := Color(Werte.TURMARTEN["pliplop"]["farbe"])
+	var ziel := gegner_in_reichweite(von, weite, false, z)
+	if ziel == null:
+		_turm_abkling[z] = 0.0
+		return
+	rest = float(karte.turm_wert(z, "abklingzeit"))
+	if turmbilder.has(z):
+		(turmbilder[z] as TurmBild).feuert(ziel.position)
+	match pfad:
+		"flak":
+			var radius := float(werte["radius"]) * Werte.ZELLE
+			Ton.am_ort(self, "tc-heavy", von)
+			schuss(von, ziel.position, farbe)
+			flaechenschaden(ziel.position, radius, schaden, Color("ffb070"))
+			if werte.has("nachbrand"):
+				lege_brand(ziel.position, radius * 0.8, schaden * float(werte["nachbrand"]))
+		"schockwelle":
+			Ton.am_ort(self, "tc-arc", von)
+			effekte.welle(karte.mitte(z), weite, Color("9be37b"), "funk", 0.6)
+			for g in gegner.duplicate():
+				if not is_instance_valid(g) or _geschuetzt(g) or von.distance_to(g.position) > weite or not karte.sicht_von_wall(z, von, g.position):
+					continue
+				g.markiert = maxf(g.markiert, float(werte["mark_sek"]))
+				g.markier_faktor = Werte.MARKIERUNG_FAKTOR
+				g.markiert_brakk = false
+				if werte.has("bremse"):
+					g.frost_tempo = 0.6 if g.gefroren <= 0.0 else minf(g.frost_tempo, 0.6)
+					g.gefroren = maxf(g.gefroren, float(werte["bremse"]))
+				if bool(g.daten.get("fernkampf", false)) or BrakkFortschritt.gross(g):
+					continue
+				_pp_stoss(g, von, float(werte["stoss"]) * Werte.ZELLE)
+		"nagler":
+			var n := 0
+			var alt: Array = _pp_nagel.get(z, [])
+			if alt.size() == 2 and alt[0] == ziel:
+				n = int(alt[1])
+			var bonus := minf(float(werte["hoechst"]), float(werte["je_treffer"]) * n)
+			_pp_nagel[z] = [ziel, n + 1]
+			Ton.am_ort(self, "tc-heavy", von)
+			effekte.leuchtschuss(von, 18.0, ziel.position, 14.0, Color("ff8ad8"), 0.08 + von.distance_to(ziel.position) / 4200.0, 7.0 + 4.0 * bonus)
+			ziel.nimm_schaden(schaden * (1.0 + bonus))
+		_:
+			Ton.am_ort(self, "tc-heavy", von)
+			schuss(von, ziel.position, farbe)
+			ziel.nimm_schaden(schaden)
+	_turm_abkling[z] = rest
+
+
+## Schockwelle: Gegner vom Turm wegstoßen, höchstens bis vor ein Hindernis.
+func _pp_stoss(g: Gegner, von: Vector2, weite: float) -> void:
+	var richtung := (g.position - von).normalized()
+	if richtung == Vector2.ZERO:
+		richtung = Vector2.LEFT
+	var ziel := g.position
+	var s := 0.0
+	while s < weite:
+		s = minf(weite, s + 4.0)
+		var neu := g.position + richtung * s
+		if not karte.ist_begehbar(karte.zelle_bei(neu)):
+			break
+		ziel = neu
+	if ziel != g.position:
+		effekte.strahl(g.position, ziel, Color("9be37b"), 2.0)
+		g.position = ziel
+		g.plane_neu()

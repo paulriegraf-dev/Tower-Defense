@@ -21,6 +21,8 @@ var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN
 var werkschutz_zahl: Dictionary = {}   # 20.11. (Nachtrag): Truppenturm-Zelle -> lebende Werkschutz-Truppen (Punkte am Turm)
 var turm_stufe: Dictionary = {}    # Turm-Zelle -> Stufe 2 oder 3 (fehlt = Stufe 1)
 var turm_faehigkeit: Dictionary = {}   # Turm-Zelle -> gewählte Stufe-3-Fähigkeit (Schlüssel in Werte.TURM_STUFE_3)
+var mg_stufe: Dictionary = {}     # 20.11. (Paul): MG-Stellung (Sonde 7) – Stellungs-Zelle -> Ausbaustufe 1–3 (fehlt = 0)
+var mg_wahl: Dictionary = {}      # 20.11. (Paul): MG-Stellung – Stellungs-Zelle -> [Wahl Stufe 1, Stufe 2, Stufe 3]
 # Neue Grafik (16.11.): Stufe, letzter Schuss und Blickrichtung je Batterie (vom Spiel gesetzt)
 var batterie_stufe_neu: Dictionary = {}
 var batterie_schuss: Dictionary = {}   # Batterie-Zelle -> Sekunden seit dem Schuss (fehlt = Ruhe)
@@ -363,6 +365,8 @@ func entferne(z: Vector2i) -> void:
 	turm_stufe.erase(z)
 	turm_faehigkeit.erase(z)
 	magnet_richtung.erase(z)
+	mg_stufe.erase(z)
+	mg_wahl.erase(z)
 	if generator_paar.has(z):
 		generator_paar.erase(generator_paar[z])
 		generator_paar.erase(z)
@@ -525,6 +529,8 @@ func posten_bonus(z: Vector2i, daten: Dictionary) -> float:
 
 ## Welcher Turm entstünde auf `z`? Bestimmt durch die freien Nachbarwälle (siehe Werte.TURMARTEN). "" = keiner.
 func turm_form(z: Vector2i) -> String:
+	if Werte.pliplop() and inhalt(z) == WALL and wall_nachbarn(z) == 0:
+		return "pliplop"   # 20.11. (Paul): Irrtürmer – PliPlop 3cK auf einem einzelnen Erdwall
 	var form := _gerade_form(z)
 	if form == "" and _diagonal_paar(z).size() == 2:
 		# Treppe: Erdwälle schräg an zwei gegenüberliegenden Ecken -> Heilturm (wenn keine andere Form passt)
@@ -594,6 +600,15 @@ func turm_wert(z: Vector2i, schluessel: String, vorgabe: Variant = null) -> Vari
 	var art: String = turm_art.get(z, "geschuetz")
 	var wert: Variant = Werte.TURMARTEN[art].get(schluessel, vorgabe)
 	var stufe := int(turm_stufe.get(z, 1))
+	if art == "pliplop":   # 20.11. (Paul): Werte je Pfad und Stufe aus Werte.PLIPLOP_TURM
+		var pfad: Dictionary = Werte.PLIPLOP_TURM.get(str(turm_faehigkeit.get(z, "")), {})
+		if stufe >= 2 and not pfad.is_empty():
+			wert = (pfad["stufen"][clampi(stufe - 2, 0, 2)] as Dictionary).get(schluessel, wert)
+		if schluessel == "reichweite" and wert != null:
+			wert = maxf(0.5, float(wert) + anhoehe_bonus(z) + Werte.mod("turm_reichweite"))
+		elif schluessel == "schaden" and wert != null:
+			wert = float(wert) * Werte.mod_faktor("turm_schaden")
+		return wert
 	if stufe >= 2 and (Werte.TURM_STUFE_2[art] as Dictionary).has(schluessel):
 		wert = Werte.TURM_STUFE_2[art][schluessel]
 	if stufe >= 4:

@@ -491,6 +491,9 @@ func _turm_bild(art: String, stufe: int, faehigkeit: String = "") -> Dictionary:
 			return _einzel(n + name + ".png", Vector2(64, 64))
 		"truppen":   # 20.11. (Nachtrag): Platzhalter aus Code
 			return {"tex": Platzhalter.truppenturm(stufe), "zelle": Vector2(Platzhalter.TT_GROESSE), "reihe": 0, "n": 1}
+		"pliplop":   # 20.11. (Paul): Platzhalter aus Code, Aufsatz je Pfad
+			var ring := str(Werte.PLIPLOP_TURM.get(faehigkeit, {}).get("ring", ""))
+			return {"tex": Platzhalter.pliplop(ring), "zelle": Vector2(Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE), "reihe": 0, "n": 1}
 	return _einzel(n + art + ".png", Vector2(64, 64))
 
 
@@ -635,6 +638,55 @@ func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictiona
 
 
 ## Formturm mit Ausbaupfad: Grund › Stufe 2 › eine von zwei Fähigkeiten.
+## 20.11. (Paul): MG-Stellung – Ausbau am Nest, die Truppe ist nur Besatzung.
+func _mg_karte() -> Dictionary:
+	var W := Werte
+	var bild := {"tex": Platzhalter.mg_aufsatz(), "zelle": Vector2(28, 16), "reihe": 0, "n": 1}
+	var n: Dictionary = W.MG_NEST
+	var pfad: Array = [{"kurz": "Nest", "bild": bild, "abschnitte": [["Was sie macht", Stil.LEUCHT, [
+		"Nur mit der Anführerin Sonde 7: Jede Stellung ist ein MG-Nest. Eine Truppe aus einer Fabrik muss hinauf, darf sie aber wieder verlassen.",
+		"Die Werte hängen am Nest, nicht an der Truppe: Jede Truppe darin schießt gleich. Billige, nicht ausgebaute Truppen reichen.",
+		"Nest: %s Schaden alle %s s, Reichweite %s (Wachposten und Anhöhe zählen dazu)." % [_z(n["schaden"]), _z(n["abklingzeit"]), _z(n["reichweite"])],
+		"Klick auf die Stellung öffnet den Ausbau. Stufe 1 und 2 je eine von zwei Richtungen, Stufe 3 eine Sonderform, die aus beiden folgt."]]]}]
+	for i in 2:
+		var zeilen: Array = []
+		for k: String in W.MG_AUSBAU[i]:
+			var e: Dictionary = W.MG_AUSBAU[i][k]
+			zeilen.append("%s: %s (+ %s · – %s)" % [e["name"], e["text"], e["stark"], e["schwach"]])
+		pfad.append({"kurz": "St. %d" % (i + 1), "bild": bild, "abschnitte": [["Stufe %d · %d Budget · eine von zwei" % [i + 1, W.KOSTEN_MG_STUFE[i]], Stil.GOLD, zeilen]]})
+	for kombi: String in W.MG_SONDER:
+		var zeilen: Array = []
+		for k: String in W.MG_SONDER[kombi]:
+			var e: Dictionary = W.MG_SONDER[kombi][k]
+			zeilen.append("%s: %s (+ %s · – %s)" % [e["name"], e["text"], e["stark"], e["schwach"]])
+		var teile := kombi.split("+")
+		var titel := "%s + %s" % [W.MG_AUSBAU[0][teile[0]]["name"], W.MG_AUSBAU[1][teile[1]]["name"]]
+		pfad.append({"kurz": titel.replace(" + ", "+"), "zweig": true, "bild": bild, "abschnitte": [["Stufe 3 nach %s · %d Budget" % [titel, W.KOSTEN_MG_STUFE[2]], Stil.GOLD, zeilen]]})
+	return {"name": "MG-Stellung", "unter": "Stellung mit eigenem Ausbau (Sonde 7)", "marke": "%d · [3]" % W.KOSTEN_STELLUNG, "bild": bild,
+		"werte": [["Schaden", _z(n["schaden"])], ["Angriff alle", _z(n["abklingzeit"]) + " s"], ["Reichweite", _z(n["reichweite"])], ["Stufen", "%d / %d / %d" % [W.KOSTEN_MG_STUFE[0], W.KOSTEN_MG_STUFE[1], W.KOSTEN_MG_STUFE[2]]]],
+		"pfad": pfad}
+
+
+## 20.11. (Paul): PliPlop 3cK – Turm ohne Formvorschrift, drei Pfade ab Stufe 2.
+func _pliplop_karte() -> Dictionary:
+	var W := Werte
+	var d: Dictionary = W.TURMARTEN["pliplop"]
+	var pr: Array[int] = W.kosten_pliplop_stufen()
+	var pfad: Array = [{"kurz": "Grund", "bild": _turm_bild("pliplop", 1), "abschnitte": [["Was er macht", Stil.LEUCHT, [d["text"],
+		"Stufe 2 wählt den Pfad (%d), Stufe 3 und 4 verstärken ihn (%d / %d)." % [pr[0], pr[1], pr[2]],
+		"Wird nicht von Stützen getragen: Sprenger legen ihn nicht still."]]]}]
+	for name: String in W.PLIPLOP_TURM:
+		var p: Dictionary = W.PLIPLOP_TURM[name]
+		var zeilen: Array = [p["text"]]
+		for i in 3:
+			zeilen.append("Stufe %d: %s" % [i + 2, p["stufen"][i]["text"]])
+		pfad.append({"kurz": p["name"], "zweig": true, "bild": _turm_bild("pliplop", 2, name), "abschnitte": [["Pfad %s" % p["name"], Stil.GOLD, zeilen],
+			["Stärken und Schwächen", Stil.TEXT_BLASS, ["+ " + str(p["stark"]), "– " + str(p["schwach"])]]]})
+	return {"name": d["name"], "unter": "Turm auf einem einzelnen Erdwall (Irrtürmer)", "marke": "%d · [4]" % W.KOSTEN_PLIPLOP, "bild": _turm_bild("pliplop", 1),
+		"werte": [["Preis", str(W.KOSTEN_PLIPLOP)], ["Form", "Einzelwall"], ["Reichweite", _z(d["reichweite"])], ["Schaden", _z(d["schaden"])], ["Angriff alle", _z(d["abklingzeit"]) + " s"]],
+		"pfad": pfad}
+
+
 func _turmkarte(art: String, extra: Array) -> Dictionary:
 	var W := Werte
 	var d: Dictionary = W.TURMARTEN[art]
@@ -862,12 +914,14 @@ func _baue_daten() -> void:
 				"Wachposten: Auf einem einzelnen Erdwall ohne Nachbarwälle reicht jede Truppe +%s Felder weiter." % _z(W.WACHPOSTEN_BONUS),
 				"Nahkämpfer am Boden kommen nicht heran. Gefährlich sind Sphären, Schleudern, Rauch und Myr-Drohnen.",
 				"Darf auch in der Welle gebaut werden, solange kein Gegner in der Nähe ist."]]]},
+		_mg_karte(),   # 20.11. (Paul): MG-Stellung (Sonde 7)
 		_turmkarte("geschuetz", ["Das ist der bisherige Turm."]),
 		_turmkarte("frost", ["Braucht eine lange Ecke: Der Turm steht im Knick, beide Arme sind mindestens 2 Erdwälle lang.",
 			"Bremst ganze Trupps – gut gegen Fahnensturm und schnelle Rudel."]),
 		_turmkarte("funk", ["Zählt alle Stellungen im Umkreis, nicht nur eine – je mehr Stellungen drumherum, desto mehr lohnt er."]),
 		_turmkarte("lanze", ["Braucht eine Klammer: drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer zur selben Seite ab (⊐). Der Turm steht in der Mitte.",
 			"Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
+		_pliplop_karte(),   # 20.11. (Paul): PliPlop 3cK (Irrtürmer)
 		_turmkarte("truppen", ["Nur mit dem Anführer Irrtürmer: ein Erdwall mit genau zwei Nachbarwällen, auf den keine andere Turmform passt. Die Punkte am Turm zeigen, wie viele Werkschutz-Truppen gerade leben."]),   # 20.11. (Nachtrag)
 		_turmkarte("heil", ["Braucht eine Treppe: drei Erdwälle schräg hintereinander, der Turm in der Mitte. Andere Erdwälle daneben stören nicht, solange keine andere Turmform passt.",
 			"Truppen sind knapp: Wer überlebt, muss nicht nachgebaut werden."]),
@@ -973,7 +1027,7 @@ func _anfuehrer_karten() -> Array:
 		var frei := Anfuehrer.frei(id)
 		var abschnitte: Array = [["Perks", Stil.LEUCHT, a["perks"]], ["Nachteile", Stil.WARN, a["nachteile"]]]
 		if id == "paul":
-			abschnitte.append(["Aufträge (ab Runde %d, je Bauphase einer)" % Auftraege.AB_RUNDE, Stil.GOLD, Auftraege.uebersicht()])   # 20.11.
+			abschnitte.append(["Aufträge (ab Runde %d)" % Auftraege.AB_RUNDE, Stil.GOLD, Auftraege.uebersicht()])   # 20.11.
 		if not frei:
 			abschnitte.append(["Freischalten", Stil.GOLD, [Anfuehrer.freischalt_text(id)]])
 		karten.append({"name": "Anführer " + str(a["name"]), "unter": str(a["kurz"]), "marke": "Anführer" if frei else "gesperrt",

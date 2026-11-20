@@ -48,9 +48,22 @@ func _init(p_ego: EgoModus) -> void:
 	super(p_ego)
 	var d: Dictionary = Werte.SONDE7["schweben"]
 	akku = float(d["akku"])
-	for w: String in Werte.SONDE7_WAFFEN:
-		_bilder[w] = ImageTexture.create_from_image(_male_waffe(w))
-	_bilder[""] = ImageTexture.create_from_image(_male_handschuh())
+
+
+## 20.11. (Paul): Bild der Waffe `w` ("" = Handschuh) mit Leuchtteilen in der Farbe des aktiven Rings.
+func _waffenbild(w: String) -> Texture2D:
+	var schluessel := w + "|" + ring()
+	if not _bilder.has(schluessel):
+		var img := _male_waffe(w) if w != "" else _male_handschuh()
+		if ring() != "":
+			var ziel := ring_farbe()
+			for y in img.get_height():
+				for x in img.get_width():
+					var c := img.get_pixel(x, y)
+					if c.a > 0.0 and c.b > 0.85 and c.g > 0.8 and c.r < 0.7:   # die cyanfarbenen Leuchtteile
+						img.set_pixel(x, y, ziel.lightened(0.25) if c.r > 0.55 else ziel)
+		_bilder[schluessel] = ImageTexture.create_from_image(img)
+	return _bilder[schluessel]
 
 
 func f() -> BrakkFortschritt:
@@ -128,7 +141,22 @@ func _schub_start() -> void:
 	_schub = 0.0
 	_schub_rest = float(d["abkling"]) * (1.0 - spell_w("schub", "abkling") / 100.0)   # 20.11. (Nachtrag): Takt-Ring
 	_schub_spell()
-	_schub_r = Vector2(ego._vorne().x, ego._vorne().z).normalized()
+	# 20.11. (Paul): Schub in die Richtung, in die gerade gelenkt wird (WASD bzw. Stick) – auch zur Seite und nach hinten;
+	# ohne Lenkung nach vorn
+	var lenk := Vector2.ZERO
+	if Input.is_physical_key_pressed(KEY_W):
+		lenk.y += 1.0
+	if Input.is_physical_key_pressed(KEY_S):
+		lenk.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_D):
+		lenk.x += 1.0
+	if Input.is_physical_key_pressed(KEY_A):
+		lenk.x -= 1.0
+	if ego.touch != null:
+		lenk += ego.touch.stick()
+	var vor := Vector2(ego._vorne().x, ego._vorne().z).normalized()
+	var seit := Vector2(ego._rechts().x, ego._rechts().z).normalized()
+	_schub_r = vor if lenk.length() < 0.2 else (vor * lenk.y + seit * lenk.x).normalized()
 	ego._fov_puls = maxf(ego._fov_puls, 4.0)
 	_zaehle("schub")
 	Ton.spiele(ego.spiel, "tc-arc", -10.0)
@@ -161,7 +189,7 @@ func _teleport() -> void:
 	if t <= 0.0:
 		ego.spiel.melde("Dort ist kein Platz.", 1.2)
 		return
-	ego.spiel.effekte.flaeche(von, Werte.ZELLE * 0.6, SONDE_FARBE)
+	ego.spiel.effekte.flaeche(von, Werte.ZELLE * 0.6, ring_farbe())
 	var b := ego.brakk
 	if ego.hd.ist_hoch(z) and k.inhalt(z) == Karte.WALL:
 		b.oben = true
@@ -173,7 +201,7 @@ func _teleport() -> void:
 		b.posten_zelle = Karte.KEINE
 		b.zustand = Einheit.Zustand.BODEN
 	ego._setze_fuss(p)
-	ego.spiel.effekte.flaeche(p, Werte.ZELLE * 0.6, SONDE_FARBE)
+	ego.spiel.effekte.flaeche(p, Werte.ZELLE * 0.6, ring_farbe())
 	_tele_rest = float(d["abkling"]) * (1.0 - spell_w("teleport", "abkling") / 100.0)   # 20.11. (Nachtrag): Takt-Ring
 	_teleport_spell(von, p)
 	ego._fov_puls = maxf(ego._fov_puls, 8.0)
@@ -719,7 +747,7 @@ func _schrot(kugeln: int) -> void:
 	for i in kugeln:
 		var r := blick.rotated(Vector3.UP, deg_to_rad(randf_range(-1.0, 1.0) * streu)).rotated(ego._rechts(), deg_to_rad(randf_range(-0.4, 0.4) * streu))
 		var e := _erster(float(d["weite"]), r)
-		ego._strahl(muendung, ego.hd.kamera.global_position + r * float(e[1]), Color("ffd9a0").lerp(ring_farbe(), 0.3))
+		ego._strahl(muendung, ego.hd.kamera.global_position + r * float(e[1]), Color("ffd9a0").lerp(ring_farbe(), 0.75) if ring() != "" else Color("ffd9a0"))
 		if e[0] != null:
 			if brand > 0.0 and getroffen == 0:
 				brand_bei((e[0] as Gegner).position, brand, float(d["schaden"]) * _sf())   # 20.11. (Nachtrag): Brand-Ring
@@ -785,7 +813,7 @@ func _sondenblick() -> void:
 		_umriss_vorher = ego.hd.umriss_an
 	_blick_bis = Time.get_ticks_msec() + int((float(d["blick_sek"]) + spell_w("sondengewehr", "blick_dauer")) * 1000.0)   # 20.11. (Nachtrag): Ziel-Ring
 	ego.hd.umriss_an = true
-	ego.spiel.effekte.welle(ego._fuss2d(), float(d["blick_weite"]) * Werte.ZELLE, SONDE_FARBE, "funk", 0.8)
+	ego.spiel.effekte.welle(ego._fuss2d(), float(d["blick_weite"]) * Werte.ZELLE, ring_farbe(), "funk", 0.8)
 	_zaehle("sondenblick")
 	Ton.spiele(ego.spiel, "alert", -10.0)
 	_verbrauche()
@@ -835,7 +863,7 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 	var schwank := (ego._sway + Vector2(0, 7.0 * ego._delle)) * wpx
 	if waffe == "":
 		# Hand: zwei Handschuhe mit Emitter – links der Farblaser, rechts das Energiebündel (Platzhalter aus Code)
-		var tex: Texture2D = _bilder[""]
+		var tex: Texture2D = _waffenbild("")
 		var ts := Vector2(tex.get_size()) * wpx * 1.2
 		var farbe := ring_farbe()
 		for seite: int in [-1, 1]:
@@ -858,7 +886,7 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 				if _blitz > 0.0:
 					ego._muendungsblitz(mund, wpx, farbe)
 		return
-	var tex2: Texture2D = _bilder[waffe]
+	var tex2: Texture2D = _waffenbild(waffe)
 	var ts2 := Vector2(tex2.get_size()) * wpx * 1.4
 	var pos2 := Vector2(g.x * 0.66 - ts2.x * 0.5, g.y - ts2.y + 6.0 * wpx) + wipp + schwank + Vector2(_rueck * 3.0, _rueck * 8.0) * wpx
 	if waffe == "sondengewehr" and _laden >= 0.0:
@@ -925,7 +953,7 @@ func male_oben(g: Vector2) -> void:
 		var rest := float(_luft_bis - Time.get_ticks_msec()) / 1000.0
 		Stil.schreibe_mittig(bild, Vector2(g.x / 2.0, g.y * 0.62), "LUFTSCHLAG %d s · %d Granaten" % [ceili(rest), magazin], 20, ring_farbe())
 	if _blick_bis > 0:
-		Stil.schreibe_mittig(bild, Vector2(g.x / 2.0, g.y * 0.16), "SONDENBLICK %d s" % ceili(float(_blick_bis - Time.get_ticks_msec()) / 1000.0), 18, SONDE_FARBE)
+		Stil.schreibe_mittig(bild, Vector2(g.x / 2.0, g.y * 0.16), "SONDENBLICK %d s" % ceili(float(_blick_bis - Time.get_ticks_msec()) / 1000.0), 18, ring_farbe())
 
 
 ## 20.11. (Nachtrag): Fähigkeiten-Leiste wie bei Brakk (ego_modus._faehigkeiten) – hier nur Rest, Text darüber, läuft.
@@ -1051,6 +1079,8 @@ static func _male_waffe(art: String) -> Image:
 			EgoModus._vieleck(img, [Vector2(12, 4), Vector2(28, 4), Vector2(29, 18), Vector2(11, 18)], metall)
 			EgoModus._vieleck(img, [Vector2(15, 6), Vector2(25, 6), Vector2(25, 14), Vector2(15, 14)], Color("23262e"))   # dicker Lauf
 			EgoModus._vieleck(img, [Vector2(11, 30), Vector2(29, 30), Vector2(29, 38), Vector2(11, 38)], Color("ff8a3d"))   # Trommel
+	if art in ["schrot", "luftschlag"]:
+		EgoModus._vieleck(img, [Vector2(15, 42), Vector2(25, 42), Vector2(25, 45), Vector2(15, 45)], cyan)   # 20.11. (Paul): Leuchtband – nimmt die Ringfarbe an
 	EgoModus._umranden(img)
 	return img
 

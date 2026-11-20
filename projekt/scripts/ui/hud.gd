@@ -49,6 +49,9 @@ var weg_text: Label
 
 var _status: Malflaeche
 var _welle: Malflaeche
+var _auftraege: Malflaeche          # 20.11. (Paul): Liste der laufenden Aufträge
+var _auftrag_zeilen: Array = []
+const AUFTRAG_BREITE := 172.0
 var _konsole: Malflaeche
 var _tipp: Malflaeche
 var _formen: Malflaeche          # Turm [4] gewählt: welche Wallform welchen Turm ergibt (16.11.)
@@ -223,6 +226,7 @@ func _ready() -> void:
 
 	_status = _flaeche(_male_status)
 	_welle = _flaeche(_male_welle)
+	_auftraege = _flaeche(_male_auftraege)   # 20.11. (Paul): Pauls Aufträge, oben links unter Leben und Budget
 	_tipp_oben = _flaeche(_male_tipp_oben)
 	_konsole = _flaeche(_male_konsole)
 	_tipp = _flaeche(_male_tipp)
@@ -333,8 +337,8 @@ func aktualisiere(_delta: float) -> void:
 		_runde_text += "  ·  Bauzeit %d s" % ceili(float(s.bauzeit_rest))   # 18.11.: Bauzeit-Limit
 	if s.herausforderung != "":
 		_runde_text += "  ·  " + Werte.herausforderung_name(s.herausforderung)   # 18.11.
-	if not (s.auftrag as Dictionary).is_empty():
-		_runde_text += "  ·  " + Auftraege.titel(s.auftrag)   # 20.11.: Pauls Auftrag
+	_auftrag_zeilen = Auftraege.zeilen(s, s.auftrag) if not (s.auftrag as Dictionary).is_empty() else []   # 20.11.: Pauls Aufträge
+	_bei_aenderung(_auftraege, [_auftrag_zeilen])
 	_welle_zeile = ""
 	_welle_zusatz = ""
 	_gruppen = []
@@ -530,6 +534,14 @@ func _ordne_an() -> void:
 		w += Stil.breite("Verteidigung", Stil.NORMAL) + 6.0
 	_status.position = Vector2(RAND, RAND)
 	_status.size = Vector2(ceilf(w), 22.0)
+	# 20.11. (Paul): Pauls Aufträge darunter – je Auftrag Kopfzeile (Stufe, Name, Stand) und Text mit Lohn
+	_auftraege.visible = not _auftrag_zeilen.is_empty()
+	if _auftraege.visible:
+		var ah := 4.0
+		for z: Dictionary in _auftrag_zeilen:
+			ah += 11.0 + ceilf(Stil.absatz_groesse(_auftrag_text(z), AUFTRAG_BREITE - 10.0, Stil.KLEIN).y) + 4.0
+		_auftraege.position = Vector2(RAND, RAND + 22.0 + 3.0 + 12.0 + 3.0)   # unter der Zeile „Gegnerweg …“
+		_auftraege.size = Vector2(AUFTRAG_BREITE, ah)
 
 	# oben Mitte: Runde, darunter die Gegner
 	var zeile2 := 0.0
@@ -836,6 +848,47 @@ func _male_status(ci: Control) -> void:
 			ci.draw_rect(r.grow(-1.0), Stil.METALL_TIEF)
 	x += Werte.zins_stufen() * 6.0 + 4.0
 	Stil.schreibe(ci, Vector2(x, y), "+%d" % _zins, Stil.NORMAL, Stil.GOLD)
+
+
+func _auftrag_text(z: Dictionary) -> String:
+	return "%s  →  %s" % [z["text"], z["lohn"]]
+
+
+## 20.11. (Paul): Pauls Aufträge. Farbe der Marke = Stufe, Haken/Kreuz = Ergebnis, „bereit“ = Bedingung zum Wellenstart steht.
+func _male_auftraege(ci: Control) -> void:
+	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
+	var y := 4.0
+	for z: Dictionary in _auftrag_zeilen:
+		var st: Dictionary = Auftraege.STUFEN[int(z["stufe"])]
+		var farbe := Color(str(st["farbe"]))
+		var zustand := str(z["zustand"])
+		var blass := zustand == "nein"
+		var marke := str(st["name"]) + (" · Pflicht" if bool(z["pflicht"]) else "")
+		var mw := ceilf(Stil.breite(marke, Stil.KLEIN)) + 6.0
+		Stil.platte(ci, Rect2(Vector2(4, y), Vector2(mw, 10)), 2.0, Stil.METALL_DUNKEL, farbe.darkened(0.5 if blass else 0.15))
+		Stil.schreibe_mittig(ci, Vector2(4 + mw / 2.0, y + 5.0), marke, Stil.KLEIN, farbe.darkened(0.4) if blass else farbe)
+		Stil.schreibe(ci, Vector2(4 + mw + 4.0, y + 5.0), str(z["name"]), Stil.KLEIN, Stil.TEXT_BLASS if blass else Stil.TEXT)
+		var rechts := str(z["stand"])
+		var rf := Stil.TEXT_BLASS
+		match zustand:
+			"ja":
+				rechts = "erfüllt"
+				rf = Color("9be37b")
+			"nein":
+				rechts = "verfehlt"
+				rf = Stil.WARN
+			"halb":
+				rechts = "läuft"
+				rf = Stil.LEUCHT
+			"bereit":
+				rechts = (rechts + " ✓").strip_edges()
+				rf = Color("9be37b")
+		if rechts != "":
+			Stil.schreibe(ci, Vector2(ci.size.x - 5.0 - Stil.breite(rechts, Stil.KLEIN), y + 5.0), rechts, Stil.KLEIN, rf)
+		y += 11.0
+		var t := _auftrag_text(z)
+		Stil.absatz(ci, Vector2(5, y), t, ci.size.x - 10.0, Stil.KLEIN, Stil.TEXT_BLASS.darkened(0.25) if blass else Stil.TEXT_BLASS)
+		y += ceilf(Stil.absatz_groesse(t, ci.size.x - 10.0, Stil.KLEIN).y) + 4.0
 
 
 func _male_welle(ci: Control) -> void:
