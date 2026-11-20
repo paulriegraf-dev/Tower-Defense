@@ -49,6 +49,8 @@ var _sterne: Array = []
 const PROFIL_H := 18.0
 const TAFEL := Rect2(372, 60, 252, 276)
 var _eingabe: LineEdit              # unsichtbares Eingabefeld für den Spitznamen (gezeichnet wird selbst)
+var _code_modus := false            # 20.11.: das Eingabefeld nimmt gerade einen Entwicklercode auf (Einstellungen)
+var _code := ""                     # 20.11.: getippter Code, solange das Feld nicht aktiv ist
 var _erststart := false             # erster Start: nach dem Namen fragen
 var _laedt := false                 # ein Online-Phantom wird gerade geladen
 var _online_stand := -1
@@ -111,6 +113,7 @@ func _bild(pfad: String) -> Texture2D:
 # ------------------------------------------------------------------ Seiten
 
 func _zeige(seite: String) -> void:
+	_code_merken()   # 20.11.
 	if _tippt():
 		_eingabe.release_focus()
 	if seite == "phantom":
@@ -234,6 +237,8 @@ func _baue() -> void:
 			_eintraege.append(["Musik: " + _prozent_text(Werte.musik), _naechste_musik.bind(10), "Klick lauter, Rechtsklick leiser · auch ← →", Stil.TEXT, _naechste_musik])
 			_eintraege.append(["Geräusche: " + _prozent_text(Werte.toene), _naechste_toene.bind(10), "Schüsse nur nah herangezoomt · ← →", Stil.TEXT, _naechste_toene])
 			_eintraege.append(["Übersicht", func(): uebersicht_gewaehlt.emit(), "Gegner, Truppen, Bauten, Regeln", Stil.TEXT])
+			_eintraege.append(["Code: " + _code_text(), _starte_code, "Enter löst ein" if _tippt() else "zum Eingeben klicken", Stil.TEXT])   # 20.11.: Entwicklercodes
+			_eintraege.append(["Einlösen", _loese_code, "", Stil.TEXT])
 			_eintraege.append(["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS])
 	_wahl = clampi(_wahl, 0, _eintraege.size() - 1)
 
@@ -697,9 +702,50 @@ func _name_text() -> String:
 	return Profil.name() if Profil.hat_namen() else "(noch keiner)"
 
 
+## 20.11.: Entwicklercode – dasselbe unsichtbare Eingabefeld wie beim Namen, Enter oder „Einlösen“ löst ein.
+func _code_text() -> String:
+	if _tippt() and _code_modus:
+		return _eingabe.text + ("_" if fmod(_zeit, 1.0) < 0.55 else " ")
+	return _code if _code != "" else "–"
+
+
+func _starte_code() -> void:
+	if _tippt():
+		return
+	if OS.has_feature("web") and DisplayServer.is_touchscreen_available():
+		var antwort: Variant = JavaScriptBridge.eval("window.prompt(%s, %s)" % [JSON.stringify("Code:"), JSON.stringify(_code)], true)
+		if antwort is String:
+			_code = (antwort as String).strip_edges()
+			_baue()
+		return
+	_code_modus = true
+	_eingabe.max_length = 32
+	_eingabe.text = _code
+	_eingabe.grab_focus()
+	_eingabe.caret_column = _eingabe.text.length()
+	_meldung = ""
+	_baue()
+
+
+## Feld verlassen, Getipptes behalten.
+func _code_merken() -> void:
+	if _tippt() and _code_modus:
+		_code = _eingabe.text.strip_edges()
+		_eingabe.release_focus()
+
+
+func _loese_code() -> void:
+	_code_merken()
+	if Profil.code_einloesen(_code):
+		_code = ""
+	_baue()
+
+
 func _starte_eingabe() -> void:
 	if _tippt():
 		return
+	_code_modus = false   # 20.11.
+	_eingabe.max_length = Profil.NAME_MAX
 	if OS.has_feature("web") and DisplayServer.is_touchscreen_available():
 		# 18.11. (Paul): am Handy öffnet das unsichtbare Feld keine Bildschirmtastatur – dort das Eingabefenster des Browsers
 		var alt := Profil.name() if Profil.hat_namen() else ""
@@ -1072,8 +1118,12 @@ func _process(delta: float) -> void:
 		_online_stand = Online.geaendert
 		if not _laedt:
 			_baue()
-	if _tippt() and _seite == "profil":
+	if _tippt() and _seite == "profil" and not _code_modus:
 		_eintraege[0][0] = "Name: " + _name_text()
+	if _tippt() and _code_modus and _seite == "einstellungen":   # 20.11.: blinkender Strich im Codefeld
+		for e: Array in _eintraege:
+			if str(e[0]).begins_with("Code: "):
+				e[0] = "Code: " + _code_text()
 	# Übersicht offen: das Menü wartet unsichtbar
 	_welt.visible = not (spiel != null and spiel.get("_lexikon") != null and spiel._lexikon.visible)
 	SichererRand.einpassen(_welt, Stil.UI_SKALA)   # 19.11.: iPhone – sichere Ränder (am PC unverändert)
@@ -1114,9 +1164,17 @@ func _input(event: InputEvent) -> void:
 	var k: int = (event as InputEventKey).keycode
 	if _tippt():
 		if k in [KEY_ENTER, KEY_KP_ENTER]:
-			_bestaetige_namen()
+			if _code_modus:
+				_loese_code()   # 20.11.
+			else:
+				_bestaetige_namen()
 			get_viewport().set_input_as_handled()
 		elif k == KEY_ESCAPE:
+			if _code_modus:
+				_code_merken()   # 20.11.
+				_baue()
+				get_viewport().set_input_as_handled()
+				return
 			_eingabe.release_focus()
 			if _erststart:
 				_spaeter()
@@ -1184,7 +1242,9 @@ func _maus_eingabe(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and TC_ADRESSE != "" and _seite != "anfuehrer" and _tc_rect().has_point((event as InputEventMouseButton).position):
 			_oeffne_tc()
 			return
-		if _tippt() and event.button_index == MOUSE_BUTTON_LEFT and not _zeile(0).has_point((event as InputEventMouseButton).position):
+		if _tippt() and _code_modus and event.button_index == MOUSE_BUTTON_LEFT:
+			_code_merken()   # 20.11.: Klick daneben behält den Code („Einlösen“ löst ihn dann ein)
+		elif _tippt() and event.button_index == MOUSE_BUTTON_LEFT and not _zeile(0).has_point((event as InputEventMouseButton).position):
 			_bestaetige_namen()   # Klick daneben übernimmt den Namen
 		if event.button_index == MOUSE_BUTTON_RIGHT and _seite != "haupt":
 			for i in _eintraege.size():

@@ -1093,6 +1093,7 @@ var _pause_tafel: Malflaeche
 var _pause_titel := "Pause"
 var _pause_knoepfe: Array[Tafelknopf] = []
 var _einstellungen := false
+var _code_feld: LineEdit   # 20.11.: unsichtbares Eingabefeld für Entwicklercodes (Einstellungen), gezeichnet wird der Knopf
 # 19.11. (Paul, Handy: Run mitten in der Runde verloren): Das Pause-Menü geht im Kampf von selbst auf, wenn die Seite den
 # Fokus verliert – ein Tipp, der gerade unterwegs war, traf dann „Hauptmenü“ oder „Neustart“. Deshalb: kurze Sperre nach
 # dem Aufgehen, und beide Knöpfe fragen nach (zweiter Tipp innerhalb weniger Sekunden).
@@ -1117,6 +1118,16 @@ func _baue_pause() -> void:
 		ci.draw_rect(Rect2(Vector2(10, 3), Vector2(ci.size.x - 20.0, 1)), Stil.LEUCHT)
 		Stil.schreibe_mittig(ci, Vector2(ci.size.x / 2.0, 16.0), _pause_titel, Stil.GROSS, Stil.TEXT)
 	_pause.add_child(_pause_tafel)
+	_code_feld = LineEdit.new()   # 20.11.
+	_code_feld.max_length = 32
+	_code_feld.modulate = Color(1, 1, 1, 0)
+	_code_feld.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_code_feld.position = Vector2(-400, -400)
+	_code_feld.size = Vector2(200, 30)
+	_code_feld.context_menu_enabled = false
+	_code_feld.text_changed.connect(func(_t: String) -> void: _einstellungsseite())
+	_code_feld.text_submitted.connect(func(_t: String) -> void: _loese_code())
+	_pause.add_child(_code_feld)
 	process_mode = Node.PROCESS_MODE_ALWAYS   # Oberfläche bedienbar, während das Spiel pausiert
 
 
@@ -1185,6 +1196,7 @@ func _notification(what: int) -> void:
 
 
 func pause_aus() -> void:
+	_code_feld.release_focus()   # 20.11.
 	_pause.visible = false
 	get_tree().paused = false
 
@@ -1194,6 +1206,8 @@ func pausiert() -> bool:
 
 
 func _hauptseite() -> void:
+	if _code_feld != null:
+		_code_feld.release_focus()   # 20.11.
 	_einstellungen = false
 	_pause_titel = "Pause"
 	var neu := "Nochmal angreifen" if spiel.phantom_modus == "angriff" else "Neustart"
@@ -1237,8 +1251,29 @@ func _einstellungsseite() -> void:
 			_einstellungsseite()) if spiel.hd != null else null],
 		["Musik: %s" % _prozent(Werte.musik), func(): _lautstaerke("musik", 10), func(): _lautstaerke("musik", -10)],
 		["Geräusche: %s" % _prozent(Werte.toene), func(): _lautstaerke("toene", 10), func(): _lautstaerke("toene", -10)],
+		["Code: " + (_code_feld.text + "_" if _code_feld.has_focus() else (_code_feld.text if _code_feld.text != "" else "–")), _code_tippen],   # 20.11.: Entwicklercodes
+		["Einlösen", _loese_code],
 		["Zurück", _hauptseite],
 	])
+
+
+## 20.11.: Entwicklercode – Knopf „Code“ aktiviert das Eingabefeld (am Handy das Eingabefenster des Browsers).
+func _code_tippen() -> void:
+	if OS.has_feature("web") and DisplayServer.is_touchscreen_available():
+		var antwort: Variant = JavaScriptBridge.eval("window.prompt(%s, %s)" % [JSON.stringify("Code:"), JSON.stringify(_code_feld.text)], true)
+		if antwort is String:
+			_code_feld.text = (antwort as String).strip_edges()
+	else:
+		_code_feld.grab_focus()
+		_code_feld.caret_column = _code_feld.text.length()
+	_einstellungsseite()
+
+
+func _loese_code() -> void:
+	_code_feld.release_focus()
+	if Profil.code_einloesen(_code_feld.text):
+		_code_feld.text = ""
+	_einstellungsseite()
 
 
 static func _prozent(p: int) -> String:

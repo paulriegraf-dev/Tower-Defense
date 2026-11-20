@@ -53,7 +53,13 @@ static func name(id: String) -> String:
 ## Freigeschaltet? Brakk immer; sonst über seinen Erfolg.
 static func frei(id: String) -> bool:
 	var e := str(eintrag(id)["erfolg"])
-	return e == "" or Profil.hat_erfolg(e)
+	return e == "" or Profil.hat_erfolg(e) or Profil.hat_code("allesfrei")   # 20.11.: Entwicklercode
+
+
+## 20.11.: Nur per Code frei (Code „allesfrei“ oder Erfolg aus dem Code „erfolge“) – dann keine Rangliste, keine Phantome.
+static func per_code(id: String) -> bool:
+	var e := str(eintrag(id)["erfolg"])
+	return e != "" and not Profil.erfolg_verdient(e)
 
 
 static func ranglistenfaehig(id: String) -> bool:

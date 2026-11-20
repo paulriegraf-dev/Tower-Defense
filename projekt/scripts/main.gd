@@ -920,7 +920,16 @@ func _setze_anfuehrer(id: String) -> void:
 	var vorgabe := str(Werte.KARTE_REGELN.get("anfuehrer", ""))
 	Werte.setze_anfuehrer(vorgabe if vorgabe != "" else id)
 	_protokoll["anfuehrer"] = Werte.anfuehrer
+	_merke_code()   # 20.11.
 	leben = Werte.start_leben()
+
+
+## 20.11.: Anführer nur per Entwicklercode frei → Flag im Partieprotokoll: keine Rangliste, keine Phantome.
+func _merke_code() -> void:
+	if Anfuehrer.per_code(Werte.anfuehrer):
+		_protokoll["code"] = true
+	else:
+		_protokoll.erase("code")
 
 
 ## 18.11.: Einkommen (Rundenbonus, Prämien, Erzadern) mit „Doppeltes Geld“ und dem Werte-Mod „Einkommen“ der Karte.
@@ -1133,7 +1142,7 @@ func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 
 ## Verteidigung gegen ein Angriffs-Phantom (oder ein Sieg im normalen Spiel) zu Ende: Bau hochladen, Duell melden.
 func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
-	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer):   # 19.11.: Paul meldet nichts an die Rangliste
+	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer) or _protokoll.has("code"):   # 19.11.: Paul meldet nichts an die Rangliste; 20.11.: per Code freigeschaltet auch nicht
 		return
 	var vid := ""
 	if pfad != "":
@@ -1402,6 +1411,7 @@ func _beginne_protokoll() -> void:
 	for z in karte.checkpoints:
 		cps.append([z.x, z.y])
 	_protokoll = {"version": 1, "begonnen": Time.get_datetime_string_from_system(), "checkpoints": cps, "runden": [], "anfuehrer": Werte.anfuehrer}   # 19.11.: Anführer
+	_merke_code()   # 20.11.
 	_protokoll_datei = "partie-%s.json" % Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "-")
 
 
@@ -1641,6 +1651,7 @@ func _lade_zwischenstand() -> void:
 	setze_basis(Vector2i(int(bz[0]), int(bz[1])))
 	_protokoll = d["protokoll"]
 	_protokoll["anfuehrer"] = Werte.anfuehrer   # 19.11.
+	_merke_code()   # 20.11.
 	_protokoll_datei = str(d["protokoll_datei"])
 	_profil_kills = d.get("kills", {})
 	_setze_stand(d["stand"])
@@ -3820,7 +3831,7 @@ func _gewonnen() -> void:
 		erfolg("ohne_fabrik")
 	_erfolge_zum_sieg()   # 19.11.
 	var als_phantom := false
-	if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "" and Anfuehrer.ranglistenfaehig(Werte.anfuehrer):   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen; 19.11.: nicht mit Paul
+	if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "" and Anfuehrer.ranglistenfaehig(Werte.anfuehrer) and not _protokoll.has("code"):   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen; 19.11.: nicht mit Paul; 20.11.: nicht per Code
 		# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
 		var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
 		var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)

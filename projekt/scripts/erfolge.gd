@@ -71,6 +71,15 @@ static func melde(id: String) -> void:
 	if e.is_empty() or not Profil.setze_erfolg(id):
 		return
 	_gib_belohnung(e)
+	_zeige(e)
+
+
+## 20.11.: Dieselbe Einblendung für andere Rückmeldungen (Entwicklercodes): eigener Titel statt „Erfolg: …“.
+static func einblendung(titel: String, text: String, symbol: String) -> void:
+	_zeige({"titel": titel, "text": text, "symbol": symbol})
+
+
+static func _zeige(e: Dictionary) -> void:
 	var baum := Engine.get_main_loop() as SceneTree
 	if baum == null or baum.root == null or DisplayServer.get_name() == "headless":
 		return
@@ -119,11 +128,11 @@ func _male() -> void:
 	var rein := clampf(_seit / 0.3, 0.0, 1.0)
 	var raus := clampf((ANZEIGE_SEK - _seit) / 0.3, 0.0, 1.0)
 	var anteil := minf(rein, raus)
-	var titel := "Erfolg: " + str(e["name"])
+	var titel := str(e["titel"]) if e.has("titel") else "Erfolg: " + str(e["name"])   # 20.11.: auch Codes
 	var text := str(e["text"])
 	var w := ceilf(maxf(Stil.breite(titel, Stil.NORMAL), Stil.breite(text, Stil.KLEIN)) + 44.0)
 	var r := Rect2(Vector2(roundf((640.0 - w) / 2.0), roundf(-40.0 + anteil * 86.0)), Vector2(w, 32.0))
 	Stil.platte(_flaeche, r, 4.0, Color(0.06, 0.07, 0.1, 0.95), Stil.GOLD)
 	Stil.symbol(_flaeche, str(e["symbol"]), Vector2(r.position.x + 17.0, r.get_center().y), 2.0, Stil.GOLD)
-	Stil.schreibe(_flaeche, Vector2(r.position.x + 34.0, r.position.y + 10.0), titel, Stil.NORMAL, Stil.GOLD)
+	Stil.schreibe(_flaeche, Vector2(r.position.x + 34.0, r.position.y + (10.0 if text != "" else 16.0)), titel, Stil.NORMAL, Stil.GOLD)   # 20.11.: ohne zweite Zeile mittig
 	Stil.schreibe(_flaeche, Vector2(r.position.x + 34.0, r.position.y + 22.0), text, Stil.KLEIN, Stil.TEXT)

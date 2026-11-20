@@ -30,6 +30,7 @@ static func _lade() -> void:
 		_d["stat"] = {}
 	if not (_d.get("kills") is Dictionary):
 		_d["kills"] = {}
+	_wende_codes_an()   # 20.11.: Entwicklercodes
 	_speichere()
 
 
@@ -183,6 +184,66 @@ static func setze_erfolg(id: String) -> bool:
 	_d["erfolge"][id] = Time.get_datetime_string_from_system()
 	_speichere()
 	return true
+
+
+## 20.11.: Entwicklercodes (Einstellungen → Code). Code → Wirkung (Text der Einblendung); verglichen ohne Groß/Klein.
+## Eingelöste Codes stehen im Profil (Feld „codes“) und wirken bei jedem Start wieder.
+## allesfrei: alle Anführer frei, ohne ihre Erfolge zu vergeben (Partien damit: keine Rangliste, keine Phantome).
+## erfolge: alle Erfolge (nur zum Testen der Anzeige) – als Zeitpunkt steht „Code“, damit sie nicht als verdient gelten.
+const CODES := {
+	"allesfrei": "alle Anführer frei",
+	"erfolge": "alle Erfolge",
+}
+const PER_CODE := "Code"
+
+
+static func hat_code(code: String) -> bool:
+	_lade()
+	return (_d.get("codes", []) as Array).has(code)
+
+
+## Erfolg wirklich verdient (nicht über den Code „erfolge“)?
+static func erfolg_verdient(id: String) -> bool:
+	_lade()
+	var e: Dictionary = _d.get("erfolge", {})
+	return e.has(id) and str(e[id]) != PER_CODE
+
+
+## Löst einen Code ein und gibt den Text für die Einblendung zurück ("" = unbekannter Code).
+static func loese_code(text: String) -> String:
+	_lade()
+	var code := text.strip_edges().to_lower()
+	if not CODES.has(code):
+		return ""
+	if not (_d.get("codes") is Array):
+		_d["codes"] = []
+	if not (_d["codes"] as Array).has(code):
+		(_d["codes"] as Array).append(code)
+	_wende_codes_an()
+	_speichere()
+	return str(CODES[code])
+
+
+## Einstellungen → „Einlösen“ (Startmenü und Pausenmenü): einlösen und als Einblendung zurückmelden.
+static func code_einloesen(text: String) -> bool:
+	var wirkung := loese_code(text)
+	if wirkung == "":
+		Erfolge.einblendung("Unbekannter Code", "", "buch")
+		return false
+	Erfolge.einblendung("Code eingelöst: " + wirkung, "", "brakk")
+	return true
+
+
+## Wirkungen, die im Profil stehen müssen (allesfrei wird bei Anfuehrer.frei() abgefragt). Auch neue Erfolge späterer
+## Versionen kommen so beim Start dazu.
+static func _wende_codes_an() -> void:
+	if not hat_code("erfolge"):
+		return
+	if not (_d.get("erfolge") is Dictionary):
+		_d["erfolge"] = {}
+	for e: Dictionary in Erfolge.LISTE:
+		if not (_d["erfolge"] as Dictionary).has(str(e["id"])):
+			_d["erfolge"][str(e["id"])] = PER_CODE
 
 
 ## 18.11.: Formenlehre – merkt sich, welche Turmarten schon einmal gebaut wurden. Gibt die Anzahl zurück.
