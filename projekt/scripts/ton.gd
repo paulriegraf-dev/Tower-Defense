@@ -11,6 +11,10 @@ const ZOOM_AB := 0.0   # 16.11. (Paul): auf jeder Zoomstufe hörbar – leiser, 
 const GLEICHE := 2
 const ABSTAND := 0.09
 const STIMMEN := 8
+const EGO_HOERWEITE := 12.0   # 20.11. (Paul): Felder – so weit hört Brakk Schüsse in der Ego-Sicht
+const EGO_NAH_DB := 1.0       # direkt neben ihm
+const EGO_FERN_DB := -12.0    # am Rand der Hörweite
+const EGO_ROGUE_DB := 3.0     # Befehl 24: Angriffe der Verteidiger noch deutlicher
 ## Grundlautstärke je Klang (dB), damit kein Klang heraussticht.
 const PEGEL := {
 	"tc-rail": -12.0, "tc-plasma": -4.0, "tc-blaster": -6.0, "tc-grenade": -6.0, "tc-pistol": -4.0, "tc-heavy": -10.0,
@@ -32,6 +36,20 @@ static func _jetzt() -> float:
 ## Geräusch aus dem Gefecht an einem Weltpunkt: nur nah herangezoomt und im Bild.
 static func am_ort(spiel: Node, art: String, ort: Vector2) -> void:
 	if spiel == null or not spiel.is_inside_tree():
+		return
+	# 20.11. (Paul): Ego-Sicht – nach Abstand zu Brakk statt nach dem Bild: auch Schüsse von hinten und der Seite sind zu
+	# hören, nah deutlich lauter, mit Richtung (links/rechts). In Befehl 24 noch etwas kräftiger.
+	var ego: Variant = spiel.get("ego")
+	var kom: Variant = spiel.get("kommandant")
+	if ego != null and kom != null and is_instance_valid(kom) and bool(spiel.get("brakk_modus")):
+		var weg: Vector2 = ort - (kom as Node2D).position
+		var felder := weg.length() / Werte.ZELLE
+		if felder > EGO_HOERWEITE:
+			return
+		var rechts: Vector3 = ego._rechts()
+		var seite_ego := 0.0 if felder < 0.3 else clampf(weg.normalized().dot(Vector2(rechts.x, rechts.z).normalized()), -1.0, 1.0)
+		var plus := EGO_ROGUE_DB if spiel.get("order24") != null else 0.0
+		spiele(spiel, art, lerpf(EGO_NAH_DB, EGO_FERN_DB, clampf(felder / EGO_HOERWEITE, 0.0, 1.0)) + plus, seite_ego * 0.8)
 		return
 	var z: float = spiel.zoom_anteil() if spiel.has_method("zoom_anteil") else 1.0
 	if z < ZOOM_AB:

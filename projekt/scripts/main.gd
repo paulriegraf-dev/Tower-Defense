@@ -1356,7 +1356,7 @@ func _neustart() -> void:
 	loesche_sitzung()   # 19.11.
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
-	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else ("brakk" if brakk_modus else "normal")   # 18.11.: Neustart bleibt im Brakk-Mode
+	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else ("brakk" if brakk_modus and Werte.modus() != "rogue" else "normal")   # 18.11.: Neustart bleibt im Brakk-Mode; 20.11. (Paul): Rogue bleibt Rogue (über das Regelpaket der Karte)
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
 
 
@@ -3538,6 +3538,8 @@ func gefahrenzellen(radius: float = Werte.GEFAHR_RADIUS) -> Dictionary:
 
 ## Schutzschild: Gegner in ihrer Zone sind bis zur letzten Runde nicht angreifbar.
 func _geschuetzt(g: Gegner) -> bool:
+	if order24 != null and g == order24.brakk_ziel:
+		return false   # 20.11. (Paul): Befehl 24 – am Myriaden-HQ gibt es keinen Schild, Brakk ist dort nicht sicher
 	return not endkampf and karte.zelle_bei(g.position).x < Werte.ZONE_SPALTEN
 
 

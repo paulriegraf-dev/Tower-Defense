@@ -862,7 +862,7 @@ func _strahl_bis(von: Vector3, r: Vector3, weite: float) -> float:
 		var p := von + r * t
 		if p.y <= 0.0:
 			return t
-		if not spiel.endkampf and p.x < float(Werte.ZONE_SPALTEN):
+		if not spiel.endkampf and spiel.order24 == null and p.x < float(Werte.ZONE_SPALTEN):   # 20.11. (Paul): in Befehl 24 kein Schild am Myriaden-HQ
 			return t   # 18.11. (Paul): der Schild vor der Gegnerzone fängt den Schuss ab
 		var z := Vector2i(floori(p.x), floori(p.z))
 		if z != eigene:
@@ -2457,6 +2457,10 @@ func _male_terminal() -> void:
 		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.22), vorsatz + ("Held: " if irr else "Brakk: ") + BrakkFortschritt.brakk_text(ring, zeig), 14, Stil.TEXT)
 		if spiel.order24 == null:   # 20.11. (Paul): in Befehl 24 gibt es kein Ringfeld (Brakk baut nichts)
 			Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Feld: " + _ring_fabrik_text(ring, zeig), 14, Stil.TEXT_BLASS)
+		elif _myr_feld():   # … außer im Überläufer-Verlauf: dort bestimmt der Ring die Myriaden-Einheit
+			var o24: Order24 = spiel.order24
+			Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Feld: " + o24.myr_takt_text(str(Order24.MYR_RING.get(ring, "hund")),
+				o24.wf("myr_wert") * (1.0 + o24.wf("myr_ring_stufe") / 100.0 * float(zeig - 1))), 14, Stil.TEXT_BLASS)
 		var kb := Rect2(r.end.x - 130.0, r.get_center().y - 13.0, 122.0, 26.0)
 		if irr:
 			# 20.11. (Nachtrag): jeder Kauf ist ein neuer Ring (Stufe 1) im gewählten Satz; ausgebaut wird links
@@ -2571,13 +2575,18 @@ func _wirf_feld() -> void:
 	if f.ringe.is_empty():
 		spiel.melde("Noch kein Ring – am Lichtterminal der Basis kaufen ([F] an der Basis in der Bauphase).", 2.5)
 		return
-	if spiel.phase != 0:
+	if spiel.phase != 0 and not _myr_feld():
 		spiel.melde("Ringfelder setzt du in der Bauphase – in der Welle liegen sie fest.", 2.0)
 		return
 	f.gewaehlt = clampi(f.gewaehlt, 0, f.ringe.size() - 1)
 	_feld_zielt = true
 	_feuer = false
 	Ton.spiele(spiel, "ui-klick", -4.0)
+
+
+## 20.11. (Paul): Befehl 24, Überläufer – das Ringfeld gilt den Myriaden-Fabriken und lässt sich jederzeit werfen.
+func _myr_feld() -> bool:
+	return spiel.order24 != null and spiel.order24.geheim
 
 
 func _feld_abbrechen() -> void:
@@ -2606,6 +2615,11 @@ func _feld_mitte(ecke: Vector2i) -> Vector2:
 
 func _feld_fabriken(ecke: Vector2i) -> Array:
 	var liste: Array = []
+	if _myr_feld():
+		for z: Vector2i in spiel.order24.myr_fabriken:
+			if BrakkFortschritt.im_feld(z, ecke):
+				liste.append(z)
+		return liste
 	for z: Vector2i in spiel.fabriken:
 		if not karte.paar.has(z) and BrakkFortschritt.im_feld(z, ecke):
 			liste.append(z)
@@ -2614,7 +2628,7 @@ func _feld_fabriken(ecke: Vector2i) -> Array:
 
 func _feld_bestaetigen() -> void:
 	var f := brakk.fortschritt
-	if f == null or f.ringe.is_empty() or spiel.phase != 0:
+	if f == null or f.ringe.is_empty() or (spiel.phase != 0 and not _myr_feld()):
 		_feld_abbrechen()
 		return
 	var ecke := _feld_ecke_im_blick()
@@ -2628,6 +2642,12 @@ func _feld_bestaetigen() -> void:
 	_trauma = minf(1.0, _trauma + 0.12)
 	spiel.effekte.flaeche(_feld_mitte(ecke), Werte.ZELLE * 1.1, _ring_farbe(ring))
 	Ton.spiele(spiel, "tc-arc", -4.0)
+	if _myr_feld():
+		var o: Order24 = spiel.order24
+		var typ := str(Order24.MYR_RING.get(ring, "hund"))
+		var wert: float = o.wf("myr_wert") * (1.0 + o.wf("myr_ring_stufe") / 100.0 * float(maxi(0, f.ring_stufe(ring) - 1)))
+		spiel.melde("%s: %d/4 Myriaden-Fabriken im Feld – jede baut %s." % [str(BrakkFortschritt.RINGE[ring]["name"]), _feld_fabriken(ecke).size(), o.myr_takt_text(typ, wert)], 4.0)
+		return
 	spiel.melde("%s: %d/4 Fabriken im Feld bauen %s." % [str(BrakkFortschritt.RINGE[ring]["name"]), _feld_fabriken(ecke).size(), _ring_fabrik_text(ring, f.ring_stufe(ring))], 3.0)
 
 
@@ -2713,7 +2733,7 @@ func _felder_weiter(dt: float) -> void:
 		if s != null:
 			s.rotation.y += dt * 0.8
 			s.position.y = 0.2 + 0.06 * sin(Time.get_ticks_msec() / 400.0)
-	if _feld_zielt and (spiel.phase != 0 or f.ringe.is_empty()):
+	if _feld_zielt and ((spiel.phase != 0 and not _myr_feld()) or f.ringe.is_empty()):
 		_feld_abbrechen()
 	if not _feld_zielt or not _frei():
 		if _vorschau != null:

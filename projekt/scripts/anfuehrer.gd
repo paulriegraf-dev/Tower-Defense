@@ -8,7 +8,7 @@ extends RefCounted
 ## Felder: id, name, initiale (Porträt-Platzhalter), farbe, kurz, perks (drei Zeilen), nachteile, erfolg, rangliste.
 
 const LISTE: Array[Dictionary] = [
-	{"id": "brakk", "name": "Brakk", "initiale": "B", "farbe": Color("7fe0ff"),
+	{"id": "brakk", "name": "Brakk", "initiale": "B", "farbe": Color("7fe0ff"), "portraet": "res://assets/neu/ui/bau_brakk.png",   # 20.11. (Paul): echtes Porträt; die anderen folgen zum 30.11.
 		"kurz": "Kommandant des Technoclans. Alles wie gewohnt.",
 		"perks": ["Figur Brakk [8]: 500, einmal je Partie", "Alle Bauwerke ohne Grenzen", "Bewährte Regeln, ohne Überraschungen"],
 		"nachteile": ["Keine – aber auch keine Extras"],

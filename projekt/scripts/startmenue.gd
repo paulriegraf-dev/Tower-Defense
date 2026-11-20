@@ -443,7 +443,17 @@ func _male_af_kachel(ci: Control, i: int, a: Dictionary) -> void:
 	ci.draw_rect(Rect2(p.position + Vector2(4, 4), p.size - Vector2(8, 8)), Color(farbe, 0.08 if frei else 0.03))
 	for ecke: Vector2 in [Vector2(5, 5), Vector2(p.size.x - 7, 5), Vector2(5, p.size.y - 7), Vector2(p.size.x - 7, p.size.y - 7)]:
 		ci.draw_rect(Rect2(p.position + ecke, Vector2(2, 2)), Stil.RAHMEN_HELL)
-	if frei:
+	# 20.11. (Paul): echtes Porträt, wo es eins gibt (Brakk) – 32er-Bild dreifach auf dem Schirm, die Initiale sonst
+	var portraet: Texture2D = null
+	if str(a.get("portraet", "")) != "" and ResourceLoader.exists(str(a["portraet"])):
+		portraet = load(str(a["portraet"]))
+	if portraet != null:
+		var ps := Vector2(48, 48)
+		ci.draw_rect(Rect2(p.position + Vector2(4, 4), p.size - Vector2(8, 8)), Color(farbe, 0.16))
+		ci.draw_texture_rect(portraet, Rect2((p.get_center() - ps / 2.0).round(), ps), false, Color.WHITE if frei else Color(0.25, 0.27, 0.32))
+		if an and frei:
+			ci.draw_rect(Rect2(p.position + Vector2(2, 2), p.size - Vector2(4, 4)), farbe, false, 1.0)
+	elif frei:
 		Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), str(a["initiale"]), 28, farbe)
 	else:
 		Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), str(a["initiale"]), 28, Color(Stil.TEXT_BLASS, 0.25))

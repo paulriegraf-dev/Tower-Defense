@@ -29,7 +29,10 @@ const STANDARD := {
 	"geheim_ab": 900,           # hält Brakk das Myriaden-HQ bis hierhin, beginnt der geheime Verlauf „Überläufer“ (0 = aus)
 	"myr_takt": 30,             # Überläufer: Wellenzyklus der Myriaden-Fabriken
 	"myr_wert": 60,             # Wert der Einheiten je Fabrik und Zyklus (Hund 10 → 6 Hunde, Fahne 75 → 1)
-	"myr_bau_mal": 4,           # Baupreis = Einheitenpreis × so viel
+	"myr_bau_mal": 4,           # (alt: Baupreis = Einheitenpreis × so viel – seit dem Ringfeld-Umbau unbenutzt)
+	"myr_fabrik_preis": 150,    # 20.11. (Paul): es gibt nur noch EINE Myriaden-Fabrik zu diesem Preis – was sie baut, bestimmt das Ringfeld
+	"myr_ohne_ring": 50,        # Prozent des Werts, solange die Fabrik in keinem Ringfeld steht (dann Hunde)
+	"myr_ring_stufe": 30,       # Prozent mehr Wert je Ringstufe über 1 (Stufe 3: +60 %)
 	"myr_kosten_anteil": 50,    # Prozent des Einheitenpreises kostet die Produktion je Zyklus
 	"geheim_einkommen": 30,     # Beute je Zyklus
 	"geheim_cp_sek": 30,        # beide Checkpoints so lange halten → Schild des Technoclan-HQ fällt
@@ -51,7 +54,7 @@ const STANDARD := {
 	"faehigkeit_ab": 720,       # … ab hier auf Stufe 3 mit Fähigkeit (Minigun, Brandfeld …)
 	"staerke_je_min": 4,        # Prozent mehr Schaden je Minute für neue Truppen
 	"tempo_je_min": 2,          # Prozent schneller je Minute (höchstens +40 %)
-	"leben_je_min": 3,          # Prozent mehr Leben je Minute
+	"leben_je_min": 10,         # Prozent mehr Leben je Minute – 20.11. (Paul): vorher 3 (Brakks Schaden wuchs viel schneller)
 	"lager_neu_ab": 360,        # ab hier baut der Technoclan neue Lager (außer Brakks Sicht) …
 	"lager_neu_takt": 150,      # … so oft …
 	"lager_max": 8,             # … bis so viele Lager stehen
@@ -65,11 +68,14 @@ const STANDARD := {
 	"vorstoss_sek": 30,         # so lange muss er es halten
 	"brakk_schaden": 25,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an (Balance gegen seine Beweglichkeit)
 	"medkit_takt": 60,          # Med-Kit am Myriaden-HQ liegt so oft wieder, nach dessen Fall so oft eins verstreut
-	"medkit_heilung": 40,       # Prozent von Brakks Leben
+	"medkit_heilung": 15,       # Prozent von Brakks Leben – 20.11. (Paul): deutlich weniger (vorher 40)
 	"fabriken_aussen": 4,       # Lager über die Karte verteilt (Fabrik, Stellungen, Turm)
 	"fabriken_innen": 3,        # im Schild, für Brakk nicht erreichbar
 	"stufe_innen": 2,           # 20.11. (Paul): Fabriken im Schild ausgebaut wie im normalen Spiel
 	"besatzung_innen": 3,       # so viele Truppen hält jede Fabrik im Schild zur Verteidigung
+	"praemie_kill": 5,          # 20.11. (Paul): kleines Kopfgeld je Kill …
+	"kill_stufe": 2,            # … je so vielen Kills an derselben Stellung (am Boden: derselben Fabrik) sinkt es um 1 …
+	"kill_frist": 30,           # … und ist nach so vielen Sekunden ohne Kill dort wieder voll (gegen stumpfes Abfarmen)
 	"praemie_fabrik": 80,       # 20.11. (Paul): wenig Geld, dafür Erfahrung
 	"praemie_stellung": 0,
 	"praemie_wall": 0,
@@ -86,7 +92,7 @@ const STANDARD := {
 	"lager_tuerme": 1,          # dazu je Lager ein Geschützturm
 	"heiltuerme": 1,            # dazu Heiltürme mit Instandsetzung
 	"fabrik_leben": 1500,       # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon)
-	"sabotage_halten": 3,       # Sekunden [E] an der Rückseite halten, ungestört
+	"sabotage_halten": 5,       # Sekunden [E] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
 	"sabotage_lahm": 60,        # so lange liefert eine sabotierte Fabrik nichts
 	"praemie_sabotage": 40,
 	"alarm_radius": 6,          # Felder: bei Angriff auf eine Fabrik laufen Truppen im Umkreis hin
@@ -94,7 +100,7 @@ const STANDARD := {
 	"pilot_neu": 45,            # fällt der Pilot, dauert der nächste so lange
 	"pilot_reparatur": 5,       # Sekunden Reparatur vor Ort
 	"kern_leben": 400,          # Turmkern: leer geschossen fällt der Turm aus, bis ein Pilot ihn repariert (20.11., Paul)
-	"spreng_drop": 12,          # Prozent: gefallene Truppe lässt eine Sprengladung fallen (Elite immer)
+	"spreng_drop": 5,           # Prozent: gefallene Truppe lässt eine Sprengladung fallen (Elite immer) – 20.11. (Paul): vorher 12
 	"spreng_max": 3,            # höchstens so viele im Gepäck
 	"spreng_zuender": 3,        # Sekunden Zünder
 	"mobil_abkling": 125,       # 20.11. (Paul): Prozent Abklingzeit von Q und E (Anker, Lichttreppe, Lichtbrücke) – eher eingekesselt
@@ -1181,6 +1187,7 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			return
 		var e: Einheit = t.einheit
 		var war_stellung := e.in_stellung()
+		var kg_ort := ("s:%s" % str(e.posten_zelle)) if war_stellung else ("f:%s" % str(e.fabrik_zelle))
 		_alarm_auf_brakk(spiel.kommandant)   # 20.11. (Paul): wer angegriffen wird, ruft Hilfe
 		e.nimm_schaden(menge)
 		t.leben = e.leben
@@ -1188,8 +1195,11 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			t._tot = true
 			sabotage["truppen"] = int(sabotage["truppen"]) + 1
 			kills += 1
-			if war_stellung:
+			_kopfgeld(kg_ort)
+			if war_stellung and int(w("praemie_stellung")) > 0:
 				_praemie("stellungen", int(w("praemie_stellung")), "Stellung geleert")
+			elif war_stellung:
+				sabotage["stellungen"] = int(sabotage["stellungen"]) + 1
 		return
 	if t.art == "hq":
 		_tc_hq_treffer(menge * BAU_SCHADEN)
@@ -1235,6 +1245,23 @@ func fabrik_treffer(z: Vector2i, schaden: float) -> void:
 		spiel.effekte.fx("g_tod", karte.mitte(z) + Vector2(0, 16), 1.0)
 	_praemie("fabriken", int(w("praemie_fabrik")), "Fabrik zerstört", int(w("xp_fabrik")))
 	print("ORDER24 Fabrik %s zerstört bei %.0f s" % [str(z), zeit])
+
+
+var _kopfgeld_merk := {}   # Ort ("s:<Stellung>" / "f:<Fabrik>") -> [Kills in Folge, Zeit des letzten Kills]
+
+## 20.11. (Paul): Kopfgeld je Kill. An derselben Stellung (am Boden: Truppen derselben Fabrik) sinkt es je kill_stufe Kills
+## um 1; nach kill_frist Sekunden ohne Kill dort ist es wieder voll.
+func _kopfgeld(ort: String) -> void:
+	var voll := int(w("praemie_kill"))
+	if voll <= 0:
+		return
+	var m: Array = _kopfgeld_merk.get(ort, [0, -999.0])
+	var n := int(m[0]) if zeit - float(m[1]) < wf("kill_frist") else 0
+	var betrag := maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe"))))
+	_kopfgeld_merk[ort] = [n + 1, zeit]
+	if betrag > 0:
+		sabotage["geld"] = int(sabotage["geld"]) + betrag
+		spiel.budget += betrag   # ohne Meldung: sie würde wichtigere Zeilen verdrängen – das Budget oben zählt mit
 
 
 func _praemie(was: String, betrag: int, text: String, xp: int = 0) -> void:
@@ -1379,7 +1406,8 @@ func sprengen(z: Vector2i) -> void:
 	spiel.effekte.flaeche(p, Werte.ZELLE * 1.3, Color("ff9a3d"))
 	if Werte.grafik_neu:
 		spiel.effekte.fx("g_tod", p + Vector2(0, 16), 1.0)
-	Ton.spiele(spiel, "alert", -6.0)
+	Ton.spiele(spiel, "hit-boom", 9.0)   # 20.11. (Paul): Sprengung mit Knall …
+	Ton.spiele(spiel, "tf-stone", 4.0)   # … und Geröll
 	_explosion3d(z)
 	if spiel.ego != null:
 		spiel.ego.set("_trauma", minf(1.0, float(spiel.ego.get("_trauma")) + 0.35))
@@ -1420,9 +1448,11 @@ func sabotage_abbruch(grund: String) -> void:
 func _fabriken_pflegen(k: Kommandant, echt: float) -> void:
 	if not sabo.is_empty():
 		var z: Vector2i = sabo["zelle"]
-		if k.leben < float(sabo["leben"]) - 0.01:
-			sabotage_abbruch("getroffen")
-		elif fabrik_an_rueckseite(k.position) != z:
+		# 20.11. (Paul): Treffer brechen die Sabotage nicht mehr ab – riskant, aber möglich. Solange Brakk dran ist,
+		# stockt die Produktion dieser Fabrik (kein Ersatz rückt nach).
+		if spiel.fabriken.has(z):
+			spiel.fabriken[z]["timer"] = 0.0
+		if fabrik_an_rueckseite(k.position) != z:
 			sabotage_abbruch("zu weit weg")
 		else:
 			sabo["t"] = float(sabo["t"]) + echt
@@ -2165,13 +2195,27 @@ func am_terminal(fuss: Vector2) -> bool:
 
 # ------------------------------------------------------------------ Überläufer – geheimer Verlauf (20.11., Paul)
 ## Hält Brakk das Myriaden-HQ bis geheim_ab (der Vorstoß darauf ist nicht angesagt – Brakk ahnt es nur), meldet Sonde 7,
-## dass er übergelaufen ist. Dann baut er mit [1]–[7] Myriaden-Fabriken in der Zone des HQ (Baupreis = Einheitenpreis
-## × myr_bau_mal, je Wellenzyklus kostet die Produktion myr_kosten_anteil % der Einheiten). Alle myr_takt Sekunden
+## dass er übergelaufen ist. Dann baut er mit [1] Myriaden-Fabriken in der Zone des HQ (eine Sorte, myr_fabrik_preis) und
+## wirft mit [C] Ringfelder darüber: Der Ring bestimmt die Einheit (MYR_RING), ihr Preis die Zahl je Zyklus. Je
+## Wellenzyklus kostet die Produktion myr_kosten_anteil % der Einheiten. Alle myr_takt Sekunden
 ## laufen die Myriaden los – über die Checkpoints zur Technoclan-Basis. Hält Brakk beide Checkpoints geheim_cp_sek lang,
 ## fällt der Schild des Technoclan-HQ; Brakks Waffen und Myriaden an der Basis zerstören es → geheimes Ende.
 ## Das Myriaden-HQ kann weiter fallen (die Fabriken stehen dann still) und von Brakk zurückerobert werden.
 
 const MYR_TYPEN: Array[String] = ["hund", "sphaere", "schild", "sprenger", "rauch", "sani", "fahne"]
+## 20.11. (Paul): Welche Myriaden-Einheit eine Fabrik im Feld des Rings baut. Wie viele je Zyklus, folgt aus dem Preis der
+## Einheit (Phantom.PREISE): myr_wert 60 → 6 Hunde, aber nur alle drei Zyklen ein Belagerungsturm.
+const MYR_RING := {
+	"feuerteam": "hund",         # Taktring: viele, schnell
+	"minigun": "sphaere",        # Wirbelring: Battlesphären
+	"bollwerk": "schild",        # Wallring: Schildträger
+	"durchschuss": "sprenger",   # Durchschlagring: bricht Erdwälle
+	"brandfeld": "rauch",        # Brandring: Rauchwerfer
+	"plasmagel": "sani",         # Gelring: Sanitäter
+	"markierung": "fahne",       # Zielring: Fahnenträger führt den Trupp
+	"abpraller": "schwarm",      # Sprungring: Schwarmgeist
+	"laser": "belagerung",       # Glutstrahlring: Belagerungsturm
+}
 const MYR_FARBE := Color("ff7ad9")
 var myr_fabriken := {}            # Zonenfeld -> {"typ": String, "knoten": Node3D}
 var myr_hq_besetzt := false
@@ -2224,7 +2268,7 @@ func _geheim_starten() -> void:
 	funken([
 		["SONDE 7 · FUNK", "An alle Einheiten: Kommandant Brakk hat sich endgültig dem Feind angeschlossen.", ""],
 		["BRAKK", "Ihr habt es so gewollt. Myriaden – ab jetzt kämpft ihr mit mir.", ""],
-		["", "Baue Myriaden-Fabriken in der Zone am HQ mit [1]–[7]. Nimm beide Checkpoints und halte sie – dann fällt der Schild des Technoclan-HQ.", ""],
+		["", "Baue Myriaden-Fabriken in der Zone am HQ mit [1]. Wirf mit [C] ein Ringfeld darüber: Der Ring bestimmt, welche Myriaden sie bauen. Nimm beide Checkpoints und halte sie – dann fällt der Schild des Technoclan-HQ.", ""],
 	])
 	print("ORDER24 Überläufer bei %.0f s" % zeit)
 
@@ -2302,18 +2346,64 @@ func _rueckholer(cp: Vector2i) -> void:
 		alarm[(e as Node).get_instance_id()] = {"ziel": cp, "bis": zeit + 15.0}
 
 
-## Ein Wellenzyklus: jede Myriaden-Fabrik schickt Einheiten im Wert von myr_wert los, wenn die Beute für die Produktion reicht.
+## 20.11. (Paul): Ring, in dessen Feld die Myriaden-Fabrik `z` steht ("" = keins; das zuletzt gesetzte Feld gewinnt).
+func myr_ring(z: Vector2i) -> String:
+	var k: Kommandant = spiel.kommandant
+	if k == null or k.fortschritt == null:
+		return ""
+	var ring := ""
+	for r: String in k.fortschritt.felder:
+		if BrakkFortschritt.im_feld(z, k.fortschritt.felder[r] as Vector2i):
+			ring = r
+	return ring
+
+
+## Was die Fabrik `z` gerade baut: die Einheit des Rings, ohne Feld Hunde.
+func myr_typ(z: Vector2i) -> String:
+	return str(MYR_RING.get(myr_ring(z), "hund"))
+
+
+## Wert, den die Fabrik `z` je Zyklus verbaut: myr_wert, ohne Ringfeld nur ein Teil, je Ringstufe mehr.
+func myr_wert_von(z: Vector2i) -> float:
+	var ring := myr_ring(z)
+	if ring == "":
+		return wf("myr_wert") * wf("myr_ohne_ring") / 100.0
+	var st: int = spiel.kommandant.fortschritt.ring_stufe(ring)
+	return wf("myr_wert") * (1.0 + wf("myr_ring_stufe") / 100.0 * float(maxi(0, st - 1)))
+
+
+## Kurz für Anzeigen: „6 Hunde je Zyklus“ bzw. „1 Belagerungsturm alle 3 Zyklen“.
+func myr_takt_text(typ: String, wert: float) -> String:
+	var preis := float(maxi(1, Phantom.preis(typ)))
+	var name := str(Werte.GEGNER[typ]["name"])
+	var je := wert / preis
+	if je >= 0.95:
+		return "%s × %s je Zyklus" % [str(snappedf(je, 0.1)).trim_suffix(".0").replace(".", ","), name]
+	return "1 %s alle %s Zyklen" % [name, str(snappedf(1.0 / je, 0.1)).trim_suffix(".0").replace(".", ",")]
+
+
+## Ein Wellenzyklus: jede Myriaden-Fabrik bekommt ihren Wert gutgeschrieben und schickt so viele Einheiten los, wie das
+## Guthaben hergibt (der Rest bleibt stehen) – so zählt ein Fahnenträger nicht wie ein Hund. Die Produktion kostet Beute.
 func _myr_welle() -> void:
 	var los := 0
 	for z: Vector2i in myr_fabriken:
-		var typ := str((myr_fabriken[z] as Dictionary)["typ"])
+		var fab: Dictionary = myr_fabriken[z]
+		var typ := myr_typ(z)
+		if str(fab.get("typ", "")) != typ:
+			fab["typ"] = typ
+			fab["guthaben"] = 0.0   # umgestellt: von vorn
 		var preis := maxi(1, Phantom.preis(typ))
-		var n := maxi(1, roundi(wf("myr_wert") / float(preis)))
+		fab["guthaben"] = float(fab.get("guthaben", 0.0)) + myr_wert_von(z)
+		var n := int(floorf(float(fab["guthaben"]) / float(preis) + 0.001))
+		if n <= 0:
+			continue
 		var kosten := roundi(float(n * preis) * wf("myr_kosten_anteil") / 100.0)
 		if spiel.budget < kosten:
 			spiel.melde("Zu wenig Beute für die Myriaden-Fabrik (%s): %d nötig." % [str(Werte.GEGNER[typ]["name"]), kosten], 3.0)
+			fab["guthaben"] = minf(float(fab["guthaben"]), float(preis))   # nicht endlos ansparen
 			continue
 		spiel.budget -= kosten
+		fab["guthaben"] = float(fab["guthaben"]) - float(n * preis)
 		for i in n:
 			var g: Gegner = spiel._neuer_gegner(typ, z, 0)
 			g.position += Vector2(randf_range(-8, 8), randf_range(-8, 8))
@@ -2322,21 +2412,20 @@ func _myr_welle() -> void:
 		print("ORDER24 Myriaden-Welle bei %.0f s: %d Einheiten" % [zeit, los])
 
 
-## [1]–[7] im Überläufer-Verlauf: Myriaden-Fabrik auf dem Feld unter dem Fadenkreuz bauen (nur in der Zone am HQ).
+## [1] im Überläufer-Verlauf: Myriaden-Fabrik auf dem Feld unter dem Fadenkreuz bauen (nur in der Zone am HQ).
 func ego_zahl(ego: EgoModus, taste: int) -> bool:
 	if not geheim or vorbei:
 		return false
-	var nr := taste - KEY_1
-	if nr < 0 or nr >= MYR_TYPEN.size():
+	if taste != KEY_1:
 		return false
-	var grund := myr_bauen(MYR_TYPEN[nr], karte.zelle_bei(ego.ziel_welt()), ego._fuss2d())
+	var grund := myr_bauen("", karte.zelle_bei(ego.ziel_welt()), ego._fuss2d())
 	if grund != "":
 		spiel.melde(grund, 2.5)
 	return true
 
 
-func myr_preis(typ: String) -> int:
-	return Phantom.preis(typ) * int(w("myr_bau_mal"))
+func myr_preis(_typ: String = "") -> int:
+	return int(w("myr_fabrik_preis"))   # 20.11. (Paul): eine Fabrik, ein Preis
 
 
 ## Baut eine Myriaden-Fabrik; gibt den Grund zurück, wenn es nicht geht ("" = gebaut).
@@ -2353,9 +2442,10 @@ func myr_bauen(typ: String, z: Vector2i, fuss: Vector2) -> String:
 	if spiel.budget < preis:
 		return "Zu wenig Beute: %d nötig." % preis
 	spiel.budget -= preis
-	myr_fabriken[z] = {"typ": typ, "knoten": null}
+	typ = myr_typ(z)
+	myr_fabriken[z] = {"typ": typ, "knoten": null, "guthaben": 0.0, "gezeigt": ""}
 	Ton.spiele(spiel, "ui-klick")
-	spiel.melde("Myriaden-Fabrik: %s (−%d)." % [str(Werte.GEGNER[typ]["name"]), preis], 2.5)
+	spiel.melde("Myriaden-Fabrik gebaut (−%d): %s.%s" % [preis, myr_takt_text(typ, myr_wert_von(z)), "" if myr_ring(z) != "" else " Mit [C] ein Ringfeld darüber werfen, dann baut sie die Einheit des Rings."], 4.0)
 	print("ORDER24 Myriaden-Fabrik %s bei %s" % [typ, str(z)])
 	return ""
 
@@ -2387,14 +2477,21 @@ func _tc_hq_treffer(menge: float) -> void:
 func _myr_3d(hd: HdAnsicht) -> void:
 	for z: Vector2i in myr_fabriken:
 		var f: Dictionary = myr_fabriken[z]
-		if f["knoten"] != null:
+		var typ_jetzt := myr_typ(z)
+		if f["knoten"] != null and str(f.get("gezeigt", typ_jetzt)) == typ_jetzt:
 			continue
+		if f["knoten"] != null:
+			# 20.11. (Paul): das Ringfeld hat die Fabrik umgestellt – Platzhalter mit der neuen Einheit
+			_knoten3d.erase(f["knoten"])
+			(f["knoten"] as Node3D).queue_free()
+		f["gezeigt"] = typ_jetzt
+		var ring_jetzt := myr_ring(z)
 		var kn := Node3D.new()
 		hd.add_child(kn)
 		kn.position = Vector3(float(z.x) + 0.5, 0.0, float(z.y) + 0.5)
 		_kasten3d(kn, Vector3(0.85, 0.6, 0.85), Color("5a2350"), Vector3(0, 0.3, 0))
-		_kasten3d(kn, Vector3(0.6, 0.12, 0.6), MYR_FARBE, Vector3(0, 0.66, 0))
-		var d: Dictionary = Werte.grafik_daten(Werte.GEGNER[str(f["typ"])])
+		_kasten3d(kn, Vector3(0.6, 0.12, 0.6), Einheit.ABZEICHEN.get(ring_jetzt, MYR_FARBE) if ring_jetzt != "" else MYR_FARBE, Vector3(0, 0.66, 0))   # Deckel in Ringfarbe
+		var d: Dictionary = Werte.grafik_daten(Werte.GEGNER[typ_jetzt])
 		if d.has("blatt") and d.has("zelle"):
 			var bild := AtlasTexture.new()
 			bild.atlas = load(str(d["blatt"]))
@@ -2419,6 +2516,8 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 		return false
 	match taste:
 		"C":
+			if geheim:
+				return false   # 20.11. (Paul): Überläufer – [C] wirft wieder das Ringfeld (ego_modus), die Sprengladung entfällt
 			if gedrueckt:
 				var v: Vector3 = ego._vorne()
 				var grund := ladung_setzen(wall_fuer_ladung(ego._fuss2d(), ego.ziel_welt(), Vector2(v.x, v.z)))
@@ -2440,11 +2539,19 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	if geheim:
 		# 20.11.: Überläufer – Bauliste der Myriaden-Fabriken links
 		var by := roundf(g.y * 0.3)
-		Stil.schreibe(bild, Vector2(24, by), "MYRIADEN-FABRIKEN · Zone links", 14, MYR_FARBE)
-		for i in MYR_TYPEN.size():
-			var typ := MYR_TYPEN[i]
-			var preis := myr_preis(typ)
-			Stil.schreibe(bild, Vector2(24, by + 18.0 + i * 17.0), "[%d] %s  %d" % [i + 1, str(Werte.GEGNER[typ]["name"]), preis], 14, Stil.TEXT if spiel.budget >= preis else Stil.TEXT_BLASS)
+		Stil.schreibe(bild, Vector2(24, by), "MYRIADEN · Zone links", 14, MYR_FARBE)
+		Stil.schreibe(bild, Vector2(24, by + 18.0), "[1] Fabrik  %d   (%d stehen)" % [myr_preis(), myr_fabriken.size()], 14, Stil.TEXT if spiel.budget >= myr_preis() else Stil.TEXT_BLASS)
+		Stil.schreibe(bild, Vector2(24, by + 35.0), "[C] Ringfeld: der Ring bestimmt die Einheit", 14, Stil.TEXT_BLASS)
+		var zeile := 0
+		var kf: BrakkFortschritt = spiel.kommandant.fortschritt if spiel.kommandant != null else null
+		if kf != null:
+			for ring: String in kf.ringe:
+				var typ := str(MYR_RING.get(ring, "hund"))
+				var wert := wf("myr_wert") * (1.0 + wf("myr_ring_stufe") / 100.0 * float(maxi(0, kf.ring_stufe(ring) - 1)))
+				Stil.schreibe(bild, Vector2(24, by + 54.0 + zeile * 17.0), "%s → %s" % [str(BrakkFortschritt.RINGE[ring]["name"]), myr_takt_text(typ, wert)],
+					13, Einheit.ABZEICHEN.get(ring, Stil.TEXT) if kf.felder.has(ring) else Stil.TEXT_BLASS)
+				zeile += 1
+		Stil.schreibe(bild, Vector2(24, by + 54.0 + zeile * 17.0), "ohne Feld → %s" % myr_takt_text("hund", wf("myr_wert") * wf("myr_ohne_ring") / 100.0), 13, Stil.TEXT_BLASS)
 	var y := 116.0 + 52.0
 	var m := Vector2(g.x / 2.0, y)
 	if am_terminal(ego._fuss2d()):
@@ -2452,8 +2559,9 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	# Sprengladungen: Kästchen links unten über der Lebensanzeige
 	var lx := 24.0
 	var ly := g.y - 128.0
-	Stil.schreibe(bild, Vector2(lx, ly - 10.0), "SPRENGLADUNGEN [C]", 13, Stil.TEXT_BLASS)
-	for i in int(w("spreng_max")):
+	if not geheim:   # 20.11. (Paul): im Überläufer-Verlauf liegt [C] wieder auf dem Ringfeld
+		Stil.schreibe(bild, Vector2(lx, ly - 10.0), "SPRENGLADUNGEN [C]", 13, Stil.TEXT_BLASS)
+	for i in (int(w("spreng_max")) if not geheim else 0):
 		var r := Rect2(lx + i * 26.0, ly, 20.0, 14.0)
 		bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
 		if i < ladungen:

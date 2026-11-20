@@ -28,6 +28,8 @@ func _process(_delta: float) -> void:
 		per_knopf = not per_knopf
 	_tab_vorher = tab
 	var an: bool = per_knopf and spiel._menue == null
+	if spiel.get("order24") != null and spiel.order24 != null and not spiel.order24.geheim:
+		an = false   # 20.11. (Paul): Befehl 24 – keine Schadensliste (erst im geheimen Verlauf wieder)
 	var handy: bool = spiel.brakk_modus and spiel.get("ego") != null and spiel.ego != null and spiel.ego.touch != null
 	scale = Vector2.ONE * Stil.UI_SKALA * (B_HANDY if handy else 1.0)
 	if an != visible:
