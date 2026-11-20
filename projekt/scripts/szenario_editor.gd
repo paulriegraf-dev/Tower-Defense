@@ -569,6 +569,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		_zahl(l, o, "produktion_sek", "Ersatz alle (s)", 1, 1, 60, Order24.STANDARD)
 		_zahl(l, o, "fabrik_leben", "Leben Fabrik", 100, 100, 9000, Order24.STANDARD)
 		_zahl(l, o, "sabotage_halten", "Sabotage [F] (s)", 1, 1, 15, Order24.STANDARD)
+		_zahl(l, o, "sabotage_schaden", "Schaden an Brakk beim Sabotieren (%)", 10, 100, 400, Order24.STANDARD)
 		_zahl(l, o, "sabotage_lahm", "Sabotiert lahm (s)", 5, 5, 300, Order24.STANDARD)
 		_zahl(l, o, "alarm_radius", "Alarm-Umkreis (Felder)", 1, 0, 20, Order24.STANDARD)
 		_zahl(l, o, "pilot_verzug", "Pilot kommt nach (s)", 5, 0, 120, Order24.STANDARD)

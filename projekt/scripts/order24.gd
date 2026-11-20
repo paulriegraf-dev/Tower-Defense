@@ -66,7 +66,8 @@ const STANDARD := {
 	"vorstoss": true,           # Technoclan darf das Myriaden-HQ einnehmen
 	"vorstoss_start": 480,      # ab dann marschiert ein Jagdtrupp darauf
 	"vorstoss_sek": 30,         # so lange muss er es halten
-	"brakk_schaden": 25,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an (Balance gegen seine Beweglichkeit)
+	"brakk_schaden": 45,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an – 20.11. (Paul): 45 statt 25, Sabotieren war ohne Gefahr
+	"sabotage_schaden": 150,    # Prozent: Schaden an Brakk, solange er sabotiert (ungeschützt an der Fabrik)
 	"medkit_takt": 60,          # Med-Kit am Myriaden-HQ liegt so oft wieder, nach dessen Fall so oft eins verstreut
 	"medkit_heilung": 15,       # Prozent von Brakks Leben – 20.11. (Paul): deutlich weniger (vorher 40)
 	"fabriken_aussen": 4,       # Lager über die Karte verteilt (Fabrik, Stellungen, Turm)
@@ -2878,8 +2879,9 @@ class BrakkZiel extends Gegner:
 		var k: Kommandant = spiel.kommandant
 		if k != null and not k.gefallen:
 			var quelle := str(spiel.schadensquelle).get_slice(":", 0)
-			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * o24.wf("brakk_schaden") / 100.0
-			k.nimm_schaden(menge * o24.wf("brakk_schaden") / 100.0)
+			var anteil := o24.wf("brakk_schaden") / 100.0 * (o24.wf("sabotage_schaden") / 100.0 if not o24.sabo.is_empty() else 1.0)   # 20.11. (Paul): beim Sabotieren verwundbarer
+			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * anteil
+			k.nimm_schaden(menge * anteil)
 
 	func kommender_weg(_hoechstens: int) -> Array[Vector2i]:
 		return []
