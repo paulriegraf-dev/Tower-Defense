@@ -30,11 +30,11 @@ const STANDARD := {
 	"myr_takt": 30,             # Überläufer: Wellenzyklus der Myriaden-Fabriken
 	"myr_wert": 60,             # Wert der Einheiten je Fabrik und Zyklus (Hund 10 → 6 Hunde, Fahne 75 → 1)
 	"myr_bau_mal": 4,           # (alt: Baupreis = Einheitenpreis × so viel – seit dem Ringfeld-Umbau unbenutzt)
-	"myr_fabrik_preis": 150,    # 20.11. (Paul): es gibt nur noch EINE Myriaden-Fabrik zu diesem Preis – was sie baut, bestimmt das Ringfeld
+	"myr_fabrik_preis": 100,    # 20.11. (Paul): es gibt nur noch EINE Myriaden-Fabrik zu diesem Preis – was sie baut, bestimmt das Ringfeld
 	"myr_ohne_ring": 50,        # Prozent des Werts, solange die Fabrik in keinem Ringfeld steht (dann Hunde)
 	"myr_ring_stufe": 30,       # Prozent mehr Wert je Ringstufe über 1 (Stufe 3: +60 %)
 	"myr_kosten_anteil": 50,    # Prozent des Einheitenpreises kostet die Produktion je Zyklus
-	"geheim_einkommen": 30,     # Beute je Zyklus
+	"geheim_einkommen": 30,     # Gold je Zyklus
 	"geheim_cp_sek": 30,        # beide Checkpoints so lange halten → Schild des Technoclan-HQ fällt
 	"geheim_hq_leben": 3000,    # Leben des Technoclan-HQ
 	"myr_rueck_sek": 10,        # so lange am besetzten Myriaden-HQ stehen (ohne Technoclan in der Nähe) = zurückerobert
@@ -2184,7 +2184,7 @@ func _medkits_pflegen(k: Kommandant, echt: float) -> void:
 	if not _terminal_erklaert and k.position.distance_to(hq_mitte()) <= 3.5 * Werte.ZELLE:
 		_terminal_erklaert = true   # 20.11. (Paul): Ankunft an der Zuflucht
 		funken([
-			["BRAKK", "Das Lichtterminal im Myriaden-HQ läuft noch – gerade so. Mit Beute hole ich mir hier Ringe: [F] am HQ.", ""],
+			["BRAKK", "Das Lichtterminal im Myriaden-HQ läuft noch – gerade so. Mit Gold hole ich mir hier Ringe: [F] am HQ.", ""],
 			["BRAKK", "Und der Heilturm daneben hat auch noch nicht den Geist aufgegeben. Hier kann ich kurz durchatmen.", ""],
 		])
 	# 20.11. (Paul): Heilturm – heilt Brakk im Umkreis, solange kein Technoclan in der Nähe ist
@@ -2410,7 +2410,7 @@ func myr_takt_text(typ: String, wert: float) -> String:
 
 
 ## Ein Wellenzyklus: jede Myriaden-Fabrik bekommt ihren Wert gutgeschrieben und schickt so viele Einheiten los, wie das
-## Guthaben hergibt (der Rest bleibt stehen) – so zählt ein Fahnenträger nicht wie ein Hund. Die Produktion kostet Beute.
+## Guthaben hergibt (der Rest bleibt stehen) – so zählt ein Fahnenträger nicht wie ein Hund. Die Produktion kostet Gold.
 func _myr_welle() -> void:
 	var los := 0
 	for z: Vector2i in myr_fabriken:
@@ -2426,7 +2426,7 @@ func _myr_welle() -> void:
 			continue
 		var kosten := roundi(float(n * preis) * wf("myr_kosten_anteil") / 100.0)
 		if spiel.budget < kosten:
-			spiel.melde("Zu wenig Beute für die Myriaden-Fabrik (%s): %d nötig." % [str(Werte.GEGNER[typ]["name"]), kosten], 3.0)
+			spiel.melde("Zu wenig Gold für die Myriaden-Fabrik (%s): %d nötig." % [str(Werte.GEGNER[typ]["name"]), kosten], 3.0)
 			fab["guthaben"] = minf(float(fab["guthaben"]), float(preis))   # nicht endlos ansparen
 			continue
 		spiel.budget -= kosten
@@ -2467,7 +2467,7 @@ func myr_bauen(typ: String, z: Vector2i, fuss: Vector2) -> String:
 		return "Zu weit weg – geh näher heran."
 	var preis := myr_preis(typ)
 	if spiel.budget < preis:
-		return "Zu wenig Beute: %d nötig." % preis
+		return "Zu wenig Gold: %d nötig." % preis
 	spiel.budget -= preis
 	typ = myr_typ(z)
 	myr_fabriken[z] = {"typ": typ, "knoten": null, "guthaben": 0.0, "gezeigt": ""}

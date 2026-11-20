@@ -2948,7 +2948,7 @@ func _countdown_anzeige(g: Vector2) -> void:
 	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "[Enter] jetzt" if touch == null else "antippen: jetzt", 14, Stil.TEXT_BLASS)
 
 
-## 20.11. (Schritt 5b): Order 24 – Restzeit, Phase und Beute oben in der Mitte.
+## 20.11. (Schritt 5b): Order 24 – Restzeit, Phase und Gold oben in der Mitte.
 func _order24_anzeige(g: Vector2) -> void:
 	var o: Order24 = spiel.order24
 	var rest := ceili(o.uhr_sek())   # 20.11.: endlos – die Uhr zählt hoch

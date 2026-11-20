@@ -450,7 +450,7 @@ static func kurzzeilen(k: Dictionary) -> Array:
 	if modus == "rogue":
 		var o: Dictionary = r.get("order24", {}) if r.get("order24", {}) is Dictionary else {}
 		var sek := int(o.get("ueberleben_sek", Order24.STANDARD["ueberleben_sek"]))
-		aus.append("Brakk-Mode Rogue · %d:%02d überstehen · Beute zu Beginn %d" % [sek / 60, sek % 60, int(r.get("start_budget", 0))])
+		aus.append("Brakk-Mode Rogue · %d:%02d überstehen · Gold zu Beginn %d" % [sek / 60, sek % 60, int(r.get("start_budget", 0))])
 		aus.append("Truppen: Jagd ab %d s, %d %% in Trupps%s" % [int(o.get("jagd_start", Order24.STANDARD["jagd_start"])), int(o.get("jagd_anteil", Order24.STANDARD["jagd_anteil"])), ", Vorstoß ab %d s" % int(o.get("vorstoss_start", Order24.STANDARD["vorstoss_start"])) if bool(o.get("vorstoss", true)) else ""])
 		return aus
 	aus.append("Startgeld %d · %d Runden%s%s" % [int(r.get("start_budget", Werte.STANDARD_BUDGET)), int(r.get("runden", Werte.STANDARD_RUNDEN)), "" if bool(r.get("einkommen", true)) else " · kein Einkommen", " · Brakk-Ego" if modus == "brakk" else ""])
@@ -528,7 +528,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		_zahl(l, o, "myr_ohne_ring", "Wert ohne Ringfeld (%)", 10, 0, 100, Order24.STANDARD)
 		_zahl(l, o, "myr_ring_stufe", "Mehr Wert je Ringstufe (%)", 5, 0, 200, Order24.STANDARD)
 		_zahl(l, o, "myr_kosten_anteil", "Produktionskosten (%)", 5, 0, 200, Order24.STANDARD)
-		_zahl(l, o, "geheim_einkommen", "Beute je Welle", 5, 0, 500, Order24.STANDARD)
+		_zahl(l, o, "geheim_einkommen", "Gold je Welle", 5, 0, 500, Order24.STANDARD)
 		_zahl(l, o, "geheim_cp_sek", "Checkpoints halten (s)", 5, 5, 300, Order24.STANDARD)
 		_zahl(l, o, "geheim_hq_leben", "Leben Technoclan-HQ", 100, 100, 20000, Order24.STANDARD)
 		l.text("Tipp: Brakk entkommt mit Rolle, Anker und Lichttreppe – früh jagen und viele Gruppen machen es eng.")
@@ -537,7 +537,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 			_geaendert())
 		_zahl(l, o, "vorstoss_sek", "HQ halten (s)", 2, 2, 120, Order24.STANDARD)
 		_zahl(l, o, "brakk_schaden", "Schaden an Brakk (%)", 5, 5, 300, Order24.STANDARD)
-		l.abschnitt("Befehl 24 – Karte, Hilfen und Beute")
+		l.abschnitt("Befehl 24 – Karte, Hilfen und Gold")
 		var karten: Array = [["", "Zufall"], ["phantom", "Phantom"]]
 		for f: String in Werte.ALARM_FORMATIONEN:
 			karten.append([f, str(Nachschlag.TEXTE[f][0])])
@@ -563,7 +563,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		_zahl(l, o, "kill_frist", "Kopfgeld wieder voll (s)", 5, 5, 300, Order24.STANDARD)
 		_zahl(l, o, "praemie_wall", "Prämie Erdwall", 5, 0, 999, Order24.STANDARD)
 		_zahl(l, o, "praemie_sabotage", "Prämie Sabotage", 5, 0, 999, Order24.STANDARD)
-		l.text("Tipp: Beute kauft Ringe am Ringterminal – höhere Prämien machen Brakk schneller stark.")
+		l.text("Tipp: Gold kauft Ringe am Lichtterminal – höhere Prämien machen Brakk schneller stark.")
 		# 20.11. (Ergänzung Befehl 24): Regeln für Fabriken, Türme und Sprengladungen
 		l.abschnitt("Befehl 24 – Fabriken und Türme")
 		_zahl(l, o, "stellungen_je_fabrik", "Stellungen je Fabrik", 1, 0, 8, Order24.STANDARD)
