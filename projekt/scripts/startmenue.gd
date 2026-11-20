@@ -149,12 +149,12 @@ func _baue() -> void:
 			# 20.11. (Schritt 5b): Classic = der bisherige Brakk-Mode, Rogue = Order 24
 			_eintraege = [
 				["Classic", _brakk_mode, "20 Runden gegen die Myriaden in der Ego-Sicht – wie bisher", LICHT],
-				["Rogue · Order 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL],
+				["Rogue · Befehl 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL],
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 		"rogue":
 			# 20.11. (Schritt 5b): Order 24 mit Standardwerten oder eine eigene Rogue-Karte aus dem Editor
-			_eintraege = [["Order 24 · Standardwerte", _rogue_los.bind("szenario_order24"), _karten_text("szenario_order24"), LICHT]]
+			_eintraege = [["Befehl 24 · Standardwerte", _rogue_los.bind("szenario_order24"), _karten_text("szenario_order24"), LICHT]]
 			for kname: String in Werte.eigene_karten():
 				var rg: Variant = Werte.karten_daten(kname).get("regeln", {})
 				if rg is Dictionary and str((rg as Dictionary).get("modus", "")) == "rogue":
@@ -492,7 +492,8 @@ func _brakk_mode() -> void:
 
 ## 20.11. (Schritt 5b): Order 24 auf einer Rogue-Karte (Regelpaket modus "rogue" – main.gd startet dann Order24).
 func _rogue_los(kname: String) -> void:
-	_zeige_anfuehrer("rogue", _starte.bind(true, "normal", kname, ""), true)   # Anführerwahl wie im Classic-Modus
+	Werte.setze_anfuehrer("brakk")   # 20.11. (Paul): Befehl 24 gilt nur Brakk – keine Anführerwahl
+	_starte(true, "normal", kname, "")
 
 
 ## Startet einen Modus. Gespielt wird auf der großen Karte (Paul 16.11.); nur aufgezeichnete Bauten (Phantom

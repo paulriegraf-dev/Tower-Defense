@@ -330,6 +330,8 @@ func _frei() -> bool:
 		return false
 	if _terminal != null and _terminal.visible:
 		return false
+	if spiel.order24 != null and spiel.order24.sperrt_steuerung():
+		return false   # 20.11.: Befehl 24 – Verrat-Sequenz läuft
 	return not Input.is_key_pressed(KEY_ALT)
 
 
@@ -474,6 +476,8 @@ const TASTEN := {KEY_Q: "Q", KEY_E: "E", KEY_R: "R", KEY_V: "V", KEY_X: "X", KEY
 ## Taste (oder Maustaste) gedrückt / losgelassen: Aktion laut Belegung. Erst darf das Kit des Anführers, dann die
 ## gemeinsamen Aktionen (Brakks Fähigkeiten, Bewegung, Ringfeld). true = erledigt.
 func _aktion(taste: String, gedrueckt: bool) -> bool:
+	if spiel.order24 != null and spiel.order24.ego_taste(self, taste, gedrueckt):
+		return true   # 20.11.: Befehl 24 – [C] Sprengladung, [E] Sabotage an der Fabrik-Rückseite (order24.gd)
 	var was := str((Werte.ANFUEHRER_EGO[anfuehrer()]["tasten"] as Dictionary).get(taste, ""))
 	if was == "":
 		return false
@@ -1630,6 +1634,8 @@ func _waffe(tex: Texture2D, pos: Vector2, ts: Vector2, winkel: float, blitz: boo
 
 ## Schmale Bauliste am linken Rand (statt der Leiste unten): Taste, Name, Preis; das gewählte Werkzeug leuchtet.
 func _bauliste(g: Vector2, unter_liste: bool = false) -> void:
+	if spiel.order24 != null:
+		return   # 20.11.: Befehl 24 – Brakk baut nicht
 	if spiel.phase != 0 and spiel.werkzeug == Karte.FREI:
 		return   # im Kampf freie Sicht
 	var zeile := 34.0
@@ -2162,7 +2168,7 @@ func _faehigkeiten(g: Vector2) -> void:
 	if kit == null:
 		liste = [
 			["tumble", "Shift", _tumble_rest / TUMBLE_ABKLING, "", false],
-			["anker", "Q", _anker_rest / ANKER_ABKLING, "", false],
+			["anker", "Q", _anker_rest / (ANKER_ABKLING * _mobil()), "", false],
 			["lanze", "RMB", _lanze_rest / LANZE_ABKLING, "", false],
 			["ulti", "R", _ulti_rest(), "", false],
 			["saeule", "X", _saeule_rest / SAEULE_ABKLING, "", false],
@@ -2282,7 +2288,7 @@ func _ringleiste(g: Vector2) -> void:
 			_bild.draw_arc(mi, 9.0, 0.0, TAU, 20, Color(0.3, 0.32, 0.36), 1.5)
 			Stil.schreibe(_bild, Vector2(r.position.x + 40.0, r.get_center().y), "ab Stufe %d" % int(BrakkFortschritt.FINGER_AB[i]), 16, Color(0.4, 0.42, 0.47))
 	if not f.ringe.is_empty():
-		Stil.schreibe(_bild, Vector2(x, hinter.end.y + 12.0), "Mausrad: aktiver Ring · [C] Feld (Bauphase)", 14, Stil.TEXT_BLASS)
+		Stil.schreibe(_bild, Vector2(x, hinter.end.y + 12.0), "Mausrad: aktiver Ring" if spiel.order24 != null else "Mausrad: aktiver Ring · [C] Feld (Bauphase)", 14, Stil.TEXT_BLASS)
 
 
 ## Steht Brakk in der Bauphase an der Basis? Dann öffnet [F] das Lichtterminal.
@@ -2446,7 +2452,8 @@ func _male_terminal() -> void:
 		var zeig := 1 if irr else mini(3, st + 1)   # 20.11. (Nachtrag): Irrtürmer kauft immer Stufe 1
 		var vorsatz := ("St. %d – " % zeig) if st < 3 or irr else ""
 		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.22), vorsatz + ("Held: " if irr else "Brakk: ") + BrakkFortschritt.brakk_text(ring, zeig), 14, Stil.TEXT)
-		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Feld: " + _ring_fabrik_text(ring, zeig), 14, Stil.TEXT_BLASS)
+		if spiel.order24 == null:   # 20.11. (Paul): in Befehl 24 gibt es kein Ringfeld (Brakk baut nichts)
+			Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Feld: " + _ring_fabrik_text(ring, zeig), 14, Stil.TEXT_BLASS)
 		var kb := Rect2(r.end.x - 130.0, r.get_center().y - 13.0, 122.0, 26.0)
 		if irr:
 			# 20.11. (Nachtrag): jeder Kauf ist ein neuer Ring (Stufe 1) im gewählten Satz; ausgebaut wird links
@@ -2878,6 +2885,9 @@ func _berge_zurueck() -> void:
 ## Bauphase mit Countdown: läuft er ab, startet die Welle von selbst ([Enter] startet früher). Die Zeit läuft auch,
 ## solange das Lichtterminal offen ist – Einkaufen gehört zum Zeitdruck.
 func _fliessende_runden(dt: float) -> void:
+	if spiel.order24 != null:
+		_countdown = -1.0
+		return   # 20.11.: Befehl 24 – keine Wellen, die Uhr von Order24 zählt
 	if _briefing != null and _briefing.visible:
 		return   # 18.11.: die Einsatz-Tafel ist noch offen – der Countdown wartet
 	if not spiel.brakk_modus or spiel.phase != 0:
@@ -2921,11 +2931,12 @@ func _order24_anzeige(g: Vector2) -> void:
 	var r := Rect2(m.x - 170.0, m.y - 18.0, 340.0, 36.0)
 	_bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
 	_bild.draw_rect(r, farbe, false, 2.0)
-	Stil.schreibe_mittig(_bild, m + Vector2(0, -2), "Order 24 · %d:%02d" % [rest / 60, rest % 60], 20, farbe)
+	Stil.schreibe_mittig(_bild, m + Vector2(0, -2), "Befehl 24 · %d:%02d" % [rest / 60, rest % 60], 20, farbe)
 	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * clampf(o.zeit / maxf(1.0, o.wf("ueberleben_sek")), 0.0, 1.0), 3)), farbe)
 	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "%s · Budget %d" % [o.phase_text(), int(spiel.budget)], 14, Stil.TEXT_BLASS)
 	if o.am_terminal(_fuss2d()) and (_terminal == null or not _terminal.visible):
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 52), "[F] Ringterminal", 16, Stil.GOLD)
+	o.hud(_bild, g, self)   # 20.11.: Befehl 24 – Sprengladungen, In Deckung, Sabotage (order24.gd)
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Überhitzen (18.11.)
@@ -3001,6 +3012,13 @@ func _ring_fabrik_text(ring: String, st: int) -> String:
 const ANKER_WEITE := 10.0
 const ANKER_TEMPO := 14.0        # Felder je Sekunde
 const ANKER_ABKLING := 6.0
+
+
+## 20.11. (Paul): Befehl 24 – Q und E (Anker, Lichtbrücke; die Treppe über kletter_abklingzeit) laden langsamer, man ist eher eingekesselt.
+func _mobil() -> float:
+	return spiel.order24.wf("mobil_abkling") / 100.0 if spiel.order24 != null else 1.0
+
+
 var _anker := -1.0               # läuft: Sekunden seit dem Abschuss (-1 = nein)
 var _anker_von := Vector3.ZERO
 var _anker_nach := Vector3.ZERO
@@ -3204,7 +3222,7 @@ func _versuche_bruecke() -> bool:
 	_bruecke.set_meta("mats", [flaeche, kante])
 	_bruecke_rest = BRUECKE_HALTEN
 	_bruecke_aufbau = 0.0
-	_bruecke_cd = BRUECKE_ABKLING
+	_bruecke_cd = BRUECKE_ABKLING * _mobil()
 	_hand_zeigen = maxf(_hand_zeigen, BRUECKE_AUFBAU + 0.2)
 	_trauma = minf(1.0, _trauma + 0.12)
 	Ton.spiele(spiel, "tc-arc", -5.0)
@@ -4101,7 +4119,7 @@ func _anker_ziehen() -> void:
 	_anker_dauer = maxf(0.25, _anker_von.distance_to(_anker_nach) / ANKER_TEMPO)
 	_anker = 0.0
 	_haken = -1.0
-	_anker_rest = ANKER_ABKLING
+	_anker_rest = ANKER_ABKLING * _mobil()
 	steig = 0.0
 	_flug = Vector2.ZERO
 	if brakk.oben:
@@ -4116,7 +4134,7 @@ func _anker_ziehen() -> void:
 
 func _haken_los() -> void:
 	_haken = -1.0
-	_anker_rest = ANKER_ABKLING
+	_anker_rest = ANKER_ABKLING * _mobil()
 	if _anker_seil != null:
 		_anker_seil.visible = false
 		_anker_haken.visible = false
@@ -4677,7 +4695,7 @@ func _sieg_bild(g: Vector2) -> void:
 	Stil.schreibe_mittig(_bild, Vector2.ZERO, "SIEG", 96, Stil.GOLD)
 	Stil.ebene = Transform2D.IDENTITY
 	_bild.draw_set_transform_matrix(Transform2D.IDENTITY)
-	Stil.schreibe_mittig(_bild, m + Vector2(0, 78), "Das HQ der Myriaden ist gefallen.", 24, Color(Stil.TEXT, x))
+	Stil.schreibe_mittig(_bild, m + Vector2(0, 78), str(_sieg_bericht.get("unterzeile", "Das HQ der Myriaden ist gefallen.")), 24, Color(Stil.TEXT, x))   # 20.11.: Befehl 24 mit eigener Zeile
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Respawn (19.11.)

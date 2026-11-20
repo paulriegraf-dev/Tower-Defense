@@ -451,7 +451,7 @@ static func kurzzeilen(k: Dictionary) -> Array:
 		var o: Dictionary = r.get("order24", {}) if r.get("order24", {}) is Dictionary else {}
 		var sek := int(o.get("ueberleben_sek", Order24.STANDARD["ueberleben_sek"]))
 		aus.append("Brakk-Mode Rogue · %d:%02d überstehen · Beute zu Beginn %d" % [sek / 60, sek % 60, int(r.get("start_budget", 0))])
-		aus.append("Truppen: Jagd ab %d s, %d %% in %d Gruppen%s" % [int(o.get("jagd_start", 90)), int(o.get("jagd_anteil", 60)), int(o.get("jaeger_gruppen", 3)), ", Vorstoß zum HQ" if bool(o.get("vorstoss", true)) else ""])
+		aus.append("Truppen: Jagd ab %d s, %d %% in Trupps%s" % [int(o.get("jagd_start", Order24.STANDARD["jagd_start"])), int(o.get("jagd_anteil", Order24.STANDARD["jagd_anteil"])), ", Vorstoß ab %d s" % int(o.get("vorstoss_start", Order24.STANDARD["vorstoss_start"])) if bool(o.get("vorstoss", true)) else ""])
 		return aus
 	aus.append("Startgeld %d · %d Runden%s%s" % [int(r.get("start_budget", Werte.STANDARD_BUDGET)), int(r.get("runden", Werte.STANDARD_RUNDEN)), "" if bool(r.get("einkommen", true)) else " · kein Einkommen", " · Brakk-Ego" if modus == "brakk" else ""])
 	var gesperrt: PackedStringArray = []
@@ -490,19 +490,29 @@ func _stellschrauben(l: ModLeiste) -> void:
 		if not (r.get("order24", {}) is Dictionary):
 			r["order24"] = {}
 		var o: Dictionary = r["order24"]
-		l.abschnitt("Order 24 – Zeit und Jagd")
-		_zahl(l, o, "ueberleben_sek", "Überleben (s)", 30, 60, 1800, Order24.STANDARD)
-		_zahl(l, o, "jagd_start", "Jagd ab (s)", 10, 0, 900, Order24.STANDARD)
+		l.abschnitt("Befehl 24 – Ablauf")   # 20.11.: Flucht → Sabotage → Jagd → Vorstoß
+		_zahl(l, o, "ueberleben_sek", "Überleben (s)", 30, 60, 3600, Order24.STANDARD)
+		_zahl(l, o, "flucht_sek", "Flucht bis (s)", 10, 0, 600, Order24.STANDARD)
+		_zahl(l, o, "jagd_start", "Jagd ab (s)", 10, 0, 1800, Order24.STANDARD)
+		_zahl(l, o, "sabotage_ende_fabriken", "Jagd schon nach Fabriken", 1, 1, 8, Order24.STANDARD)
+		_zahl(l, o, "vorstoss_start", "Vorstoß ab (s)", 10, 0, 3600, Order24.STANDARD)
+		l.text("Tipp: Flucht – niemand jagt. Sabotage – Verteidiger statisch. Jagd – Trupps suchen Brakk. Vorstoß – ein Trupp nimmt das Myriaden-HQ.")
+		l.abschnitt("Befehl 24 – Jagdtrupps")
 		_zahl(l, o, "jagd_anteil", "Jäger (%)", 5, 0, 100, Order24.STANDARD)
-		_zahl(l, o, "jaeger_gruppen", "Jägergruppen", 1, 1, 4, Order24.STANDARD)
-		_zahl(l, o, "stellung_anteil", "In Stellungen (%)", 5, 0, 100, Order24.STANDARD)
+		_zahl(l, o, "trupp_min", "Trupp mindestens", 1, 1, 8, Order24.STANDARD)
+		_zahl(l, o, "trupp_max", "Trupp höchstens", 1, 1, 12, Order24.STANDARD)
+		_zahl(l, o, "sicht_verlust", "Aus der Sicht bis Suche (s)", 1, 1, 60, Order24.STANDARD)
+		_zahl(l, o, "such_sek", "Suchen (s)", 5, 0, 180, Order24.STANDARD)
+		_zahl(l, o, "welle_takt", "Neuer Trupp alle (s)", 10, 10, 600, Order24.STANDARD)
+		_zahl(l, o, "welle_groesse", "Größe neuer Trupps", 1, 1, 12, Order24.STANDARD)
+		_zahl(l, o, "elite_jede", "Elitetrupp jede n-te Welle", 1, 0, 10, Order24.STANDARD)
 		l.text("Tipp: Brakk entkommt mit Rolle, Anker und Lichttreppe – früh jagen und viele Gruppen machen es eng.")
 		l.schalter("Vorstoß zum Myriaden-HQ", bool(o.get("vorstoss", true)), func() -> void:
 			o["vorstoss"] = not bool(o.get("vorstoss", true))
 			_geaendert())
 		_zahl(l, o, "vorstoss_sek", "HQ halten (s)", 2, 2, 120, Order24.STANDARD)
 		_zahl(l, o, "brakk_schaden", "Schaden an Brakk (%)", 5, 5, 300, Order24.STANDARD)
-		l.abschnitt("Karte, Hilfen und Beute")
+		l.abschnitt("Befehl 24 – Karte, Hilfen und Beute")
 		var karten: Array = [["", "Zufall"], ["phantom", "Phantom"]]
 		for f: String in Werte.ALARM_FORMATIONEN:
 			karten.append([f, str(Nachschlag.TEXTE[f][0])])
@@ -511,13 +521,42 @@ func _stellschrauben(l: ModLeiste) -> void:
 			_geaendert())
 		_zahl(l, o, "fabriken_aussen", "Fabriken außen", 1, 0, 8, Order24.STANDARD)
 		_zahl(l, o, "fabriken_innen", "Fabriken im Schild", 1, 0, 6, Order24.STANDARD)
-		_zahl(l, o, "medkit_zahl", "Med-Kits", 1, 0, 8, Order24.STANDARD)
-		_zahl(l, o, "medkit_takt", "Med-Kits neu (s)", 10, 10, 300, Order24.STANDARD)
+		_zahl(l, o, "stufe_innen", "Stufe der Schild-Fabriken", 1, 0, 3, Order24.STANDARD)
+		_zahl(l, o, "besatzung_innen", "Verteidiger je Schild-Fabrik", 1, 0, 8, Order24.STANDARD)
+		_zahl(l, o, "lager_tuerme", "Türme je Lager", 1, 0, 3, Order24.STANDARD)
+		_zahl(l, o, "truppen_leben", "Leben der Truppen (%)", 5, 20, 200, Order24.STANDARD)
+		_zahl(l, o, "turm_wall_bonus", "Turm-Reichweite gegen Brakk auf Wällen (+Felder)", 1, 0, 5, Order24.STANDARD)
+		_zahl(l, o, "xp_fabrik", "Erfahrung Fabrik", 5, 0, 200, Order24.STANDARD)
+		_zahl(l, o, "xp_sabotage", "Erfahrung Sabotage", 5, 0, 200, Order24.STANDARD)
+		_zahl(l, o, "medkit_takt", "Med-Kit neu (s)", 10, 10, 300, Order24.STANDARD)
 		_zahl(l, o, "medkit_heilung", "Heilung (%)", 5, 5, 100, Order24.STANDARD)
 		_zahl(l, o, "praemie_fabrik", "Prämie Fabrik", 10, 0, 999, Order24.STANDARD)
 		_zahl(l, o, "praemie_stellung", "Prämie Stellung", 5, 0, 999, Order24.STANDARD)
 		_zahl(l, o, "praemie_wall", "Prämie Erdwall", 5, 0, 999, Order24.STANDARD)
+		_zahl(l, o, "praemie_sabotage", "Prämie Sabotage", 5, 0, 999, Order24.STANDARD)
 		l.text("Tipp: Beute kauft Ringe am Ringterminal – höhere Prämien machen Brakk schneller stark.")
+		# 20.11. (Ergänzung Befehl 24): Regeln für Fabriken, Türme und Sprengladungen
+		l.abschnitt("Befehl 24 – Fabriken und Türme")
+		_zahl(l, o, "stellungen_je_fabrik", "Stellungen je Fabrik", 1, 0, 8, Order24.STANDARD)
+		_zahl(l, o, "patrouille", "Streife je Fabrik", 1, 0, 6, Order24.STANDARD)
+		_zahl(l, o, "produktion_sek", "Ersatz alle (s)", 1, 1, 60, Order24.STANDARD)
+		_zahl(l, o, "fabrik_leben", "Leben Fabrik", 100, 100, 9000, Order24.STANDARD)
+		_zahl(l, o, "sabotage_halten", "Sabotage [E] (s)", 1, 1, 15, Order24.STANDARD)
+		_zahl(l, o, "sabotage_lahm", "Sabotiert lahm (s)", 5, 5, 300, Order24.STANDARD)
+		_zahl(l, o, "alarm_radius", "Alarm-Umkreis (Felder)", 1, 0, 20, Order24.STANDARD)
+		_zahl(l, o, "pilot_verzug", "Pilot kommt nach (s)", 5, 0, 120, Order24.STANDARD)
+		_zahl(l, o, "pilot_neu", "Neuer Pilot nach (s)", 5, 0, 300, Order24.STANDARD)
+		_zahl(l, o, "pilot_reparatur", "Pilot repariert (s)", 1, 1, 30, Order24.STANDARD)
+		_zahl(l, o, "tuerme", "Formtürme", 1, 0, 12, Order24.STANDARD)
+		_zahl(l, o, "heiltuerme", "Heiltürme (Instandsetzung)", 1, 0, 4, Order24.STANDARD)
+		_zahl(l, o, "kern_leben", "Leben Turmkern", 50, 50, 3000, Order24.STANDARD)
+		l.text("Tipp: Sabotage legt eine Fabrik nur lahm, bis der Pilot kommt – Zerstören kostet Zeit, hält aber für immer.")
+		l.abschnitt("Befehl 24 – Sprengladungen")
+		_zahl(l, o, "spreng_drop", "Drop-Chance (%)", 1, 0, 100, Order24.STANDARD)
+		_zahl(l, o, "spreng_max", "Höchstens im Gepäck", 1, 1, 9, Order24.STANDARD)
+		_zahl(l, o, "spreng_zuender", "Zünder (s)", 1, 1, 10, Order24.STANDARD)
+		_zahl(l, o, "mobil_abkling", "Abklingzeit Q/E (%)", 5, 50, 300, Order24.STANDARD)
+		l.text("Tipp: Erdwälle gehen nur durch Sprengladungen weg und kommen nicht wieder – so bahnt sich Brakk eigene Wege.")
 	if r.has("formation"):
 		irgendwas = true
 		l.abschnitt("Alarmstart – Formation und Lage")
@@ -569,7 +608,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		l.abschnitt("Zange")
 		l.text("Zweite Zone rechts unten: Jeder Trupp teilt sich, die Hälften laufen über Checkpoint 1 bzw. 2.")
 	if not irgendwas:
-		l.text("Diese Karte hat keine besonderen Stellschrauben. Startgeld, Runden und Bauten stehen im Reiter Regeln; Vorlagen mit Stellschrauben: Belagert, Alarmstart, Order 24.")
+		l.text("Diese Karte hat keine besonderen Stellschrauben. Startgeld, Runden und Bauten stehen im Reiter Regeln; Vorlagen mit Stellschrauben: Belagert, Alarmstart, Befehl 24.")
 
 
 ## Ganzzahl im Regelpaket mit −/+ (Umschalt = 5 Schritte). `std` liefert den Standardwert.

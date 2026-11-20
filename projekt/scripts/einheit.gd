@@ -343,7 +343,7 @@ func _process(delta: float) -> void:
 			_posten_check -= delta
 			if _posten_check <= 0.0 and not spiel.ist_einnehmer(self) and (ist_pilot or not spiel.aufraeumen()):   # Checkpoint zurückholen und Aufräumen gehen vor
 				_posten_check = 1.0
-				if (ist_pilot or not spiel.im_endkampf() or spiel.endkampf_stellung_frei(self)) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():
+				if (ist_pilot or not spiel.im_endkampf() or spiel.endkampf_stellung_frei(self)) and (spiel.order24 == null or spiel.order24.darf_in_stellung(self)) and not karte.finde_posten(karte.zelle_bei(position), self).is_empty():   # 20.11.: Befehl 24 – Jäger, Pilot und Begleiter bleiben unten
 					_marschziel = Karte.KEINE
 					_suche_posten()
 					return
@@ -486,7 +486,8 @@ func _repariere(delta: float) -> void:
 	_sprite.bewegt(false)
 	_rep_zeit += delta
 	queue_redraw()
-	if _rep_zeit >= Werte.REPARATUR_SEK:
+	var rep_sek: float = spiel.order24.wf("pilot_reparatur") if spiel.order24 != null else Werte.REPARATUR_SEK   # 20.11.: Befehl 24
+	if _rep_zeit >= rep_sek:
 		spiel.repariere(_rep_ziel)
 		_rep_ziel = Karte.KEINE
 		_rep_zeit = 0.0

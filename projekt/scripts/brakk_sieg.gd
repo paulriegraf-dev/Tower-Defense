@@ -44,7 +44,7 @@ func _draw() -> void:
 	draw_rect(Rect2(-40, -40, 720, 440), Color(0.02, 0.03, 0.05, 0.55 * a))
 	Stil.platte(self, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.94), Stil.GOLD)
 	var af := str(bericht.get("anfuehrer", "brakk"))   # 20.11.: der Anführer steht mit drauf (Brakk wie bisher)
-	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), "SIEG" + ("" if af == "brakk" else " · " + Anfuehrer.name(af).to_upper()), Stil.GROSS, Stil.GOLD)
+	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), str(bericht.get("kopf", "SIEG")) + ("" if af == "brakk" else " · " + Anfuehrer.name(af).to_upper()), Stil.GROSS, Stil.GOLD)   # 20.11.: Kopf aus dem Bericht (Befehl 24: Überstanden / Gefallen)
 	male_bericht(self, Rect2(TAFEL.position + Vector2(10, 28), TAFEL.size - Vector2(20, 64)), bericht)
 	for k: Array in [[KNOPF_NOCHMAL, "Nochmal"], [KNOPF_MENUE, "Hauptmenü"]]:
 		var r: Rect2 = k[0]

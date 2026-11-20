@@ -41,6 +41,8 @@ var fabrik_typ: Dictionary = {}    # Fabrik-Zelle -> Einheitentyp, den sie baut
 var fabrik_stufe: Dictionary = {}  # Fabrik-Zelle -> Ausbaustufe (0 = Grundfabrik)
 var paar: Dictionary = {}          # Batterie <-> ihre Pilotenfabrik (beide Richtungen)
 var ausgefallen: Dictionary = {}   # zerschossene Fabriken und Batterien: stehen noch, arbeiten aber erst nächste Runde wieder
+var sicht_eigenes_feld := false   # 20.11.: Befehl 24 – eine Stellung sieht nur über ihr eigenes Feld hinaus (order24.gd)
+var ziel_wall_sichtbar := false  # 20.11.: Befehl 24 – das Zielfeld selbst (Brakk auf einem Erdwall) versperrt die Sicht nicht
 var vorschau_partner := KEINE      # Bauvorschau der Batterie: das Feld ihrer Pilotenfabrik
 var fortschritt: Dictionary = {}   # Fabrik-Zelle -> 0..1 (Produktionsbalken)
 
@@ -740,7 +742,7 @@ func _strahl_frei(von: Vector2, nach: Vector2) -> bool:
 		var z := zelle_bei(von.lerp(nach, float(i) / schritte))
 		if z == vorher:
 			continue
-		if z != start and (feld.has(z) or ist_fels(z) or (z != ende and boden.get(z, "") == "wald")):   # 18.11.: durch Wald nicht, hinein schon
+		if z != start and ((feld.has(z) and not (ziel_wall_sichtbar and z == ende)) or ist_fels(z) or (z != ende and boden.get(z, "") == "wald")):   # 18.11.: durch Wald nicht, hinein schon; 20.11.: Befehl 24
 			return false
 		# schräg von Feld zu Feld = genau über eine Ecke: gesperrt, sobald dort ein Wall (oder Fels) anliegt
 		if z.x != vorher.x and z.y != vorher.y:
@@ -1115,8 +1117,12 @@ func stueck_nr(z: Vector2i) -> int:
 ## Sicht aus einer Stellung oder von einem Turm auf dem Erdwall `wall`:
 ## Über das eigene Wallstück wird hinweggeschossen, jeder fremde Erdwall versperrt die Sicht.
 ## Fabriken und Batterien stehen am Boden und verdecken nichts.
+## 20.11.: In Befehl 24 (sicht_eigenes_feld) sieht eine Stellung nur über ihr eigenes Feld hinaus – jeder weitere Erdwall
+## unterbricht den Sichtstrahl, auch wenn er mit ihrem verbunden ist.
 func sicht_von_wall(wall: Vector2i, von: Vector2, nach: Vector2) -> bool:
 	var eigen := stueck_nr(wall)
+	var nur_feld: bool = sicht_eigenes_feld and ausbau.get(wall, FREI) == STELLUNG
+	var ziel_oben: bool = sicht_eigenes_feld and feld.get(zelle_bei(nach), FREI) == WALL   # 20.11. (Paul): Brakk oben auf den Wällen – Höhe gegen Höhe, Wälle verdecken nicht
 	var ziel := zelle_bei(nach)
 	var vorher := KEINE
 	var schritte := int(von.distance_to(nach) / 4.0) + 1
@@ -1125,7 +1131,7 @@ func sicht_von_wall(wall: Vector2i, von: Vector2, nach: Vector2) -> bool:
 		if z == vorher:
 			continue
 		vorher = z
-		if z != ziel and ((feld.get(z, FREI) == WALL and stueck_nr(z) != eigen) or sperrt_sicht(z)):
+		if z != ziel and ((feld.get(z, FREI) == WALL and not ziel_oben and (z != wall if nur_feld else stueck_nr(z) != eigen)) or sperrt_sicht(z)):
 			return false
 	return true
 

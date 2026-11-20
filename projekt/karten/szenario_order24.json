@@ -22,7 +22,7 @@
 		7
 	],
 	"basis_fest": true,
-	"beschreibung": "Brakk-Mode Rogue: Der Technoclan hat sich gegen Brakk gewandt. Allein gegen die ausgebaute Verteidigung – überstehe die Zeit.",
+	"beschreibung": "Brakk-Mode Rogue: Befehl 24 – der Technoclan hat Brakk verraten. Allein gegen die ausgebaute Verteidigung – überstehe 15 Minuten.",
 	"checkpoint_bereiche": [
 		[
 			6,
@@ -55,7 +55,7 @@
 	],
 	"mauern": [],
 	"mauern_fest": [],
-	"name": "Order 24",
+	"name": "Befehl 24",
 	"regeln": {
 		"anfuehrer": "",
 		"bauten": {
@@ -70,28 +70,12 @@
 		},
 		"brakk_stufe": 4,
 		"brakk_stufen": true,
-		"einfuehrung": "Order 24: Der Technoclan hat sich gegen dich gewandt. Sabotiere Fabriken, Stellungen und Erdwälle – am Ringterminal (pink) gibt es für die Beute Ringe. Nach 90 Sekunden beginnt die Jagd.",
+		"einfuehrung": "Befehl 24: Der Technoclan hat dich verraten. Flieh zum Myriaden-HQ im Westen (Ringterminal, Med-Kit, Sprengladung), sabotiere die Lager und überstehe 15 Minuten. Nach zweieinhalb Minuten jagen dich Trupps, ab Minute 8 stoßen sie auf das Myriaden-HQ vor.",
 		"einkommen": false,
 		"herausforderung": "",
 		"modus": "rogue",
 		"order24": {
-			"brakk_schaden": 25,
-			"fabriken_aussen": 3,
-			"fabriken_innen": 3,
-			"jaeger_gruppen": 3,
-			"jagd_anteil": 60,
-			"jagd_start": 90,
-			"karte": "",
-			"medkit_heilung": 40,
-			"medkit_takt": 60,
-			"medkit_zahl": 4,
-			"praemie_fabrik": 120,
-			"praemie_stellung": 40,
-			"praemie_wall": 15,
-			"stellung_anteil": 70,
-			"ueberleben_sek": 480,
-			"vorstoss": true,
-			"vorstoss_sek": 20
+			"karte": ""
 		},
 		"runden": 8,
 		"start_budget": 300,

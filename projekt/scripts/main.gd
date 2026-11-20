@@ -2170,8 +2170,8 @@ func _process(delta: float) -> void:
 			karte.fortschritt[z] = 1.0
 			continue
 		f["timer"] += delta
-		karte.fortschritt[z] = f["timer"] / Werte.PRODUKTION_SEK
-		if f["timer"] >= Werte.PRODUKTION_SEK:
+		karte.fortschritt[z] = f["timer"] / produktion_sek()
+		if f["timer"] >= produktion_sek():
 			f["timer"] = 0.0
 			var e := Einheit.new()
 			figuren.add_child(e)
@@ -2181,6 +2181,8 @@ func _process(delta: float) -> void:
 				e.leben = e.max_leben
 			if brakk_modus and str(f.get("ring", "")) == "plasmagel":
 				e.daten["schaden"] = float(e.daten["schaden"]) * BRAKK_GEL_FELD_SCHADEN   # 19.11. (Paul, Bot-Partien): Gel-Feld war am stärksten
+			if order24 != null:
+				order24.neue_einheit(e)   # 20.11. (Paul): Befehl 24 – Truppen schwächer
 			einheiten.append(e)
 			(f["einheiten"] as Array).append(e)
 
@@ -2530,6 +2532,8 @@ func _tuerme_feuern(delta: float) -> void:
 		schuetze = null
 		schadensobjekt = z
 		var weite: float = float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
+		if order24 != null:
+			weite += order24.turm_bonus() * Werte.ZELLE   # 20.11. (Paul): Befehl 24 – Brakk auf den Erdwällen wird weiter beschossen
 		var farbe := Color(art["farbe"])
 		var von := karte.mitte(z) + Vector2(0, -14)
 		schuss_herkunft = von
@@ -3222,7 +3226,7 @@ func _lade_durchgang() -> void:
 ## Die Welle, die als Nächstes kommt – in der Sandbox mit den dort eingestellten Gegnerzahlen.
 func naechste_welle() -> Dictionary:
 	if order24 != null:
-		return Werte.welle_aus_plan({"name": "Order 24", "trupps": []}, 1)   # 20.11.: keine Myriaden-Wellen
+		return Werte.welle_aus_plan({"name": "Befehl 24", "trupps": []}, 1)   # 20.11.: keine Myriaden-Wellen
 	if phantom_modus == "angriff":
 		return Werte.welle_aus_plan({"name": "Dein Angriff", "trupps": _plaene.get(welle, []), "wurf_frei": true}, welle)
 	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
@@ -3590,6 +3594,8 @@ var _reparaturen: Dictionary = {}   # Gebäude- oder Turmfeld -> Pilot, der es g
 
 ## Das nächste kaputte Ding, das dieser Pilot zu Fuß erreicht: {"z": Feld, "neben": Feld daneben} oder {}.
 func reparaturziel(pilot: Einheit) -> Dictionary:
+	if order24 != null:
+		return order24.reparaturziel(pilot)   # 20.11.: Befehl 24 – nur der eigene Pilot, nur sabotierte Fabriken
 	var hier := karte.zelle_bei(pilot.position)
 	var kaputt: Array[Vector2i] = []
 	for z: Vector2i in karte.ausgefallen:
@@ -4255,7 +4261,7 @@ func _order24_gewaehlt() -> void:
 	_tempo_faktor = Werte.BRAKK_TEMPO
 	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor
 	Werte.setze_grafik("hd")   # nicht gespeichert
-	Werte.setze_anfuehrer(Werte.anfuehrer if Werte.ego_hat(Werte.anfuehrer) else "brakk")   # wie im Classic-Modus: gewählter Anführer mit Ego-Kit
+	Werte.setze_anfuehrer("brakk")   # 20.11. (Paul): Befehl 24 gilt nur Brakk
 	_setze_anfuehrer(Werte.anfuehrer)
 	order24 = Order24.new()
 	add_child(order24)
@@ -4739,6 +4745,8 @@ func einheit_gefallen(e: Einheit) -> void:
 	if e is Kommandant:
 		(e as Kommandant).faellt()
 		return
+	if order24 != null:
+		order24.gefallen(e)   # 20.11.: Befehl 24 – Sprengladung als Drop
 	einheiten.erase(e)
 	Ton.am_ort(self, "death-tc", e.position)
 	if Werte.grafik_neu:
@@ -4850,7 +4858,14 @@ func endkampf_stellung_frei(e: Einheit) -> bool:
 	return besetzt < normal
 
 
+## 20.11.: Befehl 24 – eigener Produktionszyklus aus dem Regelpaket (order24.gd), sonst Werte.PRODUKTION_SEK.
+func produktion_sek() -> float:
+	return order24.produktion_sek() if order24 != null else Werte.PRODUKTION_SEK
+
+
 func truppen_limit(z: Vector2i) -> int:
+	if order24 != null and order24.truppen_limit(z) >= 0:
+		return order24.truppen_limit(z)   # 20.11.: Befehl 24 – Stellungen plus Streife, im Schild keine
 	var stufe := int(fabriken[z].get("stufe", 0)) if fabriken.has(z) else 0
 	if fabriken.has(z) and fabriken[z]["typ"] == "pilot":
 		# Pilotenfabrik: immer genug für die Batterie, mit Stufe 1 ein Reservepilot dazu
@@ -5780,7 +5795,7 @@ func hinweis_text(unter_maus: int = Karte.FREI) -> Array:
 		return ["Kein Fußweg zum HQ! Reiße Erdwälle ab (Rechtsklick), sonst kommen deine Truppen nicht durch.", true]
 	if (werkzeug == Karte.WALL or werkzeug == Karte.FABRIK) and not karte.vorschau_pfad.is_empty() and karte.weg_bricht_durch(karte.vorschau_pfad, karte.vorschau_zelle):
 		return ["Kein Weg mehr frei: Die Gegner reißen das rot markierte Feld ein.", true]
-	if karte.weg_bricht_durch(karte.pfad):
+	if karte.weg_bricht_durch(karte.pfad) and order24 == null:   # 20.11.: Befehl 24 hat keinen Gegnerweg
 		return ["Achtung: Der Weg führt durch ein Gebäude (rot). Die Gegner reißen es ein.", true]
 	var typ := unter_maus if unter_maus != Karte.FREI else werkzeug
 	if typ != Karte.FREI:

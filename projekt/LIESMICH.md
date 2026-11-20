@@ -334,6 +334,76 @@ Sabotage-Zahlen); fällt er, ist es vorbei (kein Wiedererscheinen). Karte `karte
 - Prüfen: `godot --headless --path . --fixed-fps 60 -s werkzeuge/order24test.gd -- <Läufe> [Überlebenszeit] [Jagdbeginn]` (Bot-Brakk
   weicht aus und sabotiert; Protokoll `ORDER24 …` und `JAGD …` mit den Wegen der Gruppen und dem Schaden an Brakk je Quelle).
 
+### Befehl 24 – Ergänzung (20.11., Paul)
+
+Was oben zu Order 24 steht, gilt weiter, außer wo es hier anders steht. Im Spiel heißt der Modus jetzt **Befehl 24** (Menü
+„Rogue · Befehl 24“). Im Code bleibt `order24`. Alle Zahlen sind Stellschrauben im Regelpaket `regeln.order24`, im Editor unter
+Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme, Sprengladungen).
+- **Nur Brakk:** In der Anführerwahl vor Befehl 24 sind Irrtürmer und Sonde 7 grau, darauf steht „Befehl 24 gilt nur Brakk“.
+- **Verrat-Sequenz** (`scripts/verrat24.gd`, Fenster wie im Tutorial, tippender Text, Steuerung gesperrt, [Esc] überspringt,
+  [Enter]/Klick blättert): Brakk steht am Technoclan-HQ, drei Technogunner in Reihe vor ihm. Sonde 7 funkt „Befehl 24 bestätigt.
+  Kommandant Brakk … Sie sind entlassen.“, die drei drehen sich um und legen an. Brakk: „Ihr Verräter! Für die Repaulblik!!“ Dann
+  roter Rand, der Schild schließt sich, ein Schuss schlägt neben ihm ein, und es kommt „Überlebe.“ (7 Zeilen). Erst danach läuft
+  die Uhr. Brakks Porträt ist die Kachel aus der Bauleiste. Die Sequenz bringt keine neuen Sprites.
+- **Ablauf:** Flucht bis `flucht_sek` 60 (niemand jagt, die Truppen gehen in Stellung) · Sabotage bis `jagd_start` 300 (die
+  Verteidiger bleiben statisch: Nester, Streifen um ihre Fabrik, Alarm nur lokal). Die Sabotage endet früher, wenn
+  `sabotage_ende_fabriken` 2 Fabriken zerstört sind · Jagd: Banner „Befehl 24 · Stufe 2“, Sonde 7 „Findet ihn.“ `jagd_anteil`
+  67 % der Truppen bilden Trupps zu `trupp_min`–`trupp_max` (3–5), der Rest bleibt in den Nestern. Ein Trupp läuft auf Brakks
+  letzten bekannten Ort und fächert dort auf (einer direkt, zwei über die Flanken), Wegesuche durch die Wälle wie bisher.
+  Verliert er Brakk `sicht_verlust` 8 s aus der Sicht, sucht er `such_sek` 20 s um den letzten Punkt und geht dann wieder Streife.
+  Meldet eine Stellung Brakk in der Nähe, jagt er wieder. Alle `welle_takt` 90 s kommt ein neuer Trupp aus den Schild-Fabriken
+  (`welle_groesse` 4, je zerstörte Fabrik draußen dauerhaft einer weniger), jede `elite_jede` 3. Welle ist ein Elitetrupp aus
+  genau drei · Vorstoß ab `vorstoss_start` 600: Ein Jagdtrupp marschiert zum Myriaden-HQ. Hält er es `vorstoss_sek` 15 s, fällt
+  es: zweiter Schild, das Ringterminal darin ist unerreichbar, das Med-Kit dort ist weg. Danach erscheint alle `medkit_takt` 60 s
+  ein Med-Kit verstreut hinter Wällen (höchstens 2) · Sieg nach `ueberleben_sek` 900.
+- **Karte:** Zufall unter den Formationen aus [H] (Phantom nur, wenn im Editor gewählt). Im Schild liegen 2 Fabriken und die
+  Batterie. Draußen stehen `fabriken_aussen` 3 Fabriken mit je `stellungen_je_fabrik` 4 Stellungen und `patrouille` 2 Mann Streife,
+  dazu `tuerme` 4 Formtürme und `heiltuerme` 1 Heilturm mit Instandsetzung (fehlt die Form, wird ein Erdwall angebaut). Am
+  Myriaden-HQ (links, Zuflucht) gibt es das Ringterminal (2×2, wird beim ersten Betreten mit einem Satz erklärt), ein Med-Kit und
+  eine Sprengladung. Die Besatzung steht ab Start; Ersatz liefert eine Fabrik alle `produktion_sek` 12 s (normal 5).
+- **Sichtlinie:** Eine Stellung sieht nur über ihr eigenes Feld hinaus. Jeder weitere Erdwall unterbricht den Strahl, auch ein
+  verbundener (`karte.sicht_eigenes_feld`). „In Deckung“ (Schild-Symbol links unten) steht da, solange keine Stellung Brakk sieht.
+- **Erdwälle** nehmen von Schüssen keinen Schaden mehr. Weg gehen sie nur durch **Sprengladungen**: Gefallene Truppen lassen mit
+  `spreng_drop` 12 % eine fallen (Elite immer), im Gepäck sind höchstens `spreng_max` 3 (Zähler links unten). [C] setzt eine
+  Ladung auf den Erdwall unter dem Fadenkreuz oder direkt vor Brakk, der Zünder läuft `spreng_zuender` 3 s. Danach ist der Wall weg
+  (mit Stellung bzw. Turm darauf), Türme, die er gestützt hat, schweigen, und Truppen direkt daneben nehmen 120 Schaden. Brakk
+  baut in Befehl 24 nicht; [C] ist nur die Sprengladung. Ab der Jagd baut der Technoclan gesprengte Wälle in `nachbau_sek` 20 s
+  nach, aber nur, wenn Brakk mehr als 5 Felder weg ist (mit Instandsetzung in Reichweite doppelt so schnell).
+- **Türme:** Entweder die Stütze sprengen (der Turm schweigt bis zum Nachbau) oder den **Kern** treffen (Trefferbereich auf dem
+  Turm, `kern_leben` 400). Leer geschossen fällt der Turm `kern_ausfall` 20 s aus (Platzhalter: grauer Qualm-Kasten darüber) und
+  läuft dann von selbst wieder. Ein Heilturm mit Instandsetzung bringt ihn schon nach 8 s zurück.
+- **Stellungen** werden nicht zerstört, nur die Truppe darauf. Die Fabrik liefert im nächsten Zyklus Ersatz, der zur Stellung läuft.
+- **Fabriken draußen:** **Sabotage** – [E] an der Rückseite (Seite zum Technoclan-HQ) `sabotage_halten` 3 s halten. Wird Brakk
+  dabei getroffen oder geht er weg, bricht sie ab. Sonst ist die Fabrik `sabotage_lahm` 60 s lahm und liefert keinen Ersatz
+  (Prämie `praemie_sabotage`). Woanders bleibt [E] die Lichttreppe. **Zerstörung** über `fabrik_leben` 1500 (Schüsse wirken mit
+  60 %, der Ladestrahl nimmt mindestens 10 %), dann bleiben Trümmer und die Fabrik kommt nicht wieder. **Alarm:** Wird eine Fabrik
+  angegriffen, laufen die Truppen am Boden im Umkreis `alarm_radius` 6 für 20 s hin, die Nester bleiben besetzt. **Pilot:**
+  `pilot_verzug` 20 s nach einer Sabotage geht ein Pilot mit zwei Begleitern aus der Batterie zur Fabrik und repariert sie in
+  `pilot_reparatur` 5 s. Fällt er, kommt der nächste erst nach `pilot_neu` 45 s. Zerstörte Fabriken repariert er nicht.
+- **Ende:** Sieg mit Kameraflug, dann die Übersicht „Befehl 24 überstanden“. Fällt Brakk, erscheint dieselbe Übersicht als
+  Wertung „Gefallen“ (statt der normalen Niederlage). Darin stehen Minuten, zerstörte und sabotierte Fabriken, Kills, Ringe,
+  gesprengte Erdwälle und die Zeit in Deckung. Dazu der **Spielstil**: Saboteur (Fabriken + halbe gesprengte Wälle ≥ 3), Geist
+  (≥ 60 % in Deckung und unter 25 Kills), sonst Berserker.
+- **Code:** fast alles in `scripts/order24.gd`. Haken: `karte.gd` (Sichtregel), `main.gd` (`produktion_sek`, `truppen_limit`,
+  `reparaturziel`, `einheit_gefallen`), `einheit.gd` (Reparaturzeit; Jäger/Pilot/Begleiter suchen keine Stellung), `ego_modus.gd`
+  ([C]/[E] über `Order24.ego_taste`, Anzeige über `Order24.hud`, Steuerung in der Sequenz gesperrt, keine Bauliste und kein
+  Wellen-Countdown), `brakk_sieg.gd` (Kopf), `startmenue.gd` (nur Brakk).
+- **Prüfen:** `godot --headless --path . --fixed-fps 60 -s werkzeuge/befehl24test.gd -- [Formation]` prüft die Regeln (Sichtlinie,
+  Sprengladung, Turmkern, Ersatz, Sabotage mit Pilot, Zerstörung). `… befehl24test.gd -- phasen` spielt den Ablauf mit
+  verkürzten Zeiten durch (Phasen, Trupps, Wellen mit Elite, Suchen/Streife, Vorstoß, Fall des HQ, Siegbild). Beide schreiben in
+  user:// – vorher sichern.
+
+**Nachtrag nach Pauls Test (20.11.)** – geht dem Abschnitt oben vor:
+- Keine Anführerwahl mehr vor Befehl 24, es startet direkt mit Brakk. Runde, Gegnerweg und die Weg-Warnung sind in Befehl 24 ausgeblendet. Im Lichtterminal fehlt die Zeile „Feld“, und unter den Ringen steht nichts mehr zu Truppen.
+- Brakk startet mit freier Sicht auf die drei Verräter und das HQ (kein Erdwall dazwischen oder direkt neben ihm). Der Dialog hat vier Zeilen Vorgeschichte (Text in `verrat24.gd`, `ZEILEN`), tippt langsamer und lässt jede Zeile 2,6 s plus 0,03 s je Zeichen stehen.
+- Ablauf: Flucht 45 s, Jagd ab 150 s, Vorstoß ab 480 s. Schon vor der Jagd gibt es Druck: Sieht eine Stellung Brakk oder greift er eine Truppe an, laufen die Truppen am Boden im Umkreis zu ihm.
+- Karte: 3 Fabriken im Schild auf Stufe 2 (`stufe_innen`) mit je 3 Verteidigern (`besatzung_innen`), die in der Basis bleiben. Dazu `fabriken_aussen` 4 Lager über die Karte verteilt (Fabrik, 4 Stellungen, 1 Turm), 6 Formtürme und der Heilturm. Vom Schild führen immer drei Wege hinaus (oben, Mitte, unten); blanke Erdwälle darauf werden geöffnet (`_wege_freimachen`).
+- Jagd: 80 % der Truppen außerhalb der Basis jagen, neue Trupps haben 5 Mann. Truppen sind in Befehl 24 schwächer (`truppen_leben` 70 %).
+- Sicht: Steht Brakk oben auf einem Erdwall, sehen ihn Stellungen und Türme über die Wälle hinweg. Bodentruppen sehen und treffen ihn dort auch. Türme reichen dann `turm_wall_bonus` 2 Felder weiter.
+- Erdwälle werden **nicht** nachgebaut, so bahnt sich Brakk eigene Wege. Ein Turm mit leerem Kern läuft nicht von selbst wieder an: Der Pilot kommt nach `pilot_verzug` und repariert ihn (oder ein Heilturm mit Instandsetzung).
+- Q und E (Anker, Lichttreppe, Lichtbrücke) laden in Befehl 24 um `mobil_abkling` 125 % langsamer.
+- Wirtschaft: Geleerte Stellungen und gesprengte Wälle bringen kein Geld mehr. Eine zerstörte Fabrik bringt 80 und 20 Erfahrung, eine Sabotage 40 und 10 Erfahrung (`xp_fabrik`, `xp_sabotage`). Kills geben wie bisher Erfahrung.
+
 ### Menü und Editor (20.11., Schritt 5b)
 - **Brakk-Mode** im Startmenü hat jetzt zwei Unterpunkte: **Classic** (der bisherige Brakk-Mode) und **Rogue · Order 24**. Die Szenarien
   stehen weiter unter Herausforderungen (Paul, 20.11.).

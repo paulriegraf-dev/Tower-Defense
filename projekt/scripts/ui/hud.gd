@@ -379,6 +379,9 @@ func aktualisiere(_delta: float) -> void:
 	_bei_aenderung(_tipp, [_tipp_titel, _tipp_text, _tipp_warnung, s._meldung_art, s._meldung_zeit > 0.0, s._meldung])
 	_bei_aenderung(_tipp_oben, [_tipp_oben_text, _tipp_oben_x])
 	_bei_aenderung(weg_grund, [weg_text.text])
+	if s.order24 != null:
+		_welle.visible = false   # 20.11. (Paul): Befehl 24 – Runde und Gegnerweg gibt es hier nicht
+		weg_grund.visible = false
 	for f: Control in [_konsole, _zuweis, _warnung, _formen]:
 		f.queue_redraw()
 	if not start.disabled and _start_bild != null:
