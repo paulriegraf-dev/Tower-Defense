@@ -114,9 +114,11 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 	var by := r.position.y + 38.0
 	var an: Dictionary = b.get("anteile", {})
 	var gesamt := maxf(1.0, float(an.get("brakk", 0.0)) + float(an.get("truppen", 0.0)) + float(an.get("tuerme", 0.0)))
-	Stil.schreibe(ci, Vector2(bx, by), "Schaden der Partie", Stil.KLEIN, Stil.LEUCHT)
-	by += 11.0
-	for z: Array in [[Anfuehrer.name(af), "brakk", Stil.GOLD], ["Truppen", "truppen", Stil.LEUCHT], ["Türme", "tuerme", Color("bfa3ff")]]:
+	var ohne := bool(b.get("ohne_anteile", false))   # 20.11. (Paul): Befehl 24 – keine Anteile (Truppen und Türme sind dort der Gegner)
+	if not ohne:
+		Stil.schreibe(ci, Vector2(bx, by), "Schaden der Partie", Stil.KLEIN, Stil.LEUCHT)
+		by += 11.0
+	for z: Array in ([] if ohne else [[Anfuehrer.name(af), "brakk", Stil.GOLD], ["Truppen", "truppen", Stil.LEUCHT], ["Türme", "tuerme", Color("bfa3ff")]]):
 		var v := float(an.get(z[1], 0.0))
 		Stil.schreibe(ci, Vector2(bx, by), str(z[0]), Stil.KLEIN, Stil.TEXT)
 		var anteil := "%d %%" % roundi(100.0 * v / gesamt)

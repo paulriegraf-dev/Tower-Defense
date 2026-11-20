@@ -61,7 +61,7 @@ const STANDARD := {
 	"tore_ab": 480,             # ab hier setzt er Tore in seine Wälle Richtung Myriaden-HQ …
 	"tore_takt": 60,            # … so oft …
 	"tore_max": 4,              # … höchstens so viele
-	"welle_groesse": 6,         # so groß (jede zerstörte Fabrik draußen: einer weniger, dauerhaft)
+	"welle_groesse": 8,         # so groß (jede zerstörte Fabrik draußen: einer weniger, dauerhaft)   # 20.11. (Paul): +2
 	"elite_jede": 2,            # jede so vielte Welle ein Elitetrupp aus genau drei
 	"vorstoss": true,           # Technoclan darf das Myriaden-HQ einnehmen
 	"vorstoss_start": 480,      # ab dann marschiert ein Jagdtrupp darauf
@@ -78,15 +78,16 @@ const STANDARD := {
 	"fabriken_innen": 3,        # im Schild, für Brakk nicht erreichbar
 	"stufe_innen": 2,           # 20.11. (Paul): Fabriken im Schild ausgebaut wie im normalen Spiel
 	"besatzung_innen": 3,       # so viele Truppen hält jede Fabrik im Schild zur Verteidigung
-	"praemie_kill": 12,         # 20.11. (Paul): kleines Kopfgeld je Kill …   # 20.11. (Paul): 8 statt 5, Elite ×3 – Gold für Ringe (175/300/450) und Myriaden-Fabriken
+	"praemie_kill": 7,          # 20.11. (Paul): Kopfgeld je Kill (Elite ×3) – 7 statt 12, sonst kommen die Ringe zu schnell
 	"kill_stufe": 2,            # … je so vielen Kills an derselben Stellung (am Boden: derselben Fabrik) sinkt es um 1 …
 	"kill_frist": 30,           # … und ist nach so vielen Sekunden ohne Kill dort wieder voll (gegen stumpfes Abfarmen)
 	"praemie_fabrik": 200,      # 20.11. (Paul): wenig Geld, dafür Erfahrung
 	"praemie_stellung": 0,
 	"praemie_wall": 0,
-	"xp_fabrik": 40,            # Erfahrung für Brakk: zerstörte Fabrik …
-	"xp_sabotage": 20,          # … sabotierte Fabrik
-	"xp_kill": 2,               # 20.11. (Paul): zusätzliche Erfahrung je Kill (Elite ×3) – mehr Ringplätze (Stufe 5/7/9)
+	"xp_fabrik": 25,            # Erfahrung für Brakk: zerstörte Fabrik …
+	"xp_sabotage": 12,          # … sabotierte Fabrik
+	"xp_kill": 0,               # 20.11. (Paul): zusätzliche Erfahrung je Kill (Elite ×3) – 0: Stufe 8 nach 3:32 war viel zu schnell
+	"kill_xp_prozent": 50,      # 20.11. (Paul): Prozent der normalen Kill-Erfahrung (Stufe 8 soll eher gegen Minute 12–15 kommen)
 	"truppen_leben": 90,        # Prozent: Leben der Technoclan-Truppen – 20.11. (Paul): 90 statt 70, Brakk wird mit mehr Ringen stärker
 	"turm_wall_bonus": 2,       # Felder mehr Reichweite der Türme, solange Brakk auf den Erdwällen läuft
 	"karte": "",                # "" = Zufall unter den Formationen aus [H], sonst eine Formation oder "phantom" (Verteidigungs-Phantom)
@@ -99,10 +100,10 @@ const STANDARD := {
 	"heiltuerme": 1,            # dazu Heiltürme mit Instandsetzung
 	"fabrik_leben": 1500,       # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon)
 	"sabotage_halten": 5,       # Sekunden [F] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
-	"sabotage_lahm": 60,        # so lange liefert eine sabotierte Fabrik nichts
+	"sabotage_lahm": 0,         # so lange liefert eine sabotierte Fabrik nichts – 0 = bis der Pilot sie repariert (20.11., Paul)
 	"praemie_sabotage": 100,
 	"alarm_radius": 6,          # Felder: bei Angriff auf eine Fabrik laufen Truppen im Umkreis hin
-	"pilot_verzug": 20,         # Sekunden nach einer Sabotage geht ein Pilot mit zwei Begleitern los
+	"pilot_verzug": 40,         # Sekunden nach einer Sabotage geht ein Pilot mit zwei Begleitern los
 	"pilot_neu": 45,            # fällt der Pilot, dauert der nächste so lange
 	"pilot_reparatur": 5,       # Sekunden Reparatur vor Ort
 	"kern_leben": 400,          # Turmkern: leer geschossen fällt der Turm aus, bis ein Pilot ihn repariert (20.11., Paul)
@@ -119,6 +120,7 @@ const LANZE_FABRIK := 0.10       # 20.11.: der Ladestrahl nimmt einer Fabrik min
 const LADUNG_REICHWEITE := 1.8   # 20.11.: Felder – so weit vor Brakk darf der Erdwall für die Sprengladung liegen
 const LADUNG_SCHADEN := 120.0    # 20.11.: Truppen dicht an der Sprengung
 const ALARM_SEK := 20.0          # 20.11.: so lange bleiben alarmierte Truppen an der Fabrik
+const BRAKK_NAH := 5.0            # 20.11. (Paul): Felder – so nah an Brakk geht keine Truppe in eine Stellung
 const TECHNO_FARBE := Color("b46cff")
 
 var spiel: Node
@@ -396,7 +398,7 @@ func _schock() -> void:
 	k.max_leben = float(k.daten["leben"])
 	k.leben = k.max_leben
 	k.fortschritt = BrakkFortschritt.new(k)
-	spiel.budget = 400
+	spiel.budget = 300
 	if spiel.ego != null:
 		spiel.ego.set("_trauma", 1.0)
 	Ton.spiele(spiel, "tc-arc", 0.0)
@@ -1143,6 +1145,8 @@ func _ziele_pflegen() -> void:
 			t = _neues_ziel(schl)
 			t.zelle = z
 			t.art = "fabrik"
+			t.set_meta("treffer_hoehe", 0.5)
+			t.set_meta("treffer_radius", 0.7)
 		t.position = p
 		t.leben = float(fabrik_hp[z])
 		t.max_leben = wf("fabrik_leben")
@@ -1156,7 +1160,9 @@ func _ziele_pflegen() -> void:
 			t = _neues_ziel(schl)
 			t.zelle = z
 			t.art = "kern"
-		t.position = karte.mitte(z) + Vector2(0, -8)
+		t.position = karte.mitte(z)
+		t.set_meta("treffer_hoehe", 0.9)   # 20.11. (Paul): der Kern sitzt oben im Turm und ist gut zu treffen
+		t.set_meta("treffer_radius", 0.6)
 		t.leben = float(kern[z])
 		t.max_leben = wf("kern_leben")
 	# 20.11.: Überläufer – ohne Schild ist das Technoclan-HQ ein Ziel für Brakks Waffen
@@ -1167,6 +1173,8 @@ func _ziele_pflegen() -> void:
 			th = _neues_ziel("hq")
 			th.zelle = karte.basis
 			th.art = "hq"
+			th.set_meta("treffer_hoehe", 0.8)
+			th.set_meta("treffer_radius", 1.0)
 		th.position = karte.mitte(karte.basis) + Vector2(0, -Werte.ZELLE * 0.5)
 		th.leben = tc_hq_leben
 		th.max_leben = wf("geheim_hq_leben")
@@ -1482,7 +1490,7 @@ func _fabriken_pflegen(k: Kommandant, echt: float) -> void:
 			lahm.erase(z)   # der Pilot hat repariert
 			continue
 		lahm[z] = float(lahm[z]) - echt
-		if float(lahm[z]) <= 0.0:
+		if float(lahm[z]) <= 0.0 and wf("sabotage_lahm") > 0.0:   # 0 = nur der Pilot repariert
 			lahm.erase(z)
 			spiel.repariere(z, true)
 	for id: int in alarm.keys():
@@ -1497,7 +1505,7 @@ func sabotieren(z: Vector2i) -> void:
 	karte.fortschritt.erase(z)
 	lahm[z] = wf("sabotage_lahm")
 	pilot_auftraege.append({"z": z, "ab": zeit + wf("pilot_verzug")})
-	_praemie("sabotiert", int(w("praemie_sabotage")), "Fabrik sabotiert (%d s lahm)" % int(w("sabotage_lahm")), int(w("xp_sabotage")))
+	_praemie("sabotiert", int(w("praemie_sabotage")), ("Fabrik sabotiert (%d s lahm)" % int(w("sabotage_lahm")) if wf("sabotage_lahm") > 0.0 else "Fabrik sabotiert – lahm, bis ein Pilot sie repariert"), int(w("xp_sabotage")))
 	Ton.spiele(spiel, "tc-arc", -4.0)
 	karte.queue_redraw()
 	print("ORDER24 Fabrik %s sabotiert bei %.0f s" % [str(z), zeit])
@@ -1606,6 +1614,9 @@ func reparaturziel(p: Einheit) -> Dictionary:
 
 ## Darf diese Truppe in eine Stellung? Jäger, Pilot und Begleiter nie.
 func darf_in_stellung(e: Einheit) -> bool:
+	var k: Kommandant = spiel.kommandant
+	if laeuft and k != null and not k.gefallen and e.position.distance_to(k.position) <= BRAKK_NAH * Werte.ZELLE:
+		return false   # 20.11. (Paul): ist Brakk nah, bleibt die Truppe unten und kämpft (wie sonst auch) statt in die Stellung zu laufen
 	return not jaeger.has(e.get_instance_id()) and e != pilot and not eskorte.has(e) and not _ist_innen(e)
 
 
@@ -2960,6 +2971,7 @@ func bericht(sieg: bool) -> Dictionary:
 	b["max_leben"] = int(k.max_leben) if k != null else 0
 	var an: Dictionary = b.get("anteile", {})
 	b["anteile"] = {"brakk": float(an.get("brakk", 0.0)), "truppen": 0.0, "tuerme": 0.0}   # Truppen und Türme sind hier der Gegner
+	b["ohne_anteile"] = true   # 20.11. (Paul): die Anteile-Balken braucht es hier nicht
 	b["hoehepunkte"] = [
 		["Überlebt", _uhr(zeit) if wf("ueberleben_sek") <= 0.0 else "%s von %s" % [_uhr(zeit), _uhr(wf("ueberleben_sek"))]],
 		["Fabriken zerstört / sabotiert", "%d / %d" % [int(sabotage["fabriken"]), int(sabotage["sabotiert"])]],

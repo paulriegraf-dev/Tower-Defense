@@ -141,9 +141,9 @@ func _process(_delta: float) -> bool:
 					merk["pilot_los"] = o.zeit - uhr
 					pruefe(absf(o.zeit - uhr - o.wf("pilot_verzug")) < 1.5 and o.eskorte.size() == 2, "Pilot: los nach %.1f s mit %d Begleitern" % [o.zeit - uhr, o.eskorte.size()])
 				if not karte.ausgefallen.has(z):
-					pruefe(merk.has("pilot_los") and o.zeit - uhr < o.wf("sabotage_lahm"), "Pilot: Fabrik nach %.1f s repariert (ohne Pilot erst nach %d s)" % [o.zeit - uhr, int(o.w("sabotage_lahm"))])
+					pruefe(merk.has("pilot_los") and (o.wf("sabotage_lahm") <= 0.0 or o.zeit - uhr < o.wf("sabotage_lahm")), "Pilot: Fabrik nach %.1f s repariert (ohne Pilot erst nach %d s)" % [o.zeit - uhr, int(o.w("sabotage_lahm"))])
 					_weiter()
-				elif o.zeit - uhr > o.wf("sabotage_lahm") + 2.0:
+				elif o.zeit - uhr > (o.wf("sabotage_lahm") if o.wf("sabotage_lahm") > 0.0 else 120.0) + 2.0:
 					pruefe(false, "Pilot: Fabrik nicht repariert")
 					_weiter()
 			elif not merk.has("dbg"):

@@ -4345,7 +4345,7 @@ func befehl24_weiterspielen() -> void:
 	order24.weiter = true
 	add_child(order24)
 	order24.einrichten(self)
-	budget = 400   # 20.11. (Paul): wie das Startgold von Befehl 24
+	budget = 300   # 20.11. (Paul): wie das Startgold von Befehl 24 – nicht gleich Ringe kaufen
 	if kommandant != null:
 		kommandant.position = karte.mitte(order24.brakk_start())
 		kommandant.anker = kommandant.position

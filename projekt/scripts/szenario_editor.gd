@@ -554,6 +554,7 @@ func _stellschrauben(l: ModLeiste) -> void:
 		_zahl(l, o, "xp_fabrik", "Erfahrung Fabrik", 5, 0, 200, Order24.STANDARD)
 		_zahl(l, o, "xp_sabotage", "Erfahrung Sabotage", 5, 0, 200, Order24.STANDARD)
 		_zahl(l, o, "xp_kill", "Erfahrung je Kill (extra)", 1, 0, 20, Order24.STANDARD)
+		_zahl(l, o, "kill_xp_prozent", "Kill-Erfahrung (%)", 10, 0, 300, Order24.STANDARD)
 		_zahl(l, o, "medkit_takt", "Med-Kit neu (s)", 10, 10, 300, Order24.STANDARD)
 		_zahl(l, o, "medkit_heilung", "Heilung (%)", 5, 5, 100, Order24.STANDARD)
 		_zahl(l, o, "heilturm_prozent", "Heilturm: % Leben je s", 1, 0, 20, Order24.STANDARD)

@@ -947,7 +947,7 @@ func _auto_zielen() -> void:
 	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot:
 			continue
-		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
+		var c := _ziel_mitte(g)   # 20.11.: Befehl 24 – Ziele können Höhe und Größe vorgeben
 		var d := c - von
 		var weite := d.length()
 		if weite > SCHUSS_WEITE or weite < 0.1:
@@ -961,6 +961,16 @@ func _auto_zielen() -> void:
 		bester = t
 		_auto_ziel = g
 		_auto_r = r
+
+
+## 20.11. (Paul): Trefferpunkt eines Ziels in 3D. Befehl-24-Ziele (Turmkern, Fabrik, HQ) geben über Metadaten Höhe und
+## Größe vor – der Turmkern sitzt oben im Turm und ist größer als eine Figur.
+func _ziel_mitte(g: Gegner) -> Vector3:
+	return _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + float(g.get_meta("treffer_hoehe", 0.42)))
+
+
+func _ziel_radius(g: Gegner, standard: float) -> float:
+	return maxf(standard, float(g.get_meta("treffer_radius", 0.0)))
 
 
 ## Richtung der Schüsse: am Handy auf das selbst gewählte Ziel, sonst durchs Fadenkreuz.
@@ -996,11 +1006,11 @@ func _schiess() -> void:
 	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot:
 			continue
-		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
+		var c := _ziel_mitte(g)
 		var t := (c - von).dot(r)
 		if t <= 0.0 or t >= bis:
 			continue
-		if (von + r * t).distance_to(c) <= 0.34:
+		if (von + r * t).distance_to(c) <= _ziel_radius(g, 0.34):
 			linie.append([t, g])
 	linie.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 	var f := brakk.fortschritt
@@ -1940,7 +1950,7 @@ func _kill(g: Gegner) -> void:
 	if f.frei("ulti") and spiel.welle >= f.ulti_ab_welle:
 		f.ulti_ladung = mini(f.ulti_ladung + 1, BrakkFortschritt.ULTI_KILLS)   # Kills vor der Freischaltung zählen nicht
 	# 18.11. (Paul): bei dreifacher Gegnerzahl nur die halbe Erfahrung je Kill (Bruchteile werden gesammelt)
-	f.kill_xp += float(BrakkFortschritt.XP_KILL + int(g.daten.get("praemie", 0)) / 5) * BrakkFortschritt.XP_KILL_ANTEIL
+	f.kill_xp += float(BrakkFortschritt.XP_KILL + int(g.daten.get("praemie", 0)) / 5) * BrakkFortschritt.XP_KILL_ANTEIL * (spiel.order24.wf("kill_xp_prozent") / 100.0 if spiel.order24 != null else 1.0)   # 20.11. (Paul): Befehl 24 – Stufen nicht zu schnell
 	var xp := floori(f.kill_xp)
 	f.kill_xp -= float(xp)
 	if xp > 0 and f.gib(xp, brakk) > 0:
@@ -2090,9 +2100,9 @@ func _lanze_feuer() -> void:
 	for g: Gegner in spiel.ego_gegner().duplicate():
 		if not is_instance_valid(g) or g._tot:
 			continue
-		var c := _zu3d(g.position, (hd.H if hd.ist_hoch(karte.zelle_bei(g.position)) else 0.0) + 0.42)
+		var c := _ziel_mitte(g)
 		var t := (c - von).dot(r)
-		if t <= 0.0 or t >= weite or (von + r * t).distance_to(c) > 0.45:
+		if t <= 0.0 or t >= weite or (von + r * t).distance_to(c) > _ziel_radius(g, 0.45):
 			continue
 		# 19.11. (Paul): dazu ein Anteil des maximalen Lebens (große Gegner weniger) – trägt die Lanze ins späte Spiel
 		var anteil := float(BrakkFortschritt.LANZE_ANTEIL["gross" if BrakkFortschritt.gross(g) else "normal"])
