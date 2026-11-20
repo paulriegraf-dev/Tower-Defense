@@ -75,6 +75,7 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 	_sprite.einrichten(daten)
 	if bool(daten.get("elite", false)):
 		_sprite.scale *= float(Werte.ELITE["groesse"])   # 20.11.: Elite etwas größer
+		add_child(Platzhalter.kronen_sprite(float(_sprite.get("_zelle")) * _sprite.scale.y * 0.8 + 2.0))   # 20.11. (Nachtrag): Krone
 	if Werte.grafik_neu and Werte.NEU_HALTUNG.has(typ):
 		# Neue Grafik: in der Stellung kniend bzw. liegend, die Brüstung verdeckt die Beine
 		_sprite.setze_haltung(Werte.NEU_HALTUNG[typ])
@@ -531,6 +532,8 @@ func _feuere_auf(ziel: Node2D) -> void:
 	if _abkling > 0.0:
 		return
 	var pause: float = daten["abklingzeit"]
+	if zustand == Zustand.AUF_POSTEN and Werte.mg_stellung():
+		pause /= float(Werte.MG_STELLUNG["takt"])   # 20.11. (Nachtrag): MG-Stellung (Sonde 7)
 	if faehigkeit == "feuerteam":
 		# je mehr Feuerteam-Schützen gerade Gegner auf derselben Kachel beschießen, desto kürzer die Pause –
 		# 17.11.: der Bonus baut sich über einige Schüsse auf (Anlauf) und verfällt bei einer Feuerpause
@@ -614,6 +617,9 @@ func _treffe(e: Dictionary) -> void:
 	spiel.schuss_herkunft = position
 	var farbe := Color(daten["schussfarbe"])
 	var schaden := float(daten["schaden"]) * (Werte.MINIGUN_SCHADEN_FAKTOR if e["minigun"] else 1.0)
+	if lebt and spiel.brakk_geschosse != null and spiel.brakk_geschosse.ist_brakk(ziel):
+		_auf_brakk(e, schaden)   # 20.11.: Schritt 6c – echtes Geschoss bzw. Zielstrahl
+		return
 	if e["flaeche"]:
 		# Flächenschaden: trifft alle Gegner rund um das Ziel (ist es schon weg, dort, wo es zuletzt war)
 		var ort: Vector2 = (ziel as Node2D).position if lebt else e["pos"]
@@ -639,6 +645,21 @@ func _treffe(e: Dictionary) -> void:
 		e["muendung"] = position + Vector2(absf(m.x - position.x) * (-1 if _sprite.flip_h else 1), m.y - position.y)
 	spiel.schuss(e["muendung"], (ziel as Node2D).position + Vector2(0, 4), farbe)
 	ziel.call("nimm_schaden", schaden)
+
+
+## 20.11.: Schritt 6c – Schuss auf Brakk im Brakk-Mode: Plasma als langsamer Ball, Scharfschütze mit Zielstrahl,
+## sonst ein schneller Laser. Ob er trifft, entscheidet brakk_geschosse.gd.
+func _auf_brakk(e: Dictionary, schaden: float) -> void:
+	var bg: BrakkGeschosse = spiel.brakk_geschosse
+	var typ := str(spiel.fabriken.get(fabrik_zelle, {}).get("typ", ""))
+	var h: float = 0.45 + (spiel.hd.H if spiel.hd != null and zustand == Zustand.AUF_POSTEN else 0.0)
+	var quelle: String = spiel.schadensquelle
+	if e["flaeche"]:
+		bg.schiesse("plasma", e["start"], h, schaden, "plasmawerfer", quelle)
+	elif typ == "scharfschuetze":
+		bg.scharf(self, e["muendung"], h, reichweite_jetzt() * Werte.ZELLE + Werte.ZELLE, schaden, quelle)
+	else:
+		bg.schiesse("laser", e["muendung"], h, schaden, typ if typ != "" else "technogunner", quelle)
 
 
 ## Vom Kommandanten gesammelt: Stellung freigeben und ihm folgen.
@@ -753,7 +774,7 @@ func nimm_schaden(menge: float) -> void:
 
 ## Reichweite in Feldern, so wie sie gerade gilt (in der Stellung mit Bonus).
 func reichweite_jetzt() -> float:
-	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else _hoehe())
+	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) + (float(Werte.MG_STELLUNG["reichweite"]) if Werte.mg_stellung() else 0.0) if zustand == Zustand.AUF_POSTEN else _hoehe())   # 20.11. (Nachtrag): MG-Stellung
 
 
 ## 18.11.: Anhöhe – mehr Reichweite am Boden (in der Stellung rechnet posten_bonus sie ein). Auch für Brakk.

@@ -42,7 +42,7 @@ func male_waffen(_g: Vector2, _wpx: float) -> void:
 	pass
 
 
-## Fähigkeiten-Leiste und Ringleiste (statt Brakks).
+## Ringleiste und Zustände (die Fähigkeiten-Leiste zeichnet ego_modus.gd über leiste_info).
 func male_leisten(_g: Vector2) -> void:
 	pass
 
@@ -50,6 +50,16 @@ func male_leisten(_g: Vector2) -> void:
 ## Über allem (Strahlen, Zustandsanzeigen).
 func male_oben(_g: Vector2) -> void:
 	pass
+
+
+## 20.11. (Nachtrag): Fähigkeiten-Leiste (ego_modus._faehigkeiten) – je Aktion [Rest 0..1, Text darüber, läuft gerade].
+func leiste_info(_was: String) -> Array:
+	return [0.0, "", false]
+
+
+## Farbe für „läuft gerade“ in der Leiste.
+func leiste_farbe() -> Color:
+	return EgoModus.LICHT
 
 
 ## Hinweis unter dem Fadenkreuz ("" = keiner).
@@ -136,3 +146,126 @@ func neue_runde() -> void:
 
 func beenden() -> void:
 	pass
+
+
+# ------------------------------------------------------------------ Ring-Wirkung je Spell (20.11., Nachtrag)
+
+var _glut: Array = []             # [Gegner, Schaden je Sekunde, Rest-Sekunden]
+var _schutz_bis := 0              # ms: bis dahin „schutz_nach“
+var _schutz_nach := 0.0
+
+
+## Ring, der die Spells färbt (Irrtürmer: aktiver Ring des Helden, Sonde 7: aktiver Ring).
+func spell_ring() -> String:
+	return ""
+
+
+## Stufe dieses Rings.
+func spell_ring_stufe() -> int:
+	return ring_stufe(spell_ring())
+
+
+## Wirkung des aktiven Rings an diesem Spell ({} = keine) – Werte.RING_SPELLS.
+func spell_eintrag(spell: String) -> Dictionary:
+	var ring := spell_ring()
+	if ring == "":
+		return {}
+	return Werte.ring_spell(ego.anfuehrer(), spell, ring)
+
+
+func spell_hat(spell: String, art: String) -> bool:
+	return str(spell_eintrag(spell).get("art", "")) == art
+
+
+## Stärke der Wirkung `art` an `spell` auf der Ringstufe (0 = keine).
+func spell_w(spell: String, art: String) -> float:
+	var e := spell_eintrag(spell)
+	if str(e.get("art", "")) != art:
+		return 0.0
+	return Werte.ring_spell_wert(e, spell_ring_stufe())
+
+
+## Weniger Schaden für den Anführer (0..1) – Kommandant.nimm_schaden fragt das ab.
+func schutz() -> float:
+	return _schutz_nach if Time.get_ticks_msec() < _schutz_bis else 0.0
+
+
+func schutz_fuer(sek: float, anteil: float) -> void:
+	_schutz_bis = Time.get_ticks_msec() + int(sek * 1000.0)
+	_schutz_nach = anteil
+
+
+## Gegner im Umkreis (Felder) um p bremsen.
+func bremse_umkreis(p: Vector2, radius_felder: float, sek: float) -> void:
+	ego.spiel.effekte.welle(p, radius_felder * Werte.ZELLE, Color("9fe8ff"), "frost", 0.5)
+	for g: Gegner in ego.spiel.ego_gegner():
+		if is_instance_valid(g) and not g._tot and g.position.distance_to(p) <= radius_felder * Werte.ZELLE:
+			g.gebremst = maxf(g.gebremst, sek)
+
+
+## Hitzestoß: Schaden im Umkreis (Quelle „ring“).
+func hitzestoss(p: Vector2, radius_felder: float, schaden: float) -> void:
+	ego.spiel.effekte.welle(p, radius_felder * Werte.ZELLE, Color("ff8a3d"), "funk", 0.6)
+	ego.spiel.effekte.flaeche(p, radius_felder * Werte.ZELLE, Color("ff8a3d"))
+	for g: Gegner in ego.spiel.ego_gegner().duplicate():
+		if is_instance_valid(g) and not g._tot and not ego.spiel._geschuetzt(g) and g.position.distance_to(p) <= radius_felder * Werte.ZELLE:
+			trifft(g, schaden, "ring")
+	Ton.spiele(ego.spiel, "hit-boom", -8.0)
+
+
+## Brandfeld (Quelle „ring“).
+func brand_bei(p: Vector2, radius_felder: float, schaden_je_sek: float) -> void:
+	var sp := ego.spiel
+	sp.schadensquelle = "fabrik:-1,-1"
+	sp.brakk_quelle = "ring"
+	sp.lege_brand(p, radius_felder * Werte.ZELLE, schaden_je_sek)
+	sp.schadensquelle = ""
+	sp.brakk_quelle = ""
+
+
+## Nachglühen: `gesamt` Schaden über `sek` (Quelle „ring“).
+func glut(g: Gegner, gesamt: float, sek: float) -> void:
+	if is_instance_valid(g) and not g._tot and gesamt > 0.0:
+		_glut.append([g, gesamt / sek, sek])
+
+
+func glut_weiter(echt: float) -> void:
+	var noch: Array = []
+	for e: Array in _glut:
+		var g: Gegner = e[0]
+		if not is_instance_valid(g) or g._tot:
+			continue
+		var dt := minf(echt, float(e[2]))
+		trifft(g, float(e[1]) * dt, "ring")
+		e[2] = float(e[2]) - dt
+		if float(e[2]) > 0.0:
+			noch.append(e)
+	_glut = noch
+
+
+## Nächster Gegner hinter `g` in Schussrichtung (von `von` aus), höchstens 2 Felder weiter (null = keiner).
+func dahinter(g: Gegner, von: Vector2) -> Gegner:
+	var r := (g.position - von).normalized()
+	var bester: Gegner = null
+	var beste := 2.0 * Werte.ZELLE
+	for h: Gegner in ego.spiel.ego_gegner():
+		if h == g or not is_instance_valid(h) or h._tot or ego.spiel._geschuetzt(h):
+			continue
+		var d := h.position - g.position
+		var t := d.dot(r)
+		if t > 0.0 and t < beste and (g.position + r * t).distance_to(h.position) <= Werte.ZELLE * 0.6:
+			beste = t
+			bester = h
+	return bester
+
+
+## Blitz springt von `g` auf `n` weitere Gegner (Quelle „ring“, zählt als Schaden des Anführers).
+func kette(g: Gegner, n: int, schaden: float) -> void:
+	if not is_instance_valid(g) or n <= 0:
+		return
+	var sp := ego.spiel
+	sp.schadensquelle = "fabrik:-1,-1"
+	sp.brakk_quelle = "ring"
+	ego._brakk_sprung(g, n, schaden)
+	sp.schadensquelle = ""
+	sp.brakk_quelle = ""

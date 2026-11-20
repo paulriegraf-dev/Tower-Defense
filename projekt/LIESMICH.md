@@ -208,6 +208,23 @@ Eigener Modus im Startmenü: Du bist Brakk in der Ego-Sicht, die ganze Partie la
 - Fähigkeiten mit Ziel (Treppe/Brücke, Anker, Säule): **kurz tippen** = dort, wohin das Fadenkreuz zeigt; **halten und ziehen** = zielen mit Vorschau am Ziel (Raute, rotes Kreuz mit Grund, wenn nichts passt), loslassen = auslösen, auf „✕“ ziehen = abbrechen.
 - „Bauen“ oben links klappt die Bauliste auf (Eintrag tippen = wählen, nochmal = weglegen), der goldene Knopf baut am Fadenkreuz; derselbe Knopf heißt „Ausbauen“ vor einem Gebäude und „Ringe“ am Lichtterminal. Countdown antippen = Welle jetzt.
 
+### Ausweichen (20.11., Schritt 6c – Classic und Rogue)
+
+Schüsse auf Brakk sind echte Geschosse (`scripts/brakk_geschosse.gd`, Werte in `werte.gd` ab `BRAKK_AUSWEICH_SCHADEN`); die 2D-Logik
+aller anderen Figuren bleibt. Trefferbereich ist Brakks Rumpf (0,18 Felder), die Schützen streuen leicht (stehend ~90 % Treffer)
+und halten bei fliegenden Geschossen zur Hälfte vor (`BRAKK_VORHALT` 0,5 – seitwärts laufend trifft der Laser noch ~40 %). Verfehlte Geschosse fliegen weiter und schlagen in der nächsten Mauer oder am Ende der Bahn ein.
+- **Laser** (Technogunner 14 Felder/s, Battlesphäre 11): rot bzw. pink mit Schweif. **Plasma** (4,5 Felder/s): großer Ball, roter
+  Vorwarnkreis am Landepunkt, Einschlag 0,6 Felder, Brandfläche 2 s (20 % des Treffers je Sekunde). **Batterie** wie bisher (Zielkreuz).
+- **Telegrafieren:** Scharfschütze 0,6 s roter Zielstrahl in fester Richtung, dann Hitscan entlang der Linie. Geschütz- und Lanzenturm
+  glühen 0,3 s auf und schießen dann auf die Stelle, an der Brakk beim Aufglühen stand.
+- **Nahkampf** und Schleudersteine wie bisher. **Tumble:** 0,25 s unverwundbar (vorher 0,4), Geschosse gehen hindurch.
+  **Sprung:** Füße höher als 0,45 Felder (um den Scheitelpunkt) – Plasmaball und Brandfläche verfehlen.
+- **Schaden je Treffer:** Technogunner, Battlesphäre, Scharfschütze, Geschütz-, Lanzenturm ×1,5, Plasmawerfer ×2. Im Rogue gilt
+  zusätzlich `brakk_schaden` wie bisher (der Schaden läuft weiter über den Stellvertreter, auch die Statistik je Quelle).
+- **Feedback:** Randblitz zeigt zum echten Schützen, kurzes Rot bei Schaden, Lichtball beim Einschlag.
+- Prüfen: `godot --headless --path . -s werkzeuge/ausweichtest.gd -- [Schüsse] [Abstand]` (Trefferquoten stehend/laufend je Art,
+  dazu mit Vorhalt 50/100 % zum Vergleich, Tumble, Sprung).
+
 ### Weitere Anführer im Brakk-Mode (20.11., Schritt 6b)
 
 Vor dem Brakk-Mode wählst du den Anführer (Brakk, Irrtürmer, Sonde 7; drei Kacheln mit Initiale, Name und drei Zeilen Kit). Spielbar nur, wenn er im Normalmodus freigeschaltet ist (Erfolg „Baumeister“ → Irrtürmer, „Ausbilder“ → Sonde 7), sonst Fragezeichen. **Am Handy sind die beiden neuen vorerst nicht wählbar** („Am Handy noch nicht spielbar“), Brakk bleibt wie bisher. Die Anführer werden nur ausgetauscht – keine Perks aus dem Normalmodus. Ringe bleiben für alle das Build-System (Lichtterminal, Ringfeld [C]); je Anführer gibt es genau eine Ring-Signatur. Fällt der Anführer: Respawn wie bei Brakk.
@@ -366,8 +383,8 @@ Vor jeder Partie wird ein Anführer gewählt: **Spielen → Los** (und **Herausf
 - **Brakk** – alles wie bisher, keine Sonderfälle im Code. **Irrtürmer** (Türme) ← Erfolg „Baumeister“ (in einer Partie alle fünf Formtürme, einer auf Stufe 3). **Sonde 7** (Infanterie, MG-Nester) ← „Ausbilder“ (Tutorial bis zum Ende und ein Sieg mit mindestens 6 Fabriken, eine auf Stufe 3). **Paul** (Wirtschaft, Aufträge; Spaß, nicht ranglistenfähig) ← versteckt „Deutscher Sparer“ (im normalen Spiel eine Runde mit mindestens 1000 Budget begonnen und gewonnen); in der Wahl steht bei ihm nur der Tipp.
 - Gesperrte Anführer: Fragezeichen über dem Porträt, darunter der Erfolg. Figuren der drei neuen Anführer folgen in Schritt 2c; bis dahin ist Slot **[8]** bei ihnen gesperrt („folgt“), Brakk ist nur mit Anführer Brakk kaufbar.
 - **Perks (20.11., Balance grob – Zahlen in `ANFUEHRER_WERTE`):**
-  - **Irrtürmer:** Türme bis **Stufe 4** (450 × 0,75: +50 % Schaden, +1 Reichweite, doppelt so zäh gegen Drohnen – `TURM_STUFE_4`), Turm-Stufen 25 % billiger, Türme schießen auch ohne Stütze, 12 Gratis-Erdwälle. Nachteile: höchstens 3 Fabriken, Fabrik-Stufen 20 % teurer.
-  - **Sonde 7:** alle Fabriken 50 % billiger, Fabrik-Stufen 25 % billiger, Fabrik-**Stufe 4 = Elite** (600 × 0,75: die Truppe hat doppelt Leben und Schaden, ist größer und golden – `ELITE`). Nachteile: je Fabrik genau 1 Truppe (auch spezialisiert und im Gegenangriff), Türme nur bis Stufe 2, kein Schildgenerator.
+  - **Irrtürmer:** Türme bis **Stufe 4** (800 × 0,75 = 600: +20 % Schaden, +0,5 Reichweite, beide Stufe-3-Fähigkeiten, doppelt so zäh gegen Drohnen – `TURM_STUFE_4`), **Truppenturm** (auf einem Erdwall mit genau zwei Nachbarwällen, wenn keine andere Form passt): schießt nicht, hält 2 Werkschutz-Truppen (Technogunner, Stufe 2: 3 mit Wertepaket; Stufe 3: schneller Nachschub oder schwere Rüstung), Punkte am Turm zeigen, wie viele leben – `TURMARTEN.truppen`; Turm-Stufen 25 % billiger, Türme schießen auch ohne Stütze, 12 Gratis-Erdwälle. Nachteile: höchstens 3 Fabriken, Fabrik-Stufen 20 % teurer.
+  - **Sonde 7:** alle Fabriken 50 % billiger, **MG-Stellungen** (jede Stellung: Truppe darin +50 % Schussrate, +0,5 Reichweite, darf sie wie sonst verlassen – `MG_STELLUNG`), Fabrik-Stufen 25 % billiger, Fabrik-**Stufe 4 = Elite** (1065 × 0,75 = 800: +50 % Leben, +40 % Schaden, größer, golden mit Krone – `ELITE`). Nachteile: je Fabrik genau 1 Truppe (auch spezialisiert und im Gegenangriff), Türme nur bis Stufe 2, kein Schildgenerator.
   - **Paul:** Zinsen bis 100, Prämien ×1,5, Abriss gibt immer 100 % zurück, **Aufträge**. Nachteile: 10 statt 15 Leben, Erdwälle 15. Nicht ranglistenfähig.
 - **Pauls Aufträge** (`scripts/auftraege.gd`): ab Runde 2 je Bauphase einer (nie zweimal derselbe), oben in der Rundenanzeige und als Meldung. **Angebote** bringen Budget (Großeinkauf: 250 ausgeben, Turmfieber, Gründerzeit, Modernisierung, Mauerbau, Gut gepanzert, Umzug: Fabrik abreißen +150, Saubere Arbeit: kein Leben verlieren, Grundbesitz: beide Checkpoints halten). **Pflichten** strafen, wenn man sie verfehlt (Abrissbirne: 4 Erdwälle abreißen, Sparverbot: Welle mit höchstens 100 Budget starten, Steuerprüfung: die Hälfte ausgeben, Turmtausch, Werksschließung) – Strafe Leben (nie das letzte) oder ein Viertel des Budgets. Geprüft beim Start der Welle bzw. am Rundenende; der Zwischenstand merkt sich den Auftrag. Liste auch in der Übersicht [I] auf Pauls Karte.
 - **Übersicht [I] → Regeln:** je Anführer eine Karte mit Perks, Nachteilen und Freischaltung.

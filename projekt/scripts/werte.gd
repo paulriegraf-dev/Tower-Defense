@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 45          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 46          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -391,8 +391,15 @@ const TURMARTEN := {
 	"lanze": {"name": "Lanzenturm", "form": "Klammer", "nachbarn": 4, "farbe": "ff8a3d",
 		"reichweite": 6.0, "schaden": 45.0, "abklingzeit": 4.0, "breite": 0.35,
 		"text": "Langsamer, schwerer Strahl in gerader Linie: trifft alles, was in der Linie steht – ideal für lange Gänge."},
+	# 20.11. (Paul, Nachtrag): Truppenturm – nur der Irrtürmer (Werte.truppenturm()), auf einem Erdwall mit genau zwei
+	# Nachbarwällen, wenn keine andere Form passt. Schießt nicht; hält bis zu „werkschutz“ Technogunner (Werkschutz), die
+	# nachkommen, wenn einer fällt (PRODUKTION_SEK / „nachschub“). Ab Turmstufe 2 kommen sie mit dem Wertepaket.
+	"truppen": {"name": "Truppenturm", "form": "Zwei Nachbarwälle", "nachbarn": 2, "farbe": "c9a6ff",
+		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 0.0, "werkschutz": 2, "nachschub": 1.0, "leben_mal": 1.0,
+		"text": "Schießt nicht. Hält bis zu 2 Werkschutz-Truppen (Technogunner), die nachkommen, wenn eine fällt. Nur Irrtürmer."},
 }
 # Turmupgrades (Klick auf den Turm), wie bei den Fabriken: Stufe 2 fest, auf Stufe 3 eine von zwei Fähigkeiten.
+const FORMTUERME_ZAHL := 5   # 20.11. (Nachtrag): Baumeister und Formenlehre zählen die fünf Formtürme (ohne Truppenturm)
 const KOSTEN_TURM_STUFE: Array[int] = [125, 300]   # Patch 17.11.: vorher 175/450 (Upgrades lohnten sich für den Schaden kaum)
 const TURM_STUFE_2 := {
 	"geschuetz": {"abklingzeit": 0.65, "reichweite": 4.0, "schaden": 22.0, "text": "Starke Kanone: 22 statt 16 Schaden, alle 0,65 statt 0,9 Sekunden, 4 statt 3,5 Felder."},   # 19.11.: +6 Schaden (Paul: Stufe 2 zu schwach)
@@ -400,8 +407,15 @@ const TURM_STUFE_2 := {
 	"funk": {"reichweite": 3.5, "feuer_faktor": 0.7, "text": "Größerer Umkreis (3,5 statt 2,5 Felder), Stellungen feuern 30 % statt 25 % schneller."},   # 19.11.
 	"lanze": {"schaden": 80.0, "text": "Stärkerer Strahl: 80 statt 45 Schaden."},   # 19.11.: vorher 65
 	"heil": {"heilung": 14.0, "text": "Heilt mehr: 14 statt 8 Leben."},   # 19.11.: vorher 12
+	"truppen": {"werkschutz": 3, "text": "Hält 3 statt 2 Werkschutz-Truppen, sie kommen mit dem Wertepaket (Stufe 2)."},   # 20.11. (Nachtrag)
 }
 const TURM_STUFE_3 := {
+	"truppen": {   # 20.11. (Nachtrag): Truppenturm (Irrtürmer)
+		"nachschub": {"name": "Schneller Nachschub", "nachschub": 2.0, "text": "Werkschutz kommt doppelt so schnell nach.",
+			"stark": "lange Gefechte, viele Verluste", "schwach": "nicht stärker, solange keiner fällt"},
+		"panzer": {"name": "Schwere Rüstung", "leben_mal": 1.6, "text": "Werkschutz hat 60 % mehr Leben.",
+			"stark": "Engstellen, Nahkämpfer", "schwach": "kommt nicht schneller nach"},
+	},
 	"geschuetz": {
 		"doppelschuss": {"name": "Doppelschuss", "ziele": 2, "text": "Trifft zwei Gegner zugleich.",
 			"stark": "gegen Rudel", "schwach": "nicht stärker gegen einzelne zähe Gegner"},
@@ -492,22 +506,46 @@ const ANFUEHRER_STANDARD := {
 	"truppen_fest": 0,             # 20.11.: jede Fabrik hält genau so viele Truppen, auch spezialisiert und im Gegenangriff (0 = wie gewohnt)
 	"fabrik_max_stufe": 3,         # 20.11.: höchste Fabrikstufe (4 = Elite, siehe ELITE)
 	"auftraege": false,            # 20.11.: Pauls Aufträge (scripts/auftraege.gd)
+	"mg_stellung": false,          # 20.11. (Nachtrag): Stellungen sind MG-Stellungen (MG_STELLUNG)
+	"truppenturm": false,          # 20.11. (Nachtrag): Formturm „Truppenturm“ auf geraden Wällen (TURMARTEN.truppen)
 }
 ## 20.11. (Paul): Perks der drei neuen Anführer. Brakk bleibt leer = alles wie bisher.
 const ANFUEHRER_WERTE := {
 	"brakk": {},
 	"irrtuermer": {"figur": "", "max_fabriken": 3, "turm_max_stufe": 4, "preis_turm_stufe": 0.75, "stuetze_legt_still": false,
-		"startpaket_waelle": 12, "preis_fabrik_stufe": 1.2},
-	"sonde7": {"figur": "", "preis_fabrik": 0.5, "truppen_fest": 1, "preis_fabrik_stufe": 0.75, "fabrik_max_stufe": 4,
+		"startpaket_waelle": 12, "preis_fabrik_stufe": 1.2, "truppenturm": true},
+	"sonde7": {"figur": "", "preis_fabrik": 0.5, "truppen_fest": 1, "preis_fabrik_stufe": 0.75, "fabrik_max_stufe": 4, "mg_stellung": true,
 		"turm_max_stufe": 2, "gesperrt": ["generator"]},
 	"paul": {"figur": "", "zins_stufen": 10, "praemie_faktor": 1.5, "erstattung": 1.0, "start_leben": -5, "preis_wall": 1.5,
 		"auftraege": true},
 }
 ## 20.11.: Stufe 4 (nur mit passendem Anführer). Preise vor dem Faktor des Anführers.
-const KOSTEN_STUFE_4: int = 600          # Fabrik Stufe 4: Elite-Truppe (Sonde 7)
-const KOSTEN_TURM_STUFE_4: int = 450     # Turm Stufe 4: großes Wertepaket (Irrtürmer)
-const ELITE := {"leben": 2.0, "schaden": 2.0, "groesse": 1.3, "farbe": Color(1.0, 0.86, 0.45)}   # Elite-Truppe: doppelt so stark, größer, golden
-const TURM_STUFE_4 := {"schaden": 1.5, "reichweite": 1.0, "leben": 2.0}   # ×Schaden, +Reichweite, ×Leben gegen Drohnen
+const KOSTEN_STUFE_4: int = 1065         # Fabrik Stufe 4: Elite-Truppe (Sonde 7) – 20.11. (Paul, Nachtrag): × 0,75 = 800 (vorher 600)
+const KOSTEN_TURM_STUFE_4: int = 800     # Turm Stufe 4 (Irrtürmer) – 20.11. (Paul, Nachtrag): × 0,75 = 600 (vorher 450)
+const ELITE := {"leben": 1.5, "schaden": 1.4, "groesse": 1.3, "farbe": Color(1.0, 0.86, 0.45)}   # Elite-Truppe: größer, golden – 20.11. (Paul, Nachtrag): +50 % Leben, +40 % Schaden (vorher ×2 / ×2)
+const TURM_STUFE_4 := {"schaden": 1.2, "reichweite": 0.5, "leben": 2.0}   # ×Schaden, +Reichweite, ×Leben gegen Drohnen – 20.11. (Paul, Nachtrag): +20 %, +0,5 (vorher ×1,5, +1); dazu beide Stufe-3-Fähigkeiten
+
+
+## 20.11. (Paul, Nachtrag): MG-Stellung (Sonde 7, Normalmodus) – jede Stellung ist ein MG-Nest: die Truppe darin schießt
+## schneller und etwas weiter. Sonst wie eine normale Stellung (die Truppe darf sie verlassen). Eine Stufe.
+const MG_STELLUNG := {"takt": 1.5, "reichweite": 0.5}   # Schussrate ×, Reichweite + (nur in der Stellung)
+
+
+static func mg_stellung() -> bool:
+	return bool(af("mg_stellung"))
+
+
+static func truppenturm() -> bool:
+	return bool(af("truppenturm"))
+
+
+## 20.11. (Nachtrag): Texte zu Stufe 4 aus den Werten (Fabrikmenü, Meldungen, Anführer-Perks).
+static func turm4_text() -> String:
+	return "+%d %% Schaden, +%s Reichweite, beide Stufe-3-Fähigkeiten" % [roundi((float(TURM_STUFE_4["schaden"]) - 1.0) * 100.0), str(TURM_STUFE_4["reichweite"]).replace(".", ",")]
+
+
+static func elite_text() -> String:
+	return "+%d %% Leben, +%d %% Schaden" % [roundi((float(ELITE["leben"]) - 1.0) * 100.0), roundi((float(ELITE["schaden"]) - 1.0) * 100.0)]
 
 
 ## Anführer festlegen; unbekannt oder leer (alte Dateien) = Brakk.
@@ -624,19 +662,22 @@ static func figur() -> String:
 ##   tasten: Taste -> Aktion. Tasten: links, rechts (Maus), Q, E, R, V, X, C, shift, leertaste. Die Steuerung liest
 ##           ego_modus.gd einmal; je Anführer zählt nur diese Belegung (Brakk: genau wie bisher).
 ##   leben, tempo: Faktor auf Brakks Leben (Werte.KOMMANDANT) bzw. Lauftempo in der Ego-Sicht.
-##   frei: Brakks Bewegungsfähigkeiten, die dieser Anführer auch hat (Brakk selbst: Stufen aus BrakkFortschritt.AB).
+##   ab: 20.11. (Nachtrag) ab welcher Heldenstufe eine Aktion geht (nicht genannt = von Anfang an; Brakk: BrakkFortschritt.AB).
+##       Grundangriff ab Stufe 1, [R] zuletzt. Brakks Bewegungen, die ein Anführer nicht in der Belegung hat, fehlen ihm.
 ##   kit: drei Zeilen für Auswahlbild und Übersicht.
 ## Alle Zahlen sind Startwerte (Paul spielt es).
 const ANFUEHRER_EGO := {
-	"brakk": {"leben": 1.0, "tempo": 1.0, "frei": [],
+	"brakk": {"leben": 1.0, "tempo": 1.0, "ab": {},
 		"tasten": {"links": "pistolen", "rechts": "lanze", "Q": "anker", "E": "treppe", "R": "ulti", "V": "zeitlupe", "X": "saeule",
 			"C": "feld", "shift": "tumble", "leertaste": "sprung"},
 		"kit": ["Zwei Pistolen, Ladestrahl, Lichtsäule", "Lichttreppe, Anker, Rolle, Doppelsprung", "Ring-Signatur: Zeitlupe je Ring"]},
-	"irrtuermer": {"leben": 0.9, "tempo": 1.0, "frei": ["tumble"],
+	"irrtuermer": {"leben": 0.9, "tempo": 1.0,
+		"ab": {"tumble": 2, "hierher": 2, "hack": 3, "ueberladen": 4, "ringtausch": 6, "aufsatz": 7},
 		"tasten": {"links": "prellbolzen", "rechts": "hack", "Q": "ueberladen", "E": "treppe", "R": "aufsatz", "V": "ringtausch", "X": "hierher",
 			"C": "feld", "shift": "tumble", "leertaste": "sprung"},
-		"kit": ["Prellbolzen und Hack auf Türme", "Begleitturm PliPlop rollt mit", "Ring-Signatur: zwei Ringslots + Verbund"]},
-	"sonde7": {"leben": 0.8, "tempo": 1.05, "frei": [],
+		"kit": ["Prellbolzen und Hack auf Türme", "Begleitturm PliPlop rollt mit", "Ring-Signatur: zwei Ringsätze (je 4) + Verbund"]},
+	"sonde7": {"leben": 0.8, "tempo": 1.05,
+		"ab": {"schub": 2, "doppellaser": 3, "teleport": 4, "schrot": 5, "sondengewehr": 6, "luftschlag": 7},
 		"tasten": {"links": "hand_links", "rechts": "hand_rechts", "Q": "teleport", "E": "doppellaser", "R": "luftschlag", "V": "schrot", "X": "sondengewehr",
 			"C": "feld", "shift": "schub", "leertaste": "schweben"},
 		"kit": ["Schwebt mit Düsen, Schub und Teleport", "Ruft vier Waffen mit Magazin", "Ring-Signatur: Hand und Erfassungstreffer"]},
@@ -658,8 +699,6 @@ const EGO_TASTEN_NAME := {"links": "Linksklick", "rechts": "Rechtsklick", "shift
 ## 20.11.: Irrtürmer – Mauern und Gefährte (scripts/ego_irrtuermer.gd, scripts/pliplop.gd). Felder in Feldern, Zeiten in
 ## Sekunden (Echtzeit). Schaden des Prellbolzens und des PliPlop wächst mit der Stufe wie Brakks (BrakkFortschritt.schaden_faktor).
 const IRRTUERMER := {
-	"slots": 2,                    # Ringslots: Hand und PliPlop
-	"kopie_anteil": 0.5,           # derselbe Ring ein zweites Mal (für den anderen Slot) kostet so viel vom Kaufpreis
 	"bolzen": {"schaden": 13.0, "takt": 0.42, "tempo": 15.0, "weite": 14.0, "abpraller": 2, "flaeche": 0.6,   # 20.11. (Paul): Schaden vorher 16 – Irrtürmer war in den Bot-Partien am stärksten
 		"stoss_naehe": 1.0, "stoss_radius": 1.6, "stoss": 1.2},   # platzt er so nah am PliPlop, stößt er Nahkämpfer im Umkreis so weit weg
 	"hack": {"weite": 4.0, "tempo": 0.6, "mal": 1.0},   # Reichweite, Lauftempo beim Halten, Faktor auf den Schaden des gehackten Schusses
@@ -696,9 +735,12 @@ const SONDE7 := {
 	"schweben": {"akku": 5.0, "laden": 4.0, "steigen": 2.6, "sinken": 1.4, "hoehe": 3.2, "doppel": 0.3},   # laden: leer → voll am Boden
 	"schub": {"felder": 3.0, "dauer": 0.25, "akku": 1.0, "abkling": 1.2},
 	"teleport": {"weite": 6.0, "abkling": 8.0},
-	"hand": {"laser_schaden": 5.0, "laser_takt": 0.1, "hitze_sek": 3.0, "pause": 1.5, "weite": 12.0,
+	# 20.11. (Paul, Nachtrag): Hand-Laser und Doppel-Lasergewehr – so viele Sekunden Dauerfeuer bis zur Überhitzung (ab Stufe
+	# „spaet_ab“ länger), dann „pause“ gesperrt; ohne Feuern kühlt es „kuehl“-mal so schnell ab, wie es sich aufheizt.
+	"hitze": {"sek": 6.0, "sek_spaet": 8.0, "spaet_ab": 5, "pause": 1.5, "kuehl": 2.0},
+	"hand": {"laser_schaden": 5.0, "laser_takt": 0.1, "weite": 12.0,
 		"buendel_schaden": 34.0, "buendel_takt": 0.9, "buendel_tempo": 7.0, "buendel_flaeche": 0.7},
-	"doppellaser": {"magazin": 40, "abkling": 10.0, "schaden": 9.0, "takt": 0.12, "hitze_sek": 3.0, "weite": 12.0,
+	"doppellaser": {"magazin": 40, "abkling": 10.0, "schaden": 9.0, "takt": 0.12, "weite": 12.0,
 		"erfassen": [4, 6, 8], "erfassen_ab": [1, 4, 7], "erfassen_sek": 6.0, "erfassung_mal": 1.4},   # erfassen: Ziele ab Stufe erfassen_ab
 	"schrot": {"magazin": 8, "abkling": 12.0, "schaden": 9.0, "kugeln": 8, "streuung": 16.0, "weite": 4.5, "takt": 0.7, "nachladen": 2.0},
 	"sondengewehr": {"magazin": 4, "abkling": 12.0, "laden": 0.8, "schaden": 80.0, "weite": 6.0, "blick_sek": 6.0, "blick_bonus": 1.25, "blick_weite": 14.0},
@@ -707,6 +749,122 @@ const SONDE7 := {
 ## Welche Taste ruft welche Waffe (Reihenfolge = Anzeige); Belegung steht in ANFUEHRER_EGO.
 const SONDE7_WAFFEN: Array[String] = ["doppellaser", "schrot", "sondengewehr", "luftschlag"]
 const SONDE7_WAFFEN_NAME := {"": "Hand", "doppellaser": "Doppel-Lasergewehr", "schrot": "Schrotflinte", "sondengewehr": "Sondengewehr", "luftschlag": "Luftschlag"}
+
+
+## 20.11. (Paul, Nachtrag): Ring-Wirkung je Fähigkeit („Spell“) – was der Ring an der Fähigkeit ändert. Es zählt der
+## aktive Ring beim Auslösen (Irrtürmer: aktiver Ring des Helden, Sonde 7: aktiver Ring). Höchstens eine Wirkung je Ring
+## und Spell; fehlt ein Ring, hat er an diesem Spell keine Wirkung (lieber nichts als etwas Erzwungenes). Keine Dopplung
+## mit dem Grundschuss: beim Irrtürmer wirken Markierung, Bremse, Brand und Sprung schon auf jeden Hack-Treffer (über
+## den Held-Satz) – dort steht deshalb nichts; die Waffen der Sonde 7 tragen sonst keinen Ring-Effekt.
+## art: Schlüssel, den der Code abfragt (EgoKit.spell_w); wert: Stärke auf Ringstufe 1, je Stufe darüber +RING_SPELL_JE_STUFE
+## (Einheiten im Text, {w} = Wert auf der aktuellen Stufe); vorbild: woran es sich orientiert. Auch die Übersicht [I]
+## liest diese Tabelle.
+const RING_SPELL_JE_STUFE := 0.25
+const RING_SPELLS := {
+	"irrtuermer": {
+		"hack": {
+			"laser": {"art": "turm_takt", "wert": 30.0, "text": "Der gehackte Turm glüht: er selbst feuert {w} % schneller, solange du hackst.", "vorbild": "Deep Rock Galactic (Overclock)"},
+			"feuerteam": {"art": "echo", "wert": 40.0, "text": "Echo: jeder gehackte Schuss wiederholt sich kurz danach mit {w} % Schaden.", "vorbild": "Path of Exile (Spell Echo)"},
+			"minigun": {"art": "anlauf", "wert": 50.0, "text": "Anlauf: je länger du hältst, desto mehr Schaden – bis +{w} % nach 4 s.", "vorbild": "Deep Rock Galactic (Minigun)"},
+			"bollwerk": {"art": "schutz", "wert": 25.0, "text": "Solange du hackst, nimmst du {w} % weniger Schaden.", "vorbild": "Overwatch (Orisa: Festung)"},
+			"plasmagel": {"art": "gelstrahl", "wert": 1.5, "text": "Der Hack-Strahl wird zäh: Gegner, die ihn kreuzen, sind {w} s gebremst.", "vorbild": "Overwatch (Symmetra-Strahl)"},
+			"durchschuss": {"art": "durch", "wert": 50.0, "text": "Gehackte Schüsse treffen auch den nächsten Gegner dahinter ({w} % Schaden).", "vorbild": "Path of Exile (Pierce)"},
+			"markierung": {"art": "zielsuche", "wert": 0.0, "text": "Zielsuche: gehackte Schüsse gehen von selbst an den stärksten Gegner in Reichweite.", "vorbild": "Risk of Rain 2 (ATG-Rakete)"},
+		},
+		"ueberladen": {
+			"laser": {"art": "hitzestoss", "wert": 200.0, "text": "Zum Schluss stößt der Turm eine Hitzewelle aus: {w} % Bolzenschaden im Umkreis von 1,5 Feldern.", "vorbild": "Hades (Gabe am Ende einer Wirkung)"},
+			"feuerteam": {"art": "abkling", "wert": 30.0, "text": "Abklingzeit {w} % kürzer.", "vorbild": "Overwatch-Perks"},
+			"minigun": {"art": "dauer", "wert": 50.0, "text": "Hält {w} % länger.", "vorbild": "Warframe (Dauer-Mod)"},
+			"bollwerk": {"art": "truppenschild", "wert": 20.0, "text": "Truppen im Umkreis von 2 Feldern bekommen einen Schild ({w} % ihres Lebens, 8 s).", "vorbild": "Overwatch (Brigitte)"},
+			"plasmagel": {"art": "bremswelle", "wert": 2.0, "text": "Beim Auslösen bremst eine Gelwelle alle Gegner im Umkreis von 2 Feldern {w} s.", "vorbild": "Hades (Demeter)"},
+			"markierung": {"art": "markwelle", "wert": 4.0, "text": "Beim Auslösen werden alle Gegner im Umkreis von 2,5 Feldern {w} s markiert.", "vorbild": "Path of Exile (Mark-Fluch)"},
+			"abpraller": {"art": "zweiter_turm", "wert": 50.0, "text": "Springt auf den nächsten Turm in 3 Feldern über ({w} % der Dauer).", "vorbild": "Risk of Rain 2 (Ukulele)"},
+		},
+		"hierher": {
+			"abpraller": {"art": "springen", "wert": 0.0, "text": "PliPlop springt sofort zum Punkt, statt hinzurollen.", "vorbild": "Overwatch (Winston: Sprung)"},
+			"bollwerk": {"art": "pp_schutz", "wert": 30.0, "text": "Am Haltepunkt gräbt sich PliPlop ein: {w} % weniger Schaden.", "vorbild": "Overwatch (Bastion, Torbjörn)"},
+			"feuerteam": {"art": "pp_takt", "wert": 20.0, "text": "Am Haltepunkt feuert PliPlop {w} % schneller.", "vorbild": "Overwatch (Bastion: Geschützmodus)"},
+			"markierung": {"art": "pp_weite", "wert": 1.0, "text": "Am Haltepunkt reicht PliPlop {w} Feld weiter.", "vorbild": "Team Fortress 2 (Sentry auf der Anhöhe)"},
+			"plasmagel": {"art": "ankunft_bremse", "wert": 2.5, "text": "Bei der Ankunft platzt eine Gelpfütze: Gegner im Umkreis von 1,5 Feldern {w} s gebremst.", "vorbild": "Hades (Dionysos)"},
+			"brandfeld": {"art": "ankunft_brand", "wert": 1.0, "text": "Bei der Ankunft brennt der Boden ({w} Feld Umkreis).", "vorbild": "Binding of Isaac (Brandspur)"},
+		},
+		"ringtausch": {
+			"feuerteam": {"art": "tausch_takt", "wert": 25.0, "text": "Nach dem Tausch feuern Irrtürmer und PliPlop 3 s {w} % schneller.", "vorbild": "Warframe (Tactical Reload)"},
+			"bollwerk": {"art": "pp_heilen", "wert": 15.0, "text": "Der Tausch heilt PliPlop um {w} % seines Lebens.", "vorbild": "Hades (Gabe beim Wechsel)"},
+			"plasmagel": {"art": "tausch_bremse", "wert": 1.5, "text": "Der Tausch bremst Gegner um Irrtürmer und PliPlop (1,5 Felder) {w} s.", "vorbild": "Hades (Demeter)"},
+		},
+		"aufsatz": {
+			"minigun": {"art": "dauer", "wert": 3.0, "text": "Hält {w} s länger.", "vorbild": "Warframe (Dauer-Mod)"},
+			"bollwerk": {"art": "schutz", "wert": 30.0, "text": "Während des Aufsatzes {w} % weniger Schaden.", "vorbild": "Overwatch (Bastion)"},
+			"feuerteam": {"art": "aufsatz_takt", "wert": 25.0, "text": "Der Aufsatz feuert {w} % schneller.", "vorbild": "Deep Rock Galactic (Overclock)"},
+			"laser": {"art": "hitzestoss", "wert": 300.0, "text": "Zum Schluss Hitzestoß um dich: {w} % Bolzenschaden im Umkreis von 2 Feldern.", "vorbild": "Hades (Gabe am Ende einer Wirkung)"},
+			"durchschuss": {"art": "durch", "wert": 50.0, "text": "Aufsatz-Schüsse treffen auch den Gegner dahinter ({w} % Schaden).", "vorbild": "Risk of Rain 2 (Durchschlag)"},
+		},
+	},
+	"sonde7": {
+		"schub": {
+			"bollwerk": {"art": "schutz_nach", "wert": 50.0, "text": "Nach dem Schub 1 s {w} % weniger Schaden.", "vorbild": "Hades (Dash-Gabe)"},
+			"plasmagel": {"art": "spur_bremse", "wert": 2.0, "text": "Gelspur: Gegner auf dem Weg sind {w} s gebremst.", "vorbild": "Hades (Dionysos-Dash)"},
+			"brandfeld": {"art": "spur_brand", "wert": 0.8, "text": "Start- und Zielpunkt brennen ({w} Feld Umkreis).", "vorbild": "Binding of Isaac (Brandspur)"},
+			"feuerteam": {"art": "abkling", "wert": 35.0, "text": "Abklingzeit {w} % kürzer.", "vorbild": "Overwatch-Perks"},
+		},
+		"teleport": {
+			"abpraller": {"art": "blitz", "wert": 3.0, "text": "Am Ziel springt ein Blitz auf bis zu {w} Gegner (halber Bündelschaden).", "vorbild": "Risk of Rain 2 (Ukulele)"},
+			"plasmagel": {"art": "bremse_ziel", "wert": 2.0, "text": "Die Ankunft bremst Gegner im Umkreis von 1,5 Feldern {w} s.", "vorbild": "Hades (Demeter)"},
+			"laser": {"art": "hitzestoss", "wert": 150.0, "text": "Der Abflugort explodiert: {w} % Bündelschaden im Umkreis von 1,5 Feldern.", "vorbild": "Overwatch (Tracer: Rückblende-Bombe)"},
+			"bollwerk": {"art": "schutz_nach", "wert": 40.0, "text": "Nach dem Teleport 2 s {w} % weniger Schaden.", "vorbild": "Hades (Dash-Gabe)"},
+			"feuerteam": {"art": "abkling", "wert": 30.0, "text": "Abklingzeit {w} % kürzer.", "vorbild": "Overwatch-Perks"},
+			"markierung": {"art": "erfassen", "wert": 3.0, "text": "Bis zu {w} Gegner am Ziel werden erfasst (für das Doppel-Lasergewehr).", "vorbild": "Overwatch (Soldier: Taktisches Visier)"},
+		},
+		"doppellaser": {
+			"markierung": {"art": "erfassen_plus", "wert": 2.0, "text": "Erfasst {w} Ziele mehr.", "vorbild": "Overwatch (Soldier: Taktisches Visier)"},
+			"feuerteam": {"art": "magazin", "wert": 25.0, "text": "Magazin {w} % größer.", "vorbild": "Warframe (Magazin-Mod)"},
+			"durchschuss": {"art": "durch", "wert": 50.0, "text": "Schüsse treffen auch den Gegner dahinter ({w} % Schaden).", "vorbild": "Binding of Isaac (Kugeln durchdringen)"},
+			"minigun": {"art": "anlauf", "wert": 40.0, "text": "Anlauf: Dauerfeuer wird schneller, bis +{w} % nach 3 s.", "vorbild": "Deep Rock Galactic (Minigun)"},
+			"plasmagel": {"art": "bremse_treffer", "wert": 0.5, "text": "Treffer bremsen {w} s.", "vorbild": "Hades (Demeter)"},
+		},
+		"schrot": {
+			"markierung": {"art": "streuung", "wert": 40.0, "text": "Engere Streuung: {w} % weniger.", "vorbild": "Deep Rock Galactic (Overclock „Compact Shells“)"},
+			"feuerteam": {"art": "magazin", "wert": 40.0, "text": "Magazin {w} % größer.", "vorbild": "Warframe (Magazin-Mod)"},
+			"plasmagel": {"art": "bremse_treffer", "wert": 1.0, "text": "Treffer bremsen {w} s.", "vorbild": "Hades (Demeter)"},
+			"brandfeld": {"art": "treffer_brand", "wert": 0.8, "text": "Jede Salve setzt den Boden beim ersten Treffer in Brand ({w} Feld Umkreis).", "vorbild": "Binding of Isaac (Brandspur)"},
+			"laser": {"art": "glut", "wert": 30.0, "text": "Glühende Schrote: Getroffene brennen nach – {w} % des Schadens über 3 s.", "vorbild": "Binding of Isaac (Fire Mind)"},
+			"durchschuss": {"art": "durch", "wert": 50.0, "text": "Kugeln treffen auch den Gegner dahinter ({w} % Schaden).", "vorbild": "Risk of Rain 2 (Durchschlag)"},
+		},
+		"sondengewehr": {
+			"markierung": {"art": "blick_dauer", "wert": 3.0, "text": "Der Sondenblick hält {w} s länger.", "vorbild": "Overwatch (Widowmaker: Infrarotsicht)"},
+			"feuerteam": {"art": "laden", "wert": 25.0, "text": "Lädt {w} % schneller.", "vorbild": "Deep Rock Galactic (Overclock)"},
+			"laser": {"art": "glut", "wert": 40.0, "text": "Getroffene glühen nach: {w} % des Schadens über 3 s.", "vorbild": "Binding of Isaac (Fire Mind)"},
+			"plasmagel": {"art": "bremse_treffer", "wert": 2.0, "text": "Treffer bremsen {w} s.", "vorbild": "Hades (Demeter)"},
+			"abpraller": {"art": "blitz", "wert": 2.0, "text": "Vom letzten Getroffenen springt ein Blitz auf {w} Gegner (30 % Schaden).", "vorbild": "Risk of Rain 2 (Ukulele)"},
+		},
+		"luftschlag": {
+			"brandfeld": {"art": "treffer_brand", "wert": 1.0, "text": "Jede Granate hinterlässt ein Brandfeld ({w} Feld Umkreis).", "vorbild": "Worms (Napalm)"},
+			"plasmagel": {"art": "bremse_treffer", "wert": 1.5, "text": "Einschläge bremsen {w} s.", "vorbild": "Hades (Demeter)"},
+			"feuerteam": {"art": "magazin", "wert": 40.0, "text": "Magazin {w} % größer.", "vorbild": "Warframe (Magazin-Mod)"},
+			"minigun": {"art": "dauer", "wert": 3.0, "text": "Hält {w} s länger.", "vorbild": "Warframe (Dauer-Mod)"},
+			"bollwerk": {"art": "schutz", "wert": 30.0, "text": "Während des Luftschlags {w} % weniger Schaden.", "vorbild": "Overwatch (Pharah: Schwebeflug)"},
+			"abpraller": {"art": "nachschlag", "wert": 50.0, "text": "Jede Granate springt einmal weiter: zweiter Einschlag 1 Feld dahinter mit {w} % Schaden.", "vorbild": "Worms (Clusterbombe)"},
+		},
+	},
+}
+
+
+## Ring-Wirkung an einem Spell ({} = keine). `stufe` = Ringstufe 1–3.
+static func ring_spell(af: String, spell: String, ring: String) -> Dictionary:
+	return ((RING_SPELLS.get(af, {}) as Dictionary).get(spell, {}) as Dictionary).get(ring, {})
+
+
+## Wert auf Ringstufe `stufe` (je Stufe über 1 +RING_SPELL_JE_STUFE).
+static func ring_spell_wert(e: Dictionary, stufe: int) -> float:
+	return float(e.get("wert", 0.0)) * (1.0 + RING_SPELL_JE_STUFE * float(clampi(stufe, 1, 3) - 1))
+
+
+## Text mit eingesetztem Wert („{w}“).
+static func ring_spell_text(e: Dictionary, stufe: int) -> String:
+	var w := ring_spell_wert(e, stufe)
+	var s := ("%d" % roundi(w)) if absf(w - roundf(w)) < 0.05 else ("%.1f" % w).replace(".", ",")
+	return str(e.get("text", "")).replace("{w}", s)
 
 
 ## Anführer, die es im Brakk-Mode gibt (Brakk, Irrtürmer, Sonde 7).
@@ -1475,12 +1633,34 @@ const BRAKK_DURCHBRUCH_STARK := 1.5    # ... und macht so lange so viel mehr Sch
 const BRAKK_DURCHBRUCH_DAUER := 4.0
 const BRAKK_SPRUNG_SEK := 0.8          # Hunde: so lange aufgehalten, dann springen sie über die Truppe hinweg
 const BRAKK_SPRUNG_ABKLING := 4.0
-const BRAKK_ELITE_AB := 3              # ab dieser Runde kommt je Runde (Runde 20: je Durchgang) ein Elite-Trupp
+## 20.11. (Paul): Elite-Trupps in genau diesen Runden (vorher „ab Runde 3 jede Runde“ – kam auch in Runde 4). Ein Trupp
+## der Welle (nicht der erste) wird zur Elite, in Runde 20 nur im ersten Durchgang.
+const BRAKK_ELITE_RUNDEN: Array[int] = [8, 13, 19]
 const BRAKK_ELITE_LEBEN := 2.5
 const BRAKK_ELITE_SCHADEN := 1.5
 const BRAKK_ELITE_FLAECHE := 0.9       # Felder: Elite-Treffer streifen Truppen in diesem Umkreis ...
 const BRAKK_ELITE_FLAECHE_ANTEIL := 0.4  # ... mit so viel vom Schaden
 const BRAKK_ELITE_PRAEMIE := 2.0
+## 20.11.: Schritt 6c – Ausweichen (Classic und Rogue). Schüsse auf Brakk sind echte Geschosse (brakk_geschosse.gd); die
+## 2D-Logik für alle anderen Figuren bleibt. Tempo in Feldern je Sekunde Echtzeit (Brakk läuft 3), Radien in Feldern.
+const BRAKK_AUSWEICH_SCHADEN := {   # Schaden je Treffer auf Brakk – die Trefferquote sinkt, darum mehr (Paul 20.11.)
+	"technogunner": 1.5, "sphaere": 1.5, "plasmawerfer": 2.0, "scharfschuetze": 1.5,
+	"geschuetz": 1.5, "lanze": 1.5,
+}   # alles andere (Batterie, Nahkampf, Schleudersteine): ×1
+const BRAKK_GESCHOSS := {
+	"laser": {"tempo": 14.0, "radius": 0.06, "dicke": 9.0},     # Technogunner
+	"sph": {"tempo": 11.0, "radius": 0.08, "dicke": 11.0},      # Battlesphäre (Classic)
+	"plasma": {"tempo": 4.5, "radius": 0.22, "dicke": 30.0, "einschlag": 0.6, "brand_sek": 2.0, "brand_anteil": 0.2},
+}
+const BRAKK_RUMPF := 0.18              # Brakks Trefferbereich (Radius in Feldern) – kleiner als sein Bild
+const BRAKK_STREUUNG := 0.27           # seitliche Streuung des Zielpunkts (Felder, gleichverteilt ±) – stehend etwa 90 % Treffer
+const BRAKK_VORHALT := 0.5             # Anteil, um den fliegende Geschosse Brakks Laufweg vorhalten (0 = auf die Stelle von jetzt); 20.11. (Paul): 50 %, sonst weicht Seitwärtslaufen allem aus
+const BRAKK_SCHARF_ZIEL_SEK := 0.6     # Scharfschütze: so lange steht der rote Zielstrahl, dann Hitscan entlang der Linie
+const BRAKK_SCHARF_BREITE := 0.12
+const BRAKK_TURM_GLUEHEN := 0.3        # Geschütz- und Lanzenturm: Aufglühen, dann Schuss auf Brakks Position von davor
+const BRAKK_TURM_BREITE := 0.1         # Geschützturm: halbe Breite des Schusses
+const BRAKK_TUMBLE_DURCHLASS := 0.25   # Tumble: so lange (s) gehen Geschosse durch ihn hindurch (und er nimmt keinen Schaden)
+const BRAKK_SPRUNG_BODEN := 0.45       # Sprung: Füße höher als das (Felder) – Bodengeschosse (Plasmaball, Brandfeld) verfehlen
 
 ## Battlesphäre schießt sich ein (19.11., Paul): Jeder Treffer auf ein Feld lässt Sphären, die auf dieses Feld schießen,
 ## schneller feuern – bis zu EINSCHUSS_MAX mehr Schüsse je Sekunde (also bis +50 % Schaden). Ohne Treffer kühlt das Feld ab.

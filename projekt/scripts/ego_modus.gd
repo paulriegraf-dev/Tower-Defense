@@ -176,6 +176,10 @@ func starten(p_spiel: Node) -> void:
 	_strahl_mat.emission_enabled = true
 	_strahl_mat.emission = SCHUSS
 	_strahl_mat.emission_energy_multiplier = 2.0
+	if spiel.brakk_modus and spiel.brakk_geschosse == null:
+		spiel.brakk_geschosse = BrakkGeschosse.new()   # 20.11.: Schritt 6c – Ausweichen
+		spiel.brakk_geschosse.einrichten(spiel)
+		spiel.add_child(spiel.brakk_geschosse)
 	if spiel.brakk_modus and brakk.fortschritt == null:
 		brakk.fortschritt = BrakkFortschritt.new(brakk)   # 18.11.: Stufen und Ringe für diese Partie
 		spiel.freie_waelle += BrakkFortschritt.FREIE_WAELLE
@@ -204,7 +208,7 @@ func starten(p_spiel: Node) -> void:
 		spiel.melde("Brakk-Mode: links laufen · rechts wischen zum Zielen · Fadenkreuz auf dem Gegner: Brakk schießt · Fähigkeit tippen oder halten und ziehen", 10.0)
 		return
 	if kit != null:
-		spiel.melde("Brakk-Mode mit %s: WASD + Maus · [F] ausbauen, an der Basis Ringe · [I] Übersicht → Anführer · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
+		spiel.melde("Brakk-Mode mit %s: WASD + Maus · [F] ausbauen, an der Basis Ringe · [I] Übersicht → Brakk-Mode · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
 		return
 	spiel.melde("Brakk-Mode: WASD + Maus · Klick schießt · Leertaste springt · [E] Lichttreppe · [F] ausbauen, an der Basis Ringe · Enter: Welle" + ("" if spiel.brakk_modus else " · [G] zurück"), 10.0)
 
@@ -269,6 +273,9 @@ func beenden() -> void:
 		_ebene.queue_free()
 	if is_instance_valid(spiel):
 		spiel.ego = null
+		if spiel.brakk_geschosse != null:
+			spiel.brakk_geschosse.queue_free()   # 20.11.: Schritt 6c
+			spiel.brakk_geschosse = null
 	queue_free()
 
 
@@ -470,6 +477,10 @@ func _aktion(taste: String, gedrueckt: bool) -> bool:
 	var was := str((Werte.ANFUEHRER_EGO[anfuehrer()]["tasten"] as Dictionary).get(taste, ""))
 	if was == "":
 		return false
+	if kit != null and brakk.fortschritt != null and not brakk.fortschritt.frei(was):
+		if gedrueckt:
+			_darf(was)   # 20.11. (Nachtrag): gesperrt bis zur Heldenstufe
+		return true
 	if kit != null and kit.aktion(was, gedrueckt):
 		return true
 	return _brakk_aktion(was, gedrueckt)
@@ -1556,10 +1567,10 @@ func _male_bild() -> void:
 		touch.male(_bild)   # 18.11.: Handy – Stick und Knöpfe statt Leisten
 		return
 	_rand_an()
+	_faehigkeiten(g)   # 18.11.: Symbole mit Abklingzeit (20.11., Nachtrag: für jeden Anführer dieselbe Leiste)
 	if kit != null:
-		kit.male_leisten(g)   # 20.11.: Fähigkeiten und Ringe des Anführers
+		kit.male_leisten(g)   # 20.11.: Ringe und Zustand des Anführers
 	else:
-		_faehigkeiten(g)   # 18.11.: Symbole mit Abklingzeit
 		_ringleiste(g)   # 18.11.: getragene Ringe
 	_rand_aus()
 
@@ -1961,7 +1972,7 @@ func _brakk_leiste(g: Vector2) -> void:
 		var zeile := "+%d %% Schaden · +%d Leben" % [roundi(BrakkFortschritt.SCHADEN_JE_STUFE * 100.0), roundi(BrakkFortschritt.LEBEN_JE_STUFE)]
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 34), zeile, 18, Color(Stil.TEXT, a))
 		for i in f.neu_frei.size():
-			Stil.schreibe_mittig(_bild, m + Vector2(0, 58 + 22 * i), _t("Neu: " + str(BrakkFortschritt.NAMEN[f.neu_frei[i]])), 20, Color(LICHT, a))
+			Stil.schreibe_mittig(_bild, m + Vector2(0, 58 + 22 * i), _t("Neu: " + BrakkFortschritt.faehigkeit_name(f.anfuehrer, f.neu_frei[i])), 20, Color(LICHT, a))
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Tumble und Ladestrahl (18.11.)
@@ -1971,7 +1982,7 @@ func _darf(was: String) -> bool:
 	var f := brakk.fortschritt
 	if f == null or f.frei(was):
 		return true
-	spiel.melde(_t("%s gibt es ab Stufe %d." % [BrakkFortschritt.NAMEN[was], int(BrakkFortschritt.AB[was])]), 2.5)
+	spiel.melde(_t("%s gibt es ab Stufe %d." % [BrakkFortschritt.faehigkeit_name(f.anfuehrer, was), int(BrakkFortschritt.ab_tabelle(f.anfuehrer)[was])]), 2.5)
 	return false
 
 
@@ -2001,7 +2012,7 @@ func _tumble_start() -> void:
 	_tumble = 0.0
 	_zaehle("rollen")   # 19.11.: Sieg-Übersicht
 	_tumble_rest = TUMBLE_ABKLING
-	brakk.unverwundbar = TUMBLE_DAUER + 0.1
+	brakk.unverwundbar = Werte.BRAKK_TUMBLE_DURCHLASS   # 20.11.: Schritt 6c – 0,25 s (vorher 0,4), Geschosse gehen hindurch
 	_trauma = minf(1.0, _trauma + 0.15)
 	Ton.spiele(spiel, "hit-thud", -6.0)
 
@@ -2102,6 +2113,7 @@ func _lanze_feuer() -> void:
 # ------------------------------------------------------------------ Brakk-Mode: Fähigkeiten-Leiste (18.11.)
 
 ## Kleine Pixelsymbole (Platzhalter bis zu den PixelLab-Bildern): # voll, + dunkler.
+## 20.11. (Nachtrag): auch für Irrtürmer und Sonde 7 – gleiche Leiste, gleiche Anordnung wie bei Brakk.
 const GLYPHEN := {
 	"tumble": ["..##....", ".#..#.#.", "#....###", "#.....#.", ".#..#...", "..##....", "........"],
 	"anker": ["....###", ".....##", "....#.#", "...#...", "..#....", "##.....", "##....."],
@@ -2110,10 +2122,27 @@ const GLYPHEN := {
 	"zeitlupe": ["#######", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#.#.#.", "#######"],
 	"ulti": ["###.+++", "#.#.+.+", "###.+++", "...#...", "+++.###", "+.+.#.#", "+++.###"],
 	"treppe": [".....##", "....##.", "...##..", "..##...", ".##....", "##.....", "#######"],
+	"hack": [".#...#.", "..#.#..", "#######", "#.+.+.#", "#######", "..#.#..", ".#...#."],
+	"ueberladen": ["....##.", "...##..", "..##...", ".######", "...##..", "..##...", ".##...."],
+	"hierher": ["...#...", "...#...", "...#...", "#.###.#", ".#####.", "..###..", "+++#+++"],
+	"ringtausch": ["..#....", ".######", "..#....", ".......", "....#..", "######.", "....#.."],
+	"aufsatz": ["..###..", ".##+##.", "..###..", "...#...", "..###..", ".#####.", "#######"],
+	"hand_rechts": [".......", "..###..", ".#####.", ".##+##.", ".#####.", "..###..", "......."],
+	"schub": ["#..#...", ".#..#..", "..#..#.", "...#..#", "..#..#.", ".#..#..", "#..#..."],
+	"teleport": [".#.#.#.", "#.....#", "...#...", "#.###.#", "...#...", "#.....#", ".#.#.#."],
+	"doppellaser": ["##.....", "#######", "##.....", ".......", "##.....", "#######", "##....."],
+	"schrot": ["....#..", "...#..#", "##.#...", "####..#", "##.#...", "...#..#", "....#.."],
+	"sondengewehr": ["..###..", ".#...#.", "#..#..#", "#.###.#", "#..#..#", ".#...#.", "..###.."],
+	"luftschlag": ["#..#..#", "#..#..#", ".......", ".#..#..", ".#..#..", ".......", "#######"],
 }
+## Reihenfolge der Leiste (wie bei Brakk): Taste der Belegung und Beschriftung.
+const LEISTE_TASTEN: Array[String] = ["shift", "Q", "rechts", "R", "X", "V", "E"]
+const LEISTE_NAME := {"shift": "Shift", "rechts": "RMB"}
 
 
 func _glyphe(art: String, mitte: Vector2, px: float, farbe: Color) -> void:
+	if not GLYPHEN.has(art):
+		return
 	var b: Array = GLYPHEN[art]
 	var o := (mitte - Vector2((b[0] as String).length(), b.size()) * px / 2.0).round()
 	for y in b.size():
@@ -2124,34 +2153,52 @@ func _glyphe(art: String, mitte: Vector2, px: float, farbe: Color) -> void:
 
 
 ## Über der Lebensleiste: je Fähigkeit ein Kästchen mit Taste; Abklingzeit als dunkle Füllung, gesperrt grau mit Stufe.
+## 20.11. (Nachtrag): bei Irrtürmer und Sonde 7 liefert das Kit je Aktion [Rest 0..1, Text darüber, läuft gerade].
 func _faehigkeiten(g: Vector2) -> void:
 	var f := brakk.fortschritt
 	if f == null:
 		return
-	var liste := [
-		["tumble", "Shift", _tumble_rest / TUMBLE_ABKLING],
-		["anker", "Q", _anker_rest / ANKER_ABKLING],
-		["lanze", "RMB", _lanze_rest / LANZE_ABKLING],
-		["ulti", "R", _ulti_rest()],
-		["saeule", "X", _saeule_rest / SAEULE_ABKLING],
-		["zeitlupe", "V", _zeitlupe_rest / ZEITLUPE_ABKLING],
-		["treppe", "E", brakk.e_rest / maxf(1.0, float(brakk.daten["kletter_abklingzeit"]))],
-	]
+	var liste: Array = []
+	if kit == null:
+		liste = [
+			["tumble", "Shift", _tumble_rest / TUMBLE_ABKLING, "", false],
+			["anker", "Q", _anker_rest / ANKER_ABKLING, "", false],
+			["lanze", "RMB", _lanze_rest / LANZE_ABKLING, "", false],
+			["ulti", "R", _ulti_rest(), "", false],
+			["saeule", "X", _saeule_rest / SAEULE_ABKLING, "", false],
+			["zeitlupe", "V", _zeitlupe_rest / ZEITLUPE_ABKLING, "", false],
+			["treppe", "E", brakk.e_rest / maxf(1.0, float(brakk.daten["kletter_abklingzeit"])), "", false],
+		]
+	else:
+		var tasten: Dictionary = Werte.ANFUEHRER_EGO[anfuehrer()]["tasten"]
+		for t: String in LEISTE_TASTEN:
+			var was := str(tasten.get(t, ""))
+			if was == "":
+				continue
+			var info := kit.leiste_info(was) if was != "treppe" else [brakk.e_rest / maxf(1.0, float(brakk.daten["kletter_abklingzeit"])), "", false]
+			if was == "tumble":
+				info = [_tumble_rest / TUMBLE_ABKLING, "", false]
+			liste.append([was, str(LEISTE_NAME.get(t, t)), info[0], info[1], info[2]])
 	var s := 46.0
 	var abst := 10.0
 	var breite := liste.size() * s + (liste.size() - 1) * abst
 	var y := roundf(g.y * 0.86) - 34.0 - 16.0 - s
 	var x := roundf((g.x - breite) / 2.0)
+	var an_farbe := kit.leiste_farbe() if kit != null else LICHT
 	for i in liste.size():
 		var e: Array = liste[i]
 		var art: String = e[0]
 		var r := Rect2(x + i * (s + abst), y, s, s)
 		var offen := art == "treppe" or f.frei(art)
 		var rest := clampf(float(e[2]), 0.0, 1.0)
+		var an := bool(e[4]) and offen
 		_bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
 		var farbe := LICHT if offen and rest <= 0.0 else (Stil.TEXT_BLASS if offen else Color(0.35, 0.37, 0.42))
 		if art == "ulti" and offen and rest <= 0.0:
 			farbe = Color("c9a6ff")
+		if an:
+			farbe = an_farbe
+			_bild.draw_rect(r, Color(an_farbe, 0.18))
 		_glyphe(art, r.get_center() - Vector2(0, 4), 4.0, farbe)
 		if offen and rest > 0.0:
 			_bild.draw_rect(Rect2(r.position + Vector2(0, s * (1.0 - rest)), Vector2(s, s * rest)), Color(0, 0, 0, 0.55))
@@ -2159,10 +2206,12 @@ func _faehigkeiten(g: Vector2) -> void:
 		if art == "ulti" and offen and rest > 0.0:
 			var txt := "%d/%d" % [f.ulti_ladung, BrakkFortschritt.ULTI_KILLS] if spiel.welle >= f.ulti_ab_welle else "ab R.%d" % f.ulti_ab_welle
 			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.position.y - 9.0), txt, 14, Color("c9a6ff"))
+		elif offen and str(e[3]) != "":
+			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.position.y - 9.0), str(e[3]), 14, an_farbe if an else Stil.TEXT_BLASS)
 		if offen:
 			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.end.y - 7.0), str(e[1]), 14, Color.WHITE)
 		else:
-			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.end.y - 7.0), "St.%d" % int(BrakkFortschritt.AB[art]), 14, Stil.TEXT_BLASS)
+			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.end.y - 7.0), "St.%d" % int(BrakkFortschritt.ab_tabelle(f.anfuehrer)[art]), 14, Stil.TEXT_BLASS)
 
 
 ## Ulti [R]: Anteil, der noch fehlt (0 = bereit).
@@ -2283,10 +2332,31 @@ func _kaufe(ring: String) -> void:
 		var st := brakk.fortschritt.ring_stufe(ring)
 		spiel.melde(("%s angesteckt." if st == 1 else "%s auf Stufe " + str(st) + ".") % str(BrakkFortschritt.RINGE[ring]["name"]), 2.5)
 
-## 20.11.: Irrtürmer – Kopie eines Rings für den zweiten Slot.
-func _kaufe_kopie(ring: String) -> void:
-	var grund := brakk.fortschritt.kaufe_kopie(ring, spiel)
-	spiel.melde(grund if grund != "" else "%s als Kopie für den zweiten Slot." % str(BrakkFortschritt.RINGE[ring]["name"]), 2.5)
+## 20.11. (Nachtrag): Irrtürmer – Kauf in den gewählten Satz (Held oder PliPlop), Ausbau und Verkauf je Stelle.
+var _kauf_satz := "held"
+
+
+func _kaufe_satz(ring: String) -> void:
+	var grund := brakk.fortschritt.kaufe_in(_kauf_satz, ring, spiel)
+	spiel.melde(grund if grund != "" else "%s für %s." % [str(BrakkFortschritt.RINGE[ring]["name"]), "den Irrtürmer" if _kauf_satz == "held" else "PliPlop"], 2.5)
+
+
+func _baue_satz_aus(satz: String, i: int) -> void:
+	var grund := brakk.fortschritt.baue_aus(satz, i, spiel)
+	if grund != "":
+		spiel.melde(grund, 2.5)
+
+
+func _verkaufe_satz(satz: String, i: int) -> void:
+	brakk.fortschritt.verkaufe_in(satz, i, spiel)
+
+
+func _waehle_satz(satz: String, i: int) -> void:
+	if satz == "pp":
+		brakk.fortschritt.waehle_pp(i)
+	else:
+		brakk.fortschritt.gewaehlt = i
+		brakk.fortschritt.wechsel_rest = BrakkFortschritt.WECHSEL_SEK
 
 
 func _verkaufe(ring: String) -> void:
@@ -2321,8 +2391,11 @@ func _male_terminal() -> void:
 	# links: Finger
 	var lx := o.x + 18.0
 	var ly := o.y + 58.0
-	Stil.schreibe(ci, Vector2(lx, ly), "Ringslots: Hand und PliPlop" if irr else "Brakks Finger (Stufe %d)" % f.stufe, 18, Stil.GOLD)
-	for i in (f.finger() if irr else 5):   # 20.11.: Irrtürmer – zwei Slots
+	if irr:
+		_terminal_saetze(ci, lx, ly)   # 20.11. (Nachtrag): zwei Sätze zu je vier Ringen
+	else:
+		Stil.schreibe(ci, Vector2(lx, ly), "Brakks Finger (Stufe %d)" % f.stufe, 18, Stil.GOLD)
+	for i in (0 if irr else 5):
 		var r := Rect2(lx, ly + 18.0 + i * 62.0, 270.0, 56.0)
 		ci.draw_rect(r, Color(1, 1, 1, 0.04))
 		var mi := Vector2(r.position.x + 28.0, r.get_center().y)
@@ -2342,10 +2415,20 @@ func _male_terminal() -> void:
 			Stil.schreibe(ci, Vector2(r.position.x + 56.0, r.get_center().y), "ab Stufe %d" % int(BrakkFortschritt.FINGER_AB[i]), 18, Color(0.4, 0.42, 0.47))
 	var erklaerung := "Alle getragenen Ringe stärken Brakks Pistolen. Der aktive Ring (Mausrad) bestimmt die Fähigkeiten; [C] setzt in der Bauphase sein Feld (2×2) – Fabriken darin bauen seine Truppe."
 	if irr:
-		erklaerung = "Zwei Slots: der Ring in der Hand färbt die Prellbolzen, der am PliPlop bestimmt seinen Pfad. Derselbe Ring in beiden Slots braucht eine Kopie (halber Preis). [V] tauscht, [C] setzt das Feld."   # 20.11.
+		erklaerung = "Je 4 Ringe für Irrtürmer und PliPlop, derselbe Ring auch mehrfach (wirkt mehrfach). Alle Ringe eines Satzes wirken; der aktive des PliPlop wählt seinen Pfad. Klick auf einen Ring: aktiv. [V] tauscht die aktiven, [C] setzt das Feld des Helden."   # 20.11. (Nachtrag)
 	elif f.anfuehrer == "sonde7":
 		erklaerung = "Der aktive Ring (Mausrad) färbt Farblaser und Energiebündel und die Treffer der Zielerfassung; gerufene Waffen bekommen nur sein Geschossbild. [C] setzt in der Bauphase sein Feld (2×2)."   # 20.11.
-	Stil.absatz(ci, Vector2(lx, ly + 340.0), erklaerung, 270.0, 14, Stil.TEXT_BLASS)
+	Stil.absatz(ci, Vector2(lx, ly + (392.0 if irr else 340.0)), erklaerung, 270.0, 14, Stil.TEXT_BLASS)
+	if irr:
+		# 20.11. (Nachtrag): Kauf für welchen Satz?
+		for k in 2:
+			var satz := "held" if k == 0 else "pp"
+			var kr := Rect2(o.x + w - 470.0 + k * 128.0, o.y + 10.0, 120.0, 28.0)
+			var an := _kauf_satz == satz
+			ci.draw_rect(kr, Color(Stil.GOLD, 0.2) if an else Color(0, 0, 0, 0.2))
+			ci.draw_rect(kr, Stil.GOLD if an else Stil.TEXT_BLASS, false, 2.0 if an else 1.0)
+			Stil.schreibe_mittig(ci, kr.get_center(), ("für Irrtürmer" if k == 0 else "für PliPlop"), 15, Stil.GOLD if an else Stil.TEXT_BLASS)
+			_knoepfe.append([kr, func() -> void: _kauf_satz = satz])
 	# rechts: alle Ringe
 	var rx := o.x + 310.0
 	var rw := w - 330.0
@@ -2360,12 +2443,20 @@ func _male_terminal() -> void:
 		Stil.schreibe(ci, Vector2(r.position.x + 52.0, r.position.y + zh * 0.22), str(d["name"]), 18, farbe)
 		var st := f.ring_stufe(ring)
 		# 19.11. (Paul): zeigt die Stufe, die man als Nächstes bekommt (gekauft: die nächste, auf Stufe 3 diese) – Brakk UND Feld
-		var zeig := mini(3, st + 1)
-		var vorsatz := ("St. %d – " % zeig) if st < 3 else ""
-		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.22), vorsatz + "Brakk: " + BrakkFortschritt.brakk_text(ring, zeig), 14, Stil.TEXT)
+		var zeig := 1 if irr else mini(3, st + 1)   # 20.11. (Nachtrag): Irrtürmer kauft immer Stufe 1
+		var vorsatz := ("St. %d – " % zeig) if st < 3 or irr else ""
+		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.22), vorsatz + ("Held: " if irr else "Brakk: ") + BrakkFortschritt.brakk_text(ring, zeig), 14, Stil.TEXT)
 		Stil.schreibe(ci, Vector2(r.position.x + 200.0, r.position.y + zh * 0.58), "Feld: " + _ring_fabrik_text(ring, zeig), 14, Stil.TEXT_BLASS)
 		var kb := Rect2(r.end.x - 130.0, r.get_center().y - 13.0, 122.0, 26.0)
-		if st >= BrakkFortschritt.RING_PREISE.size():
+		if irr:
+			# 20.11. (Nachtrag): jeder Kauf ist ein neuer Ring (Stufe 1) im gewählten Satz; ausgebaut wird links
+			var preis1 := int(BrakkFortschritt.RING_PREISE[0])
+			var geht1 := int(spiel.budget) >= preis1 and f.satz_ringe(_kauf_satz).size() < BrakkFortschritt.SATZ_MAX
+			ci.draw_rect(kb, Color(Stil.GOLD, 0.15) if geht1 else Color(0, 0, 0, 0.2))
+			ci.draw_rect(kb, Stil.GOLD if geht1 else Stil.TEXT_BLASS, false, 1.5)
+			Stil.schreibe_mittig(ci, kb.get_center(), "Kaufen %d" % preis1, 16, Stil.GOLD if geht1 else Stil.TEXT_BLASS)
+			_knoepfe.append([kb, _kaufe_satz.bind(ring)])
+		elif st >= BrakkFortschritt.RING_PREISE.size():
 			Stil.schreibe_mittig(ci, kb.get_center(), "Stufe 3", 16, farbe)
 		else:
 			var preis := int(BrakkFortschritt.RING_PREISE[st])
@@ -2375,17 +2466,48 @@ func _male_terminal() -> void:
 			var knopf := "Kaufen %d" % preis if st == 0 else "Stufe %d: %d" % [st + 1, preis]
 			Stil.schreibe_mittig(ci, kb.get_center(), knopf, 16, Stil.GOLD if geht else Stil.TEXT_BLASS)
 			_knoepfe.append([kb, _kaufe.bind(ring)])
-			if f.anfuehrer == "irrtuermer" and f.hat(ring) and f.ringe.count(ring) < 2:
-				# 20.11.: Irrtürmer – derselbe Ring als Kopie für den zweiten Slot (halber Kaufpreis)
-				var kk := Rect2(kb.position.x - 112.0, kb.position.y, 104.0, 26.0)
-				var kgeht := f.kopie_grund(ring, spiel) == ""
-				ci.draw_rect(kk, Color(Stil.GOLD, 0.15) if kgeht else Color(0, 0, 0, 0.2))
-				ci.draw_rect(kk, Stil.GOLD if kgeht else Stil.TEXT_BLASS, false, 1.5)
-				Stil.schreibe_mittig(ci, kk.get_center(), "Kopie %d" % f.kopie_preis(), 16, Stil.GOLD if kgeht else Stil.TEXT_BLASS)
-				_knoepfe.append([kk, _kaufe_kopie.bind(ring)])
-		if st > 0:
+		if st > 0 and not irr:
 			Stil.schreibe(ci, Vector2(r.position.x + 52.0, r.position.y + zh * 0.6), "St. %d" % st, 14, farbe)
 		i2 += 1
+
+
+## 20.11. (Nachtrag): linke Spalte des Terminals beim Irrtürmer – zwei Sätze zu je vier Ringen. Je Ring: Ausbau, Verkaufen,
+## Klick auf den Namen macht ihn aktiv.
+func _terminal_saetze(ci: Control, lx: float, ly: float) -> void:
+	var f := brakk.fortschritt
+	var zh := 40.0
+	for si in 2:
+		var satz := "held" if si == 0 else "pp"
+		var y0 := ly + si * (zh * float(BrakkFortschritt.SATZ_MAX) + 30.0)
+		var liste := f.satz_ringe(satz)
+		Stil.schreibe(ci, Vector2(lx, y0), ("Irrtürmer (%d/%d)" if si == 0 else "PliPlop (%d/%d)") % [liste.size(), BrakkFortschritt.SATZ_MAX], 18, Stil.GOLD)
+		for i in BrakkFortschritt.SATZ_MAX:
+			var r := Rect2(lx, y0 + 12.0 + i * zh, 270.0, zh - 4.0)
+			ci.draw_rect(r, Color(1, 1, 1, 0.04))
+			if i >= liste.size():
+				Stil.schreibe(ci, Vector2(r.position.x + 40.0, r.get_center().y), "frei", 15, Stil.TEXT_BLASS)
+				continue
+			var ring := liste[i]
+			var farbe := _ring_farbe(ring)
+			var st := f.satz_stufe(satz, i)
+			if i == f.satz_gewaehlt(satz):
+				ci.draw_rect(r, farbe, false, 2.0)
+			_male_ring(ci, Vector2(r.position.x + 18.0, r.get_center().y), 12.0, ring)
+			var nr := Rect2(r.position.x + 34.0, r.position.y, 100.0, r.size.y)
+			Stil.schreibe(ci, Vector2(nr.position.x, r.get_center().y - 6.0), EgoModus.ring_kurz(ring), 15, farbe)
+			Stil.schreibe(ci, Vector2(nr.position.x, r.get_center().y + 8.0), "St. %d" % st + (" · aktiv" if i == f.satz_gewaehlt(satz) else ""), 13, Stil.TEXT_BLASS)
+			_knoepfe.append([nr, _waehle_satz.bind(satz, i)])
+			var ab := Rect2(r.position.x + 136.0, r.position.y + 6.0, 62.0, r.size.y - 12.0)
+			if st < BrakkFortschritt.RING_PREISE.size():
+				var preis := int(BrakkFortschritt.RING_PREISE[st])
+				var geht := int(spiel.budget) >= preis
+				ci.draw_rect(ab, Stil.GOLD if geht else Stil.TEXT_BLASS, false, 1.0)
+				Stil.schreibe_mittig(ci, ab.get_center(), "St%d %d" % [st + 1, preis], 13, Stil.GOLD if geht else Stil.TEXT_BLASS)
+				_knoepfe.append([ab, _baue_satz_aus.bind(satz, i)])
+			var vk := Rect2(r.position.x + 202.0, r.position.y + 6.0, 64.0, r.size.y - 12.0)
+			ci.draw_rect(vk, Stil.TEXT_BLASS, false, 1.0)
+			Stil.schreibe_mittig(ci, vk.get_center(), "Verk. %d" % f.satz_erstattung(satz, i, int(spiel.welle)), 13, Stil.TEXT)
+			_knoepfe.append([vk, _verkaufe_satz.bind(satz, i)])
 
 
 # ------------------------------------------------------------------ Brakk-Mode: Ringfelder (18.11.)
@@ -3534,7 +3656,11 @@ func _treffer_merken(dt: float) -> void:
 		_trauma = minf(1.0, _trauma + 0.1 + verlust)
 		var quelle := Vector2.INF
 		var beste := INF
-		for g: Gegner in spiel.ego_gegner():
+		var bg: BrakkGeschosse = spiel.brakk_geschosse
+		if bg != null and Time.get_ticks_msec() - bg.treffer_ms < 250:
+			quelle = bg.treffer_von   # 20.11.: Schritt 6c – Randblitz in Richtung des echten Schützen
+			beste = -1.0
+		for g: Gegner in (spiel.ego_gegner() if quelle == Vector2.INF else []):
 			if is_instance_valid(g) and not g._tot:
 				var d := g.position.distance_to(brakk.position)
 				if d < beste and d < 5.0 * Werte.ZELLE:

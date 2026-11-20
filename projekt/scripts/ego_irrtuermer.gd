@@ -23,6 +23,48 @@ var _welle := -1
 var _blitz := 0.0
 var _rueck := 0.0
 var _tex_werfer: Texture2D
+# 20.11. (Nachtrag): Ring-Wirkung je Spell (Werte.RING_SPELLS)
+var _hack_seit := 0.0            # so lange wird schon gehackt (Anlauf)
+var _echo_ms := 0                # Echo des letzten Hack-Schusses fällig (ms)
+var _echo_mal := 0.0
+var _durch_an := false           # gerade ein Durchschlag-Treffer (keine Kette)
+var _ueb_ende := []              # [bis ms, Punkt, Hitzestoß-Schaden] – Überladen endet
+var _hier_angekommen := true
+var _hier_ring := ""             # Ring beim Befehl „Hierher“ (wirkt am Haltepunkt)
+var _hier_st := 1
+var _tausch_bis := 0             # ms: nach dem Ringtausch schneller
+var _tausch_mal := 1.0
+var _aufsatz_ring := ""          # Ring beim Auslösen des Aufsatzes
+var _aufsatz_st := 1
+
+
+## 20.11. (Nachtrag): Spells färbt der aktive Ring des Helden.
+func spell_ring() -> String:
+	return hand_ring()
+
+
+func spell_ring_stufe() -> int:
+	return maxi(1, f().satz_aktiv_stufe("held"))
+
+
+## Wirkung eines beim Auslösen gemerkten Rings (Hierher, Aufsatz wirken länger als der Ring aktiv sein muss).
+func _gemerkt_w(spell: String, art: String, ring: String, st: int) -> float:
+	var e := Werte.ring_spell("irrtuermer", spell, ring)
+	return Werte.ring_spell_wert(e, st) if str(e.get("art", "")) == art else 0.0
+
+
+func schutz() -> float:
+	var s := super()
+	if _hack:
+		s = maxf(s, spell_w("hack", "schutz") / 100.0)
+	if aufsatz_an():
+		s = maxf(s, _gemerkt_w("aufsatz", "schutz", _aufsatz_ring, _aufsatz_st) / 100.0)
+	return s
+
+
+## Takt-Faktor nach dem Ringtausch (Takt-Ring).
+func _tausch_faktor() -> float:
+	return 1.0 / _tausch_mal if Time.get_ticks_msec() < _tausch_bis else 1.0
 
 
 func _init(p_ego: EgoModus) -> void:
@@ -39,16 +81,25 @@ func f() -> BrakkFortschritt:
 
 ## Ring in der Hand / am PliPlop ("" = keiner).
 func hand_ring() -> String:
-	return f().slot_ring(0)
+	return f().satz_aktiv("held")   # 20.11. (Nachtrag): aktiver Ring des Held-Satzes
 
 
 func pp_ring() -> String:
-	return f().slot_ring(1)
+	return f().satz_aktiv("pp")
 
 
 ## Pfad des PliPlop (aus seinem Ring).
 func pfad() -> Dictionary:
 	return Werte.PLIPLOP_PFADE.get(pp_ring(), Werte.PLIPLOP_PFADE[""])
+
+
+## 20.11. (Nachtrag): "@held" / "@pp" = alle Ringe des Satzes zusammen (BrakkFortschritt.RING_STAPEL), sonst ein Ring.
+func ring_wert(ring: String, schluessel: String, std: Variant) -> Variant:
+	if ring == "@held":
+		return f().satz_wert("held", schluessel, std)
+	if ring == "@pp":
+		return f().satz_wert("pp", schluessel, std)
+	return super(ring, schluessel, std)
 
 
 func pp_farbe() -> Color:
@@ -103,6 +154,7 @@ func _hack_an() -> void:
 	_hack = true
 	_hack_ziel = ziel
 	_hack_takt = 0.0
+	_hack_seit = 0.0
 	ego._feuer = false
 	Ton.spiele(ego.spiel, "tc-arc", -8.0)
 
@@ -122,22 +174,105 @@ func _ueberladen() -> void:
 		ego.spiel.melde("Überladen wieder in %d s." % ceili(_ueberladen_rest), 1.5)
 		return
 	var d: Dictionary = Werte.IRRTUERMER["ueberladen"]
-	var bis := Time.get_ticks_msec() + int(float(d["sek"]) * 1000.0)
+	var sek := float(d["sek"]) * (1.0 + spell_w("ueberladen", "dauer") / 100.0)   # 20.11. (Nachtrag): Wirbel-Ring
+	var bis := Time.get_ticks_msec() + int(sek * 1000.0)
+	var wo := Vector2.INF
+	var turm := Karte.KEINE
 	if _hack and str(_hack_ziel.get("art", "")) != "pliplop":
 		var z: Vector2i = _hack_ziel["zelle"]
 		ego.spiel.turm_ueberladen[z] = [bis, float(d["mal"])]
 		ego.spiel.effekte.welle(ego.karte.mitte(z), Werte.ZELLE * 0.9, HACK_FARBE, "funk", 0.6)
-		ego.spiel.melde("Überladen: der gehackte Turm feuert %s s doppelt so schnell." % BrakkFortschritt._zahl(d["sek"]), 2.0)
+		ego.spiel.melde("Überladen: der gehackte Turm feuert %s s doppelt so schnell." % BrakkFortschritt._zahl(sek), 2.0)
+		wo = ego.karte.mitte(z)
+		turm = z
 	elif pp.einsatzbereit():
 		pp.ueberladen_bis = bis
 		ego.spiel.effekte.welle(pp.position, Werte.ZELLE * 0.9, HACK_FARBE, "funk", 0.6)
-		ego.spiel.melde("Überladen: PliPlop feuert %s s doppelt so schnell." % BrakkFortschritt._zahl(d["sek"]), 2.0)
+		ego.spiel.melde("Überladen: PliPlop feuert %s s doppelt so schnell." % BrakkFortschritt._zahl(sek), 2.0)
+		wo = pp.position
 	else:
 		ego.spiel.melde("PliPlop ist nicht da.", 1.5)
 		return
-	_ueberladen_rest = float(d["abkling"])
+	_ueberladen_rest = float(d["abkling"]) * (1.0 - spell_w("ueberladen", "abkling") / 100.0)   # Takt-Ring
+	_ueberladen_spell(wo, turm, sek, bis)
 	_zaehle("ueberladen")
 	Ton.spiele(ego.spiel, "alert", -8.0)
+
+
+## 20.11. (Nachtrag): Ring-Wirkung an „Überladen“ (Werte.RING_SPELLS) – am überladenen Turm bzw. PliPlop.
+func _ueberladen_spell(wo: Vector2, turm: Vector2i, sek: float, bis: int) -> void:
+	var w := spell_w("ueberladen", "truppenschild")
+	if w > 0.0:
+		var ende := Time.get_ticks_msec() + 8000
+		for e: Einheit in ego._truppen_um(wo, 2.0):
+			e.ring_schild = e.max_leben * w / 100.0
+			e.ring_schild_bis = ende
+			ego.spiel.effekte.welle(e.position, Werte.ZELLE * 0.55, Color("9fe8ff"), "heil", 0.8)
+	w = spell_w("ueberladen", "bremswelle")
+	if w > 0.0:
+		bremse_umkreis(wo, 2.0, w)
+	w = spell_w("ueberladen", "markwelle")
+	if w > 0.0:
+		var bonus := float(BrakkFortschritt.RINGE["markierung"]["brakk_stufen"][clampi(spell_ring_stufe(), 1, 3) - 1]["mark_bonus"])
+		for g: Gegner in _im_umkreis(wo, 2.5 * Werte.ZELLE):
+			g.markiert = maxf(g.markiert, w)
+			g.markier_faktor = bonus
+			g.markiert_brakk = true
+		ego.spiel.effekte.welle(wo, 2.5 * Werte.ZELLE, ego._ring_farbe("markierung"), "funk", 0.6)
+	w = spell_w("ueberladen", "zweiter_turm")
+	if w > 0.0 and turm != Karte.KEINE:
+		var bester := Karte.KEINE
+		var beste := 3.0 * Werte.ZELLE + 1.0
+		for z: Vector2i in ego.karte.turm_art:
+			if z != turm and ego.karte.ausbau.get(z, Karte.FREI) == Karte.TURM and ego.karte.mitte(z).distance_to(wo) < beste:
+				beste = ego.karte.mitte(z).distance_to(wo)
+				bester = z
+		if bester != Karte.KEINE:
+			ego.spiel.turm_ueberladen[bester] = [Time.get_ticks_msec() + int(sek * w / 100.0 * 1000.0), float(Werte.IRRTUERMER["ueberladen"]["mal"])]
+			ego.spiel.effekte.strahl(wo, ego.karte.mitte(bester), HACK_FARBE, 2.0)
+	w = spell_w("ueberladen", "hitzestoss")
+	if w > 0.0:
+		var d: Dictionary = Werte.IRRTUERMER["bolzen"]
+		_ueb_ende = [bis, wo, float(d["schaden"]) * f().schaden_faktor() * w / 100.0]
+
+
+## 20.11. (Nachtrag): laufende Ring-Wirkungen (Ende des Überladens, Ankunft des PliPlop).
+func _spells_weiter() -> void:
+	if not _ueb_ende.is_empty() and Time.get_ticks_msec() >= int(_ueb_ende[0]):
+		hitzestoss(_ueb_ende[1], 1.5, float(_ueb_ende[2]))
+		_ueb_ende = []
+	if pp.hier != Vector2.INF and not _hier_angekommen and pp.position.distance_to(pp.hier) <= Werte.ZELLE * 0.6:
+		_hier_angekommen = true
+		var w := _gemerkt_w("hierher", "ankunft_bremse", _hier_ring, _hier_st)
+		if w > 0.0:
+			bremse_umkreis(pp.position, 1.5, w)
+		w = _gemerkt_w("hierher", "ankunft_brand", _hier_ring, _hier_st)
+		if w > 0.0:
+			brand_bei(pp.position, w, float(Werte.IRRTUERMER["bolzen"]["schaden"]) * f().schaden_faktor() * 0.3)
+
+
+## Hack hält: Glut-Ring (der Turm selbst feuert schneller), Gel-Ring (der Strahl bremst).
+func _hack_spell_weiter() -> void:
+	var w := spell_w("hack", "turm_takt")
+	if w > 0.0 and str(_hack_ziel.get("art", "")) != "pliplop":
+		var z: Vector2i = _hack_ziel["zelle"]
+		var alt: Array = ego.spiel.turm_ueberladen.get(z, [])
+		if alt.is_empty() or int(alt[0]) < Time.get_ticks_msec() + 200 and float(alt[1]) <= 1.0 + w / 100.0:
+			ego.spiel.turm_ueberladen[z] = [Time.get_ticks_msec() + 250, 1.0 + w / 100.0]
+	w = spell_w("hack", "gelstrahl")
+	if w > 0.0:
+		var von := ego._fuss2d()
+		var bis := _hack_punkt()
+		var lang := von.distance_to(bis)
+		for g: Gegner in _in_linie(von, (bis - von).normalized(), lang):
+			g.gebremst = maxf(g.gebremst, w)
+
+
+## Hierher: PliPlop pp-Wirkungen am Haltepunkt (Wall-, Takt-, Ziel-Ring).
+func pp_hier_w(art: String) -> float:
+	if pp.hier == Vector2.INF:
+		return 0.0
+	return _gemerkt_w("hierher", art, _hier_ring, _hier_st)
 
 
 func _hierher() -> void:
@@ -154,15 +289,38 @@ func _hierher() -> void:
 		ego.spiel.melde("Dort kann PliPlop nicht hin.", 1.5)
 		return
 	pp.hier = p
+	# 20.11. (Nachtrag): Ring-Wirkung am Haltepunkt – der Ring beim Befehl zählt, solange PliPlop dort bleibt
+	_hier_ring = spell_ring()
+	_hier_st = spell_ring_stufe()
+	_hier_angekommen = false
+	if spell_hat("hierher", "springen"):
+		ego.spiel.effekte.strahl(pp.position, p, pp_farbe(), 2.0)
+		pp.position = pp._freier_platz(p)
 	ego.spiel.effekte.flaeche(p, Werte.ZELLE * 0.5, pp_farbe())
 	ego.spiel.melde("PliPlop rollt hin und bleibt dort – [X] nochmal: folgen.", 2.0)
 
 
 func _ringtausch() -> void:
-	if f().ringe.is_empty():
+	if f().ringe.is_empty() and f().pp_ringe.is_empty():
 		ego.spiel.melde("Noch kein Ring – am Lichtterminal der Basis kaufen.", 2.0)
 		return
-	f().getauscht = not f().getauscht
+	var e := spell_eintrag("ringtausch")   # 20.11. (Nachtrag): Ring des Helden vor dem Tausch
+	var w := Werte.ring_spell_wert(e, spell_ring_stufe())
+	if not f().tausche():   # 20.11. (Nachtrag): aktiver Ring des Helden ↔ aktiver Ring des PliPlop
+		ego.spiel.melde("Kein Platz zum Tauschen.", 1.5)
+		return
+	match str(e.get("art", "")):
+		"tausch_takt":
+			_tausch_bis = Time.get_ticks_msec() + 3000
+			_tausch_mal = 1.0 + w / 100.0
+		"pp_heilen":
+			if pp.einsatzbereit():
+				pp.leben = minf(pp.max_leben, pp.leben + pp.max_leben * w / 100.0)
+				ego.spiel.effekte.plus(pp.position + Vector2(0, -14), Color("7dff9a"))
+		"tausch_bremse":
+			bremse_umkreis(ego._fuss2d(), 1.5, w)
+			if pp.einsatzbereit():
+				bremse_umkreis(pp.position, 1.5, w)
 	ego._ring_blitz = 0.3
 	ego.spiel.melde("Hand: %s · PliPlop: %s (%s)" % [_ring_name(hand_ring()), _ring_name(pp_ring()), str(pfad()["name"])], 2.5)
 	Ton.spiele(ego.spiel, "ui-klick", -4.0)
@@ -177,7 +335,9 @@ func _aufsatz() -> void:
 		return
 	_hack_aus()
 	_aufsatz_welle = int(ego.spiel.welle)
-	_aufsatz_bis = Time.get_ticks_msec() + int(float(Werte.IRRTUERMER["aufsatz"]["sek"]) * 1000.0)
+	_aufsatz_ring = spell_ring()   # 20.11. (Nachtrag): Ring beim Auslösen
+	_aufsatz_st = spell_ring_stufe()
+	_aufsatz_bis = Time.get_ticks_msec() + int((float(Werte.IRRTUERMER["aufsatz"]["sek"]) + spell_w("aufsatz", "dauer")) * 1000.0)
 	pp.angedockt = true
 	pp.visible = false
 	pp.ueberladen_bis = 0
@@ -189,6 +349,9 @@ func _aufsatz() -> void:
 
 func _aufsatz_ende() -> void:
 	_aufsatz_bis = 0
+	var w := _gemerkt_w("aufsatz", "hitzestoss", _aufsatz_ring, _aufsatz_st)   # 20.11. (Nachtrag): Glut-Ring
+	if w > 0.0:
+		hitzestoss(ego._fuss2d(), 2.0, float(Werte.IRRTUERMER["bolzen"]["schaden"]) * f().schaden_faktor() * w / 100.0)
 	pp.angedockt = false
 	pp.visible = not pp.gefallen
 	pp.leer_bis = Time.get_ticks_msec() + int(float(Werte.IRRTUERMER["aufsatz"]["leer"]) * 1000.0)
@@ -228,8 +391,22 @@ func weiter(echt: float, frei: bool) -> void:
 			_hack_aus()
 		else:
 			_hack_takt -= echt
+			_hack_seit += echt
 			if _hack_takt <= 0.0:
 				_hack_schuss()
+				var echo := spell_w("hack", "echo")
+				if echo > 0.0:
+					_echo_ms = Time.get_ticks_msec() + 200   # Takt-Ring: Echo
+					_echo_mal = echo / 100.0
+			_hack_spell_weiter()
+	if _echo_ms > 0 and Time.get_ticks_msec() >= _echo_ms:
+		_echo_ms = 0
+		if _hack:
+			var t := _hack_takt
+			_hack_schuss(_echo_mal)
+			_hack_takt = t
+	_spells_weiter()
+	glut_weiter(echt)
 	_hack_strahl_zeigen()
 
 
@@ -274,9 +451,9 @@ static func _ring_name(ring: String) -> String:
 ## (außer beim Funkturm: dann fliegen die Bolzen schneller).
 func schuss() -> void:
 	var d: Dictionary = Werte.IRRTUERMER["bolzen"]
-	var takt := float(d["takt"]) * float(ring_wert(hand_ring(), "takt", 1.0))
+	var takt := float(d["takt"]) * float(ring_wert("@held", "takt", 1.0)) * _tausch_faktor()   # 20.11. (Nachtrag): Takt-Ring am Ringtausch
 	if aufsatz_an():
-		ego._takt = takt
+		ego._takt = takt / (1.0 + _gemerkt_w("aufsatz", "aufsatz_takt", _aufsatz_ring, _aufsatz_st) / 100.0)   # 20.11. (Nachtrag): Takt-Ring
 		var ziel := _ziel_im_blick(float(d["weite"]))   # aus der Hand so weit wie der Bolzen
 		_rueck = 1.0
 		_blitz = 0.06
@@ -371,7 +548,7 @@ func _bolzen_platzt(p3: Vector3) -> void:
 	var d: Dictionary = Werte.IRRTUERMER["bolzen"]
 	var p := ego._zu2d(p3)
 	var radius := float(d["flaeche"]) * Werte.ZELLE
-	var schaden := float(d["schaden"]) * f().schaden_faktor() * float(ring_wert(hand_ring(), "schaden", 1.0))
+	var schaden := float(d["schaden"]) * f().schaden_faktor() * float(ring_wert("@held", "schaden", 1.0))
 	ego.spiel.effekte.flaeche(p, radius, hand_farbe())
 	ego._funke(p3, 0.14)
 	var kill := false
@@ -426,9 +603,10 @@ func _stoss_vom_pliplop() -> void:
 func treffer(g: Gegner, schaden: float, quelle: String, slot: String) -> void:
 	if not is_instance_valid(g) or g._tot:
 		return
-	var ring := hand_ring() if slot == "hand" else pp_ring()
+	var ring := "@held" if slot == "hand" else "@pp"   # 20.11. (Nachtrag): alle Ringe des Satzes wirken
+	var hat_ring := (hand_ring() if slot == "hand" else pp_ring()) != ""
 	var verbund := false
-	if ring != "":
+	if hat_ring:
 		verbund = _stempel(g, slot)
 	var sp := ego.spiel
 	sp.schadensquelle = "fabrik:-1,-1"
@@ -440,13 +618,22 @@ func treffer(g: Gegner, schaden: float, quelle: String, slot: String) -> void:
 	if verbund and not g._tot:
 		sp.brakk_quelle = "verbund"   # 20.11.: der Zuschlag zählt als eigene Quelle
 		g.nimm_schaden(s * (float(Werte.IRRTUERMER["verbund"]["bonus"]) - 1.0))
-	if ring != "":
+	if hat_ring:
 		ring_effekt(g, s, ring, slot)
 	sp.schadensquelle = ""
 	sp.brakk_quelle = ""
 	sp.schuss_herkunft = Vector2.INF
 	if g._tot:
 		ego._kill(g)
+	# 20.11. (Nachtrag): Durchschlag-Ring an Hack und Aufsatz – der nächste Gegner dahinter
+	var durch := spell_w("hack", "durch") if quelle == "hack" else (_gemerkt_w("aufsatz", "durch", _aufsatz_ring, _aufsatz_st) if quelle == "aufsatz" else 0.0)
+	if durch > 0.0 and not _durch_an and schaden > 0.0:
+		var h := dahinter(g, ego._fuss2d()) if is_instance_valid(g) else null
+		if h != null:
+			_durch_an = true
+			ego._strahl(ego._zu3d(g.position, 0.42), ego._zu3d(h.position, 0.42), hand_farbe())
+			treffer(h, schaden * durch / 100.0, quelle, slot)
+			_durch_an = false
 
 
 ## Merkt, welcher Slot den Gegner zuletzt mit seinem Ring-Effekt traf. true = Verbund (beide Slots im Fenster).
@@ -491,12 +678,12 @@ func _verbund_bild(g: Gegner) -> void:
 
 func _pp_schiesst() -> void:
 	var p := pfad()
-	var weite := float(p["weite"]) * Werte.ZELLE
+	var weite := (float(p["weite"]) + pp_hier_w("pp_weite")) * Werte.ZELLE   # 20.11. (Nachtrag): Ziel-Ring am Haltepunkt
 	var ziel: Gegner = ego.spiel.gegner_in_reichweite(pp.position, weite, true)
 	if ziel == null:
 		pp.takt = 0.15
 		return
-	pp.takt = float(p["takt"])
+	pp.takt = float(p["takt"]) * _tausch_faktor() / (1.0 + pp_hier_w("pp_takt") / 100.0)   # 20.11. (Nachtrag): Takt-Ring
 	pp.blick = (ziel.position - pp.position).normalized()
 	pfad_feuer(pp.position, ego._zu3d(pp.position, 0.55), ziel, pp_ring(), "pliplop", "pp")
 
@@ -504,7 +691,7 @@ func _pp_schiesst() -> void:
 ## Einen Pfad-Schuss abfeuern (PliPlop, Aufsatz, Hack auf den PliPlop) – von `von` auf `ziel`.
 func pfad_feuer(von: Vector2, von3: Vector3, ziel: Gegner, ring: String, quelle: String, slot: String, mal: float = 1.0) -> void:
 	var p: Dictionary = Werte.PLIPLOP_PFADE.get(ring, Werte.PLIPLOP_PFADE[""])
-	var st := ring_stufe(ring)
+	var st := maxi(1, f().satz_aktiv_stufe("pp")) if ring == pp_ring() else ring_stufe(ring)   # 20.11. (Nachtrag): Stufe des aktiven PliPlop-Rings
 	var schaden := float(p["schaden"]) * f().schaden_faktor() * (1.0 + Werte.PLIPLOP_JE_STUFE * float(st - 1)) * mal
 	var farbe := ego._ring_farbe(ring) if ring != "" else Color("9fe8ff")
 	var sp := ego.spiel
@@ -591,6 +778,14 @@ func _kette(erstes: Gegner, spruenge: int) -> Array:
 
 ## Gegner unter dem Fadenkreuz (Blicklinie), sonst der nächste am Zielpunkt.
 func _ziel_im_blick(weite_felder: float) -> Gegner:
+	if _hack and spell_hat("hack", "zielsuche"):
+		# 20.11. (Nachtrag): Ziel-Ring – der stärkste Gegner in Reichweite
+		var staerkster: Gegner = null
+		for g: Gegner in _im_umkreis(ego._fuss2d(), weite_felder * Werte.ZELLE):
+			if staerkster == null or g.leben > staerkster.leben:
+				staerkster = g
+		if staerkster != null:
+			return staerkster
 	var von := ego.hd.kamera.global_position
 	var r := ego._schuss_blick()
 	var bis := ego._strahl_bis(von, r, weite_felder)
@@ -676,9 +871,10 @@ func _hack_gueltig() -> bool:
 
 
 ## Solange gehalten: der Irrtürmer schießt den Schuss des gehackten Ziels aus der Hand (der Turm feuert weiter).
-func _hack_schuss() -> void:
+func _hack_schuss(zusatz: float = 1.0) -> void:
 	var art := _hack_art()
-	var mal := float(Werte.IRRTUERMER["hack"]["mal"])
+	var mal := float(Werte.IRRTUERMER["hack"]["mal"]) * zusatz
+	mal *= 1.0 + spell_w("hack", "anlauf") / 100.0 * clampf(_hack_seit / 4.0, 0.0, 1.0)   # 20.11. (Nachtrag): Wirbel-Ring
 	var sp := ego.spiel
 	match art:
 		"pliplop":
@@ -798,11 +994,11 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 	var wipp := Vector2(cos(ego._gang * 0.5) * 3.0, absf(sin(ego._gang * 0.5)) * 4.0) if ego._geht else Vector2.ZERO
 	var schwank := (ego._sway + Vector2(0, 7.0 * ego._delle)) * wpx
 	if aufsatz_an():
-		# Aufsatz: der PliPlop sitzt auf dem rechten Arm (Platzhalter: Gefechtsturm von hinten)
-		var tex: Texture2D = load(PliPlop.BILD)
-		var gr := Vector2(68, 68) * wpx * 1.6
+		# Aufsatz: der PliPlop sitzt auf dem rechten Arm (Platzhalter aus Code, von hinten)
+		var tex := Platzhalter.pliplop(pp_ring())   # 20.11. (Nachtrag)
+		var gr := Vector2(Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE) * wpx * 2.7
 		var pos := Vector2(g.x * 0.74 - gr.x * 0.5, g.y - gr.y * 0.92) + wipp + schwank + Vector2(_rueck * 2.0, _rueck * 8.0) * wpx
-		bild.draw_texture_rect_region(tex, Rect2(pos.round(), gr), Rect2(0, 2 * 68, 68, 68), Color.WHITE.lerp(pp_farbe(), 0.45))
+		bild.draw_texture_rect_region(tex, Rect2(pos.round(), gr), Rect2(0, 2 * Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE), Color.WHITE.lerp(pp_farbe(), 0.25))
 		if _blitz > 0.0:
 			ego._muendungsblitz(pos + Vector2(gr.x * 0.5, gr.y * 0.2), wpx, pp_farbe())
 		var rest := float(_aufsatz_bis - Time.get_ticks_msec()) / 1000.0
@@ -830,70 +1026,62 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 		bild.draw_circle(licht, 2.5 * wpx, Color(hand_farbe(), 0.6))
 
 
-## Fähigkeiten über der Lebensleiste, rechts die beiden Ringslots und der PliPlop.
-func male_leisten(g: Vector2) -> void:
-	var bild := ego._bild
+## 20.11. (Nachtrag): Fähigkeiten-Leiste wie bei Brakk (ego_modus._faehigkeiten) – hier nur Rest, Text darüber, läuft.
+func leiste_info(was: String) -> Array:
 	var welle := int(ego.spiel.welle)
-	var ueb := Werte.IRRTUERMER["ueberladen"] as Dictionary
-	var liste := [
-		["Shift", "Rolle", ego._tumble_rest / EgoModus.TUMBLE_ABKLING, ""],
-		["RMB", "Hack", 0.0, "an" if _hack else ""],
-		["Q", "Überladen", _ueberladen_rest / float(ueb["abkling"]), ""],
-		["X", "Hierher" if pp.hier == Vector2.INF else "Folgen", 0.0, ""],
-		["V", "Tausch", 0.0, ""],
-		["R", "Aufsatz", 1.0 if _aufsatz_welle == welle and not aufsatz_an() else 0.0, "an" if aufsatz_an() else ("ab R.%d" % (welle + 1) if _aufsatz_welle == welle else "")],
-		["E", "Treppe", ego.brakk.e_rest / maxf(1.0, float(ego.brakk.daten["kletter_abklingzeit"])), ""],
-	]
-	var s := 46.0
-	var abst := 8.0
-	var breite := liste.size() * s + (liste.size() - 1) * abst
-	var y := roundf(g.y * 0.86) - 34.0 - 16.0 - s
-	var x := roundf((g.x - breite) / 2.0)
-	for i in liste.size():
-		var e: Array = liste[i]
-		var r := Rect2(x + i * (s + abst), y, s, s)
-		var rest := clampf(float(e[2]), 0.0, 1.0)
-		var an := str(e[3]) == "an"
-		var farbe := HACK_FARBE if an else (EgoModus.LICHT if rest <= 0.0 else Stil.TEXT_BLASS)
-		bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
-		if an:
-			bild.draw_rect(r, Color(HACK_FARBE, 0.18))
-		Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -6), str(e[1]), 13, farbe)
-		if rest > 0.0:
-			bild.draw_rect(Rect2(r.position + Vector2(0, s * (1.0 - rest)), Vector2(s, s * rest)), Color(0, 0, 0, 0.55))
-		bild.draw_rect(r, farbe, false, 2.0)
-		Stil.schreibe_mittig(bild, Vector2(r.get_center().x, r.end.y - 7.0), str(e[0]), 14, Color.WHITE)
-		if str(e[3]) != "" and not an:
-			Stil.schreibe_mittig(bild, Vector2(r.get_center().x, r.position.y - 9.0), str(e[3]), 14, Stil.TEXT_BLASS)
+	match was:
+		"hack":
+			return [0.0, "", _hack]
+		"ueberladen":
+			return [_ueberladen_rest / float(Werte.IRRTUERMER["ueberladen"]["abkling"]), "", false]
+		"hierher":
+			return [0.0, "bleibt" if pp.hier != Vector2.INF else "", pp.hier != Vector2.INF]
+		"aufsatz":
+			return [1.0 if _aufsatz_welle == welle and not aufsatz_an() else 0.0, "ab R.%d" % (welle + 1) if _aufsatz_welle == welle and not aufsatz_an() else "", aufsatz_an()]
+	return [0.0, "", false]
+
+
+func leiste_farbe() -> Color:
+	return HACK_FARBE
+
+
+## Rechts die beiden Ringsätze und der PliPlop.
+func male_leisten(g: Vector2) -> void:
 	_slots(g)
 
 
+## 20.11. (Nachtrag): rechts zwei Sätze zu je vier Ringen – Held und PliPlop, der aktive umrandet.
 func _slots(g: Vector2) -> void:
 	var bild := ego._bild
 	var breite := 236.0
 	var x := g.x - breite - 14.0
-	var y := roundf(g.y * 0.36)
-	var zeile := 44.0
-	var hinter := Rect2(x - 6.0, y - 30.0, breite + 12.0, zeile * 2.0 + 92.0)
+	var y := roundf(g.y * 0.30)
+	var zeile := 24.0
+	var block := 22.0 + zeile * float(BrakkFortschritt.SATZ_MAX)
+	var hinter := Rect2(x - 6.0, y - 30.0, breite + 12.0, block * 2.0 + 84.0)
 	bild.draw_rect(hinter, Color(0.04, 0.05, 0.08, 0.6))
-	Stil.schreibe(bild, Vector2(x, y - 14.0), "RINGSLOTS", 18, Stil.GOLD)
-	for slot in 2:
-		var ring := f().slot_ring(slot)
-		var r := Rect2(x, y + slot * zeile, breite, zeile - 4.0)
-		var mi := Vector2(r.position.x + 20.0, r.get_center().y)
-		var titel := "Hand" if slot == 0 else "PliPlop"
-		if ring != "":
-			var farbe := ego._ring_farbe(ring)
-			bild.draw_rect(r, Color(farbe, 0.12))
-			ego._male_ring(bild, mi, 13.0, ring)
-			Stil.schreibe(bild, Vector2(r.position.x + 40.0, r.position.y + 12.0), "%s: %s St.%d" % [titel, EgoModus.ring_kurz(ring), ring_stufe(ring)], 16, farbe)
-		else:
-			bild.draw_arc(mi, 9.0, 0.0, TAU, 20, Stil.TEXT_BLASS, 1.5)
-			Stil.schreibe(bild, Vector2(r.position.x + 40.0, r.position.y + 12.0), "%s: frei – Terminal" % titel, 16, Stil.TEXT_BLASS)
-		var unter := "Prellbolzen" if slot == 0 else "Pfad: " + str(Werte.PLIPLOP_PFADE.get(ring, Werte.PLIPLOP_PFADE[""])["name"])
-		Stil.schreibe(bild, Vector2(r.position.x + 40.0, r.position.y + 28.0), unter, 13, Stil.TEXT_BLASS)
+	Stil.schreibe(bild, Vector2(x, y - 14.0), "RINGE", 18, Stil.GOLD)
+	for si in 2:
+		var satz := "held" if si == 0 else "pp"
+		var by := y + si * block
+		var liste := f().satz_ringe(satz)
+		var titel := "Irrtürmer · Prellbolzen" if si == 0 else "PliPlop · " + str(pfad()["name"])
+		Stil.schreibe(bild, Vector2(x, by + 6.0), titel, 14, hand_farbe() if si == 0 else pp_farbe())
+		for i in BrakkFortschritt.SATZ_MAX:
+			var r := Rect2(x, by + 14.0 + i * zeile, breite, zeile - 3.0)
+			var mi := Vector2(r.position.x + 12.0, r.get_center().y)
+			if i < liste.size():
+				var ring := liste[i]
+				var farbe := ego._ring_farbe(ring)
+				bild.draw_rect(r, Color(farbe, 0.12))
+				if i == f().satz_gewaehlt(satz):
+					bild.draw_rect(r, farbe, false, 2.0)
+				ego._male_ring(bild, mi, 8.0, ring)
+				Stil.schreibe(bild, Vector2(r.position.x + 26.0, r.get_center().y), "%s St.%d" % [EgoModus.ring_kurz(ring), f().satz_stufe(satz, i)], 14, farbe)
+			else:
+				bild.draw_arc(mi, 6.0, 0.0, TAU, 16, Color(0.3, 0.32, 0.36), 1.0)
 	# PliPlop: Leben und Zustand
-	var py := y + zeile * 2.0 + 8.0
+	var py := y + block * 2.0 + 4.0
 	var anteil := clampf(pp.leben / maxf(1.0, pp.max_leben), 0.0, 1.0)
 	Stil.schreibe(bild, Vector2(x, py + 6.0), "PliPlop 3cK", 16, pp_farbe())
 	var zustand := ""
@@ -911,13 +1099,13 @@ func _slots(g: Vector2) -> void:
 	var lb := Rect2(x, py + 16.0, breite, 8.0)
 	bild.draw_rect(lb.grow(1.0), Color(0, 0, 0, 0.6))
 	bild.draw_rect(Rect2(lb.position, Vector2(lb.size.x * (0.0 if pp.gefallen else anteil), lb.size.y)), Color("8fe39a") if anteil > 0.35 else Stil.ROT)
-	Stil.schreibe(bild, Vector2(x, py + 40.0), "V tauscht · Mausrad: Ring fürs Feld [C]", 13, Stil.TEXT_BLASS)
+	Stil.schreibe(bild, Vector2(x, py + 40.0), "V tauscht aktive · Mausrad: Ring des Helden", 13, Stil.TEXT_BLASS)
 
 
 func werte_zeilen() -> Dictionary:
 	var d: Dictionary = Werte.IRRTUERMER["bolzen"]
-	var schaden := float(d["schaden"]) * f().schaden_faktor() * float(ring_wert(hand_ring(), "schaden", 1.0))
-	var pro_sek := 1.0 / maxf(0.01, float(d["takt"]) * float(ring_wert(hand_ring(), "takt", 1.0)))
+	var schaden := float(d["schaden"]) * f().schaden_faktor() * float(ring_wert("@held", "schaden", 1.0))
+	var pro_sek := 1.0 / maxf(0.01, float(d["takt"]) * float(ring_wert("@held", "takt", 1.0)))
 	var zusatz: Array = [
 		["Hand: " + _ring_name(hand_ring()), hand_farbe()],
 		["PliPlop: " + _ring_name(pp_ring()) + " → " + str(pfad()["name"]), pp_farbe()],

@@ -5,14 +5,15 @@ extends Node2D
 ## Er schießt den Pfad des Rings, den er trägt (Werte.PLIPLOP_PFADE); die Schüsse selbst feuert das Kit (EgoIrrtuermer).
 ## Eigenes Leben (Anteil vom Irrtürmer). Nahkämpfer neben ihm schaden ihm; fällt er, steht er nach „respawn“ Sekunden
 ## neben dem Irrtürmer wieder. Fällt der Irrtürmer, fällt er mit und kommt mit ihm zurück.
-## Bild (Platzhalter): der Gefechtsturm aus assets/neu/tuerme/gef_frames.png (8 Blickrichtungen), in der Ringfarbe getönt.
+## Bild (Platzhalter aus Code, 20.11. Nachtrag): Kugel auf Rad mit kurzem Lauf, je Pfad eigener Aufsatz (Platzhalter.pliplop),
+## 8 Blickrichtungen, leicht in der Ringfarbe getönt.
 ## Läuft im Takt des Kits (Echtzeit), nicht in eigenem _process. Die HD-Ansicht zeigt das Sprite2D wie jede Figur.
 
-const BILD := "res://assets/neu/tuerme/gef_frames.png"
-const BILD_ZELLE := 68
-const ANKER := Vector2(33, 55)
-const MASSSTAB := 1.0
-const ZEILE := {"S": 0, "E": 1, "N": 2, "W": 3, "SE": 4, "NE": 5, "NW": 6, "SW": 7}
+
+const BILD_ZELLE := Platzhalter.PP_ZELLE
+const ANKER := Platzhalter.PP_ANKER
+const MASSSTAB := 1.6
+const ZEILE := Platzhalter.PP_ZEILE
 const RICHTUNGEN := ["S", "SE", "E", "NE", "N", "NW", "W", "SW"]   # gegen den Uhrzeigersinn ab „zur Kamera“
 
 var spiel: Node
@@ -37,7 +38,7 @@ func einrichten(p_spiel: Node, p_kit: EgoIrrtuermer, p: Vector2, p_max_leben: fl
 	max_leben = p_max_leben
 	leben = max_leben
 	_sprite = Sprite2D.new()
-	_sprite.texture = load(BILD)
+	_sprite.texture = Platzhalter.pliplop("")
 	_sprite.region_enabled = true
 	_sprite.region_rect = Rect2(0, 0, BILD_ZELLE, BILD_ZELLE)
 	_sprite.centered = false
@@ -84,7 +85,7 @@ func kommt_zurueck(p: Vector2) -> void:
 func nimm_schaden(menge: float) -> void:
 	if gefallen or angedockt:
 		return
-	var schutz := float(kit.pfad().get("schutz", 0.0))   # Prellschild (Wallring)
+	var schutz := float(kit.pfad().get("schutz", 0.0)) + kit.pp_hier_w("pp_schutz") / 100.0   # Prellschild (Wallring); 20.11. (Nachtrag): eingegraben am Haltepunkt
 	leben -= menge * (1.0 - schutz)
 	if leben <= 0.0:
 		faellt(false)
@@ -175,7 +176,10 @@ func _bild_waehlen(kamera: Vector2) -> void:
 	var i := roundi(w / (TAU / 8.0)) % 8
 	var zeile := int(ZEILE[RICHTUNGEN[i]])
 	_sprite.region_rect = Rect2(0, zeile * BILD_ZELLE, BILD_ZELLE, BILD_ZELLE)
+	var tex := Platzhalter.pliplop(kit.pp_ring())   # 20.11. (Nachtrag): Aufsatz je Pfad
+	if _sprite.texture != tex:
+		_sprite.texture = tex
 	var farbe: Color = kit.pp_farbe()
-	_sprite.modulate = Color.WHITE.lerp(farbe, 0.45) if not leer() else Color(0.5, 0.5, 0.55)
+	_sprite.modulate = Color.WHITE.lerp(farbe, 0.25) if not leer() else Color(0.5, 0.5, 0.55)
 	if ueberladen():
 		_sprite.modulate = _sprite.modulate.lightened(0.3 + 0.2 * sin(Time.get_ticks_msec() / 60.0))

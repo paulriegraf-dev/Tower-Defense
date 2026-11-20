@@ -84,7 +84,7 @@ func aktion(was: String, gedrueckt: bool) -> bool:
 				if gedrueckt and _nachladen <= 0.0:
 					_laden = 0.0
 				elif not gedrueckt:
-					if _laden >= float(_w("sondengewehr")["laden"]):
+					if _laden >= _ladezeit():
 						_durchschlag()
 					_laden = -1.0
 			return true
@@ -126,7 +126,8 @@ func _schub_start() -> void:
 	if not luftschlag_an():
 		akku = maxf(0.0, akku - float(d["akku"]))
 	_schub = 0.0
-	_schub_rest = float(d["abkling"])
+	_schub_rest = float(d["abkling"]) * (1.0 - spell_w("schub", "abkling") / 100.0)   # 20.11. (Nachtrag): Takt-Ring
+	_schub_spell()
 	_schub_r = Vector2(ego._vorne().x, ego._vorne().z).normalized()
 	ego._fov_puls = maxf(ego._fov_puls, 4.0)
 	_zaehle("schub")
@@ -173,11 +174,100 @@ func _teleport() -> void:
 		b.zustand = Einheit.Zustand.BODEN
 	ego._setze_fuss(p)
 	ego.spiel.effekte.flaeche(p, Werte.ZELLE * 0.6, SONDE_FARBE)
-	_tele_rest = float(d["abkling"])
+	_tele_rest = float(d["abkling"]) * (1.0 - spell_w("teleport", "abkling") / 100.0)   # 20.11. (Nachtrag): Takt-Ring
+	_teleport_spell(von, p)
 	ego._fov_puls = maxf(ego._fov_puls, 8.0)
 	ego._trauma = minf(1.0, ego._trauma + 0.15)
 	_zaehle("teleport")
 	Ton.spiele(ego.spiel, "tc-rail", -10.0)
+
+
+# ------------------------------------------------------------------ Ring-Wirkung je Spell (20.11., Nachtrag)
+
+var _schub_bremse := 0.0
+var _schub_brand := 0.0
+var _dauerfeuer := 0.0           # Doppel-Lasergewehr: so lange schon Dauerfeuer (Wirbel-Ring)
+
+
+## Spells färbt der aktive Ring (Werte.RING_SPELLS).
+func spell_ring() -> String:
+	return ring()
+
+
+func schutz() -> float:
+	var s := super()
+	if luftschlag_an():
+		s = maxf(s, spell_w("luftschlag", "schutz") / 100.0)
+	return s
+
+
+func _ladezeit() -> float:
+	return float(_w("sondengewehr")["laden"]) / (1.0 + spell_w("sondengewehr", "laden") / 100.0)
+
+
+func _schub_spell() -> void:
+	var w := spell_w("schub", "schutz_nach")
+	if w > 0.0:
+		schutz_fuer(float(_w("schub")["dauer"]) + 1.0, w / 100.0)
+	_schub_bremse = spell_w("schub", "spur_bremse")
+	_schub_brand = spell_w("schub", "spur_brand")
+	if _schub_brand > 0.0:
+		brand_bei(ego._fuss2d(), _schub_brand, float(_w("hand")["buendel_schaden"]) * _sf() * 0.3)
+
+
+func _teleport_spell(von: Vector2, p: Vector2) -> void:
+	var bd := float(_w("hand")["buendel_schaden"]) * _sf()
+	var w := spell_w("teleport", "blitz")
+	if w > 0.0:
+		var erstes: Gegner = ego.spiel.gegner_in_reichweite(p, 2.0 * Werte.ZELLE, true)
+		if erstes != null:
+			ego._strahl(ego._zu3d(p, 0.6), _mitte3d(erstes), ring_farbe())
+			trifft(erstes, bd * 0.5, "ring")
+			if is_instance_valid(erstes) and int(w) > 1:
+				kette(erstes, int(w) - 1, bd * 0.5)
+	w = spell_w("teleport", "bremse_ziel")
+	if w > 0.0:
+		bremse_umkreis(p, 1.5, w)
+	w = spell_w("teleport", "hitzestoss")
+	if w > 0.0:
+		hitzestoss(von, 1.5, bd * w / 100.0)
+	w = spell_w("teleport", "schutz_nach")
+	if w > 0.0:
+		schutz_fuer(2.0, w / 100.0)
+	w = spell_w("teleport", "erfassen")
+	if w > 0.0:
+		var liste: Array = []
+		for g: Gegner in ego.spiel.ego_gegner():
+			if is_instance_valid(g) and not g._tot and not ego.spiel._geschuetzt(g) and g.position.distance_to(p) <= 2.0 * Werte.ZELLE:
+				liste.append(g)
+		liste.sort_custom(func(a: Gegner, b: Gegner) -> bool: return a.position.distance_to(p) < b.position.distance_to(p))
+		for g: Gegner in liste.slice(0, int(w)):
+			if not _erfasst.has(g):
+				_erfasst.append(g)
+		if not liste.is_empty():
+			_erfasst_bis = Time.get_ticks_msec() + int(float(_w("doppellaser")["erfassen_sek"]) * 1000.0)
+
+
+## Treffer einer gerufenen Waffe mit der Ring-Wirkung an ihr (Bremse, Glut, Durchschlag).
+func _waffen_treffer(g: Gegner, schaden: float, quelle: String, mit_ring: String = "", durch_erlaubt: bool = true) -> void:
+	if not is_instance_valid(g) or g._tot:
+		return
+	var w := waffe if waffe != "" else quelle
+	trifft(g, schaden, quelle, mit_ring)
+	if not is_instance_valid(g):
+		return
+	var b := spell_w(w, "bremse_treffer")
+	if b > 0.0 and not g._tot:
+		g.gebremst = maxf(g.gebremst, b)
+	var gl := spell_w(w, "glut")
+	if gl > 0.0:
+		glut(g, schaden * gl / 100.0, 3.0)
+	var du := spell_w(w, "durch")
+	if du > 0.0 and durch_erlaubt:
+		var h := dahinter(g, ego._fuss2d())
+		if h != null:
+			ego._strahl(_mitte3d(g), _mitte3d(h), ring_farbe())
+			_waffen_treffer(h, schaden * du / 100.0, quelle, mit_ring, false)
 
 
 ## Waffe rufen: volle Ladung; dieselbe Taste nochmal steckt sie weg (Rest verfällt, Cooldown läuft).
@@ -195,14 +285,14 @@ func _rufe(w: String) -> void:
 	if waffe != "":
 		_wegstecken()
 	waffe = w
-	magazin = int(_w(w)["magazin"])
+	magazin = roundi(float(_w(w)["magazin"]) * (1.0 + spell_w(w, "magazin") / 100.0))   # 20.11. (Nachtrag): Takt-Ring
 	_laden = -1.0
 	_takt_l = 0.0
 	_takt_r = 0.0
 	_erfasst.clear()
 	if w == "luftschlag":
 		_luft_welle = int(ego.spiel.welle)
-		_luft_bis = Time.get_ticks_msec() + int(float(_w("luftschlag")["sek"]) * 1000.0)
+		_luft_bis = Time.get_ticks_msec() + int((float(_w("luftschlag")["sek"]) + spell_w("luftschlag", "dauer")) * 1000.0)   # 20.11. (Nachtrag): Wirbel-Ring
 		ego.steig = 0.0
 		_fallen_lassen = false
 	_zaehle("waffe_" + w)
@@ -268,8 +358,14 @@ func _schub_weiter(echt: float) -> void:
 	var s := _schub_r * float(d["felder"]) / float(d["dauer"]) * Werte.ZELLE * echt
 	ego._luft_schritt(Vector2(s.x, 0.0))
 	ego._luft_schritt(Vector2(0.0, s.y))
+	if _schub_bremse > 0.0:
+		for g: Gegner in ego.spiel.ego_gegner():
+			if is_instance_valid(g) and not g._tot and g.position.distance_to(ego._fuss2d()) <= Werte.ZELLE * 0.7:
+				g.gebremst = maxf(g.gebremst, _schub_bremse)   # 20.11. (Nachtrag): Gelspur
 	if _schub >= float(d["dauer"]):
 		_schub = -1.0
+		if _schub_brand > 0.0:
+			brand_bei(ego._fuss2d(), _schub_brand, float(_w("hand")["buendel_schaden"]) * _sf() * 0.3)   # 20.11. (Nachtrag): Brandspur am Ziel
 
 
 # ------------------------------------------------------------------ Ablauf
@@ -295,6 +391,8 @@ func weiter(echt: float, frei: bool) -> void:
 		_erfasst.clear()
 	_erfasst = _erfasst.filter(func(g: Variant) -> bool: return is_instance_valid(g) and not (g as Gegner)._tot)
 	_sondenblick_weiter()
+	glut_weiter(echt)   # 20.11. (Nachtrag)
+	_dauerfeuer = _dauerfeuer + echt if waffe == "doppellaser" and _links and _sperre <= 0.0 else 0.0
 	_takt_l -= echt
 	_takt_r -= echt
 	var feuert_laser := false
@@ -318,14 +416,14 @@ func weiter(echt: float, frei: bool) -> void:
 				if (_links or _rechts) and _takt_l <= 0.0:
 					_granate()
 	if feuert_laser:
-		_hitze += echt / float(_w("hand")["hitze_sek"] if waffe == "" else _w("doppellaser")["hitze_sek"])
+		_hitze += echt / _hitze_sek()   # 20.11. (Nachtrag): 6 s Dauerfeuer, ab Stufe 5 8 s
 		if _hitze >= 1.0:
 			_hitze = 0.0
-			_sperre = float(_w("hand")["pause"])
+			_sperre = float(_w("hitze")["pause"])
 			Ton.spiele(ego.spiel, "hit-thud", -8.0)
-			ego.spiel.melde("Überhitzt – %s s Pause." % BrakkFortschritt._zahl(_w("hand")["pause"]), 1.0)
+			ego.spiel.melde("Überhitzt – %s s Pause." % BrakkFortschritt._zahl(_w("hitze")["pause"]), 1.0)
 	else:
-		_hitze = maxf(0.0, _hitze - echt / float(_w("hand")["hitze_sek"]) * 1.5)
+		_hitze = maxf(0.0, _hitze - echt / _hitze_sek() * float(_w("hitze")["kuehl"]))   # kühlt doppelt so schnell
 	_strahl_zeigen(waffe == "" and feuert_laser)
 	_geschosse_weiter(echt)
 
@@ -487,11 +585,26 @@ func _platzt(gs: Dictionary) -> void:
 	for g: Gegner in ego.spiel.ego_gegner().duplicate():
 		if not is_instance_valid(g) or g._tot or ego.spiel._geschuetzt(g) or g.position.distance_to(p) > radius:
 			continue
-		trifft(g, schaden, quelle, mit_ring)
+		if quelle == "luftschlag":
+			_waffen_treffer(g, schaden, quelle)   # 20.11. (Nachtrag): Ring-Wirkung am Luftschlag
+		else:
+			trifft(g, schaden, quelle, mit_ring)
 		n += 1
 		kill = kill or g._tot
 	if n > 0:
 		ego._treffer_gefuehl(p3, kill)
+	if quelle == "luftschlag":
+		var br := spell_w("luftschlag", "treffer_brand")   # Brand-Ring
+		if br > 0.0:
+			brand_bei(p, br, schaden * 0.25)
+		var na := spell_w("luftschlag", "nachschlag")   # Sprung-Ring: zweiter Einschlag dahinter
+		var v: Vector3 = gs["v"]
+		if na > 0.0 and Vector2(v.x, v.z).length() > 0.01:
+			var p2 := p + Vector2(v.x, v.z).normalized() * Werte.ZELLE
+			ego.spiel.effekte.flaeche(p2, radius * 0.7, ring_farbe())
+			for g: Gegner in ego.spiel.ego_gegner().duplicate():
+				if is_instance_valid(g) and not g._tot and not ego.spiel._geschuetzt(g) and g.position.distance_to(p2) <= radius * 0.7:
+					_waffen_treffer(g, schaden * na / 100.0, quelle)
 
 
 ## Dauerstrahl der Hand (ein Kasten von der linken Hand bis zum Ende, jedes Bild neu).
@@ -537,7 +650,7 @@ func _rechts_druck() -> void:
 ## Doppel-Lasergewehr links: Dauerfeuer. Sind Ziele erfasst, geht jeder Schuss reihum an das nächste (mit Ring-Effekt).
 func _doppellaser() -> void:
 	var d := _w("doppellaser")
-	_takt_l = float(d["takt"])
+	_takt_l = float(d["takt"]) / (1.0 + spell_w("doppellaser", "anlauf") / 100.0 * clampf(_dauerfeuer / 3.0, 0.0, 1.0))   # 20.11. (Nachtrag): Wirbel-Ring
 	_rueck = 0.6
 	_blitz = 0.05
 	var muendung := _hand3d(false)
@@ -546,13 +659,13 @@ func _doppellaser() -> void:
 		var g: Gegner = _erfasst[_erfasst_i]
 		var c := _mitte3d(g)
 		ego._strahl(muendung, c, ring_farbe())
-		trifft(g, float(d["schaden"]) * float(d["erfassung_mal"]) * _sf(), "erfassung", ring())
+		_waffen_treffer(g, float(d["schaden"]) * float(d["erfassung_mal"]) * _sf(), "erfassung", ring())   # 20.11. (Nachtrag): mit Ring-Wirkung
 	else:
 		var e := _erster(float(d["weite"]))
 		var ende := ego.hd.kamera.global_position + ego._schuss_blick() * float(e[1])
 		ego._strahl(muendung, ende, ring_farbe().lightened(0.3))
 		if e[0] != null:
-			trifft(e[0], float(d["schaden"]) * _sf(), "doppellaser")
+			_waffen_treffer(e[0], float(d["schaden"]) * _sf(), "doppellaser")
 	Ton.spiele(ego.spiel, "brakk-schuss-a", -8.0)
 	_verbrauche()
 
@@ -580,6 +693,7 @@ func _erfasse() -> void:
 			continue
 		liste.append([winkel, g])
 	liste.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	n += int(spell_w("doppellaser", "erfassen_plus"))   # 20.11. (Nachtrag): Ziel-Ring
 	_erfasst.clear()
 	for e: Array in liste.slice(0, n):
 		_erfasst.append(e[1])
@@ -600,12 +714,16 @@ func _schrot(kugeln: int) -> void:
 	var blick := ego._schuss_blick()
 	var muendung := _hand3d(false)
 	var getroffen := 0
+	var streu := float(d["streuung"]) * (1.0 - spell_w("schrot", "streuung") / 100.0)   # 20.11. (Nachtrag): Ziel-Ring
+	var brand := spell_w("schrot", "treffer_brand")
 	for i in kugeln:
-		var r := blick.rotated(Vector3.UP, deg_to_rad(randf_range(-1.0, 1.0) * float(d["streuung"]))).rotated(ego._rechts(), deg_to_rad(randf_range(-0.4, 0.4) * float(d["streuung"])))
+		var r := blick.rotated(Vector3.UP, deg_to_rad(randf_range(-1.0, 1.0) * streu)).rotated(ego._rechts(), deg_to_rad(randf_range(-0.4, 0.4) * streu))
 		var e := _erster(float(d["weite"]), r)
 		ego._strahl(muendung, ego.hd.kamera.global_position + r * float(e[1]), Color("ffd9a0").lerp(ring_farbe(), 0.3))
 		if e[0] != null:
-			trifft(e[0], float(d["schaden"]) * _sf(), "schrot")
+			if brand > 0.0 and getroffen == 0:
+				brand_bei((e[0] as Gegner).position, brand, float(d["schaden"]) * _sf())   # 20.11. (Nachtrag): Brand-Ring
+			_waffen_treffer(e[0], float(d["schaden"]) * _sf(), "schrot")
 			getroffen += 1
 	ego._kick += 0.05
 	ego._trauma = minf(1.0, ego._trauma + 0.2)
@@ -638,14 +756,19 @@ func _durchschlag() -> void:
 	ego._strahl(muendung, von + r * weite, ring_farbe().lightened(0.5))
 	ego._strahl(muendung + Vector3(0, 0.015, 0), von + r * weite, Color.WHITE)
 	var kill := false
+	var letzter: Gegner = null
 	for g: Gegner in ego.spiel.ego_gegner().duplicate():
 		if not is_instance_valid(g) or g._tot:
 			continue
 		var c := ego._zu3d(g.position, (ego.hd.H if ego.hd.ist_hoch(ego.karte.zelle_bei(g.position)) else 0.0) + 0.42)
 		var t := (c - von).dot(r)
 		if t > 0.0 and t <= weite and (von + r * t).distance_to(c) <= 0.45:
-			trifft(g, float(d["schaden"]) * _sf(), "sondengewehr")
+			_waffen_treffer(g, float(d["schaden"]) * _sf(), "sondengewehr", "", false)   # 20.11. (Nachtrag): Ring-Wirkung
 			kill = kill or g._tot
+			letzter = g
+	var bl := spell_w("sondengewehr", "blitz")
+	if bl > 0.0 and letzter != null:
+		kette(letzter, int(bl), float(d["schaden"]) * _sf() * 0.3)   # Sprung-Ring
 	_rueck = 1.0
 	_blitz = 0.1
 	ego._kick += 0.08
@@ -660,7 +783,7 @@ func _sondenblick() -> void:
 	var d := _w("sondengewehr")
 	if _blick_bis <= 0:
 		_umriss_vorher = ego.hd.umriss_an
-	_blick_bis = Time.get_ticks_msec() + int(float(d["blick_sek"]) * 1000.0)
+	_blick_bis = Time.get_ticks_msec() + int((float(d["blick_sek"]) + spell_w("sondengewehr", "blick_dauer")) * 1000.0)   # 20.11. (Nachtrag): Ziel-Ring
 	ego.hd.umriss_an = true
 	ego.spiel.effekte.welle(ego._fuss2d(), float(d["blick_weite"]) * Werte.ZELLE, SONDE_FARBE, "funk", 0.8)
 	_zaehle("sondenblick")
@@ -726,6 +849,7 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 			if seite < 0:
 				var heiss := _sperre > 0.0
 				bild.draw_circle(mund, (3.0 + 2.0 * _hitze) * wpx, Color(1.0, 0.3, 0.2, 0.8) if heiss else Color(farbe, 0.7))
+				_hitze_balken(Vector2(pos.x + ts.x * 0.5, pos.y - 5.0 * wpx), ts.x * 0.8, wpx)   # 20.11. (Nachtrag): Hitze an der Waffe
 			else:
 				var puls := 0.7 + 0.3 * sin(Time.get_ticks_msec() / 90.0)
 				var bereit := clampf(1.0 - _takt_r / float(_w("hand")["buendel_takt"]), 0.0, 1.0)
@@ -738,29 +862,46 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 	var ts2 := Vector2(tex2.get_size()) * wpx * 1.4
 	var pos2 := Vector2(g.x * 0.66 - ts2.x * 0.5, g.y - ts2.y + 6.0 * wpx) + wipp + schwank + Vector2(_rueck * 3.0, _rueck * 8.0) * wpx
 	if waffe == "sondengewehr" and _laden >= 0.0:
-		var zitter := clampf(_laden / float(_w("sondengewehr")["laden"]), 0.0, 1.0)
+		var zitter := clampf(_laden / _ladezeit(), 0.0, 1.0)
 		pos2 += Vector2(sin(Time.get_ticks_msec() / 20.0), cos(Time.get_ticks_msec() / 23.0)) * zitter * 1.5 * wpx
 	bild.draw_texture_rect(tex2, Rect2(pos2.round(), ts2), false)
 	var mund2 := pos2 + Vector2(ts2.x * 0.5, 3.0 * wpx)
 	bild.draw_circle(mund2, 2.0 * wpx, Color(ring_farbe(), 0.6))
+	if waffe == "doppellaser":
+		_hitze_balken(Vector2(pos2.x + ts2.x * 0.5, pos2.y - 5.0 * wpx), ts2.x * 0.6, wpx)   # 20.11. (Nachtrag)
 	if _blitz > 0.0:
 		ego._muendungsblitz(mund2, wpx, ring_farbe())
 
 
-## Über allem: Hitze, Ladering, Erfassungsmarken, Luftschlag-Zeit, Nachladen.
+## 20.11. (Nachtrag): Hitzebalken über der Laserwaffe – füllt sich beim Feuern, rot ab 75 % und während der Sperre.
+func _hitze_balken(mitte_oben: Vector2, breite: float, wpx: float) -> void:
+	if _hitze <= 0.01 and _sperre <= 0.0:
+		return
+	var bild := ego._bild
+	var r := Rect2(mitte_oben.x - breite / 2.0, mitte_oben.y - 2.0 * wpx, breite, 2.0 * wpx).abs()
+	bild.draw_rect(r.grow(wpx * 0.5), Color(0.04, 0.05, 0.08, 0.8))
+	var anteil := 1.0 if _sperre > 0.0 else _hitze
+	var rot := _sperre > 0.0 or _hitze > 0.75
+	if _sperre > 0.0 and fmod(Time.get_ticks_msec() / 150.0, 2.0) < 1.0:
+		rot = true
+	bild.draw_rect(Rect2(r.position, Vector2(r.size.x * anteil, r.size.y)), Color(1.0, 0.3, 0.2) if rot else Color(1.0, 0.8, 0.4))
+
+
+## 20.11. (Nachtrag): Sekunden Dauerfeuer bis zur Überhitzung (Werte.SONDE7["hitze"], ab Stufe "spaet_ab" länger).
+func _hitze_sek() -> float:
+	var h := _w("hitze")
+	return float(h["sek_spaet"] if f().stufe >= int(h["spaet_ab"]) else h["sek"])
+
+
+## Über allem: Ladering, Erfassungsmarken, Luftschlag-Zeit, Nachladen (Hitze: Balken an der Waffe, 20.11. Nachtrag).
 func male_oben(g: Vector2) -> void:
 	if ego._hud_aus() or not ego._frei():
 		return
 	var bild := ego._bild
 	var m := (g / 2.0).round()
 	var px := maxf(2.0, floorf(g.y / 150.0))
-	if (waffe == "" or waffe == "doppellaser") and (_hitze > 0.01 or _sperre > 0.0):
-		var w := 22.0 * px
-		var r := Rect2(m.x - w / 2.0, m.y + 16.0 * px, w, 1.5 * px)
-		bild.draw_rect(r, Color(1, 1, 1, 0.15))
-		bild.draw_rect(Rect2(r.position, Vector2(w * (1.0 if _sperre > 0.0 else _hitze), r.size.y)), Color(1.0, 0.3, 0.2) if _sperre > 0.0 or _hitze > 0.75 else Color(1.0, 0.8, 0.4))
 	if waffe == "sondengewehr" and _laden >= 0.0:
-		var a := clampf(_laden / float(_w("sondengewehr")["laden"]), 0.0, 1.0)
+		var a := clampf(_laden / _ladezeit(), 0.0, 1.0)
 		var rr := 12.0 * px
 		bild.draw_arc(m, rr, 0.0, TAU, 40, Color(1, 1, 1, 0.14), px * 0.6)
 		bild.draw_arc(m, rr, -PI / 2.0, -PI / 2.0 + TAU * a, 40, Color.WHITE if a >= 1.0 else ring_farbe(), px)
@@ -787,53 +928,36 @@ func male_oben(g: Vector2) -> void:
 		Stil.schreibe_mittig(bild, Vector2(g.x / 2.0, g.y * 0.16), "SONDENBLICK %d s" % ceili(float(_blick_bis - Time.get_ticks_msec()) / 1000.0), 18, SONDE_FARBE)
 
 
-## Fähigkeiten: Shift Schub, Q Teleport, je Waffe Cooldown oder Magazin, dazu der Akku; rechts die Ringe wie bei Brakk.
+## 20.11. (Nachtrag): Fähigkeiten-Leiste wie bei Brakk (ego_modus._faehigkeiten) – hier nur Rest, Text darüber, läuft.
+func leiste_info(was: String) -> Array:
+	var welle := int(ego.spiel.welle)
+	match was:
+		"schub":
+			return [_schub_rest / float(_w("schub")["abkling"]), "", false]
+		"teleport":
+			return [0.0 if not luftschlag_an() and _tele_rest <= 0.0 else (1.0 if luftschlag_an() else _tele_rest / float(_w("teleport")["abkling"])), "", false]
+		"hand_rechts":
+			return [0.0, "", false]
+		"doppellaser", "schrot", "sondengewehr", "luftschlag":
+			if waffe == was:
+				return [0.0, "%d" % magazin, true]
+			if was == "luftschlag":
+				return [1.0 if _luft_welle == welle else 0.0, "ab R.%d" % (welle + 1) if _luft_welle == welle else "", false]
+			return [float(cd.get(was, 0.0)) / float(_w(was)["abkling"]), "", false]
+	return [0.0, "", false]
+
+
+func leiste_farbe() -> Color:
+	return ring_farbe()
+
+
+## Akku links neben der Fähigkeiten-Leiste, rechts die Ringe wie bei Brakk.
 func male_leisten(g: Vector2) -> void:
 	var bild := ego._bild
-	var welle := int(ego.spiel.welle)
-	var liste: Array = [
-		["Shift", "Schub", _schub_rest / float(_w("schub")["abkling"]), ""],
-		["Q", "Teleport", 0.0 if not luftschlag_an() and _tele_rest <= 0.0 else (1.0 if luftschlag_an() else _tele_rest / float(_w("teleport")["abkling"])), ""],
-	]
-	for w: String in Werte.SONDE7_WAFFEN:
-		var taste := ""
-		for t: String in Werte.EGO_TASTEN:
-			if Werte.ego_taste(t) == w:
-				taste = t
-		var rest := 0.0
-		var zusatz := ""
-		if waffe == w:
-			zusatz = "an"
-		elif w == "luftschlag":
-			rest = 1.0 if _luft_welle == welle else 0.0
-			zusatz = "ab R.%d" % (welle + 1) if _luft_welle == welle else ""
-		else:
-			rest = float(cd.get(w, 0.0)) / float(_w(w)["abkling"])
-		var kurz := {"doppellaser": "Laser", "schrot": "Schrot", "sondengewehr": "Sonde", "luftschlag": "Luftschlag"}
-		liste.append([taste, str(kurz[w]), rest, zusatz, w])
 	var s := 46.0
-	var abst := 8.0
-	var breite := liste.size() * s + (liste.size() - 1) * abst
+	var breite := 7.0 * s + 6.0 * 10.0
 	var y := roundf(g.y * 0.86) - 34.0 - 16.0 - s
 	var x := roundf((g.x - breite) / 2.0)
-	for i in liste.size():
-		var e: Array = liste[i]
-		var r := Rect2(x + i * (s + abst), y, s, s)
-		var rest := clampf(float(e[2]), 0.0, 1.0)
-		var an := str(e[3]) == "an"
-		var farbe := ring_farbe() if an else (EgoModus.LICHT if rest <= 0.0 else Stil.TEXT_BLASS)
-		bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
-		if an:
-			bild.draw_rect(r, Color(farbe, 0.18))
-		Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -6), str(e[1]), 12, farbe)
-		if rest > 0.0:
-			bild.draw_rect(Rect2(r.position + Vector2(0, s * (1.0 - rest)), Vector2(s, s * rest)), Color(0, 0, 0, 0.55))
-		bild.draw_rect(r, farbe, false, 2.0)
-		Stil.schreibe_mittig(bild, Vector2(r.get_center().x, r.end.y - 7.0), str(e[0]), 14, Color.WHITE)
-		if an:
-			Stil.schreibe_mittig(bild, Vector2(r.get_center().x, r.position.y - 9.0), "%d" % magazin, 16, farbe)
-		elif str(e[3]) != "":
-			Stil.schreibe_mittig(bild, Vector2(r.get_center().x, r.position.y - 9.0), str(e[3]), 14, Stil.TEXT_BLASS)
 	# Akku unter der Leiste (links neben der Lebensleiste)
 	var ab := Rect2(x - 70.0, y + 4.0, 12.0, s - 8.0)
 	var voll := akku / float(_w("schweben")["akku"])
@@ -859,7 +983,7 @@ func werte_zeilen() -> Dictionary:
 			pro_sek = 1.0 / float(_w("schrot")["takt"])
 		"sondengewehr":
 			schaden = float(_w("sondengewehr")["schaden"]) * _sf()
-			pro_sek = 1.0 / float(_w("sondengewehr")["laden"])
+			pro_sek = 1.0 / _ladezeit()
 		"luftschlag":
 			schaden = float(_w("luftschlag")["schaden"]) * _sf()
 			pro_sek = 1.0 / float(_w("luftschlag")["takt"])

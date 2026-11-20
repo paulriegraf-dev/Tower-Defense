@@ -63,6 +63,7 @@ const BRAKK_GEL_FELD_SCHADEN := 0.75      # 19.11. (Paul): Truppen im Gel-Feld m
 var _brakk_praemie := 0.0                # Bruchteile der gedrittelten Prämie
 var szenario_editor: SzenarioEditor = null   # 18.11.: Szenario-Editor (Startmenü → Sandbox → Szenario bauen)
 var order24: Order24 = null   # 20.11. (Schritt 5b): Brakk-Mode „Rogue“ – Order 24 (scripts/order24.gd)
+var brakk_geschosse: BrakkGeschosse = null   # 20.11. (Schritt 6c): Brakk-Mode – Schüsse auf Brakk als echte Geschosse (setzt die Ego-Sicht)
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
 var endkampf := false               # letzte Runde: Gegner ohne Ende, Sieg durch Zerstören des HQ
@@ -1060,7 +1061,7 @@ func _pruefe_baumeister(neue_art: String = "") -> void:
 	if neue_art != "" and not formen.has(neue_art):
 		formen.append(neue_art)
 		_protokoll["formen"] = formen
-	if formen.size() < Werte.TURMARTEN.size():
+	if formen.filter(func(a: Variant) -> bool: return str(a) != "truppen").size() < Werte.FORMTUERME_ZAHL:   # 20.11. (Nachtrag): ohne Truppenturm
 		return
 	for z: Vector2i in karte.turm_stufe:
 		if int(karte.turm_stufe[z]) >= 3:
@@ -2472,6 +2473,39 @@ func checkpoint_erreicht(i: int) -> void:
 	melde("Checkpoint %d verloren! Die nächste Welle startet dort." % (i + 1), 4.0)
 
 
+## 20.11. (Paul, Nachtrag): Truppenturm (Irrtürmer) – hält bis zu „werkschutz“ Technogunner. Fehlt einer, kommt nach
+## PRODUKTION_SEK / „nachschub“ ein neuer an einem freien Nachbarfeld heraus. Ab Turmstufe 2 mit dem Wertepaket, „leben_mal“
+## aus der Stufe-3-Fähigkeit. Die Truppen gehen wie Fabriktruppen in Stellungen oder kämpfen am Boden.
+var _werkschutz := {}   # Turm-Zelle -> {"timer", "einheiten"}
+
+func _truppenturm(z: Vector2i, delta: float) -> void:
+	var w: Dictionary = _werkschutz.get(z, {"timer": 0.0, "einheiten": []})
+	var liste: Array = (w["einheiten"] as Array).filter(func(e: Variant) -> bool: return is_instance_valid(e) and not (e as Node).is_queued_for_deletion() and (e as Einheit).leben > 0.0)
+	w["einheiten"] = liste
+	_werkschutz[z] = w
+	karte.werkschutz_zahl[z] = liste.size()
+	if liste.size() >= int(karte.turm_wert(z, "werkschutz", 2)):
+		w["timer"] = 0.0
+		return
+	w["timer"] = float(w["timer"]) + delta * float(karte.turm_wert(z, "nachschub", 1.0))
+	if float(w["timer"]) < Werte.PRODUKTION_SEK:
+		return
+	w["timer"] = 0.0
+	var e := Einheit.new()
+	figuren.add_child(e)
+	e.start(self, karte, "technogunner", z, 2 if int(karte.turm_stufe.get(z, 1)) >= 2 else 0, "")   # Truppenstufe 2 = Wertepaket
+	e.daten["name"] = "Werkschutz"
+	e.max_leben *= float(karte.turm_wert(z, "leben_mal", 1.0))
+	e.leben = e.max_leben
+	var n := karte.freier_nachbar(z)
+	if n != Karte.KEINE:
+		e.position = karte.mitte(n)
+	effekte.flaeche(e.position, Werte.ZELLE * 0.5, Color(Werte.TURMARTEN["truppen"]["farbe"]))
+	einheiten.append(e)
+	liste.append(e)
+	karte.werkschutz_zahl[z] = liste.size()
+
+
 func _tuerme_feuern(delta: float) -> void:
 	for z: Vector2i in karte.ausbau:
 		if not karte.turm_aktiv(z):
@@ -2487,6 +2521,9 @@ func _tuerme_feuern(delta: float) -> void:
 			continue
 		if art_name == "heil":
 			_heilturm(z, delta)
+			continue
+		if art_name == "truppen":
+			_truppenturm(z, delta)   # 20.11. (Nachtrag): schießt nicht, hält Werkschutz
 			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
 		schadensquelle = "turm:" + art_name
@@ -2545,6 +2582,9 @@ func _tuerme_feuern(delta: float) -> void:
 									g.sproede = maxf(g.sproede, sek)
 								if schaden > 0.0:
 									g.nimm_schaden(schaden)
+					"lanze" when brakk_geschosse != null and brakk_geschosse.ist_brakk(ziel):
+						# 20.11.: Schritt 6c – erst Aufglühen, dann der Strahl auf Brakks Stelle von davor
+						brakk_geschosse.turm(z, von, "lanze", schaden, weite, float(karte.turm_wert(z, "breite")) * Werte.ZELLE, int(karte.turm_wert(z, "strahlen", 1)), schadensquelle)
 					"lanze":
 						Ton.am_ort(self, "tc-arc", von)
 						# Strahl in gerader Linie bis zum Ende der Reichweite: trifft alles in der Linie (auch hinter Wällen)
@@ -2552,6 +2592,8 @@ func _tuerme_feuern(delta: float) -> void:
 						_lanzenstrahl(von, ende, farbe, float(karte.turm_wert(z, "breite")) * Werte.ZELLE, schaden)
 						if int(karte.turm_wert(z, "strahlen", 1)) >= 2:
 							_turm_nachschuss[z] = [0.35, ende]
+					_ when brakk_geschosse != null and brakk_geschosse.ist_brakk(ziel):
+						brakk_geschosse.turm(z, von, art_name, schaden, weite, Werte.BRAKK_TURM_BREITE * Werte.ZELLE, 1, schadensquelle)   # 20.11.: Schritt 6c
 					_:
 						Ton.am_ort(self, "tc-heavy", von)
 						_turm_schuss(z, von, ziel.position, farbe)
@@ -3161,7 +3203,7 @@ func _lade_durchgang() -> void:
 	if Werte.ZONE2.size != Vector2i.ZERO and phantom_modus == "":
 		_zange_teilen()   # 20.11. (Zange): jeden Trupp halbieren
 	_elite_nr = -1
-	if brakk_modus and welle >= Werte.BRAKK_ELITE_AB and _schlange.size() >= 2:
+	if brakk_modus and welle in Werte.BRAKK_ELITE_RUNDEN and _durchgang <= 1 and _schlange.size() >= 2:   # 20.11.: feste Liste
 		_elite_nr = randi_range(1, _schlange.size() - 1)   # nicht der erste Trupp
 	var info: Array = _welle.get("wurf_info", [])
 	var wuerfe: Array = _welle["wurf"]
@@ -4024,9 +4066,53 @@ func _turmbilder_abgleichen() -> void:
 			t.position = karte.mitte(z) + Vector2(0, 24)
 			figuren.add_child(t)
 			turmbilder[z] = t
+	_elitekronen_abgleichen()   # 20.11. (Nachtrag)
+	_mg_bilder_abgleichen()   # 20.11. (Nachtrag)
 	for z: Vector2i in karte.feld:
 		if karte.feld[z] == Karte.BATTERIE:
 			karte.batterie_stufe_neu[z] = batterie_stufe(z)
+
+
+## 20.11. (Paul, Nachtrag): MG-Stellung (Sonde 7) – Lauf mit Munitionsgurt auf jeder Stellung (2D und HD-2D).
+var _mg_bilder := {}   # Stellungs-Zelle -> Node2D
+
+func _mg_bilder_abgleichen() -> void:
+	var an := Werte.mg_stellung()
+	for z: Vector2i in _mg_bilder.keys():
+		if not an or karte.ausbau.get(z, Karte.FREI) != Karte.STELLUNG:
+			(_mg_bilder[z] as Node).queue_free()
+			_mg_bilder.erase(z)
+	if not an:
+		return
+	for z: Vector2i in karte.ausbau:
+		if karte.ausbau[z] == Karte.STELLUNG and not _mg_bilder.has(z):
+			var k := Node2D.new()
+			k.position = karte.mitte(z) + Vector2(0, 14)
+			var s := Sprite2D.new()
+			s.texture = Platzhalter.mg_aufsatz()
+			s.centered = false
+			s.scale = Vector2(2, 2)
+			s.offset = Vector2(-14, -16)
+			k.add_child(s)
+			figuren.add_child(k)
+			_mg_bilder[z] = k
+
+
+## 20.11. (Paul, Nachtrag): Elitefabrik (Stufe 4, Sonde 7) – goldene Krone über der Fabrik (2D und HD-2D).
+var _elitekronen := {}   # Fabrik-Zelle -> Sprite2D
+
+func _elitekronen_abgleichen() -> void:
+	for z: Vector2i in _elitekronen.keys():
+		if not fabriken.has(z) or int(fabriken[z].get("stufe", 0)) < 4:
+			(_elitekronen[z] as Node).queue_free()
+			_elitekronen.erase(z)
+	for z: Vector2i in fabriken:
+		if int(fabriken[z].get("stufe", 0)) >= 4 and not _elitekronen.has(z):
+			var k := Node2D.new()
+			k.position = karte.mitte(z) + Vector2(0, 20)
+			k.add_child(Platzhalter.kronen_sprite(52.0, 2.0))
+			figuren.add_child(k)
+			_elitekronen[z] = k
 
 
 # ------------------------------------------------------------ Schadensliste [Tab]
@@ -4102,6 +4188,9 @@ func _quelle_info(quelle: String) -> Dictionary:
 			var z := Vector2i(int(xy[0]), int(xy[1]))
 			if z == Karte.KEINE:
 				return {"name": Werte.KOMMANDANT["name"], "blatt": Werte.KOMMANDANT["blatt"], "zelle": Werte.KOMMANDANT["zelle"]}
+			if karte.turm_art.get(z, "") == "truppen":   # 20.11. (Nachtrag): Werkschutz eines Truppenturms
+				var tg: Dictionary = Werte.EINHEITEN["technogunner"]
+				return {"name": "Werkschutz (Truppenturm)", "blatt": tg["blatt"], "zelle": tg["zelle"]}
 			if not fabriken.has(z):
 				return {}
 			var f: Dictionary = fabriken[z]
@@ -4340,7 +4429,7 @@ func _neuer_gegner(typ: String, zelle: Vector2i, erstes_ziel: int) -> Gegner:
 	if brakk_modus and _trupp_nr == _elite_nr and not _schlange.is_empty():
 		g.mache_elite()
 		if _trupp.is_empty():
-			# 19.11. (Paul): Ansturm – ein Elite-Trupp je Runde, mit Ansage
+			# 19.11. (Paul): Elite-Trupp mit Ansage (20.11.: nur in Werte.BRAKK_ELITE_RUNDEN)
 			_einblendung.banner("ELITE-TRUPP", "Ein verstärkter Trupp greift an – mehr Leben, mehr Schaden, Treffer streifen.", Color("ff8a3a"))
 			Ton.spiele(self, "alert")
 	if typ == "sprenger":
@@ -4913,7 +5002,7 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		karte.magnet_richtung[z] = r
 	if _ist_ausbau(typ):
 		karte.baue_aus(z, typ)
-		if typ == Karte.TURM and karte.turm_art.has(z) and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.TURMARTEN.size():
+		if typ == Karte.TURM and karte.turm_art.has(z) and str(karte.turm_art[z]) != "truppen" and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.FORMTUERME_ZAHL:
 			erfolg("formenlehre")   # 18.11.
 		if typ == Karte.TURM and karte.turm_art.has(z):
 			_pruefe_baumeister(str(karte.turm_art[z]))   # 19.11.
@@ -5157,7 +5246,7 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 		return true
 	_notiere(eintrag)
 	if stufe == 3:
-		melde("%s Stufe 4 – Elite: doppelt so viel Leben und Schaden." % d["name"], 5.0)   # 20.11.
+		melde("%s Stufe 4 – Elite: %s." % [d["name"], Werte.elite_text()], 5.0)   # 20.11.; Nachtrag: Text aus den Werten
 	elif stufe == 0 and Werte.truppen_fest() > 0:
 		melde("Spezialisiert auf %s: bleibt bei dieser Truppe." % d["name"], 4.0)   # 20.11.: Sonde 7 – weiter eine Truppe
 	elif stufe == 0:
@@ -5191,7 +5280,7 @@ func werte_turm_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 		var f3: Dictionary = Werte.TURM_STUFE_3[art][faehigkeit]
 		melde("%s Stufe 3 – %s: %s" % [name, f3["name"], f3["text"]], 6.0)
 	elif stufe == 3:
-		melde("%s Stufe 4: +50 %% Schaden, +1 Reichweite, hält doppelt so viel aus." % name, 5.0)   # 20.11.
+		melde("%s Stufe 4: %s, hält doppelt so viel aus." % [name, Werte.turm4_text()], 5.0)   # 20.11.; Nachtrag: Text aus den Werten
 	else:
 		melde("%s Stufe 2: %s" % [name, Werte.TURM_STUFE_2[art]["text"]], 5.0)
 	_notiere(eintrag)

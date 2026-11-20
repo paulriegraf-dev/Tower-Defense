@@ -18,6 +18,7 @@ var boden: Dictionary = {}         # 18.11. (Etappe 2): Zelle -> Gelände mit Wi
 var leben: Dictionary = {}         # Zelle -> Lebenspunkte des Gebäudes
 var ausbau: Dictionary = {}        # Wall-Zelle -> STELLUNG / TURM / TOR
 var turm_art: Dictionary = {}      # Turm-Zelle -> Schlüssel in Werte.TURMARTEN (aus der Form der Nachbarwälle)
+var werkschutz_zahl: Dictionary = {}   # 20.11. (Nachtrag): Truppenturm-Zelle -> lebende Werkschutz-Truppen (Punkte am Turm)
 var turm_stufe: Dictionary = {}    # Turm-Zelle -> Stufe 2 oder 3 (fehlt = Stufe 1)
 var turm_faehigkeit: Dictionary = {}   # Turm-Zelle -> gewählte Stufe-3-Fähigkeit (Schlüssel in Werte.TURM_STUFE_3)
 # Neue Grafik (16.11.): Stufe, letzter Schuss und Blickrichtung je Batterie (vom Spiel gesetzt)
@@ -526,6 +527,8 @@ func turm_form(z: Vector2i) -> String:
 	if form == "" and _diagonal_paar(z).size() == 2:
 		# Treppe: Erdwälle schräg an zwei gegenüberliegenden Ecken -> Heilturm (wenn keine andere Form passt)
 		return "heil"
+	if form == "" and Werte.truppenturm() and freie_stuetzen(z).size() == 2:
+		return "truppen"   # 20.11. (Paul, Nachtrag): Irrtürmer – Truppenturm, wenn sonst nichts passt
 	return form
 
 
@@ -591,7 +594,17 @@ func turm_wert(z: Vector2i, schluessel: String, vorgabe: Variant = null) -> Vari
 	var stufe := int(turm_stufe.get(z, 1))
 	if stufe >= 2 and (Werte.TURM_STUFE_2[art] as Dictionary).has(schluessel):
 		wert = Werte.TURM_STUFE_2[art][schluessel]
-	if stufe >= 3:
+	if stufe >= 4:
+		# 20.11. (Paul, Nachtrag): Stufe 4 hat beide Stufe-3-Fähigkeiten – erst die andere, dann die gewählte (sie gewinnt,
+		# wo beide denselben Wert setzen)
+		var alle: Dictionary = Werte.TURM_STUFE_3[art]
+		var gewaehlt := str(turm_faehigkeit.get(z, ""))
+		for name: String in alle:
+			if name != gewaehlt and (alle[name] as Dictionary).has(schluessel):
+				wert = alle[name][schluessel]
+		if (alle.get(gewaehlt, {}) as Dictionary).has(schluessel):
+			wert = alle[gewaehlt][schluessel]
+	elif stufe >= 3:
 		var f: Dictionary = (Werte.TURM_STUFE_3[art] as Dictionary).get(str(turm_faehigkeit.get(z, "")), {})
 		if f.has(schluessel):
 			wert = f[schluessel]

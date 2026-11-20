@@ -30,6 +30,9 @@ var zelle := Vector2i.ZERO
 var blick := 0         # Zeile im Gefechtsturm-Blatt
 var schuss := -1.0     # Sekunden seit dem letzten Schuss (< 0 = Ruhe)
 var _bild: Sprite2D    # das Turmbild selbst (Sprite, damit die HD-2D-Ansicht es übernehmen kann)
+var _krone: Sprite2D = null    # 20.11. (Nachtrag): Stufe 4 – goldene Krone …
+var _zusatz: Sprite2D = null   # … und eine Zusatzform je Turmart (Platzhalter.turm4_zusatz)
+var _punkte: Sprite2D = null   # 20.11. (Nachtrag): Truppenturm – Werkschutz-Punkte (auch in HD-2D)
 
 
 ## Der Turm schießt auf `ziel` (Weltkoordinaten): zum Ziel drehen und die Schuss-Animation starten.
@@ -59,7 +62,48 @@ func _process(delta: float) -> void:
 	_bild.region_rect = b["quelle"]
 	_bild.offset = -(b["anker"] as Vector2)
 	_bild.modulate = b["farbe"]
+	_stufe4(b)
+	_werkschutz_punkte()
 	queue_redraw()
+
+
+## 20.11. (Paul, Nachtrag): Stufe-4-Formturm (Irrtürmer) – Krone über dem Turm und eine goldene Zusatzform je Turmart.
+## Beide sind Sprite2D, also auch in der HD-2D-Ansicht zu sehen; der goldene Rahmen am Boden kommt aus _beiwerk.
+func _stufe4(b: Dictionary) -> void:
+	var st4 := int(karte.turm_stufe.get(zelle, 1)) >= 4
+	if st4 and _krone == null:
+		_krone = Platzhalter.kronen_sprite(0.0, 2.0)
+		add_child(_krone)
+		_zusatz = Sprite2D.new()
+		_zusatz.texture = Platzhalter.turm4_zusatz(str(karte.turm_art.get(zelle, "geschuetz")))
+		_zusatz.centered = false
+		_zusatz.scale = Vector2(2, 2)
+		add_child(_zusatz)
+	if _krone == null:
+		return
+	_krone.visible = st4
+	_zusatz.visible = st4
+	var oben := (b["anker"] as Vector2).y   # Bildpixel vom Fußpunkt bis zur Oberkante (das Bild ist zweifach skaliert)
+	_krone.offset = Vector2(-8, -11 - oben - 2.0)
+	_zusatz.offset = Vector2(6, -oben * 0.7)
+
+
+## 20.11. (Paul, Nachtrag): Truppenturm – so viele Punkte über dem Tor, wie Werkschutz-Truppen gerade leben (von höchstens).
+func _werkschutz_punkte() -> void:
+	if str(karte.turm_art.get(zelle, "")) != "truppen":
+		if _punkte != null:
+			_punkte.visible = false
+		return
+	if _punkte == null:
+		_punkte = Sprite2D.new()
+		_punkte.centered = false
+		_punkte.scale = Vector2(2, 2)
+		add_child(_punkte)
+	var max_n := int(karte.turm_wert(zelle, "werkschutz", 2))
+	var n := int(karte.werkschutz_zahl.get(zelle, 0))
+	_punkte.visible = true
+	_punkte.texture = Platzhalter.punkte(n, max_n)
+	_punkte.offset = Vector2(-float(max_n * 5 + 1) / 2.0, -Platzhalter.TT_ANKER.y - 7.0)
 
 
 func _draw() -> void:
@@ -85,6 +129,11 @@ static func bild_info(k: Karte, z: Vector2i, p_blick: int, p_schuss: float, alph
 	var faehigkeit := str(k.turm_faehigkeit.get(z, ""))
 	var aktiv := alpha < 1.0 or k.turm_aktiv(z)
 	var b := {"farbe": Color(1, 1, 1, alpha) if aktiv else Color(0.45, 0.45, 0.52, alpha), "quelle": Rect2(0, 0, 64, 64)}
+	if art == "truppen":   # 20.11. (Nachtrag): Truppenturm (Irrtürmer), Platzhalter aus Code
+		b["bild"] = Platzhalter.truppenturm(stufe)
+		b["anker"] = Platzhalter.TT_ANKER
+		b["quelle"] = Rect2(Vector2.ZERO, Vector2(Platzhalter.TT_GROESSE))
+		return b
 	if art == "lanze":
 		var bildname := "lanze"
 		if stufe == 2:
@@ -132,6 +181,8 @@ static func _beiwerk(ci: CanvasItem, k: Karte, z: Vector2i, fuss: Vector2, alpha
 	if art != "geschuetz" and art != "lanze" and art != "":
 		for i in stufe - 1:
 			ci.draw_rect(Rect2(fuss + Vector2(-11 + i * 12, -2), Vector2(8, 6)), Color("ffd34d") * Color(1, 1, 1, alpha))
+	if stufe >= 4:   # 20.11. (Nachtrag): Stufe 4 – goldener Rahmen am Boden
+		ci.draw_rect(Rect2(fuss + Vector2(-28, -8), Vector2(56, 14)), Color("ffd34d") * Color(1, 1, 1, alpha), false, 2.0)
 	if mit_kreuz and not k.turm_aktiv(z):
 		var m := fuss + Vector2(0, -40)
 		ci.draw_line(m + Vector2(-14, -14), m + Vector2(14, 14), Color("ff5a64"), 4.0)

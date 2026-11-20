@@ -62,6 +62,8 @@ var sabotage := {"fabriken": 0, "stellungen": 0, "waelle": 0, "truppen": 0, "gel
 var log_wege: Array = []         # für die Prüfung: je Gruppe die Felder ihres Wegs
 var schaden_an_brakk := {}       # Quelle (spiel.schadensquelle, gekürzt auf die Art) -> Schaden an Brakk (Balance)
 var _knoten3d: Array = []
+var _terminal_ring: MeshInstance3D = null   # 20.11. (Nachtrag): Ring über dem Ringterminal
+var _terminal_mat: StandardMaterial3D = null
 var _schild3d: Array = []
 
 
@@ -729,22 +731,79 @@ func _3d_pflegen() -> void:
 		return
 	if _knoten3d.is_empty():
 		if terminal != Karte.KEINE:
-			var t := _kasten3d(hd, Vector3(1.8, 0.35, 1.8), Color("ff3df2"), Vector3(float(terminal.x) + 1.0, 0.18, float(terminal.y) + 1.0))
-			_knoten3d.append(t)
-			_knoten3d.append(_kasten3d(hd, Vector3(0.5, 1.6, 0.5), Color("ffe14d"), Vector3(float(terminal.x) + 1.0, 0.8, float(terminal.y) + 1.0)))
+			# 20.11. (Paul, Nachtrag): Ringterminal – 2×2-Sockel in Magenta, darüber ein stehender goldener Ring, der sich dreht
+			# und heller leuchtet, je näher der Anführer kommt
+			var mitte := Vector3(float(terminal.x) + 1.0, 0.0, float(terminal.y) + 1.0)
+			_knoten3d.append(_kasten3d(hd, Vector3(1.9, 0.3, 1.9), Color("ff3df2"), mitte + Vector3(0, 0.15, 0)))
+			_knoten3d.append(_kasten3d(hd, Vector3(1.5, 0.12, 1.5), Color("2a1640"), mitte + Vector3(0, 0.36, 0)))
+			for ecke: Vector2 in [Vector2(-0.8, -0.8), Vector2(0.8, -0.8), Vector2(-0.8, 0.8), Vector2(0.8, 0.8)]:
+				_knoten3d.append(_kasten3d(hd, Vector3(0.18, 0.7, 0.18), Color("ff3df2"), mitte + Vector3(ecke.x, 0.35, ecke.y)))
+			_terminal_ring = MeshInstance3D.new()
+			var t := TorusMesh.new()
+			t.inner_radius = 0.42
+			t.outer_radius = 0.6
+			_terminal_ring.mesh = t
+			_terminal_mat = _leucht(Color("ffe14d"), 0.95)
+			_terminal_ring.material_override = _terminal_mat
+			_terminal_ring.position = mitte + Vector3(0, 1.25, 0)
+			_terminal_ring.rotation = Vector3(PI / 2.0, 0, 0)   # steht aufrecht
+			hd.add_child(_terminal_ring)
+			_knoten3d.append(_terminal_ring)
+			var stein := MeshInstance3D.new()
+			var kugel := SphereMesh.new()
+			kugel.radius = 0.16
+			kugel.height = 0.32
+			stein.mesh = kugel
+			stein.material_override = _leucht(Color("7fe0ff"), 0.95)
+			stein.position = mitte + Vector3(0, 1.25, 0)
+			hd.add_child(stein)
+			_knoten3d.append(stein)
 		for m: Dictionary in medkits:
+			# 20.11. (Paul, Nachtrag): Med-Kit – weißes Paket mit rotem Kreuz (oben und vorn), Schatten am Boden, pulsiert
 			var z: Vector2i = m["zelle"]
 			var kn := Node3D.new()
 			hd.add_child(kn)
 			kn.position = Vector3(float(z.x) + 0.5, 0.0, float(z.y) + 0.5)
-			_kasten3d(kn, Vector3(0.45, 0.3, 0.45), Color("f2f2f2"), Vector3(0, 0.15, 0))
-			_kasten3d(kn, Vector3(0.36, 0.05, 0.1), Color("ff3030"), Vector3(0, 0.32, 0))
-			_kasten3d(kn, Vector3(0.1, 0.05, 0.36), Color("ff3030"), Vector3(0, 0.32, 0))
+			var schatten := MeshInstance3D.new()
+			var scheibe := CylinderMesh.new()
+			scheibe.top_radius = 0.34
+			scheibe.bottom_radius = 0.34
+			scheibe.height = 0.01
+			schatten.mesh = scheibe
+			var sm := StandardMaterial3D.new()
+			sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			sm.albedo_color = Color(0, 0, 0, 0.35)
+			schatten.material_override = sm
+			schatten.position = Vector3(0, 0.01, 0)
+			kn.add_child(schatten)
+			var paket := Node3D.new()
+			paket.name = "Paket"
+			kn.add_child(paket)
+			_kasten3d(paket, Vector3(0.42, 0.28, 0.42), Color("f2f2f2"), Vector3(0, 0.14, 0))
+			_kasten3d(paket, Vector3(0.32, 0.03, 0.09), Color("ff3030"), Vector3(0, 0.295, 0))
+			_kasten3d(paket, Vector3(0.09, 0.03, 0.32), Color("ff3030"), Vector3(0, 0.295, 0))
+			_kasten3d(paket, Vector3(0.24, 0.07, 0.02), Color("ff3030"), Vector3(0, 0.14, 0.215))
+			_kasten3d(paket, Vector3(0.07, 0.2, 0.02), Color("ff3030"), Vector3(0, 0.14, 0.215))
 			m["knoten"] = kn
 			_knoten3d.append(kn)
+	var t_ms := Time.get_ticks_msec()
 	for m: Dictionary in medkits:
 		if m["knoten"] != null:
-			(m["knoten"] as Node3D).visible = bool(m["da"])
+			var kn: Node3D = m["knoten"]
+			kn.visible = bool(m["da"])
+			var paket := kn.get_node_or_null("Paket") as Node3D
+			if paket != null:
+				var puls := 1.0 + 0.12 * sin(float(t_ms) / 180.0)
+				paket.scale = Vector3(puls, puls, puls)
+				paket.position.y = 0.06 + 0.04 * sin(float(t_ms) / 180.0)
+	if _terminal_ring != null:
+		_terminal_ring.rotation.y = float(t_ms) / 900.0
+		var nah := 1.0
+		if spiel.ego != null:
+			var mitte2 := karte.mitte(terminal) + Vector2(Werte.ZELLE, Werte.ZELLE) * 0.5
+			nah = clampf(1.0 - (spiel.ego._fuss2d().distance_to(mitte2) / Werte.ZELLE - 1.0) / 5.0, 0.0, 1.0)
+		_terminal_mat.emission_energy_multiplier = 0.6 + 3.4 * nah + 0.4 * sin(float(t_ms) / 250.0) * nah
 	while _schild3d.size() < schild_mitten.size():
 		var p: Vector2 = schild_mitten[_schild3d.size()]
 		var mi := MeshInstance3D.new()

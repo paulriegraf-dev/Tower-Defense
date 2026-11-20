@@ -151,13 +151,29 @@ func _init(brakk: Kommandant) -> void:
 		brakk.leben = brakk.max_leben
 
 
-## Brakk: ab seiner Stufe. Andere Anführer haben nur Brakks Bewegungen aus ihrer Liste „frei“ (Werte.ANFUEHRER_EGO).
+## Ab der Stufe in ab_tabelle (nicht genannt = von Anfang an).
 func frei(was: String) -> bool:
-	if alle_frei and anfuehrer == "brakk":
-		return true   # 20.11. (Schritt 5b): Szenario gibt alle Fähigkeiten frei
-	if anfuehrer != "brakk":
-		return (Werte.ego_af("frei") as Array).has(was)
-	return stufe >= int(AB.get(was, 1))
+	if alle_frei:
+		return true   # 20.11. (Schritt 5b): Szenario gibt alle Fähigkeiten frei (Nachtrag: für jeden Anführer)
+	return stufe >= int(ab_tabelle(anfuehrer).get(was, 1))   # 20.11. (Nachtrag): jeder Anführer über seine Stufen
+
+
+## 20.11. (Nachtrag): Freischaltstufen je Anführer – Brakk AB, sonst Werte.ANFUEHRER_EGO[…]["ab"].
+static func ab_tabelle(af: String) -> Dictionary:
+	if af == "brakk" or not Werte.ANFUEHRER_EGO.has(af):
+		return AB
+	return Werte.ANFUEHRER_EGO[af]["ab"]
+
+
+## Name einer Fähigkeit mit Taste (Aufstiegs-Banner, Übersicht).
+static func faehigkeit_name(af: String, was: String) -> String:
+	if af == "brakk" and NAMEN.has(was):
+		return str(NAMEN[was])
+	var taste := ""
+	for t: String in (Werte.ANFUEHRER_EGO[af]["tasten"] as Dictionary):
+		if str(Werte.ANFUEHRER_EGO[af]["tasten"][t]) == was:
+			taste = str(Werte.EGO_TASTEN_NAME.get(t, t))
+	return str(Werte.EGO_AKTIONEN.get(was, was)) + (" [%s]" % taste if taste != "" else "")
 
 
 ## 20.11.: Quellen, die für diesen Anführer gezeigt werden.
@@ -193,8 +209,9 @@ func gib(xp: int, brakk: Kommandant) -> int:
 		auf += 1
 	if auf > 0:
 		neu_frei.clear()
-		for k: String in (AB if anfuehrer == "brakk" else {}):   # 20.11.: Freischaltungen gibt es nur für Brakk
-			if int(AB[k]) > stufe - auf and int(AB[k]) <= stufe:
+		var ab := ab_tabelle(anfuehrer)   # 20.11. (Nachtrag): Freischaltungen für jeden Anführer
+		for k: String in ab:
+			if int(ab[k]) > stufe - auf and int(ab[k]) <= stufe:
 				neu_frei.append(k)
 		var neu := basis_leben + LEBEN_JE_STUFE * float(stufe - 1)
 		if not brakk.gefallen:
@@ -241,7 +258,7 @@ func ulti_rest(welle: int) -> float:
 ## Freie Finger (Ringplätze) auf der aktuellen Stufe.
 func finger() -> int:
 	if anfuehrer == "irrtuermer":
-		return int(Werte.IRRTUERMER["slots"])   # 20.11.: Hand und PliPlop
+		return SATZ_MAX   # 20.11. (Nachtrag): Satz des Helden
 	var n := 0
 	for ab: int in FINGER_AB:
 		if stufe >= ab:
@@ -254,6 +271,12 @@ func hat(ring: String) -> bool:
 
 
 func ring_stufe(ring: String) -> int:
+	if irr():   # 20.11. (Nachtrag): höchste Stufe dieses Rings im Held-Satz (für das Feld)
+		var best := 0
+		for i in ringe.size():
+			if ringe[i] == ring:
+				best = maxi(best, satz_stufe("held", i))
+		return best
 	return int(ring_stufen.get(ring, 0))
 
 
@@ -266,12 +289,12 @@ func aktiv() -> String:
 
 ## Kaufen (Stufe 1) oder die nächste Stufe: "" = geklappt, sonst der Grund.
 func kaufe(ring: String, spiel: Node) -> String:
+	if irr():
+		return kaufe_in("held", ring, spiel)   # 20.11. (Nachtrag): Irrtürmer – neuer Ring in den Held-Satz
 	var st := ring_stufe(ring)
 	if st >= RING_PREISE.size():
 		return "Der Ring ist schon auf Stufe 3."
 	if st == 0 and ringe.size() >= finger():
-		if anfuehrer == "irrtuermer":
-			return "Beide Slots sind belegt."   # 20.11.
 		return "Kein Finger frei – der nächste ab Stufe %d." % int(FINGER_AB[ringe.size()]) if ringe.size() < FINGER_AB.size() else "Alle fünf Finger tragen schon einen Ring."
 	var preis := int(RING_PREISE[st])
 	if int(spiel.budget) < preis:
@@ -294,8 +317,8 @@ func verkaufe(ring: String, spiel: Node) -> void:
 	if not ringe.has(ring):
 		return
 	spiel.budget += erstattung(ring, int(spiel.welle))
-	while ringe.has(ring):
-		ringe.erase(ring)   # 20.11.: beim Irrtürmer auch die Kopie im zweiten Slot
+	while ringe.has(ring):   # 20.11.: der Irrtürmer verkauft je Satz und Stelle (verkaufe_in)
+		ringe.erase(ring)
 	ring_stufen.erase(ring)
 	_bezahlt.erase(ring)
 	_gekauft_in.erase(ring)
@@ -317,6 +340,8 @@ static func im_feld(z: Vector2i, ecke: Vector2i) -> bool:
 ## 19.11. (Paul): Ringe stapeln – für Brakks Schüsse (Autoattacke) wirken ALLE getragenen Ringe zugleich, jeder auf seiner
 ## Stufe (Tabelle `brakk_stufen` in RINGE). Jeder Wert gehört genau einem Ring; `std`, wenn keiner ihn hat.
 func brakk_wert(schluessel: String, std: Variant) -> Variant:
+	if irr():
+		return satz_wert("held", schluessel, std)   # 20.11. (Nachtrag): alle Ringe des Held-Satzes, mehrfache addiert
 	for r: String in ringe:
 		var st := clampi(ring_stufe(r), 1, 3)
 		var d: Dictionary = RINGE[r]["brakk_stufen"][st - 1]
@@ -330,7 +355,7 @@ func brakk_wert_aktiv(schluessel: String, std: Variant) -> Variant:
 	var r := aktiv()
 	if r == "":
 		return std
-	var st := clampi(ring_stufe(r), 1, 3)
+	var st := clampi(satz_aktiv_stufe("held") if irr() else ring_stufe(r), 1, 3)   # 20.11. (Nachtrag): Irrtürmer – Stufe dieser Kopie
 	return (RINGE[r]["brakk_stufen"][st - 1] as Dictionary).get(schluessel, std)
 
 
@@ -409,7 +434,7 @@ func speichern() -> Dictionary:
 		f[ring] = [e.x, e.y]
 	return {"erfahrung": erfahrung, "stufe": stufe, "xp_rest": _xp_rest, "kill_xp": kill_xp, "ulti_ladung": ulti_ladung,
 		"ulti_ab_welle": ulti_ab_welle, "ringe": Array(ringe), "ring_stufen": ring_stufen, "bezahlt": _bezahlt,
-		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt, "schaden_quellen": schaden_quellen, "schaden_runden": schaden_runden, "kills_runden": kills_runden, "zaehler": zaehler, "getauscht": getauscht}
+		"gekauft_in": _gekauft_in, "felder": f, "gewaehlt": gewaehlt, "schaden_quellen": schaden_quellen, "schaden_runden": schaden_runden, "kills_runden": kills_runden, "zaehler": zaehler, "saetze": saetze_speichern()}   # 20.11. (Nachtrag): Irrtürmer-Sätze
 
 
 func lade(d: Dictionary, brakk: Kommandant) -> void:
@@ -439,7 +464,7 @@ func lade(d: Dictionary, brakk: Kommandant) -> void:
 			var e: Array = fe[r]
 			felder[r] = Vector2i(int(e[0]), int(e[1]))
 	gewaehlt = clampi(int(d.get("gewaehlt", 0)), 0, maxi(0, ringe.size() - 1))
-	getauscht = bool(d.get("getauscht", false))   # 20.11.: Irrtürmer
+	saetze_laden(d.get("saetze", {}))   # 20.11. (Nachtrag): Irrtürmer – Stufen je Kopie und PliPlop-Satz
 	schaden_quellen = d.get("schaden_quellen", {})   # 19.11.
 	schaden_runden = d.get("schaden_runden", {})
 	kills_runden = d.get("kills_runden", {})
@@ -621,40 +646,240 @@ func sieg_bericht(spiel: Node, sekunden: float) -> Dictionary:
 	}
 
 
-# ------------------------------------------------------------------ Irrtürmer: zwei Ringslots (20.11.)
+# ------------------------------------------------------------------ Irrtürmer: zwei Ringsätze (20.11., Nachtrag)
 
-## 20.11.: Der Irrtürmer trägt zwei Ringe – in der Hand (Slot 0) und am PliPlop (Slot 1). Derselbe Ring darf in beiden
-## stecken, muss dafür aber ein zweites Mal gekauft werden (Kopie zum halben Preis). Die Stufe gilt für beide Kopien.
-## [V] tauscht die Slots (ohne die Reihenfolge der Ringe zu ändern).
-var getauscht := false
+## 20.11. (Paul, Nachtrag): Irrtürmer und PliPlop tragen je bis zu SATZ_MAX Ringe – zwei getrennte Sätze. Jeder Ring wird
+## einzeln gekauft und ausgebaut (Preise wie bei Brakk, RING_PREISE); derselbe Ring darf mehrfach im Satz stecken, jede
+## Kopie hat ihre eigene Stufe. Der Held-Satz ist `ringe` (Mausrad wählt den aktiven, [C] setzt dessen Feld wie bei Brakk),
+## der PliPlop-Satz `pp_ringe` (aktiver Ring = Pfad). Alle Ringe eines Satzes wirken zugleich; mehrfach getragene Werte
+## werden nach RING_STAPEL zusammengezählt. [V] tauscht den aktiven Ring des Helden mit dem aktiven des PliPlop.
+const SATZ_MAX := 4
+## Wie gleiche Werte mehrerer Ringe zusammenkommen:
+##   plus: Zuschläge addieren (1,2 und 1,3 → 1,5), tempo: Schussrate addieren (Takt 1/1,15 zweimal → 1/1,3),
+##   summe: einfach addieren, max: der größte zählt, teilen: Brand-Takt – der kürzeste geteilt durch die Zahl der Ringe,
+##   anhaengen: Durchschlag – die Listen der weiteren Gegner hintereinander.
+## Nicht addierbar (Vorschlag): Markierungsdauer und Sprungschaden (der größte Wert), Brand-Takt (häufiger statt stärker),
+## Schutz höchstens SCHUTZ_MAX.
+const RING_STAPEL := {"schaden": "plus", "takt": "tempo", "mark_bonus": "plus", "mark_sek": "max", "bremse": "summe",
+	"gel_bonus": "plus", "brand_takt": "teilen", "spruenge": "summe", "sprung_anteil": "max", "weitere": "anhaengen",
+	"anlauf": "plus", "schutz": "summe"}
+const SCHUTZ_MAX := 0.6
+var held_st: Array[int] = []           # Stufe je Ring im Held-Satz (gleiche Reihenfolge wie `ringe`)
+var held_bez: Array[int] = []          # bezahlt je Ring
+var held_runde: Array[int] = []        # gekauft in Runde
+var pp_ringe: Array[String] = []       # PliPlop-Satz
+var pp_st: Array[int] = []
+var pp_bez: Array[int] = []
+var pp_runde: Array[int] = []
+var pp_gewaehlt := 0                   # aktiver Ring des PliPlop (bestimmt den Pfad)
 
 
-## Ring in Slot 0 (Hand) oder 1 (PliPlop), "" = leer.
-func slot_ring(slot: int) -> String:
-	var i := slot if not getauscht else 1 - slot
-	return ringe[i] if i >= 0 and i < ringe.size() else ""
+func irr() -> bool:
+	return anfuehrer == "irrtuermer"
 
 
-func kopie_preis() -> int:
-	return roundi(float(RING_PREISE[0]) * float(Werte.IRRTUERMER["kopie_anteil"]))
+## [Ringe, Stufen, Bezahlt, Runde] des Satzes "held" oder "pp".
+func _satz(name: String) -> Array:
+	return [ringe, held_st, held_bez, held_runde] if name == "held" else [pp_ringe, pp_st, pp_bez, pp_runde]
 
 
-## Kann der Ring als Kopie in den zweiten Slot? ("" = ja, sonst der Grund)
-func kopie_grund(ring: String, spiel: Node) -> String:
-	if anfuehrer != "irrtuermer" or not hat(ring) or ringe.count(ring) >= 2:
-		return "Keine Kopie möglich."
-	if ringe.size() >= finger():
-		return "Beide Slots sind belegt."
-	if int(spiel.budget) < kopie_preis():
+func satz_ringe(name: String) -> Array[String]:
+	return ringe if name == "held" else pp_ringe
+
+
+func satz_stufe(name: String, i: int) -> int:
+	var st: Array = _satz(name)[1]
+	return int(st[i]) if i >= 0 and i < st.size() else 0
+
+
+func satz_gewaehlt(name: String) -> int:
+	return gewaehlt if name == "held" else pp_gewaehlt
+
+
+## Aktiver Ring des Satzes ("" = keiner; beim Helden auch während des Wechsels).
+func satz_aktiv(name: String) -> String:
+	if name == "held":
+		return aktiv()
+	return pp_ringe[clampi(pp_gewaehlt, 0, pp_ringe.size() - 1)] if not pp_ringe.is_empty() else ""
+
+
+func satz_aktiv_stufe(name: String) -> int:
+	var l := satz_ringe(name)
+	return satz_stufe(name, clampi(satz_gewaehlt(name), 0, l.size() - 1)) if not l.is_empty() else 0
+
+
+## Kauft einen Ring (Stufe 1) in den Satz: "" = geklappt, sonst der Grund.
+func kaufe_in(name: String, ring: String, spiel: Node) -> String:
+	var s := _satz(name)
+	if (s[0] as Array).size() >= SATZ_MAX:
+		return "%s trägt schon %d Ringe." % ["Der Irrtürmer" if name == "held" else "PliPlop", SATZ_MAX]
+	var preis := int(RING_PREISE[0])
+	if int(spiel.budget) < preis:
 		return "Nicht genug Budget."
+	spiel.budget -= preis
+	(s[0] as Array).append(ring)
+	(s[1] as Array).append(1)
+	(s[2] as Array).append(preis)
+	(s[3] as Array).append(int(spiel.welle))
 	return ""
 
 
-func kaufe_kopie(ring: String, spiel: Node) -> String:
-	var grund := kopie_grund(ring, spiel)
-	if grund != "":
-		return grund
-	spiel.budget -= kopie_preis()
-	ringe.append(ring)
-	_bezahlt[ring] = int(_bezahlt.get(ring, 0)) + kopie_preis()
+## Nächste Stufe für den Ring an Stelle i des Satzes.
+func baue_aus(name: String, i: int, spiel: Node) -> String:
+	var s := _satz(name)
+	var st := satz_stufe(name, i)
+	if st <= 0:
+		return "Kein Ring."
+	if st >= RING_PREISE.size():
+		return "Der Ring ist schon auf Stufe 3."
+	var preis := int(RING_PREISE[st])
+	if int(spiel.budget) < preis:
+		return "Nicht genug Budget."
+	spiel.budget -= preis
+	(s[1] as Array)[i] = st + 1
+	(s[2] as Array)[i] = int((s[2] as Array)[i]) + preis
 	return ""
+
+
+func satz_erstattung(name: String, i: int, welle: int) -> int:
+	var s := _satz(name)
+	var summe := int((s[2] as Array)[i])
+	return summe if int((s[3] as Array)[i]) == welle else int(summe * RING_ZURUECK)
+
+
+func verkaufe_in(name: String, i: int, spiel: Node) -> void:
+	var s := _satz(name)
+	if i < 0 or i >= (s[0] as Array).size():
+		return
+	spiel.budget += satz_erstattung(name, i, int(spiel.welle))
+	var ring := str((s[0] as Array)[i])
+	for a: Array in s:
+		a.remove_at(i)
+	if name == "held":
+		if not ringe.has(ring):
+			felder.erase(ring)   # das Feld gehört zum Ring des Helden
+		gewaehlt = clampi(gewaehlt, 0, maxi(0, ringe.size() - 1))
+	else:
+		pp_gewaehlt = clampi(pp_gewaehlt, 0, maxi(0, pp_ringe.size() - 1))
+
+
+## PliPlop: aktiven Ring wählen (Terminal).
+func waehle_pp(i: int) -> void:
+	pp_gewaehlt = clampi(i, 0, maxi(0, pp_ringe.size() - 1))
+
+
+## [V]: aktiver Ring des Helden ↔ aktiver Ring des PliPlop (mit Stufe und Bezahltem). Ist ein Satz leer, wandert der
+## Ring nur hinüber (wenn dort Platz ist). false = nichts getauscht.
+func tausche() -> bool:
+	var h := _satz("held")
+	var p := _satz("pp")
+	var hi := clampi(gewaehlt, 0, maxi(0, ringe.size() - 1))
+	var pi := clampi(pp_gewaehlt, 0, maxi(0, pp_ringe.size() - 1))
+	if not ringe.is_empty() and not pp_ringe.is_empty():
+		for k in 4:
+			var t: Variant = (h[k] as Array)[hi]
+			(h[k] as Array)[hi] = (p[k] as Array)[pi]
+			(p[k] as Array)[pi] = t
+	elif not ringe.is_empty() and pp_ringe.size() < SATZ_MAX:
+		for k in 4:
+			(p[k] as Array).append((h[k] as Array)[hi])
+			(h[k] as Array).remove_at(hi)
+		pp_gewaehlt = pp_ringe.size() - 1
+	elif not pp_ringe.is_empty() and ringe.size() < SATZ_MAX:
+		for k in 4:
+			(h[k] as Array).append((p[k] as Array)[pi])
+			(p[k] as Array).remove_at(pi)
+		gewaehlt = ringe.size() - 1
+	else:
+		return false
+	gewaehlt = clampi(gewaehlt, 0, maxi(0, ringe.size() - 1))
+	pp_gewaehlt = clampi(pp_gewaehlt, 0, maxi(0, pp_ringe.size() - 1))
+	for r: Variant in felder.keys():
+		if not ringe.has(str(r)):
+			felder.erase(r)
+	return true
+
+
+## Wert aller Ringe eines Satzes zusammen (RING_STAPEL), `std` ohne passenden Ring.
+func satz_wert(name: String, schluessel: String, std: Variant) -> Variant:
+	var s := _satz(name)
+	var werte: Array = []
+	for i in (s[0] as Array).size():
+		var d: Dictionary = RINGE[str((s[0] as Array)[i])]["brakk_stufen"][clampi(int((s[1] as Array)[i]), 1, 3) - 1]
+		if d.has(schluessel):
+			werte.append(d[schluessel])
+	return stapeln(schluessel, werte, std)
+
+
+## Mehrere Werte desselben Schlüssels nach RING_STAPEL zusammenzählen.
+static func stapeln(schluessel: String, werte: Array, std: Variant) -> Variant:
+	if werte.is_empty():
+		return std
+	match str(RING_STAPEL.get(schluessel, "max")):
+		"plus":
+			var v := 1.0
+			for w: Variant in werte:
+				v += float(w) - 1.0
+			return v
+		"tempo":
+			var t := 1.0
+			for w: Variant in werte:
+				t += 1.0 / float(w) - 1.0
+			return 1.0 / t
+		"summe":
+			var su := 0.0
+			for w: Variant in werte:
+				su += float(w)
+			if schluessel == "schutz":
+				return minf(su, SCHUTZ_MAX)
+			return int(su) if werte[0] is int else su
+		"teilen":
+			var m := INF
+			for w: Variant in werte:
+				m = minf(m, float(w))
+			return m / float(werte.size())
+		"anhaengen":
+			var l: Array = []
+			for w: Variant in werte:
+				l.append_array(w as Array)
+			return l
+	var mx: Variant = werte[0]
+	for w: Variant in werte:
+		if float(w) > float(mx):
+			mx = w
+	return mx
+
+
+## Gespeicherter Stand der Sätze (Zwischenstand).
+func saetze_speichern() -> Dictionary:
+	return {"held_st": Array(held_st), "held_bez": Array(held_bez), "held_runde": Array(held_runde), "pp_ringe": Array(pp_ringe),
+		"pp_st": Array(pp_st), "pp_bez": Array(pp_bez), "pp_runde": Array(pp_runde), "pp_gewaehlt": pp_gewaehlt}
+
+
+func saetze_laden(d: Dictionary) -> void:
+	held_st.clear()
+	held_bez.clear()
+	held_runde.clear()
+	pp_ringe.clear()
+	pp_st.clear()
+	pp_bez.clear()
+	pp_runde.clear()
+	var hs: Array = d.get("held_st", [])
+	var hb: Array = d.get("held_bez", [])
+	var hr: Array = d.get("held_runde", [])
+	for i in ringe.size():
+		held_st.append(int(hs[i]) if i < hs.size() else 1)
+		held_bez.append(int(hb[i]) if i < hb.size() else int(RING_PREISE[0]))
+		held_runde.append(int(hr[i]) if i < hr.size() else -1)
+	var pr: Array = d.get("pp_ringe", [])
+	var ps: Array = d.get("pp_st", [])
+	var pb: Array = d.get("pp_bez", [])
+	var pu: Array = d.get("pp_runde", [])
+	for i in pr.size():
+		if not RINGE.has(str(pr[i])):
+			continue
+		pp_ringe.append(str(pr[i]))
+		pp_st.append(int(ps[i]) if i < ps.size() else 1)
+		pp_bez.append(int(pb[i]) if i < pb.size() else int(RING_PREISE[0]))
+		pp_runde.append(int(pu[i]) if i < pu.size() else -1)
+	pp_gewaehlt = clampi(int(d.get("pp_gewaehlt", 0)), 0, maxi(0, pp_ringe.size() - 1))

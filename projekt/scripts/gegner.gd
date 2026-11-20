@@ -406,7 +406,10 @@ func _process(delta: float) -> void:
 				var zf: Vector2i = karte.zelle_bei(ziel.position) if ziel != null else bau
 				_abkling = float(daten["abklingzeit"]) / (1.0 + _einschuss_bonus(zf))
 			_sprite.angriff(_abkling)
-			if ziel != null:
+			if ziel != null and spiel.brakk_geschosse != null and spiel.brakk_geschosse.ist_brakk(ziel):
+				# 20.11.: Schritt 6c – auf Brakk fliegt ein echtes Geschoss (ausweichbar)
+				spiel.brakk_geschosse.schiesse("sph", position + Vector2(0, -6), 0.5, schaden_gegen(ziel, float(daten.get("schaden_einheit", daten["schaden"]))), typ, "")
+			elif ziel != null:
 				spiel.schuss(position + Vector2(0, -6), ziel.position, Color("ff7ad9"))
 				var s := schaden_gegen(ziel, float(daten.get("schaden_einheit", daten["schaden"])))
 				ziel.nimm_fernschaden(s)   # 18.11.: Fernschuss (Ruine deckt)

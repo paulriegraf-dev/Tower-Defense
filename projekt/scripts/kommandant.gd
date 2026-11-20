@@ -267,6 +267,8 @@ func nimm_schaden(menge: float) -> void:
 		return
 	if fortschritt != null:
 		menge *= 1.0 - float(fortschritt.brakk_wert("schutz", 0.0))   # 19.11.: Wallring
+		if spiel.ego != null and spiel.ego.kit != null:
+			menge *= 1.0 - spiel.ego.kit.schutz()   # 20.11. (Nachtrag): Ring-Wirkung an einem Spell (Wallring)
 	var f: float = spiel.schild_faktor(position)
 	if f < 1.0:
 		spiel.kuppel_abgefangen(position, menge * (1.0 - f))
