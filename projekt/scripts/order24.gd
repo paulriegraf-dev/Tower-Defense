@@ -87,7 +87,7 @@ const STANDARD := {
 	"xp_fabrik": 25,            # Erfahrung für Brakk: zerstörte Fabrik …
 	"xp_sabotage": 12,          # … sabotierte Fabrik
 	"xp_kill": 0,               # 20.11. (Paul): zusätzliche Erfahrung je Kill (Elite ×3) – 0: Stufe 8 nach 3:32 war viel zu schnell
-	"kill_xp_prozent": 50,      # 20.11. (Paul): Prozent der normalen Kill-Erfahrung (Stufe 8 soll eher gegen Minute 12–15 kommen)
+	"kill_xp_prozent": 80,      # 20.11. (Paul): Prozent der normalen Kill-Erfahrung (Stufe 8 soll eher gegen Minute 12–15 kommen)
 	"truppen_leben": 90,        # Prozent: Leben der Technoclan-Truppen – 20.11. (Paul): 90 statt 70, Brakk wird mit mehr Ringen stärker
 	"turm_wall_bonus": 2,       # Felder mehr Reichweite der Türme, solange Brakk auf den Erdwällen läuft
 	"karte": "",                # "" = Zufall unter den Formationen aus [H], sonst eine Formation oder "phantom" (Verteidigungs-Phantom)
