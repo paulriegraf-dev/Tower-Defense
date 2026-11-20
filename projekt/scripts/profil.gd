@@ -212,7 +212,12 @@ static func erfolg_verdient(id: String) -> bool:
 ## Löst einen Code ein und gibt den Text für die Einblendung zurück ("" = unbekannter Code).
 static func loese_code(text: String) -> String:
 	_lade()
-	var code := text.strip_edges().to_lower()
+	# 20.11. (Paul: „Unbekannter Code“): nur Buchstaben und Ziffern zählen – Anführungszeichen beim Kopieren,
+	# Leerzeichen oder Punkt von der Handy-Autokorrektur („Alles frei.“) stören nicht
+	var code := ""
+	for c in text.to_lower():
+		if (c >= "a" and c <= "z") or (c >= "0" and c <= "9"):
+			code += c
 	if not CODES.has(code):
 		return ""
 	if not (_d.get("codes") is Array):
