@@ -26,15 +26,15 @@ extends Node
 const STANDARD := {
 	# 20.11. (Paul, Ergänzung Befehl 24): Ablauf Flucht → Sabotage → Jagd → Vorstoß, alle Zeiten in echten Sekunden
 	"ueberleben_sek": 0,        # 0 = endlos (Paul, 20.11.: kein Sieg nach Zeit – die Wertung ist, wie lange Brakk durchhält); sonst Sieg nach so vielen Sekunden
-	"geheim_ab": 720,           # hält Brakk das Myriaden-HQ bis hierhin, beginnt der geheime Verlauf „Überläufer“ (0 = aus)   # 20.11. (Paul): ab 12:00 statt 15:00
+	"geheim_ab": 900,           # hält Brakk das Myriaden-HQ bis hierhin, beginnt der geheime Verlauf „Überläufer“ (0 = aus)   # 20.11. (Paul): doch wieder ab 15:00
 	"myr_takt": 30,             # Überläufer: Wellenzyklus der Myriaden-Fabriken
 	"myr_wert": 60,             # Wert der Einheiten je Fabrik und Zyklus (Hund 10 → 6 Hunde, Fahne 75 → 1)
 	"myr_bau_mal": 4,           # (alt: Baupreis = Einheitenpreis × so viel – seit dem Ringfeld-Umbau unbenutzt)
 	"myr_fabrik_preis": 100,    # 20.11. (Paul): es gibt nur noch EINE Myriaden-Fabrik zu diesem Preis – was sie baut, bestimmt das Ringfeld
 	"myr_ohne_ring": 50,        # Prozent des Werts, solange die Fabrik in keinem Ringfeld steht (dann Hunde)
 	"myr_ring_stufe": 30,       # Prozent mehr Wert je Ringstufe über 1 (Stufe 3: +60 %)
-	"myr_kosten_anteil": 50,    # Prozent des Einheitenpreises kostet die Produktion je Zyklus
-	"geheim_einkommen": 30,     # Gold je Zyklus
+	"myr_kosten_anteil": 40,    # Prozent des Einheitenpreises kostet die Produktion je Zyklus
+	"geheim_einkommen": 60,     # Gold je Zyklus
 	"geheim_cp_sek": 30,        # beide Checkpoints so lange halten → Schild des Technoclan-HQ fällt
 	"geheim_hq_leben": 3000,    # Leben des Technoclan-HQ
 	"myr_rueck_sek": 10,        # so lange am besetzten Myriaden-HQ stehen (ohne Technoclan in der Nähe) = zurückerobert
@@ -68,6 +68,8 @@ const STANDARD := {
 	"vorstoss_sek": 30,         # so lange muss er es halten
 	"brakk_schaden": 45,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an – 20.11. (Paul): 45 statt 25, Sabotieren war ohne Gefahr
 	"sabotage_schaden": 150,    # Prozent: Schaden an Brakk, solange er sabotiert (ungeschützt an der Fabrik)
+	"hq_aggro_radius": 10,      # 20.11. (Paul): Felder um den Schild des Technoclan-HQ, in denen die KI aggressiver wird …
+	"hq_aggro_schaden": 50,     # … bis zu so viel Prozent mehr Schaden an Brakk direkt am Schild; ab halber Nähe rücken auch die Verteidiger aus
 	"medkit_takt": 60,          # Med-Kit am Myriaden-HQ liegt so oft wieder, nach dessen Fall so oft eins verstreut
 	"heilturm_prozent": 2,      # 20.11. (Paul): Heilturm am Myriaden-HQ – so viel Prozent von Brakks Leben je Sekunde …
 	"heilturm_radius": 2,       # … in so vielen Feldern Umkreis, solange kein Technoclan in 3 Feldern ist
@@ -76,15 +78,16 @@ const STANDARD := {
 	"fabriken_innen": 3,        # im Schild, für Brakk nicht erreichbar
 	"stufe_innen": 2,           # 20.11. (Paul): Fabriken im Schild ausgebaut wie im normalen Spiel
 	"besatzung_innen": 3,       # so viele Truppen hält jede Fabrik im Schild zur Verteidigung
-	"praemie_kill": 5,          # 20.11. (Paul): kleines Kopfgeld je Kill …
+	"praemie_kill": 12,         # 20.11. (Paul): kleines Kopfgeld je Kill …   # 20.11. (Paul): 8 statt 5, Elite ×3 – Gold für Ringe (175/300/450) und Myriaden-Fabriken
 	"kill_stufe": 2,            # … je so vielen Kills an derselben Stellung (am Boden: derselben Fabrik) sinkt es um 1 …
 	"kill_frist": 30,           # … und ist nach so vielen Sekunden ohne Kill dort wieder voll (gegen stumpfes Abfarmen)
-	"praemie_fabrik": 80,       # 20.11. (Paul): wenig Geld, dafür Erfahrung
+	"praemie_fabrik": 200,      # 20.11. (Paul): wenig Geld, dafür Erfahrung
 	"praemie_stellung": 0,
 	"praemie_wall": 0,
-	"xp_fabrik": 20,            # Erfahrung für Brakk: zerstörte Fabrik …
-	"xp_sabotage": 10,          # … sabotierte Fabrik
-	"truppen_leben": 70,        # Prozent: Technoclan-Truppen in Befehl 24 schwächer (mehr Fabriken)
+	"xp_fabrik": 40,            # Erfahrung für Brakk: zerstörte Fabrik …
+	"xp_sabotage": 20,          # … sabotierte Fabrik
+	"xp_kill": 2,               # 20.11. (Paul): zusätzliche Erfahrung je Kill (Elite ×3) – mehr Ringplätze (Stufe 5/7/9)
+	"truppen_leben": 90,        # Prozent: Leben der Technoclan-Truppen – 20.11. (Paul): 90 statt 70, Brakk wird mit mehr Ringen stärker
 	"turm_wall_bonus": 2,       # Felder mehr Reichweite der Türme, solange Brakk auf den Erdwällen läuft
 	"karte": "",                # "" = Zufall unter den Formationen aus [H], sonst eine Formation oder "phantom" (Verteidigungs-Phantom)
 	# 20.11. (Paul, Ergänzung Befehl 24): Regeln nur in diesem Modus
@@ -97,7 +100,7 @@ const STANDARD := {
 	"fabrik_leben": 1500,       # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon)
 	"sabotage_halten": 5,       # Sekunden [F] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
 	"sabotage_lahm": 60,        # so lange liefert eine sabotierte Fabrik nichts
-	"praemie_sabotage": 40,
+	"praemie_sabotage": 100,
 	"alarm_radius": 6,          # Felder: bei Angriff auf eine Fabrik laufen Truppen im Umkreis hin
 	"pilot_verzug": 20,         # Sekunden nach einer Sabotage geht ein Pilot mit zwei Begleitern los
 	"pilot_neu": 45,            # fällt der Pilot, dauert der nächste so lange
@@ -393,7 +396,7 @@ func _schock() -> void:
 	k.max_leben = float(k.daten["leben"])
 	k.leben = k.max_leben
 	k.fortschritt = BrakkFortschritt.new(k)
-	spiel.budget = 300
+	spiel.budget = 400
 	if spiel.ego != null:
 		spiel.ego.set("_trauma", 1.0)
 	Ton.spiele(spiel, "tc-arc", 0.0)
@@ -1197,6 +1200,7 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 		var e: Einheit = t.einheit
 		var war_stellung := e.in_stellung()
 		var kg_ort := ("s:%s" % str(e.posten_zelle)) if war_stellung else ("f:%s" % str(e.fabrik_zelle))
+		var elite := bool(e.daten.get("elite", false))
 		_alarm_auf_brakk(spiel.kommandant)   # 20.11. (Paul): wer angegriffen wird, ruft Hilfe
 		e.nimm_schaden(menge)
 		t.leben = e.leben
@@ -1204,7 +1208,10 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			t._tot = true
 			sabotage["truppen"] = int(sabotage["truppen"]) + 1
 			kills += 1
-			_kopfgeld(kg_ort)
+			_kopfgeld(kg_ort, 3 if elite else 1)   # 20.11. (Paul): Elite bringt dreifaches Kopfgeld
+			var kk: Kommandant = spiel.kommandant
+			if kk != null and kk.fortschritt != null and int(w("xp_kill")) > 0:
+				kk.fortschritt.gib(int(w("xp_kill")) * (3 if elite else 1), kk)   # 20.11. (Paul): mehr Erfahrung je Kill
 			if war_stellung and int(w("praemie_stellung")) > 0:
 				_praemie("stellungen", int(w("praemie_stellung")), "Stellung geleert")
 			elif war_stellung:
@@ -1260,7 +1267,7 @@ var _kopfgeld_merk := {}   # Ort ("s:<Stellung>" / "f:<Fabrik>") -> [Kills in Fo
 
 ## 20.11. (Paul): Kopfgeld je Kill. An derselben Stellung (am Boden: Truppen derselben Fabrik) sinkt es je kill_stufe Kills
 ## um 1; nach kill_frist Sekunden ohne Kill dort ist es wieder voll.
-func _kopfgeld(ort: String) -> void:
+func _kopfgeld(ort: String, mal: int = 1) -> void:
 	var voll := int(w("praemie_kill"))
 	if voll <= 0:
 		return
@@ -1268,7 +1275,7 @@ func _kopfgeld(ort: String) -> void:
 	var n := int(m[0]) if zeit - float(m[1]) < wf("kill_frist") else 0
 	if ort.begins_with("f:"):
 		n = 0   # 20.11. (Paul): Truppen am Boden bringen immer das volle Kopfgeld – nur Stellungen nutzen sich ab
-	var betrag := maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe"))))
+	var betrag := maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe")))) * mal
 	_kopfgeld_merk[ort] = [n + 1, zeit]
 	if betrag > 0:
 		sabotage["geld"] = int(sabotage["geld"]) + betrag
@@ -1697,6 +1704,7 @@ func _ablauf(k: Kommandant) -> void:
 			_jagd_eroeffnen(k)
 		elif p == "vorstoss" and not jagd:
 			_jagd_eroeffnen(k)   # der Vorstoß selbst wird nicht angesagt
+	_hq_aggro(k)
 	if not jagd and not in_deckung:
 		_alarm_auf_brakk(k)   # 20.11. (Paul): schon vor der Jagd Druck – wer ihn sieht, ruft die Truppen in der Nähe
 	if not jagd:
@@ -1709,6 +1717,35 @@ func _ablauf(k: Kommandant) -> void:
 	_eskalation()
 	if phase() == "vorstoss" and not hq_eingenommen and zeit >= _vorstoss_wahl:
 		_vorstoss_waehlen()
+
+
+## 20.11. (Paul): 0..1 – wie nah Brakk am Schild des Technoclan-HQ ist (1 = direkt am Schild, 0 = weiter als hq_aggro_radius).
+func hq_naehe() -> float:
+	var k: Kommandant = spiel.kommandant
+	if k == null or schild_mitten.is_empty():
+		return 0.0
+	var d := k.position.distance_to(schild_mitten[0]) / Werte.ZELLE - SCHILD_RADIUS
+	return clampf(1.0 - d / maxf(1.0, wf("hq_aggro_radius")), 0.0, 1.0)
+
+
+## 20.11. (Paul): Kommt Brakk dem Technoclan-HQ nahe, weiß die ganze Basis, wo er ist: alle Trupps in der Nähe jagen ihn,
+## ab halber Nähe rücken auch die Verteidiger aus dem Schild aus.
+func _hq_aggro(k: Kommandant) -> void:
+	var n := hq_naehe()
+	if n <= 0.0:
+		return
+	bekannt = karte.zelle_bei(k.position)
+	bekannt_zeit = zeit
+	for t: Dictionary in trupps:
+		if str(t["modus"]) != "vorstoss":
+			t["modus"] = "jagd"
+			t["zuletzt"] = bekannt
+			t["gesehen"] = zeit
+	if n >= 0.5:
+		for x in _truppen():
+			var u := x as Einheit
+			if _ist_innen(u) and u.zustand == Einheit.Zustand.BODEN:
+				alarm[u.get_instance_id()] = {"ziel": _freies_feld_nahe(bekannt, 1), "bis": zeit + 6.0}
 
 
 ## Brakk gesehen: von einer Stellung (nicht in Deckung) oder von einem Jäger in Sichtweite – dann ist sein Ort bekannt.
@@ -2142,7 +2179,18 @@ func _zuflucht_legen() -> void:
 		medkits.append({"zelle": frei[0], "da": true, "knoten": null, "hq": true})
 	if frei.size() > 1:
 		ladungen_boden.append({"pos": karte.mitte(frei[1]), "knoten": null})
-	if frei.size() > 2:
+	# 20.11. (Paul): der Heilturm steht in der Myriaden-Zone (innerhalb ihres Schilds), nah am HQ – nicht am Rand
+	var zone_beste := INF
+	for y in range(1, Werte.ZEILEN - 1):
+		for x in Werte.ZONE_SPALTEN:
+			var z := Vector2i(x, y)
+			var d := karte.mitte(z).distance_to(hq_mitte())
+			if d < 1.5 * Werte.ZELLE or not karte.in_karte(z) or karte.feld.has(z):
+				continue
+			if d < zone_beste:
+				zone_beste = d
+				heilturm = z
+	if heilturm == Karte.KEINE and frei.size() > 2:
 		heilturm = frei[2]
 	print("ORDER24 Zuflucht am Myriaden-HQ: Lichtterminal im HQ · Med-Kit %s · Heilturm %s" % [str(frei[0] if frei.size() > 0 else Karte.KEINE), str(heilturm)])
 
@@ -2950,6 +2998,7 @@ class BrakkZiel extends Gegner:
 		if k != null and not k.gefallen:
 			var quelle := str(spiel.schadensquelle).get_slice(":", 0)
 			var anteil := o24.wf("brakk_schaden") / 100.0 * (o24.wf("sabotage_schaden") / 100.0 if not o24.sabo.is_empty() else 1.0)   # 20.11. (Paul): beim Sabotieren verwundbarer
+			anteil *= 1.0 + o24.wf("hq_aggro_schaden") / 100.0 * o24.hq_naehe()   # 20.11. (Paul): je näher am Technoclan-HQ, desto gefährlicher
 			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * anteil
 			k.nimm_schaden(menge * anteil)
 
