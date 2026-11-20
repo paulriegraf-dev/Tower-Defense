@@ -980,7 +980,7 @@ func _male_erfolge(ci: Control) -> void:
 				if str(e.get("belohnung", "")) != "":
 					info += " · Belohnung: %s" % e["belohnung"]
 			else:
-				info = "??? – ein versteckter Erfolg."
+				info = "??? – " + str(e.get("tipp", "ein versteckter Erfolg."))   # 20.11. (Paul): manche verraten eine Anspielung
 	Stil.absatz(ci, Vector2(r.position.x + 12.0, r.end.y - 22.0), info, r.size.x - 24.0, Stil.KLEIN, Stil.TEXT_BLASS)
 
 

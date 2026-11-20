@@ -35,6 +35,11 @@ const LISTE: Array[Dictionary] = [
 	{"id": "baumeister", "name": "Baumeister", "text": "In einer Partie alle fünf Formtürme gebaut, einen davon auf Stufe 3.", "symbol": "turm", "versteckt": false, "belohnung": ""},
 	{"id": "ausbilder", "name": "Ausbilder", "text": "Tutorial abgeschlossen und mit mindestens 6 Fabriken gewonnen, eine davon auf Stufe 3.", "symbol": "fabrik", "versteckt": false, "belohnung": ""},
 	{"id": "deutscher_sparer", "name": "Deutscher Sparer", "text": "Eine Runde mit mindestens 1000 Budget begonnen und die Partie gewonnen.", "symbol": "muenze", "versteckt": true, "belohnung": ""},
+	## 20.11. (Paul): Befehl 24 (Brakk-Mode Rogue) – versteckt, gesperrt steht statt der Bedingung eine Anspielung („tipp“)
+	{"id": "befehl24", "name": "Befehl 24", "text": "Vom eigenen Rat zum Verräter erklärt – und die Flucht angetreten (Brakk-Mode Rogue).", "symbol": "brakk", "versteckt": true, "belohnung": "",
+		"tipp": "Wer zu oft gewinnt, wird dem Rat unheimlich …"},
+	{"id": "ueberlaeufer", "name": "Der Feind meines Feindes", "text": "Mit den Myriaden das Technoclan-HQ zerstört – das geheime Ende von Befehl 24.", "symbol": "raster", "versteckt": true, "belohnung": "",
+		"tipp": "1110000 100 010010 1000 1011101010110 01 001"},
 ]
 ## 19.11.: Schwellen der neuen Erfolge
 const AUSBILDER_FABRIKEN := 6        # so viele Fabriken beim Sieg (Pilotenfabriken zählen nicht)

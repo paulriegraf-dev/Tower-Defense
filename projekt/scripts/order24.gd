@@ -926,6 +926,7 @@ func _verrat_ende() -> void:
 			e.zustand = Einheit.Zustand.BODEN
 	schild_auf = 1.0
 	verrat_fertig = true
+	spiel.erfolg("befehl24")   # 20.11. (Paul): Erfolg – die Flucht beginnt
 	if verrat != null:
 		verrat.queue_free()
 	verrat = null
@@ -2495,6 +2496,7 @@ func _tc_hq_treffer(menge: float) -> void:
 	if tc_hq_leben <= 0.0:
 		tc_hq_leben = 0.0
 		geheim_sieg = true
+		spiel.erfolg("ueberlaeufer")   # 20.11. (Paul): Erfolg – geheimes Ende
 		print("ORDER24 Technoclan-HQ zerstört bei %.0f s – geheimes Ende" % zeit)
 		_ende(true)
 
