@@ -122,6 +122,17 @@ func _ready() -> void:
 	_naechste()
 
 
+## 20.11. (Paul): Porträt des Myriaden-Schwarms – erstes Bild des Schwarmgeists (keine neue Grafik).
+func _schwarm_bild() -> Texture2D:
+	var d: Dictionary = Werte.grafik_daten(Werte.GEGNER["schwarm"])
+	if not d.has("blatt") or not d.has("zelle"):
+		return load(SONDE)
+	var bild := AtlasTexture.new()
+	bild.atlas = load(str(d["blatt"]))
+	bild.region = Rect2(0, 0, float(d["zelle"]), float(d["zelle"]))
+	return bild
+
+
 func _schrift(c: Control, einheiten: int) -> void:
 	c.add_theme_font_override("font", Stil.schrift_fuer(1))   # geglättete Fassung wie im Tutorial
 	c.add_theme_font_size_override("font_size", einheiten)
@@ -140,7 +151,7 @@ func _naechste() -> void:
 	_name.text = wer
 	_name.visible = wer != ""
 	_bild.visible = wer != ""
-	_bild.texture = load(BRAKK if wer == "BRAKK" else SONDE)
+	_bild.texture = _schwarm_bild() if wer.begins_with("MYRIADEN") else load(BRAKK if wer == "BRAKK" else SONDE)   # 20.11. (Paul): der Schwarm meldet sich
 	var brakk := wer == "BRAKK"
 	_name.add_theme_color_override("font_color", Color("ffd08a") if brakk else Color("9be9ff"))
 	_stil.border_color = ROT if str(z[2]) in ["verrat", "schock"] or wer == "" else HOLO

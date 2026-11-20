@@ -69,6 +69,8 @@ const STANDARD := {
 	"brakk_schaden": 45,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an – 20.11. (Paul): 45 statt 25, Sabotieren war ohne Gefahr
 	"sabotage_schaden": 150,    # Prozent: Schaden an Brakk, solange er sabotiert (ungeschützt an der Fabrik)
 	"medkit_takt": 60,          # Med-Kit am Myriaden-HQ liegt so oft wieder, nach dessen Fall so oft eins verstreut
+	"heilturm_prozent": 2,      # 20.11. (Paul): Heilturm am Myriaden-HQ – so viel Prozent von Brakks Leben je Sekunde …
+	"heilturm_radius": 2,       # … in so vielen Feldern Umkreis, solange kein Technoclan in 3 Feldern ist
 	"medkit_heilung": 15,       # Prozent von Brakks Leben – 20.11. (Paul): deutlich weniger (vorher 40)
 	"fabriken_aussen": 4,       # Lager über die Karte verteilt (Fabrik, Stellungen, Turm)
 	"fabriken_innen": 3,        # im Schild, für Brakk nicht erreichbar
@@ -137,6 +139,10 @@ var _suchziel := {}              # Einheit-ID -> {"z", "bis"} beim Suchen
 var _flucht_gemeldet := false
 var _phase_vorher := ""
 var _terminal_erklaert := false
+var heilturm := Karte.KEINE       # 20.11. (Paul): Heilturm am Myriaden-HQ (Platzhalter am Boden)
+var heilt := false               # heilt gerade
+var _heil3d: Node3D = null
+var _lichtmenue_bis := -1.0       # Überläufer: kleines Lichtmenü mit dem Neuen (bis zu dieser Zeit)
 var _takt := 0.0
 var _druck_naechster := 0.0
 var geheim := false              # 20.11. (Paul): geheimer Verlauf „Überläufer“ läuft
@@ -2120,16 +2126,8 @@ func _terminal_feld(z: Vector2i) -> bool:
 ## Am Myriaden-HQ: Ringterminal (2×2) möglichst nah am HQ, ein Med-Kit und eine Sprengladung daneben.
 func _zuflucht_legen() -> void:
 	var hq := karte.mitte(Werte.ANGRIFFS_ZELLE) + Vector2(Werte.ZELLE * 1.0, 0)
-	var beste := INF
-	for x in range(Werte.ZONE_SPALTEN, int(Werte.SPALTEN / 2.0)):
-		for y in range(1, Werte.ZEILEN - 2):
-			var e := Vector2i(x, y)
-			if not _frei_2x2(e):
-				continue
-			var d := (karte.mitte(e) + Vector2(Werte.ZELLE, Werte.ZELLE) * 0.5).distance_to(hq)
-			if d < beste:
-				beste = d
-				terminal = e
+	# 20.11. (Paul): das Lichtterminal steckt im Myriaden-HQ selbst (wie früher am Technoclan-HQ) – keine eigene Plattform
+	terminal = Karte.KEINE
 	var frei: Array[Vector2i] = []
 	for y in range(1, Werte.ZEILEN - 1):
 		for x in range(Werte.ZONE_SPALTEN, int(Werte.SPALTEN / 2.0)):
@@ -2141,7 +2139,9 @@ func _zuflucht_legen() -> void:
 		medkits.append({"zelle": frei[0], "da": true, "knoten": null, "hq": true})
 	if frei.size() > 1:
 		ladungen_boden.append({"pos": karte.mitte(frei[1]), "knoten": null})
-	print("ORDER24 Zuflucht: Ringterminal %s · Med-Kit %s" % [str(terminal), str(frei[0] if frei.size() > 0 else Karte.KEINE)])
+	if frei.size() > 2:
+		heilturm = frei[2]
+	print("ORDER24 Zuflucht am Myriaden-HQ: Lichtterminal im HQ · Med-Kit %s · Heilturm %s" % [str(frei[0] if frei.size() > 0 else Karte.KEINE), str(heilturm)])
 
 
 ## Versteckte Felder für zufällige Med-Kits: in Winkeln zwischen Erdwällen, außerhalb der Schilde.
@@ -2180,17 +2180,33 @@ func _medkits_pflegen(k: Kommandant, echt: float) -> void:
 			k.leben = minf(k.max_leben, k.leben + k.max_leben * wf("medkit_heilung") / 100.0)
 			spiel.melde("Med-Kit: +%d %% Leben" % int(w("medkit_heilung")), 2.0)
 			Ton.spiele(spiel, "ui-klick")
-	if not _terminal_erklaert and am_terminal(k.position):
-		_terminal_erklaert = true
-		spiel.melde("Ringterminal: Steh darauf und drück [F] – deine Beute gegen Ringe, auch mitten im Kampf.", 6.0)
+	if not _terminal_erklaert and k.position.distance_to(hq_mitte()) <= 3.5 * Werte.ZELLE:
+		_terminal_erklaert = true   # 20.11. (Paul): Ankunft an der Zuflucht
+		funken([
+			["BRAKK", "Das Lichtterminal im Myriaden-HQ läuft noch – gerade so. Mit Beute hole ich mir hier Ringe: [F] am HQ.", ""],
+			["BRAKK", "Und der Heilturm daneben hat auch noch nicht den Geist aufgegeben. Hier kann ich kurz durchatmen.", ""],
+		])
+	# 20.11. (Paul): Heilturm – heilt Brakk im Umkreis, solange kein Technoclan in der Nähe ist
+	heilt = false
+	if heilturm != Karte.KEINE and not hq_eingenommen and not myr_hq_besetzt and k.leben < k.max_leben:
+		if k.position.distance_to(karte.mitte(heilturm)) <= wf("heilturm_radius") * Werte.ZELLE and not _technoclan_nah(k.position, 3.0):
+			k.leben = minf(k.max_leben, k.leben + k.max_leben * wf("heilturm_prozent") / 100.0 * echt)
+			heilt = true
 
 
 ## Ringterminal: steht Brakk darauf, öffnet [F] das Lichtterminal (Ringe kaufen und aufwerten) – auch im Kampf.
 ## Nach dem Fall des Myriaden-HQ liegt es im zweiten Schild.
 func am_terminal(fuss: Vector2) -> bool:
-	if terminal == Karte.KEINE or hq_eingenommen or myr_hq_besetzt:
+	if hq_eingenommen or myr_hq_besetzt:
 		return false
-	return fuss.distance_to(karte.mitte(terminal) + Vector2(Werte.ZELLE, Werte.ZELLE) * 0.5) <= 1.6 * Werte.ZELLE
+	return fuss.distance_to(hq_mitte()) <= 2.5 * Werte.ZELLE   # 20.11. (Paul): am Myriaden-HQ selbst
+
+
+## Mitte des Myriaden-HQ (Lichtterminal, Ankunft).
+func hq_mitte() -> Vector2:
+	if is_instance_valid(spiel.hq):
+		return (spiel.hq as Node2D).position
+	return karte.mitte(Werte.ANGRIFFS_ZELLE)
 
 
 
@@ -2219,6 +2235,7 @@ const MYR_RING := {
 	"laser": "belagerung",       # Glutstrahlring: Belagerungsturm
 }
 const MYR_FARBE := Color("ff7ad9")
+const LICHT_MENUE := Color("6ee6ff")
 var myr_fabriken := {}            # Zonenfeld -> {"typ": String, "knoten": Node3D}
 var myr_hq_besetzt := false
 var _myr_rueck := 0.0
@@ -2241,8 +2258,10 @@ func geheim_text() -> String:
 
 
 ## Funkspruch im Spiel (Steuerung bleibt frei): Zeilen wie in der Verrat-Sequenz.
-func funken(zeilen: Array) -> void:
+func funken(zeilen: Array, danach: Callable = Callable()) -> void:
 	if spiel.ego == null:
+		if danach.is_valid():
+			danach.call()
 		return
 	if funk != null:
 		funk.queue_free()
@@ -2253,7 +2272,9 @@ func funken(zeilen: Array) -> void:
 	funk.fertig.connect(func() -> void:
 		if funk != null:
 			funk.queue_free()
-		funk = null)
+		funk = null
+		if danach.is_valid():
+			danach.call())
 
 
 func _geheim_starten() -> void:
@@ -2267,11 +2288,14 @@ func _geheim_starten() -> void:
 	_myr_uhr = 0.0
 	spiel._einblendung.banner("ÜBERLÄUFER", "Brakk führt jetzt die Myriaden", MYR_FARBE)
 	Ton.spiele(spiel, "alert")
+	# 20.11. (Paul): Der Schwarm meldet sich – Brakk versteht, was möglich ist; danach das Lichtmenü mit dem Neuen
 	funken([
-		["SONDE 7 · FUNK", "An alle Einheiten: Kommandant Brakk hat sich endgültig dem Feind angeschlossen.", ""],
-		["BRAKK", "Ihr habt mich zum Verräter erklärt. Dann kämpfe ich eben mit denen, die ihr fürchtet – Myriaden, folgt mir!", ""],
-		["", "Baue Myriaden-Fabriken in der Zone am HQ mit [1]. Wirf mit [C] ein Ringfeld darüber: Der Ring bestimmt, welche Myriaden sie bauen. Nimm beide Checkpoints und halte sie – dann fällt der Schild des Technoclan-HQ.", ""],
-	])
+		["MYRIADEN-SCHWARM", "1110000 100 010010 1000 1011101010110 01 001", ""],
+		["MYRIADEN-SCHWARM", "0110 1 0011100 10 111 · 1000110 0 1101", ""],
+		["BRAKK", "Ich verstehe kein Wort – und doch alles. Der Feind meines Feindes …", ""],
+		["BRAKK", "Gut. Ihr habt mich zum Verräter erklärt, Rat. Dann kämpfe ich eben mit denen, die ihr fürchtet.", ""],
+		["SONDE 7 · FUNK", "An alle Einheiten: Kommandant Brakk hat sich mit dem Schwarm verbündet. Vernichten.", ""],
+	], func() -> void: _lichtmenue_bis = zeit + 25.0)
 	print("ORDER24 Überläufer bei %.0f s" % zeit)
 
 
@@ -2535,6 +2559,26 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 	return false
 
 
+## 20.11. (Paul): Überläufer – kleines Lichtmenü, das nach dem Schwarm-Funk zeigt, was jetzt neu geht (25 s).
+func _male_lichtmenue(bild: Control, g: Vector2, Stil: GDScript) -> void:
+	var zeilen: Array = [
+		["[1]", "Myriaden-Fabrik bauen (%d) – nur in der Zone am Myriaden-HQ" % myr_preis()],
+		["[C]", "Ringfeld werfen – der Ring bestimmt, welche Myriaden die Fabrik schickt"],
+		["W", "alle %d s zieht eine Welle über die Checkpoints zur Technoclan-Basis" % int(w("myr_takt"))],
+		["CP", "beide Checkpoints %d s halten – dann fällt der Schild des Technoclan-HQ" % int(w("geheim_cp_sek"))],
+	]
+	var breite := minf(g.x - 32.0, 620.0)
+	var r := Rect2((g.x - breite) / 2.0, g.y * 0.22, breite, 34.0 + zeilen.size() * 24.0)
+	var a := clampf((_lichtmenue_bis - zeit) / 2.0, 0.0, 1.0)
+	bild.draw_rect(r, Color(0.04, 0.08, 0.12, 0.88 * a))
+	bild.draw_rect(r, Color(LICHT_MENUE, a), false, 2.0)
+	Stil.schreibe(bild, r.position + Vector2(14, 20), "LICHTMENÜ · NEU FÜR DEN ÜBERLÄUFER", 16, Color(LICHT_MENUE, a))
+	for i in zeilen.size():
+		var y := r.position.y + 44.0 + i * 24.0
+		Stil.schreibe(bild, Vector2(r.position.x + 14, y), str(zeilen[i][0]), 16, Color(Stil.GOLD, a))
+		Stil.schreibe(bild, Vector2(r.position.x + 58, y), str(zeilen[i][1]), 15, Color(Stil.TEXT, a))
+
+
 ## Anzeige unter der Uhr: Sprengladungen, „In Deckung“, Sabotage-Fortschritt und Hinweise.
 func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	var Stil := preload("res://scripts/ui/ui_stil.gd")
@@ -2554,6 +2598,8 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 					13, Einheit.ABZEICHEN.get(ring, Stil.TEXT) if kf.felder.has(ring) else Stil.TEXT_BLASS)
 				zeile += 1
 		Stil.schreibe(bild, Vector2(24, by + 54.0 + zeile * 17.0), "ohne Feld → %s" % myr_takt_text("hund", wf("myr_wert") * wf("myr_ohne_ring") / 100.0), 13, Stil.TEXT_BLASS)
+	if geheim and zeit < _lichtmenue_bis:
+		_male_lichtmenue(bild, g, Stil)
 	var y := 116.0 + 52.0
 	var m := Vector2(g.x / 2.0, y)
 	if am_terminal(ego._fuss2d()):
@@ -2697,6 +2743,26 @@ func _3d_pflegen() -> void:
 		(_schild3d[0] as Node3D).scale = Vector3.ONE * maxf(0.001, schild_auf)   # 20.11.: Verrat – der Schild schließt sich
 		(_schild3d[0] as Node3D).visible = not hq_schild_aus
 	_myr_3d(hd)
+	# 20.11. (Paul): Heilturm am Myriaden-HQ – der echte Heilturm am Boden, pulsiert beim Heilen
+	if heilturm != Karte.KEINE:
+		if _heil3d == null:
+			_heil3d = Node3D.new()
+			hd.add_child(_heil3d)
+			_heil3d.position = Vector3(float(heilturm.x) + 0.5, 0.0, float(heilturm.y) + 0.5)
+			# 20.11. (Paul): der echte Heilturm (Bild aus TurmBild), am Boden aufgestellt
+			var s := Sprite3D.new()
+			s.texture = load(Werte.NEU + "tuerme/heil.png")
+			s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+			s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+			s.pixel_size = 1.4 / 64.0
+			s.position = Vector3(0, (64.0 - 61.0 + 32.0 - 3.0) * s.pixel_size, 0)   # Fußpunkt (Pixel 61) auf den Boden
+			_heil3d.add_child(s)
+			_knoten3d.append(_heil3d)
+		_heil3d.visible = not hq_eingenommen and not myr_hq_besetzt
+		var sp := _heil3d.get_child(0) as Sprite3D
+		if sp != null:
+			sp.modulate = Color(0.75, 1.0, 0.8).lerp(Color.WHITE, 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 120.0)) if heilt else Color.WHITE   # pulsiert beim Heilen
 	# 20.11. (Paul): Rückseiten der Fabriken draußen sichtbar machen – dort sabotiert [F]
 	for z: Vector2i in rueckseite:
 		var r: Vector2i = rueckseite[z]
