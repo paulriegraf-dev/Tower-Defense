@@ -210,13 +210,18 @@ func _baue() -> void:
 			]
 		"profil":
 			if _erststart:
+				# 21.11. (Paul): beim ersten Start Pflicht – kein „Später“; bestätigen per Knopf, Klick oder Enter
 				_eintraege = [
-					["Name: " + _name_text(), _starte_eingabe, "Enter bestätigt · bis 16 Zeichen", LICHT],
-					["Später", _spaeter, "geht auch jederzeit oben rechts", Stil.TEXT_BLASS],
+					["Name: " + _name_text(), _starte_eingabe, "bis 16 Zeichen · Buchstaben oder Ziffern", LICHT],
+					["Bestätigen", _bestaetige_namen, "oder Enter drücken", KUPFER_HELL],
 				]
 			else:
 				_eintraege = [
 					["Name: " + _name_text(), _starte_eingabe, "Enter bestätigt · bis 16 Zeichen" if _tippt() else "zum Ändern klicken", LICHT],
+				]
+				if _tippt():
+					_eintraege.append(["Übernehmen", _bestaetige_namen, "oder Enter drücken", KUPFER_HELL])   # 21.11.
+				_eintraege += [
 					["Brakk-Mode · " + Anfuehrer.name(_profil_af) if _profil_brakk else "Brakk-Mode", _profil_brakk_umschalten, _profil_brakk_text(), Stil.TEXT],   # 19.11.; 20.11.: je Anführer getrennt, ein Klick blättert weiter
 					["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 				]
@@ -814,7 +819,7 @@ func _grafik_antwort(modus: String) -> void:
 
 
 func _frage_namen_beim_ersten_mal() -> void:
-	if Profil.gefragt():
+	if Profil.hat_namen():   # 21.11.: Pflicht – auch wer früher „Später“ gewählt hat, wird jetzt gefragt
 		if _grafik_frage_offen():
 			_zeige("grafik")
 		return
@@ -1193,11 +1198,12 @@ func _input(event: InputEvent) -> void:
 				_baue()
 				get_viewport().set_input_as_handled()
 				return
-			_eingabe.release_focus()
 			if _erststart:
-				_spaeter()
-			else:
-				_baue()
+				_meldung = "Bitte gib zuerst einen Namen ein."   # 21.11.: Pflicht beim ersten Start
+				get_viewport().set_input_as_handled()
+				return
+			_eingabe.release_focus()
+			_baue()
 			get_viewport().set_input_as_handled()
 		return   # alles andere geht ins Eingabefeld
 	if _laedt:
@@ -1217,7 +1223,7 @@ func _input(event: InputEvent) -> void:
 				_klick()
 				(_eintraege[_wahl][1] as Callable).call()
 		KEY_ESCAPE, KEY_BACKSPACE:
-			if _seite != "haupt" and not event.echo:
+			if _seite != "haupt" and not event.echo and not _erststart:   # 21.11.: beim ersten Start kein Weg am Namen vorbei
 				_zurueck()   # 19.11.
 		_:
 			return
@@ -1264,6 +1270,10 @@ func _maus_eingabe(event: InputEvent) -> void:
 			_code_merken()   # 20.11.: Klick daneben behält den Code („Einlösen“ löst ihn dann ein)
 		elif _tippt() and event.button_index == MOUSE_BUTTON_LEFT and not _zeile(0).has_point((event as InputEventMouseButton).position):
 			_bestaetige_namen()   # Klick daneben übernimmt den Namen
+			if not _tippt():
+				return   # übernommen: der Klick ist damit verbraucht (sonst löst er auf der neuen Seite gleich etwas aus)
+		if event.button_index == MOUSE_BUTTON_RIGHT and _erststart:
+			return   # 21.11.: beim ersten Start führt kein Weg am Namen vorbei
 		if event.button_index == MOUSE_BUTTON_RIGHT and _seite != "haupt":
 			for i in _eintraege.size():
 				var e: Array = _eintraege[i]

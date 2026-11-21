@@ -215,7 +215,11 @@ func _naechster() -> void:
 	var handgriff := s.has("fertig")
 	_btn_weiter.visible = not handgriff
 	_btn_skip.visible = false   # nur, wenn der Handgriff gerade nicht geht (siehe "kann" in _process)
-	_fortschritt.text = "Schritt %d / %d" % [_index + 1, _schritte.size()]
+	# Statt „Schritt 3 / 33“ nur das Thema: Orientierung, ohne mit der Gesamtlänge abzuschrecken (21.11.)
+	for k in range(_index, -1, -1):
+		if (_schritte[k] as Dictionary).has("thema"):
+			_fortschritt.text = str(_schritte[k]["thema"])
+			break
 
 
 func beenden() -> void:
@@ -457,14 +461,14 @@ func _baue_schritte() -> Array:
 	var p: Node = spiel
 	return [
 		# --- Spielprinzip
-		{"text": "So läuft es: Links liegt die Zone der Myriaden, geschützt von ihrem Schild. Von dort ziehen ihre Trupps zu deiner Basis rechts. Jeder Gegner, der sie erreicht, kostet dich ein Leben – du hast 15.",
+		{"thema": "Spielprinzip", "text": "So läuft es: Links liegt die Zone der Myriaden, geschützt von ihrem Schild. Von dort ziehen ihre Trupps zu deiner Basis rechts. Jeder Gegner, der sie erreicht, kostet dich ein Leben – du hast 15.",
 			"ziel": func(): return _feld(p.karte.basis, 0.6)},
 		{"text": "Die gepunktete Linie zeigt den Weg der nächsten Welle: immer der kürzeste, und immer erst über Checkpoint 1, dann über Checkpoint 2. Wie dieser Weg verläuft, bestimmst gleich du.",
 			"ziel": func(): return _feld(p.karte.checkpoints[0], 0.6)},
 		{"text": "20 Runden musst du halten. In Runde 20 drehst du den Spieß um: Dann greifen deine Truppen das HQ der Myriaden an, während deren Wellen ohne Ende weiterlaufen.",
 			},
 		# --- Fabrik und Truppen
-		{"text": "Deine Truppen kommen aus Fabriken – Türme allein reichen hier nicht. Wähle unten die Fabrik.",
+		{"thema": "Fabriken und Truppen", "text": "Deine Truppen kommen aus Fabriken – Türme allein reichen hier nicht. Wähle unten die Fabrik.",
 			"hinweis": "Taste 1 · oder Klick unten auf „Fabrik“",
 			"ziel": func(): return _knopf_von(Karte.FABRIK),
 			"fertig": func(): return p.werkzeug == Karte.FABRIK or not p.fabriken.is_empty()},
@@ -493,7 +497,7 @@ func _baue_schritte() -> Array:
 						return true
 				return false},
 		# --- Erste Welle
-		{"text": "Bereit. Starte jetzt die erste Welle. Deine Truppen laufen den Gegnern selbst entgegen und kämpfen, sobald sie sie sehen.",
+		{"thema": "Die erste Welle", "text": "Bereit. Starte jetzt die erste Welle. Deine Truppen laufen den Gegnern selbst entgegen und kämpfen, sobald sie sie sehen.",
 			"hinweis": "Leertaste · oder Klick auf „Start“",
 			"ziel": func(): return (p._btn_start as Control).get_global_rect(),
 			"fertig": func(): return p.phase == KAMPF, "welle": true},
@@ -501,7 +505,7 @@ func _baue_schritte() -> Array:
 			"hinweis": "Taste F · Tempo",
 			"fertig": func(): return p.phase == BAU and p.welle >= 2},
 		# --- Erdwälle und Stellungen
-		{"text": "Ab Runde 2 formst du das Gelände: Erdwälle lenken den Weg. Je länger der Weg, desto länger stehen die Gegner unter Beschuss. Die ersten 8 Erdwälle sind gratis – setz 3 auf oder neben die Linie.",
+		{"thema": "Erdwälle und Stellungen", "text": "Ab Runde 2 formst du das Gelände: Erdwälle lenken den Weg. Je länger der Weg, desto länger stehen die Gegner unter Beschuss. Die ersten 8 Erdwälle sind gratis – setz 3 auf oder neben die Linie.",
 			"hinweis": func(): return "Taste 2 · Erdwall – Erdwälle: %d / 3" % mini(_anzahl_waelle(), 3),
 			"ziel": func(): return _feld(_wegfeld(), 1.5) if p.werkzeug == Karte.WALL else _knopf_von(Karte.WALL),
 			"start": func(): _merk["w0"] = _anzahl_waelle(),
@@ -521,7 +525,7 @@ func _baue_schritte() -> Array:
 			"fertig": func(): return p.phase == BAU and p.welle >= 3},
 		# --- Formtürme
 		# 18.11. (Paul): Die Turmformen zeigt das Turm-Werkzeug [4], nicht die Formationen [H].
-		{"text": "Türme entstehen aus der Form deiner Erdwälle. Welche Form welchen Turm trägt, siehst du, sobald du das Turm-Werkzeug wählst. Drück 4.",
+		{"thema": "Türme", "text": "Türme entstehen aus der Form deiner Erdwälle. Welche Form welchen Turm trägt, siehst du, sobald du das Turm-Werkzeug wählst. Drück 4.",
 			"hinweis": "Taste 4 · Turm",
 			"ziel": func(): return _knopf_von(Karte.TURM),
 			"fertig": func(): return p.werkzeug == Karte.TURM},
@@ -546,7 +550,7 @@ func _baue_schritte() -> Array:
 			"ziel": func(): return _feld(_erster_ausbau(Karte.TURM)) if _hat_ausbau(Karte.TURM) else Rect2(),
 			"fertig": func(): return _menue_offen(true)},
 		# --- Upgrades
-		{"text": "Auch Fabriken wachsen: Stufe 1 legt sie auf eine Truppe fest und gibt eine dritte. Stufe 2 bringt ein Wertepaket, Stufe 3 eine Fähigkeit zur Wahl, die verändert, wie die Truppe kämpft. Bau deine Fabrik auf Stufe 1 aus.",
+		{"thema": "Upgrades", "text": "Auch Fabriken wachsen: Stufe 1 legt sie auf eine Truppe fest und gibt eine dritte. Stufe 2 bringt ein Wertepaket, Stufe 3 eine Fähigkeit zur Wahl, die verändert, wie die Truppe kämpft. Bau deine Fabrik auf Stufe 1 aus.",
 			"hinweis": "Fabrik anklicken · Knopf „Stufe 1“",
 			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else (_feld(_erste_fabrik()) if _erste_fabrik() != Karte.KEINE else Rect2()),
 			"kann": func(): return p.budget >= Werte.KOSTEN_STUFE[0],
@@ -557,14 +561,14 @@ func _baue_schritte() -> Array:
 				return false},
 		{"text": "Im Fabrikmenü stellst du auch die Zielwahl ein: Erste, Letzte oder Stärkste. Und zieh mit der Maus von der Fabrik auf eine Stellung, um sie fest für diese Fabrik zu reservieren."},
 		# --- Weitere Bauwerke
-		{"text": "Weitere Bauwerke: Das Tor [6] lässt nur deine Truppen durch die Mauer. Die Panzerung [7] schützt einen Erdwall vor der ersten Sprengung – die Myriaden haben Sprenger.",
+		{"thema": "Weitere Bauwerke", "text": "Weitere Bauwerke: Das Tor [6] lässt nur deine Truppen durch die Mauer. Die Panzerung [7] schützt einen Erdwall vor der ersten Sprengung – die Myriaden haben Sprenger.",
 			"ziel": func(): return _knopf_von(Karte.TOR)},
 		{"text": "Die Batterie [5] feuert weit und über Wälle auf Gruppen – aber nur, wenn ihre drei Piloten an Bord sind. Die kommen aus der angebauten Pilotenfabrik. Ihr Menü hat eigene Stufen, bis hin zu einem Energieschild auf dem Weg.",
 			"ziel": func(): return _knopf_von(Karte.BATTERIE)},
 		{"text": "Und dann ist da Kommandant Brakk [8]: einmal pro Partie, du steuerst ihn mit W A S D. Q sammelt Truppen und schlägt los, E klettert auf einen Wall, R stellt die Klonmaschine auf.",
 			"ziel": func(): return _knopf_von(Karte.KOMMANDANT)},
 		# --- Checkpoints und Gegner
-		{"text": "Ab Runde 5 nehmen die Gegner die Checkpoints ein, wenn sie dort stehen bleiben. Ein verlorener Checkpoint ist gefährlich: Die nächste Welle startet dort! Eine deiner Truppen geht ihn zurückholen, sobald es ruhig ist.",
+		{"thema": "Checkpoints und Gegner", "text": "Ab Runde 5 nehmen die Gegner die Checkpoints ein, wenn sie dort stehen bleiben. Ein verlorener Checkpoint ist gefährlich: Die nächste Welle startet dort! Eine deiner Truppen geht ihn zurückholen, sobald es ruhig ist.",
 			"ziel": func(): return _feld(p.karte.checkpoints[1], 0.6)},
 		{"text": "Oben steht immer, was als Nächstes kommt. Bevor eine neue Gegnerart auftaucht, kündige ich sie an. Alles über Gegner, Truppen und Bauten steht in der Übersicht. Öffne sie.",
 			"hinweis": "Taste I · Übersicht",
@@ -576,5 +580,5 @@ func _baue_schritte() -> Array:
 		{"text": "Drück [Tab] oder den Knopf oben rechts: Die Schadensliste zeigt, welche Fabrik, welcher Turm und welche Batterie wie viel geleistet hat. Nochmal [Tab] schließt sie. Ein Klick auf einen Turm oder eine Batterie zeigt ihre Werte über die ganze Partie.",
 			"ziel": func(): return _oben(0)},
 		# --- Abschluss
-		{"text": "Das war's. Abreißen geht mit Rechtsklick – was du in derselben Bauphase gebaut hast, gibt es voll zurück. Den Rest lernst du im Gefecht. Viel Erfolg, Kommandant. Sonde 7 Ende."},
+		{"thema": "Abschluss", "text": "Das war's. Abreißen geht mit Rechtsklick – was du in derselben Bauphase gebaut hast, gibt es voll zurück. Den Rest lernst du im Gefecht. Viel Erfolg, Kommandant. Sonde 7 Ende."},
 	]
