@@ -80,14 +80,26 @@ const ZITADELLE := {
 const SCHILD_FARBE := Color("b48cff")
 
 
+## 21.11. (Paul): Kärtchen der Turmformen – beim Irrtürmer zusätzlich PliPlop und Truppenturm (Klick = dieser Turm
+## wird gebaut, wie die Kacheln [9] und [0]).
+static func formen_liste() -> Array:
+	var l: Array = TURM_FORMEN.duplicate()
+	if Werte.pliplop():
+		l.append(["pliplop", ["...", ".T.", "..."]])
+	if Werte.truppenturm():
+		l.append(["truppen", ["...", "#T#", "..."]])
+	return l
+
+
 ## Name, Formname und Farbe eines Kärtchens.
 static func _form_info(art: String) -> Array:
 	if art.begins_with("schild"):
 		var st: String = {"schild": "I", "schild2": "II", "schild3": "III"}.get(art, "I")
 		return ["Zitadelle", "Stufe " + st if art != "schild" else "I · II · III", SCHILD_FARBE, "Zitadelle " + st]
 	var d: Dictionary = Werte.TURMARTEN[art]
-	var kurz: String = {"geschuetz": "Geschütz", "funk": "Funk", "frost": "Frost", "lanze": "Lanze", "heil": "Heil"}.get(art, art)
-	return [kurz, str(d["form"]), Color(str(d["farbe"])), str(d["name"])]
+	var kurz: String = {"geschuetz": "Geschütz", "funk": "Funk", "frost": "Frost", "lanze": "Lanze", "heil": "Heil", "pliplop": "PliPlop", "truppen": "Truppen"}.get(art, art)
+	var form: String = {"pliplop": "Freies Feld", "truppen": "In der Mauer"}.get(art, str(d["form"]))
+	return [kurz, form, Color(str(d["farbe"])), str(d["name"])]
 var _tipp_oben: Malflaeche
 var _neu: Emblem
 var _oben_rechts: Array[Emblem] = []
@@ -660,7 +672,7 @@ func _ordne_an() -> void:
 	if spiel.werkzeug != Karte.TURM:
 		formvorlage = ""   # 17.11.: Vorlage nur, solange man gerade einen Turm ausgesucht hat
 	if _formen.visible:
-		_formen.size = Vector2(TURM_FORMEN.size() * 59.0 - 3.0 + 10.0, 74.0)
+		_formen.size = Vector2(formen_liste().size() * 59.0 - 3.0 + 10.0, 74.0)
 		var oben := (_tipp.position.y if _tipp.visible else _konsole.position.y) - 3.0
 		_formen.position = Vector2(roundf((BREITE - _formen.size.x) / 2.0), oben - _formen.size.y)
 
@@ -786,8 +798,16 @@ func _schraffur(r: Rect2, farbe: Color, abstand: float = 6.0) -> void:
 func _formen_klick(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var i := int(floorf(((event as InputEventMouseButton).position.x - 5.0) / 59.0))
-		if i >= 0 and i < TURM_FORMEN.size():
-			var art: String = TURM_FORMEN[i][0]
+		var liste := formen_liste()
+		if i >= 0 and i < liste.size():
+			var art: String = liste[i][0]
+			if art in ["pliplop", "truppen"]:
+				# 21.11. (Paul): eigener Turm des Irrtürmers – ein Klick wählt ihn zum Bauen (nochmal = abwählen)
+				formvorlage = ""
+				spiel.turm_wunsch = "" if spiel.turm_wunsch == art else art
+				_formen.accept_event()
+				return
+			spiel.turm_wunsch = ""
 			if art == "schild":
 				# 19.11.: Zitadelle – I → II → III → aus
 				var folge := {"": "schild", "schild": "schild2", "schild2": "schild3", "schild3": ""}
@@ -847,9 +867,10 @@ func _male_formen(ci: Control) -> void:
 		unter = k.turm_form(mz)
 	elif k.in_karte(mz) and k.ist_frei(mz) and not k.hof_von(mz).is_empty():
 		unter = "schild"
-	for i in TURM_FORMEN.size():
-		var art: String = TURM_FORMEN[i][0]
-		var raster: Array = TURM_FORMEN[i][1]
+	var liste := formen_liste()
+	for i in liste.size():
+		var art: String = liste[i][0]
+		var raster: Array = liste[i][1]
 		if art == "schild" and formvorlage.begins_with("schild"):
 			art = formvorlage   # Zitadelle: die gewählte Stufe zeigen
 			raster = ZITADELLE[art]
@@ -857,6 +878,8 @@ func _male_formen(ci: Control) -> void:
 		var farbe: Color = info[2]
 		var r := Rect2(Vector2(5.0 + i * 59.0, 13.0), Vector2(56, 57))
 		var an := art == unter or art == formvorlage or (unter == "schild" and art.begins_with("schild"))
+		if art in ["pliplop", "truppen"] or spiel.turm_wunsch != "":
+			an = art == spiel.turm_wunsch   # 21.11.: gewählter Irrtürmer-Turm
 		Stil.platte(ci, r, 3.0, Stil.METALL if an else Stil.METALL_TIEF, farbe if an else Stil.RAHMEN)
 		var spalten := (raster[0] as String).length()
 		var feld := 8.0 if raster.size() <= 3 else (6.0 if raster.size() <= 4 else 24.0 / raster.size())
