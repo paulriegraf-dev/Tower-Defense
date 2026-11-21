@@ -49,6 +49,9 @@ var klon := false                   # aus der Klonmaschine (wird nicht noch einm
 var ring_schild := 0.0             # 19.11.: Brakk-Mode, Zeitlupe mit Wallring – Schild (Lebenspunkte) …
 var ring_schild_bis := 0           # … bis zu diesem Zeitpunkt (ms, Echtzeit)
 var _gefolgt := false
+var wach_turm := Karte.KEINE        # 21.11. (Paul): Werkschutz eines Truppenturms – nimmt keine Stellung …
+var wach_ziel := Karte.KEINE        # … geht nur zu diesem Feld (bedrohter Checkpoint oder zurück zum Turm)
+var wach_heim := false
 
 ## Farbe des Abzeichens je Stufe-3-Fähigkeit
 const ABZEICHEN := {
@@ -94,6 +97,8 @@ func _suche_posten() -> void:
 	var fund := karte.finde_posten(hier, self)
 	if spiel.order24 != null and not spiel.order24.darf_in_stellung(self):
 		fund = {}   # 20.11.: Order 24 – nur ein Teil besetzt Stellungen, Jäger nie
+	if wach_turm != Karte.KEINE:
+		fund = {}   # 21.11. (Paul): Werkschutz bleibt Bodentruppe
 	if spiel.im_endkampf() and not ist_pilot and not spiel.endkampf_stellung_frei(self):
 		fund = {}   # letzte Runde: nur die zusätzlichen Truppen greifen an, die normale Besatzung bleibt in den Stellungen (17.11.)
 	_punkte.clear()
@@ -198,12 +203,24 @@ func in_stellung() -> bool:
 	return zustand == Zustand.AUF_POSTEN
 
 
+## 21.11. (Paul): Besatzung eines MG-Nests (Sonde 7) – wird nicht gezeichnet, das Nest zeigt einen Besetzt-Punkt.
+var _war_im_nest := false
+
+func im_nest() -> bool:
+	return zustand == Zustand.AUF_POSTEN and Werte.mg_stellung()
+
+
 ## Sitzt die Einheit in einer Batterie? Dann ist sie unsichtbar, schießt nicht selbst und kann nicht getroffen werden.
 func in_batterie() -> bool:
 	return zustand == Zustand.IN_BATTERIE
 
 
 func _process(delta: float) -> void:
+	if im_nest():
+		visible = false   # 21.11. (Paul): im MG-Nest sieht man nur das Nest, nicht die Besatzung
+	elif _war_im_nest:
+		visible = true
+	_war_im_nest = im_nest()
 	if _bruestung != null:
 		var oben := zustand == Zustand.AUF_POSTEN
 		_sprite.haltung(oben)
@@ -392,6 +409,13 @@ func _im_tor() -> bool:
 func _waehle_marschziel() -> void:
 	var hier := karte.zelle_bei(position)
 	_marschziel = Karte.KEINE
+	if wach_turm != Karte.KEINE:
+		# 21.11. (Paul): Werkschutz – nur zum bedrohten Checkpoint oder zurück zum Turm, nie dem Gegner hinterher
+		if wach_ziel != Karte.KEINE:
+			_marschziel = wach_ziel
+			if hier != wach_ziel:
+				_plane_zur_zelle(wach_ziel)
+		return
 	if spiel.order24 != null:
 		# 20.11.: Order 24 – nur Jäger und Vorstoß laufen; alle anderen bleiben, wo sie sind (schießen nur auf Sicht)
 		var o24_ziel: Vector2i = spiel.order24.marschziel(self)

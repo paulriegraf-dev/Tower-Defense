@@ -528,7 +528,11 @@ func posten_bonus(z: Vector2i, daten: Dictionary) -> float:
 
 
 ## Welcher Turm entstünde auf `z`? Bestimmt durch die freien Nachbarwälle (siehe Werte.TURMARTEN). "" = keiner.
+var turm_wunsch := ""   # 21.11. (Paul): nur während main._baue_wunschturm – diese Turmart statt der Form ("truppen")
+
 func turm_form(z: Vector2i) -> String:
+	if turm_wunsch == "truppen" and inhalt(z) == WALL and freie_stuetzen(z).size() >= 2:
+		return "truppen"   # eigene Kachel: Truppenturm auf jedem Erdwall mit zwei freien Nachbarwällen
 	if Werte.pliplop() and inhalt(z) == WALL and wall_nachbarn(z) == 0:
 		return "pliplop"   # 20.11. (Paul): Irrtürmer – PliPlop 3cK auf einem einzelnen Erdwall
 	var form := _gerade_form(z)

@@ -155,7 +155,7 @@ func _ready() -> void:
 	leben = Werte.START_LEBEN
 	# Vollbild wie eingestellt (Standard an; das Projekt startet schon im Vollbild)
 	var ist_voll := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-	if Werte.vollbild != ist_voll:
+	if Werte.vollbild != ist_voll and not OS.has_feature("web"):   # 21.11.: Web – nie beim Laden (werte.gd)
 		Werte.setze_vollbild(Werte.vollbild)
 	_start_zelle = Werte.START_ZELLE   # Kartengröße steht erst jetzt fest
 	karte = Karte.new()
@@ -2200,6 +2200,7 @@ func _process(delta: float) -> void:
 	_braende_wirken(delta)
 	_tuerme_feuern(delta)
 	_mg_huelsen_wirken(delta)   # 20.11. (Paul): MG-Stellung, Hülsenregen
+	_mg_besetzt_zeigen()
 	_magnete_ziehen(delta)
 	_batterien_feuern(delta)
 	_checkpoints_halten(delta)
@@ -2488,37 +2489,120 @@ func checkpoint_erreicht(i: int) -> void:
 	melde("Checkpoint %d verloren! Die nächste Welle startet dort." % (i + 1), 4.0)
 
 
-## 20.11. (Paul, Nachtrag): Truppenturm (Irrtürmer) – hält bis zu „werkschutz“ Technogunner. Fehlt einer, kommt nach
-## PRODUKTION_SEK / „nachschub“ ein neuer an einem freien Nachbarfeld heraus. Ab Turmstufe 2 mit dem Wertepaket, „leben_mal“
-## aus der Stufe-3-Fähigkeit. Die Truppen gehen wie Fabriktruppen in Stellungen oder kämpfen am Boden.
-var _werkschutz := {}   # Turm-Zelle -> {"timer", "einheiten"}
+## 20.11. (Paul, Nachtrag) / 21.11. (Paul): Truppenturm (Irrtürmer) – hält bis zu „werkschutz“ Technogunner als Besatzung.
+## Die Besatzung schießt aus dem Turm (jeder Mann ein Schuss wie ein Technogunner, im Turm nicht angreifbar). Heraus kommt
+## sie nur zur ersten Reaktion: Steht ein Gegner auf einem Checkpoint im Umkreis von „ausfall_felder“ (oder ist der
+## verloren), rückt die ganze Besatzung dorthin aus – nicht in Stellungen, nicht dem Gegner hinterher. Ist der Checkpoint
+## wieder ruhig, geht sie zurück in den Turm. Gefallene kommen nach PRODUKTION_SEK / „nachschub“ im Turm nach.
+var _werkschutz := {}   # Turm-Zelle -> {"timer", "einheiten" (draußen), "drin", "ruhe", "schuss"}
+
+func _truppenturm_ziel(z: Vector2i) -> Vector2i:
+	var weit := float(karte.turm_wert(z, "ausfall_felder", 4.0))
+	var bestes := Karte.KEINE
+	var beste := INF
+	for i in karte.checkpoints.size():
+		var c: Vector2i = karte.checkpoints[i]
+		var d := Vector2(c - z).length()
+		if d > weit or d >= beste:
+			continue
+		var bedroht: bool = karte.cp_feind[i]
+		if not bedroht:
+			for g in gegner:
+				if is_instance_valid(g) and karte.zelle_bei(g.position) == c:
+					bedroht = true
+					break
+		if bedroht:
+			beste = d
+			bestes = c
+	return bestes
+
 
 func _truppenturm(z: Vector2i, delta: float) -> void:
-	var w: Dictionary = _werkschutz.get(z, {"timer": 0.0, "einheiten": []})
+	var neu_w := not _werkschutz.has(z)
+	var w: Dictionary = _werkschutz.get(z, {"timer": 0.0, "einheiten": [], "drin": 0, "ruhe": 0.0, "schuss": 0.0})
+	if not w.has("drin"):
+		w["drin"] = 0
+		w["ruhe"] = 0.0
+		w["schuss"] = 0.0
 	var liste: Array = (w["einheiten"] as Array).filter(func(e: Variant) -> bool: return is_instance_valid(e) and not (e as Node).is_queued_for_deletion() and (e as Einheit).leben > 0.0)
 	w["einheiten"] = liste
 	_werkschutz[z] = w
-	karte.werkschutz_zahl[z] = liste.size()
-	if liste.size() >= int(karte.turm_wert(z, "werkschutz", 2)):
+	var hoechst := int(karte.turm_wert(z, "werkschutz", 2))
+	if neu_w:
+		w["drin"] = hoechst   # frisch gebaut: voll besetzt
+	var drin := mini(int(w["drin"]), hoechst)
+	# Nachschub: Gefallene kommen im Turm nach
+	if drin + liste.size() >= hoechst:
 		w["timer"] = 0.0
+	else:
+		w["timer"] = float(w["timer"]) + delta * float(karte.turm_wert(z, "nachschub", 1.0))
+		if float(w["timer"]) >= Werte.PRODUKTION_SEK:
+			w["timer"] = 0.0
+			drin += 1
+			effekte.flaeche(karte.mitte(z), Werte.ZELLE * 0.5, Color(Werte.TURMARTEN["truppen"]["farbe"]))
+	var stufe := 2 if int(karte.turm_stufe.get(z, 1)) >= 2 else 0   # Truppenstufe 2 = Wertepaket
+	# Ausfall oder Rückweg
+	var cp := _truppenturm_ziel(z)
+	if cp != Karte.KEINE:
+		w["ruhe"] = 0.0
+		var raus := karte.freier_nachbar(z)
+		while drin > 0 and raus != Karte.KEINE:
+			drin -= 1
+			var e := Einheit.new()
+			e.wach_turm = z
+			e.wach_ziel = cp
+			figuren.add_child(e)
+			e.start(self, karte, "technogunner", z, stufe, "")
+			e.daten["name"] = "Werkschutz"
+			e.max_leben *= float(karte.turm_wert(z, "leben_mal", 1.0))
+			e.leben = e.max_leben
+			e.position = karte.mitte(raus)
+			e._punkte.clear()
+			effekte.flaeche(e.position, Werte.ZELLE * 0.5, Color(Werte.TURMARTEN["truppen"]["farbe"]))
+			einheiten.append(e)
+			liste.append(e)
+		for e: Einheit in liste:
+			e.wach_ziel = cp
+			e.wach_heim = false
+	elif not liste.is_empty():
+		w["ruhe"] = float(w["ruhe"]) + delta
+		if float(w["ruhe"]) >= float(karte.turm_wert(z, "ausfall_ruhe", 3.0)):
+			var heim := karte.freier_nachbar(z)
+			for e: Einheit in liste.duplicate():
+				e.wach_heim = true
+				e.wach_ziel = heim
+				var da := karte.zelle_bei(e.position)
+				if heim == Karte.KEINE or da == heim or Vector2(da - z).length() <= 1.5 or float(w["ruhe"]) > 20.0:
+					liste.erase(e)
+					einheiten.erase(e)
+					e.queue_free()
+					drin = mini(hoechst, drin + 1)
+	w["drin"] = drin
+	karte.werkschutz_zahl[z] = drin
+	# Die Besatzung schießt aus dem Turm
+	if drin <= 0:
 		return
-	w["timer"] = float(w["timer"]) + delta * float(karte.turm_wert(z, "nachschub", 1.0))
-	if float(w["timer"]) < Werte.PRODUKTION_SEK:
+	var rest := float(w["schuss"]) - delta * turm_takt(z)
+	if rest > 0.0:
+		w["schuss"] = rest
 		return
-	w["timer"] = 0.0
-	var e := Einheit.new()
-	figuren.add_child(e)
-	e.start(self, karte, "technogunner", z, 2 if int(karte.turm_stufe.get(z, 1)) >= 2 else 0, "")   # Truppenstufe 2 = Wertepaket
-	e.daten["name"] = "Werkschutz"
-	e.max_leben *= float(karte.turm_wert(z, "leben_mal", 1.0))
-	e.leben = e.max_leben
-	var n := karte.freier_nachbar(z)
-	if n != Karte.KEINE:
-		e.position = karte.mitte(n)
-	effekte.flaeche(e.position, Werte.ZELLE * 0.5, Color(Werte.TURMARTEN["truppen"]["farbe"]))
-	einheiten.append(e)
-	liste.append(e)
-	karte.werkschutz_zahl[z] = liste.size()
+	var d: Dictionary = Werte.einheit_daten("technogunner", stufe, "")
+	var von := karte.mitte(z) + Vector2(0, -14)
+	var weite := float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
+	schadensquelle = "turm:truppen"
+	schuetze = null
+	schadensobjekt = z
+	schuss_herkunft = von
+	var ziel := gegner_in_reichweite(von, weite, false, z)
+	if ziel == null:
+		w["schuss"] = 0.0
+		return
+	if turmbilder.has(z):
+		(turmbilder[z] as TurmBild).feuert(ziel.position)
+	Ton.am_ort(self, "tc-heavy", von)
+	schuss(von, ziel.position, Color(Werte.TURMARTEN["truppen"]["farbe"]))
+	ziel.nimm_schaden(float(d["schaden"]))
+	w["schuss"] = float(d["abklingzeit"]) / float(drin * maxi(1, (d.get("schuss_bilder", [0]) as Array).size()))   # jeder Mann schießt für sich: mehr Besatzung = dichteres Feuer
 
 
 func _tuerme_feuern(delta: float) -> void:
@@ -2538,7 +2622,7 @@ func _tuerme_feuern(delta: float) -> void:
 			_heilturm(z, delta)
 			continue
 		if art_name == "truppen":
-			_truppenturm(z, delta)   # 20.11. (Nachtrag): schießt nicht, hält Werkschutz
+			_truppenturm(z, delta)   # 20.11. (Nachtrag) / 21.11.: Besatzung schießt aus dem Turm, Ausfall nur zum Checkpoint
 			continue
 		if art_name == "pliplop":
 			_pliplop_turm(z, delta)   # 20.11. (Paul): PliPlop 3cK (Irrtürmer)
@@ -3486,6 +3570,13 @@ func _naechste_bauphase() -> void:
 		if e != kommandant:
 			e.queue_free()
 	einheiten.clear()
+	for tz: Vector2i in _werkschutz.keys():   # 21.11.: Rundenende – der Werkschutz ist wieder vollzählig im Truppenturm
+		if str(karte.turm_art.get(tz, "")) != "truppen":
+			_werkschutz.erase(tz)
+			karte.werkschutz_zahl.erase(tz)
+			continue
+		_werkschutz[tz] = {"timer": 0.0, "einheiten": [], "drin": int(karte.turm_wert(tz, "werkschutz", 2)), "ruhe": 0.0, "schuss": 0.0}
+		karte.werkschutz_zahl[tz] = int(_werkschutz[tz]["drin"])
 	if kommandant != null:
 		kommandant.neue_runde()
 		einheiten.append(kommandant)
@@ -4102,6 +4193,15 @@ func _turmbilder_abgleichen() -> void:
 
 ## 20.11. (Paul, Nachtrag): MG-Stellung (Sonde 7) – Lauf mit Munitionsgurt auf jeder Stellung (2D und HD-2D).
 var _mg_bilder := {}   # Stellungs-Zelle -> Node2D
+const MG_BILD_MASSSTAB := 1.5   # 21.11.: 64er-Bild, etwa so groß wie der PliPlop
+
+func _mg_besetzt_zeigen() -> void:
+	for z: Vector2i in _mg_bilder:
+		var p := (_mg_bilder[z] as Node).get_node_or_null("Besetzt") as Sprite2D
+		if p != null:
+			var e: Variant = karte.posten.get(z)
+			p.texture = Platzhalter.punkte(1 if e != null and is_instance_valid(e) and (e as Einheit).in_stellung() else 0, 1)
+
 
 func _mg_bilder_abgleichen() -> void:
 	var an := Werte.mg_stellung()
@@ -4116,11 +4216,25 @@ func _mg_bilder_abgleichen() -> void:
 			var k := Node2D.new()
 			k.position = karte.mitte(z) + Vector2(0, 14)
 			var s := Sprite2D.new()
-			s.texture = Platzhalter.mg_aufsatz()
 			s.centered = false
-			s.scale = Vector2(2, 2)
-			s.offset = Vector2(-14, -16)
+			if ResourceLoader.exists(Werte.NEU + "tuerme/mg_nest.png"):
+				# 21.11. (Paul): PixelLab-Bild des MG-Nests – steht vor der Truppe auf der Stellung
+				s.texture = load(Werte.NEU + "tuerme/mg_nest.png")
+				s.scale = Vector2(MG_BILD_MASSSTAB, MG_BILD_MASSSTAB)
+				s.offset = Vector2(-34, -60)
+			else:
+				s.texture = Platzhalter.mg_aufsatz()
+				s.scale = Vector2(2, 2)
+				s.offset = Vector2(-14, -16)
 			k.add_child(s)
+			# 21.11. (Paul): Punkt über dem Nest – besetzt (cyan) oder leer (dunkel), wie die Werkschutz-Punkte am Truppenturm
+			var p := Sprite2D.new()
+			p.name = "Besetzt"
+			p.centered = false
+			p.scale = Vector2(3, 3)
+			p.offset = Vector2(-3, -34)
+			p.texture = Platzhalter.punkte(0, 1)
+			k.add_child(p)
 			figuren.add_child(k)
 			_mg_bilder[z] = k
 
@@ -4880,7 +4994,7 @@ func kosten(typ: int) -> int:
 		Karte.WALL:
 			return 0 if freie_waelle > 0 else Werte.kosten_wall()   # 19.11.: Preis je Anführer
 		Karte.STELLUNG:
-			return 0 if freie_stellungen > 0 else Werte.KOSTEN_STELLUNG
+			return 0 if freie_stellungen > 0 else Werte.kosten_stellung()   # 21.11. (Paul): MG-Stellung (Sonde 7) kostet 50
 		Karte.TURM:
 			return Werte.KOSTEN_TURM
 		Karte.TOR:
@@ -4972,11 +5086,15 @@ func _ist_ausbau(typ: int) -> bool:
 
 ## Mit dem Turm-Werkzeug [4] auf ein freies Feld: dort entsteht ein Schildgenerator (nur in einem Hof).
 func bautyp(z: Vector2i, typ: int) -> int:
+	if typ == Karte.TURM and turm_wunsch != "":
+		return Karte.TURM   # 21.11.: Wunschturm (PliPlop auf freiem Feld bringt seinen Erdwall mit) – kein Generator
 	return Karte.GENERATOR if typ == Karte.TURM and karte.inhalt(z) == Karte.FREI else typ
 
 
 ## Leerer Text = Bauen erlaubt, sonst der Grund, warum nicht.
 func bau_hindernis(z: Vector2i, typ: int) -> String:
+	if typ == Karte.TURM and turm_wunsch != "":
+		return wunsch_hindernis(z)   # 21.11. (Paul)
 	typ = bautyp(z, typ)
 	if phantom_modus == "angriff":
 		return "Im Angriff baut der Verteidiger. Du planst die Welle im Taktikplaner [L]."
@@ -5051,6 +5169,8 @@ func kosten_bei(z: Vector2i, typ: int) -> int:
 
 
 func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
+	if typ == Karte.TURM and turm_wunsch != "":
+		return _baue_wunschturm(z)   # 21.11. (Paul): Kachel PliPlop / Truppenturm
 	typ = bautyp(z, typ)
 	var grund := bau_hindernis(z, typ)
 	if grund != "":
@@ -5596,7 +5716,88 @@ func waehle(typ: int) -> void:
 	if typ != Karte.FABRIK and not alles_frei():
 		melde("Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE)
 		return
-	werkzeug = Karte.FREI if werkzeug == typ else typ
+	werkzeug = Karte.FREI if werkzeug == typ and turm_wunsch == "" else typ
+	turm_wunsch = ""
+
+
+## 21.11. (Paul): eigene Kacheln des Irrtürmers – Turm-Werkzeug mit festem Ziel: "pliplop" (Klick auf ein freies Feld
+## baut Einzelwall und PliPlop in einem) oder "truppen" (Erdwall mit zwei freien Nachbarwällen).
+var turm_wunsch := ""
+
+func waehle_turm(art: String) -> void:
+	if phantom_modus == "angriff" or phase == Phase.ENDE or (phase == Phase.KAMPF and not darf_in_welle(Karte.TURM)):
+		return
+	if herausforderung_sperrt(Karte.TURM) != "":
+		melde(herausforderung_sperrt(Karte.TURM), 4.0)
+		return
+	if not alles_frei():
+		melde("Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE)
+		return
+	if werkzeug == Karte.TURM and turm_wunsch == art:
+		werkzeug = Karte.FREI
+		turm_wunsch = ""
+	else:
+		werkzeug = Karte.TURM
+		turm_wunsch = art
+
+
+## Warum der Wunschturm hier nicht geht ("" = geht). `mit_wall`: beim PliPlop auf freiem Feld wird der Erdwall mitgebaut.
+func wunsch_hindernis(z: Vector2i) -> String:
+	if phantom_modus == "angriff":
+		return "Im Angriff baut der Verteidiger."
+	if phase != Phase.BAU and not (phase == Phase.KAMPF and endkampf):
+		return "Türme baust du zwischen den Wellen."
+	if anfuehrer_sperrt(Karte.TURM) != "":
+		return anfuehrer_sperrt(Karte.TURM)
+	if turm_wunsch == "pliplop":
+		if karte.inhalt(z) == Karte.FREI:
+			var g := bau_hindernis_ohne_wunsch(z, Karte.WALL)
+			if g != "":
+				return g
+			if karte.wall_nachbarn(z) > 0:
+				return "PliPlop steht allein: Hier grenzt schon ein Erdwall an."
+			if budget < kosten_bei(z, Karte.WALL) + Werte.KOSTEN_PLIPLOP:
+				return "Nicht genug Budget (%d)." % (kosten_bei(z, Karte.WALL) + Werte.KOSTEN_PLIPLOP)
+			return ""
+		if karte.inhalt(z) != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z):
+			return "PliPlop: auf ein freies Feld klicken (der Erdwall kommt mit) oder auf einen einzelnen Erdwall."
+		if karte.wall_nachbarn(z) > 0:
+			return "PliPlop steht allein: Dieser Erdwall hat Nachbarwälle."
+		return "" if budget >= Werte.KOSTEN_PLIPLOP else "Nicht genug Budget (%d)." % Werte.KOSTEN_PLIPLOP
+	# Truppenturm
+	if karte.inhalt(z) != Karte.WALL:
+		return "Truppenturm: auf einen Erdwall mit zwei freien Nachbarwällen setzen."
+	if karte.ausbau.has(z):
+		return "Dieser Erdwall ist schon ausgebaut."
+	if karte.stuetze_von.has(z):
+		return "Dieser Erdwall stützt schon einen anderen Turm."
+	if karte.freie_stuetzen(z).size() < 2:
+		return "Truppenturm braucht zwei freie Nachbarwälle (links/rechts oder über Eck)."
+	return "" if budget >= Werte.KOSTEN_TURM else "Nicht genug Budget (%d)." % Werte.KOSTEN_TURM
+
+
+func _baue_wunschturm(z: Vector2i) -> bool:
+	var grund := wunsch_hindernis(z)
+	if grund != "":
+		melde(grund, 4.0)
+		return false
+	var wunsch := turm_wunsch
+	turm_wunsch = ""   # ab hier der gewöhnliche Bauweg
+	if wunsch == "pliplop" and karte.inhalt(z) == Karte.FREI:
+		baue(z, Karte.WALL, true)
+	karte.turm_wunsch = wunsch if wunsch == "truppen" else ""
+	var ok := karte.inhalt(z) == Karte.WALL and baue(z, Karte.TURM)
+	karte.turm_wunsch = ""
+	turm_wunsch = wunsch
+	return ok
+
+
+func bau_hindernis_ohne_wunsch(z: Vector2i, typ: int) -> String:
+	var w := turm_wunsch
+	turm_wunsch = ""
+	var g := bau_hindernis(z, typ)
+	turm_wunsch = w
+	return g
 
 
 func _tempo_umschalten() -> void:
@@ -5637,6 +5838,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				waehle(Karte.PANZER)
 			KEY_8:
 				waehle(Karte.KOMMANDANT)
+			KEY_9:
+				if Werte.pliplop():
+					waehle_turm("pliplop")   # 21.11. (Paul): Irrtürmer
+			KEY_0:
+				if Werte.truppenturm():
+					waehle_turm("truppen")
 			KEY_Q:
 				if kommandant != null:
 					_kommandant_meldung(kommandant.taste_q(maus_welt()))
@@ -5681,6 +5888,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_bestaetigung.visible = false
 				if not _wurfziel_fuer.is_empty():
 					_beende_wurfziel()
+			KEY_P:
+				if OS.has_feature("web"):
+					_hud.pause_an()   # 21.11.: Web – Esc gehört dem Browser (Vollbild, Mausfang), [P] öffnet das Pausenmenü
 			KEY_F:
 				_tempo_umschalten()
 			KEY_B:
@@ -5727,7 +5937,8 @@ func _unhandled_input(event: InputEvent) -> void:
 						_zieh_von = z   # Maustaste gedrückt halten und auf eine Stellung ziehen = zuweisen
 				else:
 					_schliesse_fabrikmenue()
-			elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM or karte.inhalt(z) == Karte.GENERATOR) and phase != Phase.ENDE:
+			elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM or karte.inhalt(z) == Karte.GENERATOR \
+					or (Werte.mg_stellung() and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG)) and phase != Phase.ENDE:   # 21.11. (Paul): auch die MG-Stellung – ihr Fenster ging sonst sofort wieder zu
 				_oeffne_fabrikmenue(z)   # Batterie, Turm oder Generator angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
 			else:
 				_schliesse_fabrikmenue()
@@ -5919,8 +6130,14 @@ func _werkzeug_tipp(typ: int) -> String:
 				return "Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE
 			return "Maustaste halten = ziehen, Rechtsklick = abreißen (in dieser Bauphase Gebautes voll zurück, sonst %d %%)." % roundi(Werte.erstattung() * 100.0)
 		Karte.STELLUNG:
+			if Werte.mg_stellung():
+				return "MG-Nest auf einem Erdwall (%d): Eine Truppe aus einer Fabrik bemannt es, das Nest schießt mit eigenen Werten. Klick auf das Nest = Ausbau." % Werte.KOSTEN_MG_STELLUNG   # 21.11. (Paul)
 			return "Ausbau eines Erdwalls. Eine Einheit steht oben, schießt weiter und über Wälle hinweg."
 		Karte.TURM:
+			if turm_wunsch == "pliplop":
+				return "PliPlop 3cK (%d + Erdwall): Klick auf ein freies Feld – der einzelne Erdwall kommt mit. Mehrere erlaubt, aber keiner neben einem anderen Wall." % Werte.KOSTEN_PLIPLOP
+			if turm_wunsch == "truppen":
+				return "Truppenturm (%d): auf einen Erdwall mit zwei freien Nachbarwällen setzen (in einer Mauer oder an einer Ecke)." % Werte.KOSTEN_TURM
 			return "Auf einen Erdwall setzen – die Form der Nachbarwälle bestimmt den Turm. Klick auf eine Form oben legt sie als Vorlage an die Maus (grün = Erdwall steht schon)."
 		Karte.BATTERIE:
 			return "Mit Pilotenfabrik (zwei Felder, [T] dreht): feuert weit und flächig, sobald %d Piloten darin sitzen." % int(Werte.BATTERIE["plaetze"])

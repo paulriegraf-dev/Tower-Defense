@@ -975,7 +975,7 @@ class Nebel extends Node2D:
 		# Truppen des Verteidigers sieht man nur, wo gerade eine eigene Einheit hinsieht (aufgeklärte Felder zeigen nur den Bau)
 		for e in spiel.einheiten:
 			if is_instance_valid(e):
-				e.visible = offen(spiel.karte.zelle_bei(e.position), false)
+				e.visible = offen(spiel.karte.zelle_bei(e.position), false) and not (e as Einheit).im_nest()   # 21.11.: Besatzung im MG-Nest bleibt unsichtbar
 		queue_redraw()
 	## Nebel (16.11. neu): echter Dunst statt Decke. Eine kleine Maske (ein Bildpunkt je Feld, weich gefiltert) sagt, wie
 	## dicht er ist – ungesehen dicht, aufgeklärt (und Checkpoints, Basis) halb, sichtbar frei; ein Shader lässt darüber

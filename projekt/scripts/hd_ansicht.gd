@@ -246,6 +246,16 @@ func ist_hoch(z: Vector2i) -> bool:
 	return karte.feld.get(z, -1) == Karte.WALL and karte.ausbau.get(z, Karte.FREI) != Karte.TOR
 
 
+## Wie ist_hoch, aber fürs Bild: das MG-Nest steht flach (im Ego-Modus bleibt das Feld trotzdem ein Hindernis).
+func _hoch(z: Vector2i) -> bool:
+	return ist_hoch(z) and not _mg_flach(z)
+
+
+## 21.11. (Paul): MG-Nest (Sonde 7) steht als eigener Turm auf dem Boden – kein Mauerblock, keine Brüstung darunter.
+func _mg_flach(z: Vector2i) -> bool:
+	return Werte.mg_stellung() and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG
+
+
 ## 18.11.: Leere (ganz durchsichtige) Zeilen am unteren Rand eines Bildausschnitts – zwischengespeichert je Bild und Ausschnitt.
 var _leer_cache := {}
 
@@ -324,6 +334,11 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 	var sichtbar := s.is_visible_in_tree() and s.texture != null
 	b.visible = sichtbar
 	if not sichtbar:
+		# 21.11.: versteckte Figur (Besatzung im MG-Nest) – auch Umriss und Lebensbalken ausblenden
+		if _umrisse.has(id):
+			(_umrisse[id] as Sprite3D).visible = false
+		for n: Node in _balken.get(id, []):
+			n.visible = false
 		return
 	# 18.11.: Leistung – jede Eigenschaft nur setzen, wenn sie sich ändert: Sprite3D baut bei flip_h, modulate, pixel_size,
 	# offset oder billboard sonst in jedem Bild sein Netz neu (bei allen Figuren). Ergebnis wie vorher.
@@ -354,7 +369,7 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 	# 2D: das Bild reicht von o bis o + groesse (y nach unten). 3D: y nach oben, die Unterkante liegt am Fußpunkt.
 	var versatz := Vector2(o.x, -(o.y + groesse.y))
 	var traeger: Node2D = eltern as Node2D if eltern is Node2D else s
-	var hoehe := H if ist_hoch(karte.zelle_bei(traeger.global_position)) else 0.0
+	var hoehe := H if _hoch(karte.zelle_bei(traeger.global_position)) else 0.0
 	var ort := _welt_3d(s.global_position, hoehe + 0.002)
 	# 18.11.: Ego-Sicht – aus Augenhöhe schwebten die Figuren: Das Bild drehte sich ganz zur Kamera, sein Fuß lag 22 px
 	# südlich (für die Schrägsicht) und unten sind oft leere Zeilen. Hier stehen sie aufrecht auf ihrem echten Fußpunkt
@@ -415,7 +430,7 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 func _hinter_wall(p: Vector2) -> bool:
 	var z := karte.zelle_bei(p)
 	for d in [Vector2i(0, 1), Vector2i(0, 2), Vector2i(-1, 1), Vector2i(1, 1)]:
-		if ist_hoch(z + d):
+		if _hoch(z + d):
 			return true
 	return false
 
@@ -717,7 +732,7 @@ func _bauvorschau() -> void:
 			g.region_rect = q
 			g.pixel_size = 2.0 / Werte.ZELLE
 			g.offset = Vector2(-anker.x, anker.y - q.size.y)
-			g.position = _welt_3d(m + Vector2(0, 24), (H if ist_hoch(z) else 0.0) + 0.01)
+			g.position = _welt_3d(m + Vector2(0, 24), (H if _hoch(z) else 0.0) + 0.01)
 
 
 func _geist_fabrik(g: Sprite3D, z: Vector2i, bild: String) -> void:
@@ -887,6 +902,8 @@ func _baue_waende() -> void:
 		var aus: int = karte.ausbau.get(z, Karte.FREI)
 		if aus == Karte.TOR:
 			_tor(z)
+			continue
+		if _mg_flach(z):
 			continue
 		var massiv := aus == Karte.STELLUNG or aus == Karte.TURM or karte.stuetze_von.has(z)
 		if stil == "energie" and not massiv:
@@ -2332,7 +2349,7 @@ func maus_welt(nur_boden: bool = false) -> Vector2:
 	if absf(r.y) < 0.0001:
 		return Vector2(-9999, -9999)
 	var p := von + r * ((H - von.y) / r.y)
-	if not nur_boden and ist_hoch(Vector2i(floori(p.x), floori(p.z))):
+	if not nur_boden and _hoch(Vector2i(floori(p.x), floori(p.z))):
 		return Vector2(p.x * Werte.ZELLE, p.z * Werte.ZELLE + Werte.KARTE_OBEN)
 	p = von + r * ((0.0 - von.y) / r.y)
 	return Vector2(p.x * Werte.ZELLE, p.z * Werte.ZELLE + Werte.KARTE_OBEN)
@@ -2366,4 +2383,4 @@ func bau_unter_maus() -> Vector2i:
 ## Weltpunkt der 2D-Logik -> Bildschirmpunkt (für Menüs und Hinweise an Feldern).
 func welt_zu_bild(p: Vector2) -> Vector2:
 	var z := karte.zelle_bei(p)
-	return kamera.unproject_position(_welt_3d(p, H if ist_hoch(z) else 0.0))
+	return kamera.unproject_position(_welt_3d(p, H if _hoch(z) else 0.0))

@@ -18,8 +18,12 @@ const GOLD_DUNKEL := Color("b8862a")
 const METALL := Color("4a515e")
 const METALL_HELL := Color("8a93a6")
 
-const PP_ZELLE := 40                     # PliPlop: Kantenlänge eines Bilds (Pixel)
-const PP_ANKER := Vector2(20, 35)        # Fußpunkt im Bild
+const PP_ZELLE := 68                     # PliPlop: Kantenlänge eines Bilds (Pixel) – 21.11.: PixelLab-Bilder (vorher 40, aus Code)
+const PP_ANKER := Vector2(34, 58)        # Fußpunkt im Bild
+## 21.11. (Paul): echte Bilder (PixelLab, 8 Richtungen, Zeilen wie PP_ZEILE) – je Pfad ein Blatt mit Aufsatz
+const PP_BLAETTER := {"": "grund", "flak": "flak", "schock": "schock", "nagler": "nagler"}
+const PP_ART_BLATT := {"flaeche": "flak", "mehr": "flak", "welle": "schock", "einzel": "nagler", "linie": "nagler", "sprung": "nagler"}
+const PP_RING_BLATT := {"laser": "flak", "plasmagel": "schock", "markierung": "nagler"}
 const PP_ZEILE := {"S": 0, "E": 1, "N": 2, "W": 3, "SE": 4, "NE": 5, "NW": 6, "SW": 7}   # wie beim Gefechtsturm
 
 static var _cache := {}
@@ -75,9 +79,17 @@ static func _umriss(img: Image) -> void:
 static func pliplop(ring: String) -> Texture2D:
 	var schluessel := "pp:" + ring
 	if not _cache.has(schluessel):
+		# 21.11. (Paul): PixelLab-Blatt – Pfad aus dem Ring (Turm im Normalmodus) bzw. aus der Art des Pfads (Gefährte)
+		var blatt := "grund"
+		if ring != "":
+			blatt = str(PP_RING_BLATT.get(ring, PP_ART_BLATT.get(str((Werte.PLIPLOP_PFADE.get(ring, {}) as Dictionary).get("art", "")), "grund")))
+		var pfad := "res://assets/neu/tuerme/pliplop_%s.png" % blatt
+		if ResourceLoader.exists(pfad):
+			_cache[schluessel] = load(pfad)
+			return _cache[schluessel]
 		var img := Image.create(PP_ZELLE, PP_ZELLE * 8, false, Image.FORMAT_RGBA8)
 		for name: String in PP_ZEILE:
-			_pliplop_bild(img, int(PP_ZEILE[name]) * PP_ZELLE, name, ring)
+			_pliplop_bild(img, int(PP_ZEILE[name]) * PP_ZELLE + 20, name, ring)   # Rückfall: Platzhalter aus Code (40er-Zeichnung im 68er-Feld)
 		_umriss(img)
 		_cache[schluessel] = ImageTexture.create_from_image(img)
 	return _cache[schluessel]

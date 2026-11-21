@@ -79,6 +79,9 @@ var _kreuz_kill := false
 var _stop_id := 0
 var _stop_vorher := -1.0        # Spieltempo vor dem Einfrieren (-1 = gerade kein Einfrieren)
 var _uhr_vorher := 0             # Zeitpunkt des letzten Bilds (µs) für die Echtzeit
+var _fang_soll := false          # 21.11.: Web – Mausfang ist angefordert (nur beim Übergang, nie jedes Bild neu)
+var _fang_warte := 0.0           # 21.11.: Web – so lange (Echtzeit) fehlt der angeforderte Mausfang schon
+const FANG_FRIST := 0.4          # 21.11.: Web – fehlt er länger, wartet die Tafel „Klicken zum Fortsetzen“
 
 var _ebene: CanvasLayer
 var _bild: Control
@@ -320,7 +323,7 @@ func _frei() -> bool:
 	## Darf die Ego-Sicht gerade Maus und Tasten haben? (Pause, Menüs, Alt gedrückt: nein)
 	if spiel.phase == 2:
 		return false
-	if spiel._hud != null and spiel._hud.pausiert():
+	if spiel._hud != null and (spiel._hud.pausiert() or spiel._hud.wiedereinstieg_offen()):   # 21.11.: Tafel im Web
 		return false
 	if spiel._fabrikmenue != null and spiel._fabrikmenue.visible:
 		return false
@@ -342,8 +345,14 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	if _terminal != null and _terminal.visible:
-		if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode in [KEY_ESCAPE, KEY_F]:
+		# 21.11.: im Web nur mit [F] (dieselbe Taste wie zum Öffnen) – Esc zählt im Browser nicht als Nutzergeste,
+		# danach ließe sich die Maus nicht wieder fangen
+		var zu_tasten := [KEY_F] if OS.has_feature("web") else [KEY_ESCAPE, KEY_F]
+		if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode in zu_tasten:
 			_terminal.visible = false   # 18.11.: Lichtterminal schließen
+			get_viewport().set_input_as_handled()
+		elif OS.has_feature("web") and event is InputEventKey and event.pressed and (event as InputEventKey).keycode in [KEY_ESCAPE, KEY_P]:
+			spiel.melde("Lichtterminal schließen mit [F].", 2.5)   # 21.11.: das Pausenmenü läge unter dem Terminal
 			get_viewport().set_input_as_handled()
 		return
 	if not _frei():
@@ -581,11 +590,41 @@ func _leertaste() -> void:
 
 # ------------------------------------------------------------------ Ablauf
 
+## 21.11.: Mausfang im Web. Der Browser erlaubt Pointer Lock nur direkt nach einer Nutzergeste (Klick, Taste – nicht Esc)
+## und nimmt ihn bei Esc selbst weg. Deshalb nur beim Übergang „frei“ anfordern (Folge einer Eingabe), nie jedes Bild neu.
+## Kommt er nicht oder geht er verloren, hält das Spiel an und die Tafel „Klicken zum Fortsetzen“ wartet (hud.gd).
+func _mausfang_web(frei: bool, echt: float) -> void:
+	if not frei:
+		_fang_soll = false
+		_fang_warte = 0.0
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
+	if not _fang_soll:
+		fange_maus()
+		return
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		_fang_warte = 0.0
+		return
+	_fang_warte += echt
+	if _fang_warte >= FANG_FRIST:
+		_fang_warte = 0.0
+		spiel._hud.wiedereinstieg_zeigen()
+
+
+## 21.11.: Maus fangen – nur aus einer Nutzergeste heraus (Übergang nach Taste/Klick, Klick auf die Tafel).
+func fange_maus() -> void:
+	_fang_soll = true
+	_fang_warte = 0.0
+	if touch == null:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
 func _process(delta: float) -> void:
 	if get_tree().paused:
 		# 18.11. (Paul): Pause-Menü – die Maus muss frei sein, das Fadenkreuz weg (_frei() ist in der Pause falsch).
 		# Die Ego-Sicht läuft dafür auch in der Pause weiter (process_mode ALWAYS in starten()).
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_fang_soll = false   # 21.11.: nach der Pause neu anfordern (Klick auf „Weiter“ oder die Tafel)
 		_uhr_vorher = 0
 		_bild.queue_redraw()
 		_karte_klein.queue_redraw()   # 19.11.: Übersicht / Pause – Minikarte ausblenden
@@ -628,7 +667,10 @@ func _process(delta: float) -> void:
 	var echt := clampf((uhr - _uhr_vorher) / 1000000.0, 0.0, 0.1) if _uhr_vorher > 0 else delta
 	_uhr_vorher = uhr
 	var frei := _frei()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if frei and touch == null else Input.MOUSE_MODE_VISIBLE
+	if OS.has_feature("web") and touch == null:
+		_mausfang_web(frei, echt)   # 21.11.
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if frei and touch == null else Input.MOUSE_MODE_VISIBLE
 	if touch != null:
 		_auto_zielen()   # 18.11.: Handy – Brakk schießt selbst
 		_feuer = frei and _auto_ziel != null and spiel.werkzeug == Karte.FREI and not _saeule_zielt

@@ -25,6 +25,13 @@ const BILDER := {
 	"funk": ["tuerme/funk.png", Vector2(31, 61)],
 }
 
+## 21.11. (Paul): Bildmaßstab je Turmart (Standard 2) – Truppenturm 70 %, PliPlop 75 %
+const MASSSTAB := {"truppen": 1.4, "pliplop": 1.5}
+
+static func massstab(art: String) -> float:
+	return float(MASSSTAB.get(art, 2.0))
+
+
 var karte: Karte
 var zelle := Vector2i.ZERO
 var blick := 0         # Zeile im Gefechtsturm-Blatt
@@ -58,6 +65,8 @@ func _process(delta: float) -> void:
 		if schuss >= GEF_SCHUSS_SEK:
 			schuss = -1.0
 	var b := bild_info(karte, zelle, blick, schuss, 1.0)
+	var ms := massstab(str(karte.turm_art.get(zelle, "")))
+	_bild.scale = Vector2(ms, ms)
 	_bild.texture = b["bild"]
 	_bild.region_rect = b["quelle"]
 	_bild.offset = -(b["anker"] as Vector2)
@@ -100,10 +109,10 @@ func _werkschutz_punkte() -> void:
 		_punkte.scale = Vector2(2, 2)
 		add_child(_punkte)
 	var max_n := int(karte.turm_wert(zelle, "werkschutz", 2))
-	var n := int(karte.werkschutz_zahl.get(zelle, 0))
+	var n := mini(max_n, int(karte.werkschutz_zahl.get(zelle, max_n)))   # 21.11.: Punkte = Besatzung im Turm (frisch gebaut: voll)
 	_punkte.visible = true
 	_punkte.texture = Platzhalter.punkte(n, max_n)
-	_punkte.offset = Vector2(-float(max_n * 5 + 1) / 2.0, -Platzhalter.TT_ANKER.y - 7.0)
+	_punkte.offset = Vector2(-float(max_n * 5 + 1) / 2.0, -(61.0 * massstab("truppen") / 2.0 if ResourceLoader.exists(Werte.NEU + "tuerme/truppen.png") else Platzhalter.TT_ANKER.y) - 7.0)
 
 
 func _draw() -> void:
@@ -130,6 +139,10 @@ static func bild_info(k: Karte, z: Vector2i, p_blick: int, p_schuss: float, alph
 	var aktiv := alpha < 1.0 or k.turm_aktiv(z)
 	var b := {"farbe": Color(1, 1, 1, alpha) if aktiv else Color(0.45, 0.45, 0.52, alpha), "quelle": Rect2(0, 0, 64, 64)}
 	if art == "truppen":   # 20.11. (Nachtrag): Truppenturm (Irrtürmer), Platzhalter aus Code
+		if ResourceLoader.exists(Werte.NEU + "tuerme/truppen.png"):   # 21.11. (Paul): PixelLab-Bild
+			b["bild"] = k.neu_bild("tuerme/truppen.png")
+			b["anker"] = Vector2(32, 61)
+			return b
 		b["bild"] = Platzhalter.truppenturm(stufe)
 		b["anker"] = Platzhalter.TT_ANKER
 		b["quelle"] = Rect2(Vector2.ZERO, Vector2(Platzhalter.TT_GROESSE))
@@ -176,7 +189,8 @@ static func zeichne(ci: CanvasItem, k: Karte, z: Vector2i, fuss: Vector2, p_blic
 	var b := bild_info(k, z, p_blick, p_schuss, alpha)
 	_beiwerk(ci, k, z, fuss, alpha, false)
 	var q: Rect2 = b["quelle"]
-	ci.draw_texture_rect_region(b["bild"], Rect2(fuss - (b["anker"] as Vector2) * 2.0, q.size * 2.0), q, b["farbe"])
+	var ms := massstab(str(k.turm_art.get(z, k.turm_form(z))))
+	ci.draw_texture_rect_region(b["bild"], Rect2(fuss - (b["anker"] as Vector2) * ms, q.size * ms), q, b["farbe"])
 
 
 ## Schatten, Stufenpunkte (Türme ohne eigenes Stufenbild) und das rote Kreuz, wenn der Turm außer Betrieb ist.

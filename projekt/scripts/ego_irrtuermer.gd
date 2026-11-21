@@ -996,7 +996,7 @@ func male_waffen(g: Vector2, wpx: float) -> void:
 	if aufsatz_an():
 		# Aufsatz: der PliPlop sitzt auf dem rechten Arm (Platzhalter aus Code, von hinten)
 		var tex := Platzhalter.pliplop(pp_ring())   # 20.11. (Nachtrag)
-		var gr := Vector2(Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE) * wpx * 2.7
+		var gr := Vector2(Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE) * wpx * 1.6   # 21.11.: 68er-Bild (vorher 2,7 beim 40er)
 		var pos := Vector2(g.x * 0.74 - gr.x * 0.5, g.y - gr.y * 0.92) + wipp + schwank + Vector2(_rueck * 2.0, _rueck * 8.0) * wpx
 		bild.draw_texture_rect_region(tex, Rect2(pos.round(), gr), Rect2(0, 2 * Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE, Platzhalter.PP_ZELLE), Color.WHITE.lerp(pp_farbe(), 0.25))
 		if _blitz > 0.0:

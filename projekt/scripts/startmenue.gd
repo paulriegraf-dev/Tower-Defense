@@ -444,15 +444,15 @@ func _male_af_kachel(ci: Control, i: int, a: Dictionary) -> void:
 	for ecke: Vector2 in [Vector2(5, 5), Vector2(p.size.x - 7, 5), Vector2(5, p.size.y - 7), Vector2(p.size.x - 7, p.size.y - 7)]:
 		ci.draw_rect(Rect2(p.position + ecke, Vector2(2, 2)), Stil.RAHMEN_HELL)
 	# 20.11. (Paul): echtes Porträt, wo es eins gibt (Brakk) – 32er-Bild dreifach auf dem Schirm, die Initiale sonst
-	var portraet: Texture2D = null
-	if str(a.get("portraet", "")) != "" and ResourceLoader.exists(str(a["portraet"])):
-		portraet = load(str(a["portraet"]))
+	var portraet: Texture2D = Anfuehrer.portraet(id)
 	if portraet != null:
 		var ps := Vector2(48, 48)
 		ci.draw_rect(Rect2(p.position + Vector2(4, 4), p.size - Vector2(8, 8)), Color(farbe, 0.16))
 		ci.draw_texture_rect(portraet, Rect2((p.get_center() - ps / 2.0).round(), ps), false, Color.WHITE if frei else Color(0.25, 0.27, 0.32))
 		if an and frei:
 			ci.draw_rect(Rect2(p.position + Vector2(2, 2), p.size - Vector2(4, 4)), farbe, false, 1.0)
+		if not frei:
+			Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), "?", 28, Stil.TEXT)   # 21.11.: gesperrt – Fragezeichen über dem abgedunkelten Porträt
 	elif frei:
 		Stil.schreibe_mittig(ci, p.get_center() + Vector2(0, 1), str(a["initiale"]), 28, farbe)
 	else:
@@ -545,6 +545,8 @@ func _starte(gross: bool, art: String, karte: String = "paulland", herausforderu
 static var _unterbrochen_gemeldet := false
 
 func _ready() -> void:
+	for af: Dictionary in Anfuehrer.LISTE:
+		Anfuehrer.portraet(str(af["id"]))   # 21.11.: Porträts vorladen (sonst erscheint das Bild beim ersten Zeichnen weiß)
 	if not _welt.get_window().files_dropped.is_connected(_dateien_fallen):
 		_welt.get_window().files_dropped.connect(_dateien_fallen)   # 18.11.: Import eigener Karten
 	if _seite != "haupt":

@@ -152,7 +152,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 60          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 61          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -392,11 +392,13 @@ const TURMARTEN := {
 		"reichweite": 6.0, "schaden": 45.0, "abklingzeit": 4.0, "breite": 0.35,
 		"text": "Langsamer, schwerer Strahl in gerader Linie: trifft alles, was in der Linie steht – ideal für lange Gänge."},
 	# 20.11. (Paul, Nachtrag): Truppenturm – nur der Irrtürmer (Werte.truppenturm()), auf einem Erdwall mit genau zwei
-	# Nachbarwällen, wenn keine andere Form passt. Schießt nicht; hält bis zu „werkschutz“ Technogunner (Werkschutz), die
+	# Nachbarwällen, wenn keine andere Form passt (oder über die eigene Baukachel). 21.11. (Paul): Die Besatzung schießt
+	# aus dem Turm; heraus kommt sie nur zu einem bedrohten Checkpoint im Umkreis „ausfall_felder“. Hält bis zu „werkschutz“ Technogunner (Werkschutz), die
 	# nachkommen, wenn einer fällt (PRODUKTION_SEK / „nachschub“). Ab Turmstufe 2 kommen sie mit dem Wertepaket.
 	"truppen": {"name": "Truppenturm", "form": "Zwei Nachbarwälle", "nachbarn": 2, "farbe": "c9a6ff",
-		"reichweite": 2.5, "schaden": 0.0, "abklingzeit": 0.0, "werkschutz": 2, "nachschub": 1.0, "leben_mal": 1.0,
-		"text": "Schießt nicht. Hält bis zu 2 Werkschutz-Truppen (Technogunner), die nachkommen, wenn eine fällt. Nur Irrtürmer."},
+		"reichweite": 3.0, "schaden": 0.0, "abklingzeit": 0.0, "werkschutz": 2, "nachschub": 1.0, "leben_mal": 1.0,
+		"ausfall_felder": 4.0, "ausfall_ruhe": 3.0,
+		"text": "2 Werkschutz-Truppen (Technogunner) schießen aus dem Turm und sind dort nicht angreifbar. Betritt ein Gegner einen Checkpoint im Umkreis von 4 Feldern, rücken sie dorthin aus und kehren danach zurück. Gefallene kommen nach. Nur Irrtürmer."},
 	# 20.11. (Paul): PliPlop 3cK – nur der Irrtürmer (Werte.pliplop()), ohne Formvorschrift auf einem einzelnen Erdwall ohne
 	# Nachbarn, mehrere erlaubt. Ab Stufe 2 ein Pfad (Werte.PLIPLOP_TURM).
 	"pliplop": {"name": "PliPlop 3cK", "form": "Einzelwall", "nachbarn": 0, "farbe": "7fe0ff",
@@ -412,7 +414,7 @@ const TURM_STUFE_2 := {
 	"funk": {"reichweite": 3.5, "feuer_faktor": 0.7, "text": "Größerer Umkreis (3,5 statt 2,5 Felder), Stellungen feuern 30 % statt 25 % schneller."},   # 19.11.
 	"lanze": {"schaden": 80.0, "text": "Stärkerer Strahl: 80 statt 45 Schaden."},   # 19.11.: vorher 65
 	"heil": {"heilung": 14.0, "text": "Heilt mehr: 14 statt 8 Leben."},   # 19.11.: vorher 12
-	"truppen": {"werkschutz": 3, "text": "Hält 3 statt 2 Werkschutz-Truppen, sie kommen mit dem Wertepaket (Stufe 2)."},   # 20.11. (Nachtrag)
+	"truppen": {"werkschutz": 3, "reichweite": 3.5, "text": "3 statt 2 Werkschutz-Truppen mit dem Wertepaket (Stufe 2): mehr Schaden, 3,5 Felder Reichweite."},   # 20.11. (Nachtrag)
 	"pliplop": {"text": "Pfad wählen: Flak, Schockwelle oder Nagler."},   # 20.11. (Paul): Werte stehen in PLIPLOP_TURM
 }
 const TURM_STUFE_3 := {
@@ -420,7 +422,7 @@ const TURM_STUFE_3 := {
 	"truppen": {   # 20.11. (Nachtrag): Truppenturm (Irrtürmer)
 		"nachschub": {"name": "Schneller Nachschub", "nachschub": 2.0, "text": "Werkschutz kommt doppelt so schnell nach.",
 			"stark": "lange Gefechte, viele Verluste", "schwach": "nicht stärker, solange keiner fällt"},
-		"panzer": {"name": "Schwere Rüstung", "leben_mal": 1.6, "text": "Werkschutz hat 60 % mehr Leben.",
+		"panzer": {"name": "Schwere Rüstung", "leben_mal": 1.6, "text": "Werkschutz hat beim Ausfall 60 % mehr Leben.",
 			"stark": "Engstellen, Nahkämpfer", "schwach": "kommt nicht schneller nach"},
 	},
 	"geschuetz": {
@@ -551,6 +553,11 @@ static func truppenturm() -> bool:
 ## Sonderform, die aus den beiden vorher gewählten folgt (Vorbild: BTD6-Crosspaths, Kingdom-Rush-Gimmicks, DRG-Overclocks).
 const MG_NEST := {"schaden": 9.0, "abklingzeit": 0.55, "reichweite": 3.0, "farbe": "ffd34d"}   # Grund-Nest (Stufe 0)
 const KOSTEN_MG_STUFE: Array[int] = [50, 100, 225]
+const KOSTEN_MG_STELLUNG: int = 50   # 21.11. (Paul): die MG-Stellung selbst kostet 50 (normale Stellung: KOSTEN_STELLUNG)
+
+
+static func kosten_stellung() -> int:
+	return KOSTEN_MG_STELLUNG if mg_stellung() else KOSTEN_STELLUNG
 const MG_AUSBAU := [
 	{
 		"takt": {"name": "Takt", "takt": 1.5, "text": "Feuert 50 % schneller.", "stark": "viele kleine Gegner", "schwach": "Schildträger, zähe Ziele"},
@@ -1004,7 +1011,7 @@ static func ego_taste(taste: String) -> String:
 static var grafik := "hd"   # "klassisch", "neu" (Vogelperspektive) oder "hd" (HD-2D, Standard seit 16.11.)
 static var grafik_neu := false     # neue Bilder (bei "neu" und "hd")
 static var grafik_hd := false      # 3D-Ansicht
-static var vollbild := true        # Vollbild ([F11] oder Startmenü), gespeichert
+static var vollbild := not OS.has_feature("web")   # Vollbild ([F11] oder Startmenü), gespeichert; 21.11.: im Web aus bis zur Nutzergeste
 static var toene := 80              # Kampfgeräusche in Prozent (0 = aus), gespeichert
 static var musik := 40              # Musik in Prozent (0 = aus); 16.11.: Grundlautstärke 60 % leiser, gespeichert
 static var wand_stil := "tech"     # HD-2D-Mauern: "tech" (Stilprobe), "block" (schlicht) oder "energie" – Taste [M] im Spiel
@@ -1021,7 +1028,8 @@ static func lade_einstellungen() -> void:
 		grafik_gefragt = bool(c.get_value("grafik", "touch_gefragt", false))
 		karte_gross = bool(c.get_value("karte", "gross", true))
 		karte_name = str(c.get_value("karte", "name", "paulland"))
-		vollbild = bool(c.get_value("grafik", "vollbild", true))
+		if not OS.has_feature("web"):   # 21.11.: Web – Vollbild nur per Nutzergeste (Knopf/Taste), nie beim Laden
+			vollbild = bool(c.get_value("grafik", "vollbild", true))
 		musik = clampi(int(c.get_value("ton", "musik_prozent", 40)), 0, 100)
 		toene = clampi(int(c.get_value("ton", "effekte_prozent", 80)), 0, 100)
 	if OS.get_environment("TD_KARTE") != "":
@@ -1043,6 +1051,11 @@ static func setze_vollbild(an: bool) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if an else DisplayServer.WINDOW_MODE_WINDOWED)
+	# 21.11.: Web – Keyboard Lock (nur Chrome/Edge): ein kurzes Esc geht ans Spiel, erst langes Halten verlässt das Vollbild.
+	# Nur nach einer Nutzergeste aufrufen (Knopf, Taste, Klick auf „Klicken zum Fortsetzen“) – nie beim Laden.
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("if (navigator.keyboard && navigator.keyboard.lock) { %s }" % \
+			("navigator.keyboard.lock(['Escape']).catch(function(){});" if an else "navigator.keyboard.unlock();"))
 
 
 static func setze_grafik(modus: String) -> void:

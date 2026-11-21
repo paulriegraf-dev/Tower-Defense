@@ -490,6 +490,8 @@ func _turm_bild(art: String, stufe: int, faehigkeit: String = "") -> Dictionary:
 				name = "lan_doppel" if faehigkeit == "doppelstrahl" else "lan_durchschlag"
 			return _einzel(n + name + ".png", Vector2(64, 64))
 		"truppen":   # 20.11. (Nachtrag): Platzhalter aus Code
+			if ResourceLoader.exists(n + "truppen.png"):
+				return _einzel(n + "truppen.png", Vector2(64, 64))   # 21.11. (Paul): PixelLab-Bild
 			return {"tex": Platzhalter.truppenturm(stufe), "zelle": Vector2(Platzhalter.TT_GROESSE), "reihe": 0, "n": 1}
 		"pliplop":   # 20.11. (Paul): Platzhalter aus Code, Aufsatz je Pfad
 			var ring := str(Werte.PLIPLOP_TURM.get(faehigkeit, {}).get("ring", ""))
@@ -642,6 +644,8 @@ func _truppe(id: String, unter: String, tut: Array, stellung: Array) -> Dictiona
 func _mg_karte() -> Dictionary:
 	var W := Werte
 	var bild := {"tex": Platzhalter.mg_aufsatz(), "zelle": Vector2(28, 16), "reihe": 0, "n": 1}
+	if ResourceLoader.exists(Werte.NEU + "tuerme/mg_nest.png"):
+		bild = _einzel(Werte.NEU + "tuerme/mg_nest.png", Vector2(64, 64))   # 21.11. (Paul): PixelLab-Bild
 	var n: Dictionary = W.MG_NEST
 	var pfad: Array = [{"kurz": "Nest", "bild": bild, "abschnitte": [["Was sie macht", Stil.LEUCHT, [
 		"Nur mit der Anführerin Sonde 7: Jede Stellung ist ein MG-Nest. Eine Truppe aus einer Fabrik muss hinauf, darf sie aber wieder verlassen.",
@@ -662,7 +666,7 @@ func _mg_karte() -> Dictionary:
 		var teile := kombi.split("+")
 		var titel := "%s + %s" % [W.MG_AUSBAU[0][teile[0]]["name"], W.MG_AUSBAU[1][teile[1]]["name"]]
 		pfad.append({"kurz": titel.replace(" + ", "+"), "zweig": true, "bild": bild, "abschnitte": [["Stufe 3 nach %s · %d Budget" % [titel, W.KOSTEN_MG_STUFE[2]], Stil.GOLD, zeilen]]})
-	return {"name": "MG-Stellung", "unter": "Stellung mit eigenem Ausbau (Sonde 7)", "marke": "%d · [3]" % W.KOSTEN_STELLUNG, "bild": bild,
+	return {"name": "MG-Stellung", "unter": "Stellung mit eigenem Ausbau (Sonde 7)", "marke": "%d · [3]" % W.KOSTEN_MG_STELLUNG, "bild": bild,
 		"werte": [["Schaden", _z(n["schaden"])], ["Angriff alle", _z(n["abklingzeit"]) + " s"], ["Reichweite", _z(n["reichweite"])], ["Stufen", "%d / %d / %d" % [W.KOSTEN_MG_STUFE[0], W.KOSTEN_MG_STUFE[1], W.KOSTEN_MG_STUFE[2]]]],
 		"pfad": pfad}
 
@@ -922,7 +926,7 @@ func _baue_daten() -> void:
 		_turmkarte("lanze", ["Braucht eine Klammer: drei Erdwälle in einer Linie, an beiden Enden biegt die Mauer zur selben Seite ab (⊐). Der Turm steht in der Mitte.",
 			"Am stärksten an langen, geraden Gängen, in denen die Gegner hintereinander laufen."]),
 		_pliplop_karte(),   # 20.11. (Paul): PliPlop 3cK (Irrtürmer)
-		_turmkarte("truppen", ["Nur mit dem Anführer Irrtürmer: ein Erdwall mit genau zwei Nachbarwällen, auf den keine andere Turmform passt. Die Punkte am Turm zeigen, wie viele Werkschutz-Truppen gerade leben."]),   # 20.11. (Nachtrag)
+		_turmkarte("truppen", ["Nur mit dem Anführer Irrtürmer: ein Erdwall mit genau zwei Nachbarwällen, auf den keine andere Turmform passt. Die Besatzung schießt aus dem Turm und rückt nur aus, wenn ein Gegner einen Checkpoint im Umkreis von 4 Feldern betritt. Die Punkte am Turm zeigen, wie viele Werkschutz-Truppen gerade im Turm sind."]),   # 20.11. (Nachtrag)
 		_turmkarte("heil", ["Braucht eine Treppe: drei Erdwälle schräg hintereinander, der Turm in der Mitte. Andere Erdwälle daneben stören nicht, solange keine andere Turmform passt.",
 			"Truppen sind knapp: Wer überlebt, muss nicht nachgebaut werden."]),
 		{"name": "Schildgenerator", "unter": "Großbau in einer Zitadelle", "marke": "%d · [4]" % W.KOSTEN_GENERATOR, "bild": _einzel(Werte.NEU + "tuerme/schild.png", Vector2(64, 64)),

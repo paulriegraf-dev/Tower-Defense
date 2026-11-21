@@ -27,6 +27,11 @@ const KACHELN := [
 	[Karte.PANZER, "panzer", "7", "Wallpanzer"],
 	[Karte.KOMMANDANT, "brakk", "8", "Brakk"],
 ]
+## 21.11. (Paul): Zusatzkacheln je Anführer – Turm-Werkzeug mit festem Ziel: [Turmart, Symbol, Taste, Name, Tipp]
+const WUNSCH_KACHELN := [
+	["pliplop", "pliplop", "9", "PliPlop 3cK", "Klick auf ein freies Feld: Einzelwall und PliPlop in einem. Steht allein, mehrere erlaubt."],
+	["truppen", "truppenturm", "0", "Truppenturm", "Auf einen Erdwall mit zwei freien Nachbarwällen (in einer Mauer oder an einer Ecke)."],
+]
 const KACHEL_B := 28.0
 const KACHEL_H := 40.0
 const KACHEL_ABSTAND := 3.0
@@ -41,6 +46,7 @@ var spiel: Node
 var schadensliste: Control         # setzt main.gd (Knopf oben rechts zeigt sie wie [Tab])
 var wurzel: Control
 var kacheln: Dictionary = {}       # Werkzeug -> Kachel
+var wunsch_kacheln: Array = []     # 21.11. (Paul): Zusatzkacheln (Kachel, art = Turmart)
 var start: Emblem
 var tempo: Emblem
 var menue: Emblem
@@ -249,6 +255,31 @@ func _ready() -> void:
 		k.pressed.connect(spiel.waehle.bind(k.typ))
 		_konsole.add_child(k)
 		kacheln[k.typ] = k
+	# 21.11. (Paul): Sonde 7 – die Stellung ist ein MG-Nest (eigenes Symbol und Name)
+	if Werte.mg_stellung() and kacheln.has(Karte.STELLUNG):
+		var ks: Kachel = kacheln[Karte.STELLUNG]
+		ks.name_text = "MG-Nest"
+		if ResourceLoader.exists("res://assets/neu/ui/bau_mg_nest.png"):
+			ks.bild = load("res://assets/neu/ui/bau_mg_nest.png")
+	# 21.11. (Paul): Irrtürmer – eigene Kacheln für PliPlop und Truppenturm
+	for eintrag: Array in WUNSCH_KACHELN:
+		if (eintrag[0] == "pliplop" and not Werte.pliplop()) or (eintrag[0] == "truppen" and not Werte.truppenturm()):
+			continue
+		var k := Kachel.new()
+		Stil.leerer_knopf(k)
+		k.typ = Karte.TURM
+		k.art = eintrag[0]
+		k.taste = eintrag[2]
+		k.name_text = eintrag[3]
+		k.set_meta("tipp", eintrag[4])
+		var pfad := "res://assets/neu/ui/bau_%s.png" % eintrag[1]
+		if ResourceLoader.exists(pfad):
+			k.bild = load(pfad)
+		k.size = Vector2(KACHEL_B, KACHEL_H)
+		k.scale = Vector2(_kachel_faktor, _kachel_faktor)
+		k.pressed.connect(spiel.waehle_turm.bind(eintrag[0]))
+		_konsole.add_child(k)
+		wunsch_kacheln.append(k)
 
 	# Klappe über der Konsole: Bauleiste ein- und ausklappen [B]
 	_klapp = _emblem(Vector2(18, 8), klappe, _male_klappe)
@@ -279,7 +310,7 @@ func _ready() -> void:
 		b.set_meta("tipp", eintrag[1])
 		_oben_rechts.append(b)
 		x -= 3.0
-	menue.set_meta("tipp", "Pause und Menü [Esc]")
+	menue.set_meta("tipp", "Pause und Menü [P] / [Esc]" if OS.has_feature("web") else "Pause und Menü [Esc]")
 	# nur im Phantom-Angriff: Taktikplaner ein/aus (16.11.)
 	x -= 20.0
 	_planer = _emblem(Vector2(18, 18), _planer_klick, func(ci: Control): Stil.symbol(ci, "band", ci.size / 2.0, 2.0, Stil.TEXT if not (ci as Emblem).leuchtet else Color("ffb070")))
@@ -300,6 +331,7 @@ func _ready() -> void:
 	weg_grund.visible = false
 
 	_baue_pause()
+	_baue_wiedereinstieg()   # 21.11.
 
 
 func _flaeche(malen: Callable) -> Malflaeche:
@@ -431,8 +463,16 @@ func _aktualisiere_kacheln() -> void:
 		if typ != Karte.FABRIK and not ab_welle_2:
 			k.preis_farbe = Stil.TEXT_BLASS   # noch nicht freigeschaltet
 		k.disabled = aus
-		k.gewaehlt = s.werkzeug == typ
+		k.gewaehlt = s.werkzeug == typ and (typ != Karte.TURM or str(s.turm_wunsch) == "")
 		_bei_aenderung(k, [k.preis, k.preis_farbe, k.disabled, k.gewaehlt])   # 18.11.: nur bei Änderung
+	for k: Kachel in wunsch_kacheln:   # 21.11. (Paul): PliPlop / Truppenturm
+		var preis: int = Werte.KOSTEN_PLIPLOP if k.art == "pliplop" else Werte.KOSTEN_TURM
+		k.visible = not _angreifer
+		k.preis = str(preis)
+		k.preis_farbe = (Stil.GOLD if s.budget >= preis else Stil.WARN) if ab_welle_2 else Stil.TEXT_BLASS
+		k.disabled = (phase != BAU and not (phase == KAMPF and s.darf_in_welle(Karte.TURM))) or not ab_welle_2 or _angreifer or s.herausforderung_sperrt(Karte.TURM) != ""
+		k.gewaehlt = s.werkzeug == Karte.TURM and str(s.turm_wunsch) == k.art
+		_bei_aenderung(k, [k.preis, k.preis_farbe, k.disabled, k.gewaehlt])
 	start.disabled = phase != BAU
 	start.leuchtet = phase == BAU
 	start.visible = true
@@ -496,6 +536,15 @@ func _aktualisiere_tipps() -> void:
 	elif kacheln.has(titel_typ) and _tipp_text != "" and spiel._meldung_zeit <= 0.0:
 		var k: Kachel = kacheln[titel_typ]
 		_tipp_titel = "%s  [%s]" % [k.name_text, k.taste]
+	# 21.11. (Paul): Zusatzkacheln – unter der Maus oder gewählt: eigener Titel, unter der Maus auch der eigene Tipp
+	for k: Kachel in wunsch_kacheln:
+		if _drueber(k) and spiel._meldung_zeit <= 0.0:
+			_tipp_titel = "%s  [%s]" % [k.name_text, k.taste]
+			_tipp_text = str(k.get_meta("tipp", ""))
+			_tipp_warnung = false
+			return
+		if k.gewaehlt and unter == Karte.FREI and spiel._meldung_zeit <= 0.0 and _tipp_text != "":
+			_tipp_titel = "%s  [%s]" % [k.name_text, k.taste]
 
 
 ## Maus darüber – oder am Handy gerade lange gedrückt (18.11.).
@@ -508,6 +557,8 @@ func _drueber(b: BaseButton) -> bool:
 func touch_tipp(bei: Vector2) -> bool:
 	var knoepfe: Array[Control] = [start, tempo, menue, _neu]
 	for k: Kachel in kacheln.values():
+		knoepfe.append(k)
+	for k: Kachel in wunsch_kacheln:
 		knoepfe.append(k)
 	for b: Emblem in _oben_rechts:
 		knoepfe.append(b)
@@ -569,7 +620,7 @@ func _ordne_an() -> void:
 	_tipp_oben.visible = _tipp_oben_text != ""
 
 	# unten Mitte: Konsole
-	var n := kacheln.size()
+	var n := kacheln.size() + wunsch_kacheln.size()
 	var f := _kachel_faktor
 	var reihe := n * KACHEL_B * f + (n - 1) * KACHEL_ABSTAND
 	var kw := reihe + 2.0 * SCHULTER
@@ -587,6 +638,9 @@ func _ordne_an() -> void:
 	var i := 0
 	for eintrag: Array in KACHELN:
 		var k: Kachel = kacheln[eintrag[0]]
+		k.position = Vector2(SCHULTER + i * (KACHEL_B * f + KACHEL_ABSTAND), 8.0)
+		i += 1
+	for k: Kachel in wunsch_kacheln:
 		k.position = Vector2(SCHULTER + i * (KACHEL_B * f + KACHEL_ABSTAND), 8.0)
 		i += 1
 
@@ -1232,6 +1286,9 @@ func _pause_zeige(eintraege: Array) -> void:
 func pause_an() -> void:
 	if _pause.visible:
 		return
+	if wiedereinstieg_offen():
+		_wieder.visible = false   # 21.11.: das Pausenmenü übernimmt („Weiter“ per Klick fängt Maus und Vollbild)
+		get_tree().paused = _wieder_war_pausiert
 	_pause.visible = true
 	_pause_seit_ms = Time.get_ticks_msec()
 	_sicher_was = ""
@@ -1255,10 +1312,103 @@ func pause_aus() -> void:
 	_code_feld.release_focus()   # 20.11.
 	_pause.visible = false
 	get_tree().paused = false
+	if _voll_zurueck:
+		wiedereinstieg_zeigen()   # 21.11.: Vollbild ging in der Pause verloren – erst ein Klick holt es zurück
+
+
+## 21.11.: „Weiter“ per Klick ist eine Nutzergeste – ein im Web verlorenes Vollbild kommt gleich mit zurück.
+func _weiter() -> void:
+	if _voll_zurueck:
+		_voll_zurueck = false
+		Werte.setze_vollbild(true)
+	pause_aus()
 
 
 func pausiert() -> bool:
 	return _pause != null and _pause.visible
+
+
+# ------------------------------------------------------------------ Wiedereinstieg im Web (21.11.)
+## Der Browser beendet bei Esc Vollbild und Mausfang (Pointer Lock). Neu fangen darf nur eine Nutzergeste – deshalb
+## steht das Spiel dann, und die Tafel „Klicken zum Fortsetzen“ wartet auf den Klick. Der Klick holt Vollbild und Maus
+## zurück. Den Mausfang meldet die Ego-Sicht (ego_modus.gd), das Vollbild prüft _process hier.
+var _wieder: Control
+var _wieder_war_pausiert := false
+var _voll_gesehen := false   # war das Vollbild seit dem letzten Einschalten wirklich an?
+var _voll_zurueck := false   # beim Klick wieder ins Vollbild
+
+
+func _baue_wiedereinstieg() -> void:
+	var ebene := CanvasLayer.new()
+	ebene.layer = 100   # über der Ego-Sicht (Ebene 2) und ihrem Ringterminal
+	add_child(ebene)
+	_wieder = ColorRect.new()
+	(_wieder as ColorRect).color = Color(0, 0, 0, 0.55)
+	_wieder.size = Vector2(BREITE, HOEHE)
+	_wieder.scale = Vector2(2, 2)
+	_wieder.mouse_filter = Control.MOUSE_FILTER_STOP
+	_wieder.visible = false
+	_wieder.gui_input.connect(_wiedereinstieg_klick)
+	ebene.add_child(_wieder)
+	var tafel := Malflaeche.new()
+	tafel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var titel := "Klicken zum Fortsetzen"
+	var zeile := "Maus und Vollbild werden wieder eingefangen"
+	tafel.size = Vector2(maxf(Stil.breite(titel, Stil.GROSS), Stil.breite(zeile, Stil.KLEIN)) + 30.0, 52.0).round()
+	tafel.position = ((Vector2(BREITE, HOEHE) - tafel.size) / 2.0).round()
+	tafel.malen = func(ci: Control):
+		Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 6.0)
+		ci.draw_rect(Rect2(Vector2(10, 3), Vector2(ci.size.x - 20.0, 1)), Stil.LEUCHT)
+		Stil.schreibe_mittig(ci, Vector2(ci.size.x / 2.0, 19.0), titel, Stil.GROSS, Stil.TEXT)
+		Stil.schreibe_mittig(ci, Vector2(ci.size.x / 2.0, 37.0), zeile, Stil.KLEIN, Stil.TEXT_BLASS)
+	_wieder.add_child(tafel)
+
+
+func wiedereinstieg_offen() -> bool:
+	return _wieder != null and _wieder.visible
+
+
+## Spiel anhalten und auf den Klick warten. Steht das Pausenmenü offen, übernimmt das (sein Klick auf „Weiter“ fängt).
+func wiedereinstieg_zeigen() -> void:
+	if _wieder == null or _wieder.visible or pausiert():
+		return
+	_wieder_war_pausiert = get_tree().paused
+	_wieder.visible = true
+	get_tree().paused = true
+
+
+func _wiedereinstieg_klick(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and (event as InputEventMouseButton).pressed):
+		return
+	_wieder.accept_event()
+	_wieder.visible = false
+	get_tree().paused = _wieder_war_pausiert
+	# Jetzt ist eine Nutzergeste da: Vollbild und Mausfang dürfen angefordert werden
+	if _voll_zurueck:
+		_voll_zurueck = false
+		Werte.setze_vollbild(true)
+	if spiel != null and is_instance_valid(spiel.ego):
+		spiel.ego.fange_maus()
+
+
+func _process(_delta: float) -> void:
+	if not OS.has_feature("web") or _wieder == null:
+		return
+	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		_voll_gesehen = true
+		return
+	if not (_voll_gesehen and Werte.vollbild):
+		_voll_gesehen = false
+		return
+	# Vollbild verloren (Esc oder langes Esc im Browser), ohne dass das Spiel es ausgeschaltet hat
+	_voll_gesehen = false
+	Werte.vollbild = false   # Anzeige = echter Zustand, bis der Klick es zurückholt
+	_voll_zurueck = true
+	if pausiert():
+		if _einstellungen:
+			_einstellungsseite()
+	else:
+		wiedereinstieg_zeigen()
 
 
 func _hauptseite() -> void:
@@ -1269,7 +1419,7 @@ func _hauptseite() -> void:
 	var neu := "Nochmal angreifen" if spiel.phantom_modus == "angriff" else "Neustart"
 	var fragt := Time.get_ticks_msec() - _sicher_ms <= SICHER_FRIST_MS
 	_pause_zeige([
-		["Weiter", pause_aus],
+		["Weiter", _weiter],
 		["Sicher? Nochmal tippen" if fragt and _sicher_was == "neustart" else neu, _nachfragen.bind("neustart")],
 		["Einstellungen", _einstellungsseite],
 		["Sicher? Nochmal tippen" if fragt and _sicher_was == "menue" else ("Zurück in den Editor" if SzenarioEditor.testet else "Hauptmenü"), _nachfragen.bind("menue")],   # 20.11.: beim Szenario-Test ausdrücklich
@@ -1349,7 +1499,8 @@ func _lautstaerke(was: String, d: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not pausiert():
 		return
-	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_ESCAPE:
+	if event is InputEventKey and event.pressed and not event.echo and ((event as InputEventKey).keycode == KEY_ESCAPE \
+			or ((event as InputEventKey).keycode == KEY_P and OS.has_feature("web"))):
 		if _einstellungen:
 			_hauptseite()
 		else:

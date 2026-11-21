@@ -12,7 +12,7 @@ extends Node2D
 
 const BILD_ZELLE := Platzhalter.PP_ZELLE
 const ANKER := Platzhalter.PP_ANKER
-const MASSSTAB := 1.6
+const MASSSTAB := 1.0   # 21.11.: PixelLab-Bild (68er-Feld), vorher 1,6 beim 40er-Platzhalter
 const ZEILE := Platzhalter.PP_ZEILE
 const RICHTUNGEN := ["S", "SE", "E", "NE", "N", "NW", "W", "SW"]   # gegen den Uhrzeigersinn ab „zur Kamera“
 
