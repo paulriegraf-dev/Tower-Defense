@@ -290,7 +290,7 @@ func leeren() -> void:
 
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	for l in leucht:
 		l[5] += delta
 	leucht = leucht.filter(func(l): return l[5] < l[6])

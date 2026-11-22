@@ -902,12 +902,12 @@ func _physics_process(_takt: float) -> void:
 	if o24 == null or not o24.laeuft or o24.vorbei:
 		return
 	var t := zeit()
-	_halten_weiter(Werte.SIM_SCHRITT / Werte.BRAKK_TEMPO)   # 22.11. (Teil 6): [E] am Kampfunfähigen – der Beam wartet
+	_halten_weiter(Werte.sim_schritt() / Werte.BRAKK_TEMPO)   # 22.11. (Teil 6): [E] am Kampfunfähigen – der Beam wartet; 22.11.: sim_schritt(), im Brakk-Mode doppelt so lange Schritte
 	if gewohnheiten != null:
-		gewohnheiten.weiter(Werte.SIM_SCHRITT / Werte.BRAKK_TEMPO)   # 22.11. (Teil 4)
+		gewohnheiten.weiter(Werte.sim_schritt() / Werte.BRAKK_TEMPO)   # 22.11. (Teil 4)
 		gesehen_lauf = gewohnheiten.gesehen
 	if lernen != null:
-		lernen.weiter(Werte.SIM_SCHRITT / Werte.BRAKK_TEMPO)   # 22.11. (Teil 5): Aufenthaltskarte, Spielstil
+		lernen.weiter(Werte.sim_schritt() / Werte.BRAKK_TEMPO)   # 22.11. (Teil 5): Aufenthaltskarte, Spielstil
 	# Bergung nach NEMESIS_BERGUNG_SEK
 	for k: Dictionary in kampfunfaehig.duplicate():
 		var e: Variant = k["einheit"]

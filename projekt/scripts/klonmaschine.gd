@@ -11,7 +11,7 @@ var _zeit := 0.0
 
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	_zeit += delta
 	queue_redraw()
 	if not spiel.im_kampf():

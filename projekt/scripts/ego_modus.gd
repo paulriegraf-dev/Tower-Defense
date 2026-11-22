@@ -70,6 +70,9 @@ var _ring := 0.0
 const TRAUMA_ABBAU := 1.6       # je Sekunde
 const WACKEL_WINKEL := 0.035    # Bogenmaß bei vollem Trauma
 const STOP_KILL := 0.07         # Sekunden Einfrieren beim Kill
+var _kills_seit_gefuehl := 0     # 22.11.: Kills seit dem letzten Treffergefühl (Mehrfach-Kill?)
+var _kill_gross := false         # … und ob ein großer Gegner dabei war
+var _letzter_stop_ms := -100000
 var _trauma := 0.0
 var _wackel_t := 0.0
 var _kick := 0.0                # Rückstoß der Sicht nach oben (Bogenmaß), federt zurück
@@ -1130,10 +1133,17 @@ func _treffer_gefuehl(wo: Vector3, kill: bool) -> void:
 		Ton.spiele(spiel, "hit-pboom", -12.0)   # tiefer Knall darunter (18.11.: leiser)
 		_trauma = minf(1.0, _trauma + 0.4)
 		_fov_puls = maxf(_fov_puls, 4.0)
-		_einfrieren(STOP_KILL)
+		# 22.11. (Paul: „ab Runde 11 clunky“): nur große Gegner oder Mehrfach-Kills, höchstens alle HITSTOP.abstand Sekunden
+		var stark := _kill_gross or _kills_seit_gefuehl >= int(BrakkFortschritt.HITSTOP["mehrfach"])
+		var jetzt := Time.get_ticks_msec()
+		if stark and jetzt - _letzter_stop_ms >= int(float(BrakkFortschritt.HITSTOP["abstand"]) * 1000.0):
+			_letzter_stop_ms = jetzt
+			_einfrieren(STOP_KILL)
 	else:
 		Ton.spiele(spiel, "brakk-treffer")
 		_trauma = minf(1.0, _trauma + 0.16)
+	_kills_seit_gefuehl = 0
+	_kill_gross = false
 
 
 func _funke(wo: Vector3, radius: float) -> void:
@@ -2000,6 +2010,9 @@ func _ring_treffer(g: Gegner, schaden: float) -> void:
 
 ## Ein Gegner fällt durch Brakks Schuss: Erfahrung (große Gegner mehr).
 func _kill(g: Gegner) -> void:
+	_kills_seit_gefuehl += 1   # 22.11.: für den gedrosselten Hit-Stop
+	if BrakkFortschritt.gross(g):
+		_kill_gross = true
 	var f := brakk.fortschritt
 	if f == null:
 		return

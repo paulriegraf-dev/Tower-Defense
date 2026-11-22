@@ -108,7 +108,7 @@ func letzte_von(e: Einheit) -> String:
 
 func _physics_process(_takt: float) -> void:
 	if auto and nem != null and nem.o24 != null and nem.o24.laeuft and not nem.o24.vorbei and nem.spiel.phase == 1:
-		weiter(Werte.SIM_SCHRITT / Werte.BRAKK_TEMPO)
+		weiter(Werte.sim_schritt() / Werte.BRAKK_TEMPO)
 
 
 func weiter(dt: float) -> void:

@@ -153,7 +153,16 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
 const SIM_SCHRITT: float = SPIELTEMPO / 60.0   # 9a: Spielsekunden je Simulationsschritt, bei jedem Tempo und jeder Bildrate gleich
-const VERSION: int = 66          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+## 22.11. (Paul: Brakk-Mode ab Runde 11 clunky): Im Brakk-Mode (Tempo ×2) doppelt so lange Schritte statt doppelt so vieler –
+## 60 Simulationsschritte je Sekunde wie im Normalmodus. Normalmodus und Labor: sim_mal = 1, also unverändert.
+const BRAKK_SIM_MAL: int = 2
+const BRAKK_MAX_SCHRITTE: int = 3   # so viele Schritte holt ein langsames Bild im Brakk-Mode höchstens nach (sonst schaukelt es sich auf)
+static var sim_mal: int = 1
+
+
+static func sim_schritt() -> float:
+	return SIM_SCHRITT * float(sim_mal)
+const VERSION: int = 67          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 

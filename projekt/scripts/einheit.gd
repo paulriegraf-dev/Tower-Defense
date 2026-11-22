@@ -218,7 +218,7 @@ func in_batterie() -> bool:
 
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if im_nest():
 		visible = false   # 21.11. (Paul): im MG-Nest sieht man nur das Nest, nicht die Besatzung
 	elif _war_im_nest:
@@ -544,7 +544,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (in_stellung() and spiel.peilung(posten_zelle)) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
 	if ziel == null or blind:
 		# Minigun: Rauch stoppt den Anlauf sofort, ohne Ziel läuft sie langsam aus
-		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * Werte.SIM_SCHRITT)
+		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * Werte.sim_schritt())
 		_laser_ziel = null
 		return   # im Rauch sieht die Einheit nichts
 	_sprite.flip_h = ziel.position.x < position.x
@@ -561,7 +561,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 
 	# Laserstrahl: kein Einzelschuss, sondern Dauerschaden, der am selben Ziel anwächst
 	if faehigkeit == "laser" and ziel is Gegner:
-		var dt := Werte.SIM_SCHRITT
+		var dt := Werte.sim_schritt()
 		if ziel != _laser_ziel:
 			_laser_ziel = ziel
 			_laser_zeit = 0.0

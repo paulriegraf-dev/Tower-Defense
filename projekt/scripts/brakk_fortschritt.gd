@@ -37,6 +37,9 @@ const GEMESSEN_SEK := 5.0             # „Schaden der letzten 5 Sekunden“ im 
 ## 19.11. (Paul): Fällt Brakk, steht er nach so vielen Sekunden (Echtzeit) an der Basis wieder auf – nicht erst zur nächsten Runde.
 const RESPAWN_SEK := 10.0
 const TUMBLE_SCHUSS := {"fenster": 2.0, "mal": 2.0, "mal_gross": 3.0}
+## 22.11. (Paul: „ab Runde 11 clunky“): Hit-Stop beim Kill nur bei großen Gegnern oder Mehrfach-Kills (ab „mehrfach“ Kills mit
+## einem Treffer) und höchstens alle „abstand“ Sekunden – vorher fror jeder Kill das Spiel 70 ms ein, bei 50+ Gegnern ständig.
+const HITSTOP := {"abstand": 0.5, "mehrfach": 2}
 ## 19.11. (Paul): Ladestrahl fürs späte Spiel – zusätzlich zum Schaden nimmt sie jedem Getroffenen diesen Anteil seines
 ## maximalen Lebens (große Gegner weniger). Ohne Ringeffekte.
 const LANZE_ANTEIL := {"normal": 0.10, "gross": 0.05}

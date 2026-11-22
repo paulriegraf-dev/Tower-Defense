@@ -180,7 +180,7 @@ func turm(z: Vector2i, von: Vector2, art: String, schaden: float, weite: float, 
 # ------------------------------------------------------------------ Ablauf
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if spiel == null:
 		return
 	if spiel.phase != 1:

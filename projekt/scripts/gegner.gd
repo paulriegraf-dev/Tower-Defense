@@ -306,7 +306,7 @@ func plane_neu() -> void:
 
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if _tot or not spiel.im_kampf():
 		return
 	_abkling -= delta

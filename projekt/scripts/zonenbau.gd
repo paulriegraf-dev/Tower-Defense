@@ -63,7 +63,7 @@ func _figur(daten: Dictionary) -> void:
 
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	_zeit += delta
 	_treffer -= delta
 	modulate = (Color(1, 0.88, 0.86) if Werte.grafik_neu else Color(1, 0.6, 0.6)) if _treffer > 0.0 else Color.WHITE

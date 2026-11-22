@@ -43,7 +43,7 @@ func einrichten_kommandant(p_spiel: Node, p_karte: Karte, zelle: Vector2i) -> vo
 
 
 func _physics_process(_takt: float) -> void:
-	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
+	var delta := Werte.sim_schritt()   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if fortschritt != null:
 		fortschritt.wirke(spiel)   # 18.11.: Ringfelder auch, wenn Brakk gefallen ist
 	if gefallen:

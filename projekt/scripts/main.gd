@@ -2117,8 +2117,11 @@ func _process(delta: float) -> void:
 	_bauzeit_tick(delta)
 	_aktualisiere_hud(delta)
 	_pflege_schilde()
+	# 22.11.: Brakk-Mode – doppelt so lange Schritte, und ein langsames Bild holt höchstens BRAKK_MAX_SCHRITTE nach
+	Werte.sim_mal = Werte.BRAKK_SIM_MAL if brakk_modus else 1
+	Engine.max_physics_steps_per_frame = Werte.BRAKK_MAX_SCHRITTE if brakk_modus else 8
 	# 9a: Tempo (Taste F, Brakk-Mode, Zeitlupe) wirkt ueber die Zahl der Simulationsschritte je Sekunde, nicht ueber ihre Laenge
-	Engine.physics_ticks_per_second = maxi(1, roundi(60.0 * Engine.time_scale / Werte.SPIELTEMPO))
+	Engine.physics_ticks_per_second = maxi(1, roundi(60.0 * Engine.time_scale / Werte.SPIELTEMPO / float(Werte.sim_mal)))
 
 
 ## 9a: Kampf-Simulation mit fester Schrittweite (Werte.SIM_SCHRITT). Tempo x3 = dreimal so viele Schritte je Sekunde,
@@ -2126,7 +2129,7 @@ func _process(delta: float) -> void:
 func _physics_process(_takt: float) -> void:
 	if phase != Phase.KAMPF:
 		return
-	var delta := Werte.SIM_SCHRITT
+	var delta := Werte.sim_schritt()   # 22.11.: im Brakk-Mode doppelt so lang
 	schuss_herkunft = Vector2.INF
 	schadensquelle = ""
 	schuetze = null
