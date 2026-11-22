@@ -66,6 +66,7 @@ var order24: Order24 = null   # 20.11. (Schritt 5b): Brakk-Mode „Rogue“ – 
 var brakk_geschosse: BrakkGeschosse = null   # 20.11. (Schritt 6c): Brakk-Mode – Schüsse auf Brakk als echte Geschosse (setzt die Ego-Sicht)
 var gegner: Array[Gegner] = []
 var einheiten: Array[Einheit] = []
+var ausgang := ""                 # 9b: "sieg" oder "niederlage", sobald die Partie zu Ende ist (Labor, Replay, Tests)
 var endkampf := false               # letzte Runde: Gegner ohne Ende, Sieg durch Zerstören des HQ
 var zonenbauten: Array[Zonenbau] = []   # HQ und Schleudern in der Zone des Gegners
 var hq: Zonenbau
@@ -102,6 +103,7 @@ var variante := 0                   # ab Werte.WELLEN_VARIANTEN_AB: welche der z
 var protokoll_an := true
 var _protokoll: Dictionary = {}
 var _protokoll_datei := ""
+var _kampf_tick := 0                # 9a: Bilder (feste Schrittweite) seit Wellenstart; Eingaben mitten in der Welle tragen ihn im Protokoll
 var _runde_start_ms := 0
 var _leben_vor_runde := 0
 var _cp_verloren := 0
@@ -144,6 +146,8 @@ var _durch_typen: Dictionary = {}   # 18.11.: welche Gegnertypen in dieser Parti
 
 
 func _ready() -> void:
+	Zufall.neue_partie()   # 9a: Samen der Partie, bevor Karte und Checkpoints gewuerfelt werden
+	Gegner._einschuss.clear()   # 9a: statisch – sonst zählen Treffer der vorigen Partie in dieser mit
 	herausforderung = Werte.herausforderung   # 18.11.: vom Startmenü (überlebt den Neustart der Szene)
 	if Touch.noetig():
 		add_child(Touch.new())   # 17.11.: Handy/Tablet – lange drücken = Rechtsklick, zwei Finger = Zoom, Hinweis bei Hochkant
@@ -309,7 +313,7 @@ func _alarmstart_einrichten() -> void:
 		return
 	var name := str(r["formation"])
 	if not Nachschlag.PLAENE_GROSS.has(name):
-		name = Werte.ALARM_FORMATIONEN.pick_random()
+		name = Zufall.waehle(Werte.ALARM_FORMATIONEN)
 	alarm_formation = name
 	formation_aufbauen(name, clampi(int(r.get("alarm_fabriken", 6)), 0, 12), clampi(int(r.get("alarm_stellungen", 4)), 0, 12), clampi(int(r.get("gesprengt", 6)), 0, 40))
 
@@ -319,7 +323,7 @@ func _alarmstart_einrichten() -> void:
 ## zur Karte. Alarmstart und Order 24. Gibt die Stellungen zurück.
 func formation_aufbauen(name: String, anzahl: int, soll: int, weg_damit: int) -> Array[Vector2i]:
 	var plan: Array = (Nachschlag.PLAENE_GROSS[name] as Array).duplicate()
-	if randi() % 2 == 1:
+	if Zufall.ganz(2) == 1:
 		plan.reverse()   # mal oben, mal unten gespiegelt
 	var waelle: Array = []
 	var fabrik_felder: Array[Vector2i] = []
@@ -399,7 +403,7 @@ func formation_aufbauen(name: String, anzahl: int, soll: int, weg_damit: int) ->
 			for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 				if weg.has(z + d):
 					am_weg = 1
-			blank.append([am_weg * 10 + randi() % 10, z])
+			blank.append([am_weg * 10 + Zufall.ganz(10), z])
 	blank.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) > int(b[0]))
 	for i in mini(weg_damit, blank.size()):
 		karte.entferne(blank[i][1] as Vector2i)
@@ -543,7 +547,7 @@ func starte_phantom_angriff(pfad: String) -> bool:
 		Online.ersatz_pfade = []
 	else:
 		var pool := Phantom.liste("verteidigung")
-		pool.shuffle()   # Ersatz-Phantome zufällig aus dem Pool
+		Zufall.mische(pool)   # Ersatz-Phantome zufällig aus dem Pool
 		for f: Dictionary in pool:
 			if str(f["pfad"]).get_file() != pfad.get_file() and _ersatz.size() < 2:
 				_ersatz.append(f["pfad"])
@@ -712,7 +716,7 @@ func _ersatz_nachfuellen(wiederholen: bool) -> void:
 		dran[str(e.get("gegen_pfad", "")).get_file()] = true
 	dran[_aktiv_pfad.get_file()] = true
 	var pool := Phantom.liste("verteidigung")
-	pool.shuffle()
+	Zufall.mische(pool)
 	for f: Dictionary in pool:
 		var datei := str(f["pfad"]).get_file()
 		if datei == _aktiv_pfad.get_file():
@@ -1229,6 +1233,9 @@ func _protokoll_kasten(titel: String, sonst: String) -> Dictionary:
 	return k
 
 
+var _phantom_neu := false   # 21.11.: dieser Sieg hat den Phantom-Modus freigeschaltet
+
+
 ## 18.11.: Siegbildschirm statt Text auf schwarzem Grund.
 func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
 	var k: Array = []
@@ -1248,6 +1255,8 @@ func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
 		"zeilen": [str(info["wertung"])] if str(info["wertung"]) != "" else [],
 		"knoepfe": k,
 	}
+	if _phantom_neu:
+		(conf["zeilen"] as Array).append("Phantom-Modus freigeschaltet")   # 21.11. (Paul)
 	_zeige_tafel(conf)
 
 
@@ -1415,7 +1424,7 @@ func _beginne_protokoll() -> void:
 	var cps: Array = []
 	for z in karte.checkpoints:
 		cps.append([z.x, z.y])
-	_protokoll = {"version": 1, "begonnen": Time.get_datetime_string_from_system(), "checkpoints": cps, "runden": [], "anfuehrer": Werte.anfuehrer}   # 19.11.: Anführer
+	_protokoll = {"version": 2, "samen": Zufall.samen, "karte": Werte.karte_name, "begonnen": Time.get_datetime_string_from_system(), "checkpoints": cps, "runden": [], "anfuehrer": Werte.anfuehrer}   # 19.11.: Anführer
 	_merke_code()   # 20.11.
 	_protokoll_datei = "partie-%s.json" % Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "-")
 
@@ -1430,6 +1439,8 @@ func _runden_eintrag() -> Dictionary:
 
 func _notiere(aktion: Dictionary) -> void:
 	if protokoll_an and not _protokoll.is_empty():
+		if phase == Phase.KAMPF:
+			aktion["t"] = _kampf_tick   # 9a: Eingabe mitten in der Welle – das Replay setzt sie zum selben Bild ein
 		(_runden_eintrag()["aktionen"] as Array).append(aktion)
 
 
@@ -1454,6 +1465,8 @@ func _schliesse_runde(ausgang: String) -> void:
 
 ## Im Editor landet die Datei im Projektordner unter partien/, sonst im Benutzerordner des Spiels.
 func _speichere_protokoll() -> void:
+	if ohne_spuren:
+		return   # 9a: Werkzeuge/Labor schreiben nichts nach partien/ (das Protokoll bleibt im Speicher)
 	var text := JSON.stringify(_protokoll, "\t")
 	for ordner: String in ["res://partien", "user://partien"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(ordner))
@@ -1471,10 +1484,14 @@ func _speichere_protokoll() -> void:
 ## Der Bau kommt live von der Karte (das Protokoll kennt keine Sprengungen). Nicht gesichert: Werte je Bauwerk
 ## (Schaden/Kills), Lage der Schleudern (ziehen ohnehin jede Runde um).
 const ZWISCHENSTAND := "user://zwischenstand.json"
+## 9a: Werkzeuge (Replay, Labor) setzen das vor dem Start: kein Zwischenstand, kein Sitzungs-Merker – weder lesen
+## noch schreiben noch loeschen. Sonst setzt das Startmenue die naechste Partie mit dem Stand der vorigen fort,
+## und die echten Dateien des Spielers werden ueberschrieben.
+static var ohne_spuren := false
 
 
 static func lies_zwischenstand() -> Dictionary:
-	if not FileAccess.file_exists(ZWISCHENSTAND):
+	if ohne_spuren or not FileAccess.file_exists(ZWISCHENSTAND):
 		return {}
 	var daten: Variant = JSON.parse_string(FileAccess.get_file_as_string(ZWISCHENSTAND))
 	if daten is Dictionary:
@@ -1491,12 +1508,12 @@ static func zwischenstand_runde() -> int:
 
 
 static func loesche_zwischenstand() -> void:
-	if FileAccess.file_exists(ZWISCHENSTAND):
+	if not ohne_spuren and FileAccess.file_exists(ZWISCHENSTAND):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(ZWISCHENSTAND))
 
 
 func _speichere_zwischenstand() -> void:
-	if sandbox or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
+	if ohne_spuren or sandbox or phantom_modus == "angriff" or _protokoll.has("sandbox_sprung") or welle < 2 or phase != Phase.BAU:
 		return
 	if tutorial != null and is_instance_valid(tutorial):
 		return
@@ -1564,6 +1581,8 @@ const SITZUNG := "user://sitzung.json"
 
 
 func _merke_sitzung(abschnitt: String) -> void:
+	if ohne_spuren:
+		return
 	var modus := "Brakk-Mode" if brakk_modus else ("Sandbox" if sandbox else ("Phantom-" + phantom_modus if phantom_modus != "" else ("Tutorial" if tutorial != null else "Normales Spiel")))
 	var datei := FileAccess.open(SITZUNG, FileAccess.WRITE)
 	if datei != null:
@@ -1572,13 +1591,13 @@ func _merke_sitzung(abschnitt: String) -> void:
 
 
 static func loesche_sitzung() -> void:
-	if FileAccess.file_exists(SITZUNG):
+	if not ohne_spuren and FileAccess.file_exists(SITZUNG):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SITZUNG))
 
 
 ## Abgebrochene Sitzung (einmal): {"modus", "runde", "abschnitt", "zeit"} oder {}; der Merker ist danach gelöscht.
 static func abgebrochene_sitzung() -> Dictionary:
-	if not FileAccess.file_exists(SITZUNG):
+	if ohne_spuren or not FileAccess.file_exists(SITZUNG):
 		return {}
 	var daten: Variant = JSON.parse_string(FileAccess.get_file_as_string(SITZUNG))
 	loesche_sitzung()
@@ -1658,6 +1677,7 @@ func _lade_zwischenstand() -> void:
 	var bz: Array = d["basis"]
 	setze_basis(Vector2i(int(bz[0]), int(bz[1])))
 	_protokoll = d["protokoll"]
+	Zufall.samen = int(_protokoll.get("samen", Zufall.samen))   # 9a: Fortsetzen mit dem Samen der Partie
 	_protokoll["anfuehrer"] = Werte.anfuehrer   # 19.11.
 	_merke_code()   # 20.11.
 	_protokoll_datei = str(d["protokoll_datei"])
@@ -1733,6 +1753,8 @@ func stelle_basis(art: String) -> void:
 					continue
 				if art == "ueberall" and not sandbox and (x - 1) * 2 < Werte.SPALTEN:
 					continue   # 19.11. (Paul): im Spiel steht die Basis ganz in der rechten Kartenhälfte (alle 3 Spalten); Sandbox bleibt frei
+				if art == "ueberall" and not sandbox and brakk_modus and order24 == null and float(x - 1) < Werte.SPALTEN * Werte.BRAKK_BASIS_AB_ANTEIL:
+					continue   # 22.11. (Paul): Brakk-Mode – ganz im letzten Drittel, damit die Gegner nicht zu schnell durchkommen
 				var nah := false
 				for cp in karte.checkpoints:
 					if Vector2(z - cp).length() < BASIS_ABSTAND_CP:
@@ -1742,7 +1764,7 @@ func stelle_basis(art: String) -> void:
 		if felder.is_empty():
 			melde("Kein freies Feld für die Basis gefunden.", 4.0)
 			return
-		setze_basis(felder[randi() % felder.size()])
+		setze_basis(felder[Zufall.ganz(felder.size())])
 	basis_art = art
 
 
@@ -1822,7 +1844,7 @@ func _neuer_zonenbau(art: String, zelle: Vector2i) -> Zonenbau:
 ## oder der eingenommene Checkpoint, an dem die Welle startet.
 func _spawn_zelle() -> Vector2i:
 	if not _ausgaenge.is_empty() and str(_ausgaenge[0]) == "zone2" and not Werte.ZONE2_AUSGAENGE.is_empty():
-		return Werte.ZONE2_AUSGAENGE.pick_random()   # 20.11. (Zange): zweite Hälfte des Trupps aus der zweiten Zone
+		return Zufall.waehle(Werte.ZONE2_AUSGAENGE)   # 20.11. (Zange): zweite Hälfte des Trupps aus der zweiten Zone
 	if phantom_modus != "" or Werte.KARTE_WELLEN.has(welle):   # 18.11.: eigene Wellen eines Szenarios kommen wie geplant
 		# Phantom-Modus: jeder Trupp kommt geschlossen an seinem Ausgang heraus, damit die geplante Reihenfolge hält.
 		# 16.11.: Ein gewählter Ausgang (oben/unten) gilt immer – auch wenn ein eingenommener Checkpoint sonst der
@@ -1839,7 +1861,7 @@ func _spawn_zelle() -> Vector2i:
 		return _naechster_eingang()   # 20.11.: Karte mit Eingängen – nur dort, abwechselnd
 	if Werte.plan_runde(welle) <= Werte.HAUPTLINIE_BIS:
 		return Werte.START_ZELLE   # die ersten Runden: alle über die Hauptlinie, nichts verteilt sich
-	return Vector2i(randi() % Werte.ZONE_SPALTEN, randi() % Werte.ZEILEN)
+	return Vector2i(Zufall.ganz(Werte.ZONE_SPALTEN), Zufall.ganz(Werte.ZEILEN))
 
 
 ## 20.11. (Schritt 5b, Zange): Jeder Trupp mit mindestens zwei Mitgliedern wird nach Köpfen halbiert; die zweite Hälfte
@@ -2095,8 +2117,21 @@ func _process(delta: float) -> void:
 	_bauzeit_tick(delta)
 	_aktualisiere_hud(delta)
 	_pflege_schilde()
+	# 9a: Tempo (Taste F, Brakk-Mode, Zeitlupe) wirkt ueber die Zahl der Simulationsschritte je Sekunde, nicht ueber ihre Laenge
+	Engine.physics_ticks_per_second = maxi(1, roundi(60.0 * Engine.time_scale / Werte.SPIELTEMPO))
+
+
+## 9a: Kampf-Simulation mit fester Schrittweite (Werte.SIM_SCHRITT). Tempo x3 = dreimal so viele Schritte je Sekunde,
+## nicht dreimal so grosse – so verlaeuft eine Partie bei jedem Tempo und jeder Bildrate gleich.
+func _physics_process(_takt: float) -> void:
 	if phase != Phase.KAMPF:
 		return
+	var delta := Werte.SIM_SCHRITT
+	schuss_herkunft = Vector2.INF
+	schadensquelle = ""
+	schuetze = null
+	_pflege_schilde()
+	_kampf_tick += 1
 	_abstand_halten(delta)
 
 	if endkampf and _schlange.is_empty():
@@ -2300,7 +2335,7 @@ func _schiebe(liste: Array, haerte: float, _truppen: bool) -> void:
 			var soll := ra + rb
 			if d >= soll:
 				continue
-			var richtung := abstand / d if d > 0.01 else Vector2.RIGHT.rotated(randf() * TAU)
+			var richtung := abstand / d if d > 0.01 else Vector2.RIGHT.rotated(Zufall.f() * TAU)
 			# Schwere schieben Leichte: Anteile nach Fläche (Radius²)
 			var ma := ra * ra
 			var mb := rb * rb
@@ -2913,6 +2948,8 @@ func peilung(stellung: Vector2i) -> bool:
 
 ## Heilturm mit Feldlazarett: Fällt die Truppe `e` in seinem Umkreis, steht sie mit halbem Leben wieder auf (einmal pro Runde je Turm).
 func lazarett_rettet(e: Einheit) -> bool:
+	if order24 != null and order24.nemesis != null and order24.nemesis.rettet(e):
+		return true   # 22.11. (Paul): Befehl 24 – Eliten sterben nicht, sie werden kampfunfähig und geborgen (nemesis.gd)
 	for z: Vector2i in karte.turm_art:
 		if karte.turm_art[z] == "heil" and karte.turm_aktiv(z) and not _lazarett_genutzt.has(z) and karte.turm_wert(z, "lazarett", false) \
 				and karte.mitte(z).distance_to(e.position) <= float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE:
@@ -2974,7 +3011,7 @@ func _batterien_feuern(delta: float) -> void:
 				Ton.am_ort(self, "tc-arc", von)
 				var ziel_punkt := bestes.position
 				var schaden := float(Werte.BATTERIE["schaden"]) * (Werte.BATTERIE_ST2_SCHADEN if stufe >= 2 else 1.0)
-				get_tree().create_timer(Effekte.BOLZEN_FLUG, false).timeout.connect(_batterie_einschlag.bind(z, von, ziel_punkt, radius, schaden))
+				get_tree().create_timer(Effekte.BOLZEN_FLUG, false, true).timeout.connect(_batterie_einschlag.bind(z, von, ziel_punkt, radius, schaden))
 		_turm_abkling[z] = maxf(rest, 0.0) if rest <= 0.0 else rest
 
 
@@ -3166,6 +3203,7 @@ func starte_welle(erzwingen: bool = false) -> void:
 		_protokoll["sparer"] = true   # 19.11.: Erfolg „Deutscher Sparer“ (zählt beim Sieg)
 	_auftrag_pruefen("welle")   # 20.11.: Pauls Aufträge
 	phase = Phase.KAMPF
+	_kampf_tick = 0
 	_merke_sitzung("Welle")   # 19.11.: Diagnose – brach die Sitzung ab?
 	karte.brut_aktualisieren()   # Brut-Boden: Stand zu Rundenbeginn
 	runde_stats.clear()   # Schadensliste [Tab]: zählt je Runde neu
@@ -3308,7 +3346,7 @@ func _lade_durchgang() -> void:
 		_zange_teilen()   # 20.11. (Zange): jeden Trupp halbieren
 	_elite_nr = -1
 	if brakk_modus and welle in Werte.BRAKK_ELITE_RUNDEN and _durchgang <= 1 and _schlange.size() >= 2:   # 20.11.: feste Liste
-		_elite_nr = randi_range(1, _schlange.size() - 1)   # nicht der erste Trupp
+		_elite_nr = Zufall.ganz_von_bis(1, _schlange.size() - 1)   # nicht der erste Trupp
 	var info: Array = _welle.get("wurf_info", [])
 	var wuerfe: Array = _welle["wurf"]
 	for i in wuerfe.size():
@@ -3393,7 +3431,8 @@ func sandbox_aendere_gegner(typ: String, um: int) -> void:
 
 ## Neue Bauphase: welche der zwei Varianten kommt? (vorher nur eine)
 func waehle_variante() -> void:
-	variante = randi() % 2 if welle >= Werte.WELLEN_VARIANTEN_AB else 0
+	Zufall.runde(welle)   # 9a: Zufall der Runde haengt nur an Samen und Rundennummer
+	variante = Zufall.ganz(2) if welle >= Werte.WELLEN_VARIANTEN_AB else 0
 
 
 ## Sandbox: direkt zu einer Runde springen (nur in der Bauphase). Gebautes bleibt stehen.
@@ -3608,8 +3647,8 @@ func _naechste_bauphase() -> void:
 
 ## Felder, die Truppen auf dem Weg zu ihrer Stellung meiden: alles im Gefahrenradius um einen Gegner am Boden.
 func gefahrenzellen(radius: float = Werte.GEFAHR_RADIUS) -> Dictionary:
-	if _gefahr_stand != Engine.get_process_frames():
-		_gefahr_stand = Engine.get_process_frames()
+	if _gefahr_stand != Engine.get_physics_frames():   # 9a: je Simulationsschritt neu
+		_gefahr_stand = Engine.get_physics_frames()
 		_gefahr_je = {}
 	if _gefahr_je.has(radius):
 		return _gefahr_je[radius]
@@ -3786,14 +3825,8 @@ func gegner_in_reichweite(von: Vector2, weite: float, braucht_sicht: bool, von_w
 	var bester_schild := INF
 	var grenze := weite * weite
 	for g in gegner:
-		if _geschuetzt(g):
-			continue
 		var d := von.distance_squared_to(g.position)
-		if d > grenze:
-			continue
-		if von_wall != Karte.KEINE and not karte.sicht_von_wall(von_wall, von, g.position):
-			continue
-		if braucht_sicht and not karte.sicht_frei(von, g.position):
+		if d > grenze or _geschuetzt(g):
 			continue
 		var wert: float
 		match modus:
@@ -3803,6 +3836,13 @@ func gegner_in_reichweite(von: Vector2, weite: float, braucht_sicht: bool, von_w
 				wert = -g.leben + d * 1e-6
 			_:
 				wert = float(g.rest_weg()) + d * 1e-6
+		# 9a (Leistung): die teure Sichtprüfung nur, wenn der Gegner überhaupt gewählt würde – das Ergebnis ist dasselbe
+		if wert >= beste and not (provokation and g.rolle == "schild" and wert < bester_schild):
+			continue
+		if von_wall != Karte.KEINE and not karte.sicht_von_wall(von_wall, von, g.position):
+			continue
+		if braucht_sicht and not karte.sicht_frei(von, g.position):
+			continue
 		if wert < beste:
 			beste = wert
 			bester = g
@@ -3974,6 +4014,7 @@ func zonenbau_zerstoert(b: Zonenbau) -> void:
 func _gewonnen() -> void:
 	if phase == Phase.ENDE:
 		return
+	ausgang = "sieg"
 	loesche_sitzung()   # 19.11.
 	phase = Phase.ENDE
 	if not sandbox:
@@ -3981,14 +4022,16 @@ func _gewonnen() -> void:
 	_schliesse_runde("sieg")
 	# 18.11.: Erfolge zum Sieg
 	if Werte.ziel() == "gegenangriff":
+		_phantom_neu = not Profil.phantom_frei()
 		erfolg("gegenangriff")
+		_phantom_neu = _phantom_neu and Profil.phantom_frei()   # 21.11. (Paul): Hinweis auf dem Siegbild
 	if leben >= _leben_vor_runde:
 		erfolg("unberuehrt")
 	if not _fabrik_gebaut():
 		erfolg("ohne_fabrik")
 	_erfolge_zum_sieg()   # 19.11.
 	var als_phantom := false
-	if protokoll_an and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "" and Anfuehrer.ranglistenfaehig(Werte.anfuehrer) and not _protokoll.has("code"):   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen; 19.11.: nicht mit Paul; 20.11.: nicht per Code
+	if protokoll_an and not ohne_spuren and not sandbox and not _protokoll.has("sandbox_sprung") and Werte.ist_hauptkarte() and not brakk_modus and herausforderung == "" and Anfuehrer.ranglistenfaehig(Werte.anfuehrer) and not _protokoll.has("code"):   # 18.11.: Phantome nur auf der Hauptkarte, nicht im Brakk-Mode oder in Herausforderungen; 19.11.: nicht mit Paul; 20.11.: nicht per Code
 		# Eine gewonnene Partie wird zum Verteidigungs-Phantom für den Phantom-Modus
 		var daten := Phantom.aus_partie(_protokoll, _protokoll_datei)
 		var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
@@ -4017,7 +4060,7 @@ func _gewonnen() -> void:
 
 ## Ziel einer Schleuder: die nächste Truppe in einer Stellung, sonst die nächste Fabrik (als Zelle).
 func schleuderziel(von: Vector2, weite: float) -> Variant:
-	if brakk_modus and kommandant != null and not kommandant.gefallen and randf() < 0.5 and von.distance_to(kommandant.position) <= weite:
+	if brakk_modus and kommandant != null and not kommandant.gefallen and Zufall.f() < 0.5 and von.distance_to(kommandant.position) <= weite:
 		return kommandant   # 18.11. (Paul): Brakk-Mode – jeder zweite Wurf gilt Brakk, wenn er in Reichweite ist
 	var bestes: Variant = null
 	var beste := weite * weite
@@ -4490,6 +4533,7 @@ func _brakk_modus_gewaehlt() -> void:
 		await get_tree().process_frame
 	if ego == null and hd != null and kommandant != null:
 		_ego_umschalten()
+	BrakkTutorial.anbieten(self)   # 22.11. (Paul): beim ersten Brakk-Mode das Tutorial anbieten
 
 
 ## Freies Feld möglichst nah vor der Basis (Richtung Gegner), für Brakk im Brakk-Mode.
@@ -4565,6 +4609,8 @@ func stelle_klonmaschine(z: Vector2i) -> String:
 	klonmaschine.position = karte.mitte(z)
 	figuren.add_child(klonmaschine)
 	_notiere({"a": "klon", "x": z.x, "y": z.y})
+	if order24 != null:
+		order24.brakk_gewohnheit("klon")   # 22.11. (Nemesis Teil 4): Angewohnheiten zählen
 	return "Klonmaschine steht: Wer hindurchgeht, wird einmal geklont – deine Truppen, aber auch Gegner."
 
 
@@ -4572,7 +4618,7 @@ func stelle_klonmaschine(z: Vector2i) -> String:
 func klone_gegner(g: Gegner) -> void:
 	erfolg("doppelgaenger")   # 18.11.
 	var c := _neuer_gegner(g.typ, karte.zelle_bei(g.position), g._ziel)
-	c.position = g.position + Vector2(randf_range(-8, 8), randf_range(-6, 6))
+	c.position = g.position + Vector2(Zufall.von_bis(-8, 8), Zufall.von_bis(-6, 6))
 	c.leben = g.leben
 	c.klon = true
 	c.trupp = g.trupp
@@ -4587,7 +4633,7 @@ func klone_einheit(e: Einheit) -> void:
 	var c := Einheit.new()
 	figuren.add_child(c)
 	c.start(self, karte, f["typ"], e.fabrik_zelle, int(f.get("stufe", 0)), str(f.get("faehigkeit", "")))
-	c.position = e.position + Vector2(randf_range(-8, 8), randf_range(-6, 6))
+	c.position = e.position + Vector2(Zufall.von_bis(-8, 8), Zufall.von_bis(-6, 6))
 	c.leben = minf(e.leben, c.max_leben)
 	c.klon = true
 	einheiten.append(c)
@@ -4606,7 +4652,7 @@ func zerfall(g: Gegner) -> void:
 		var d := _neuer_gegner("enterer", zelle, g._ziel)
 		d._auf_wall = false   # Myr-Drohnen aus dem Schwarmgeist kämpfen am Boden
 		d._wall_zelle = Karte.KEINE
-		d.position = g.position + Vector2(randf_range(-14, 14), randf_range(-10, 10))
+		d.position = g.position + Vector2(Zufall.von_bis(-14, 14), Zufall.von_bis(-10, 10))
 		if karte.zelle_bei(d.position) != zelle:
 			d.position = g.position   # 17.11.: nicht in eine Mauer daneben streuen
 		d._letzte_frei = zelle
@@ -4781,7 +4827,7 @@ func schleuder_umzug(b: Zonenbau, sofort: bool) -> void:
 		if not besetzt:
 			frei.append(z)
 	if not frei.is_empty():
-		b.versetze(frei[randi() % frei.size()], sofort)
+		b.versetze(frei[Zufall.ganz(frei.size())], sofort)
 
 
 ## Wallstücke, die schon ein anderer Sprenger anpeilt: jeder nimmt sich ein eigenes vor.
@@ -4905,6 +4951,8 @@ func gegner_am_ziel(g: Gegner) -> void:
 	g.queue_free()
 	_durch_typen[g.typ] = int(_durch_typen.get(g.typ, 0)) + 1   # 18.11.: für die Niederlage-Tafel
 	leben -= 1
+	if ego != null:
+		ego.einbruch(g.position)   # 22.11. (Paul): Einbruch in der Ego-Sicht deutlich anzeigen
 	if leben <= 0 and phantom_modus == "angriff":
 		leben = 0
 		_phantom_gefallen()
@@ -4917,6 +4965,7 @@ func gegner_am_ziel(g: Gegner) -> void:
 func _verloren() -> void:
 	if phase == Phase.ENDE:
 		return
+	ausgang = "niederlage"
 	loesche_sitzung()   # 19.11.
 	phase = Phase.ENDE
 	if not sandbox:
@@ -5199,6 +5248,10 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if typ == Karte.KOMMANDANT:
 		_setze_kommandant(z)
 		werkzeug = Karte.FREI
+		if not still and not brakk_modus and not sandbox and not Profil.brakk_modus_frei():
+			erfolg("aufgestellt")   # 21.11. (Paul): schaltet den Brakk-Mode im Startmenü frei
+			if Profil.brakk_modus_frei():
+				Erfolge.einblendung("Brakk-Modus freigeschaltet – im Startmenü", "", "brakk")
 		if not still:
 			melde("Kommandant Brakk handelt selbst. Anklicken = steuern: [WASD] bewegen · [Q] Sammeln, nochmal [Q] Losschlagen · [E] auf den Wall/herunter · [R] Klonmaschine. [Esc] oder Klick ins Leere lässt ihn los.", 9.0)
 		return true
@@ -6347,8 +6400,8 @@ func mg_feuer(e: Einheit, ziel: Node2D, z: Vector2i) -> float:
 	match sonder:
 		"huelsenregen":
 			var eigene := _mg_huelsen.filter(func(h: Array) -> bool: return h[2] == z).size()
-			if randf() < float(s["chance"]) and eigene < int(s["hoechst"]):
-				var p := ort + Vector2(randf_range(-0.25, 0.25), randf_range(-0.2, 0.2)) * Werte.ZELLE
+			if Zufall.f() < float(s["chance"]) and eigene < int(s["hoechst"]):
+				var p := ort + Vector2(Zufall.von_bis(-0.25, 0.25), Zufall.von_bis(-0.2, 0.2)) * Werte.ZELLE
 				_mg_huelsen.append([p, float(s["sek"]), z])
 				effekte.flaeche(p, Werte.ZELLE * 0.18, Color("ffd34d"))
 		"leuchtspur":
@@ -6369,7 +6422,7 @@ func mg_feuer(e: Einheit, ziel: Node2D, z: Vector2i) -> float:
 					_mg_ladung[z] = spielzeit()
 					var punkt := dicht.position
 					effekte.batterie_schuss(von, punkt, float(s["radius"]) * Werte.ZELLE)
-					get_tree().create_timer(Effekte.BOLZEN_FLUG, false).timeout.connect(
+					get_tree().create_timer(Effekte.BOLZEN_FLUG, false, true).timeout.connect(
 						func() -> void: flaechenschaden(punkt, float(s["radius"]) * Werte.ZELLE, schaden * float(s["mal"]), Color("9be37b")))
 	return pause
 

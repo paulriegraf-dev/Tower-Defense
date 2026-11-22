@@ -18,6 +18,8 @@ var jagd_gemeldet := false
 
 
 func _initialize() -> void:
+	Nemesis.datei = "user://nemesis_test.json"   # 22.11.: Tests schreiben nie in die echte Liste der Meistgesuchten
+	Nemesis.zuruecksetzen()
 	var a := OS.get_cmdline_user_args()
 	laeufe = int(a[0]) if a.size() > 0 else 1
 	OS.set_environment("TD_KARTE_NAME", "szenario_order24")

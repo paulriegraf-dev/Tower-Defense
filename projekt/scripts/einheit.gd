@@ -52,6 +52,8 @@ var _gefolgt := false
 var wach_turm := Karte.KEINE        # 21.11. (Paul): Werkschutz eines Truppenturms – nimmt keine Stellung …
 var wach_ziel := Karte.KEINE        # … geht nur zu diesem Feld (bedrohter Checkpoint oder zurück zum Turm)
 var wach_heim := false
+var kampfunfaehig := false          # 22.11. (Paul): Nemesis in Befehl 24 – Person bei 0 Leben: liegt bis zur Bergung (nemesis.gd)
+var halt := false                   # 22.11. (Nemesis Teil 3): eine Fähigkeit steuert die Figur (nemesis_faehigkeiten.gd)
 
 ## Farbe des Abzeichens je Stufe-3-Fähigkeit
 const ABZEICHEN := {
@@ -72,7 +74,7 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 	leben = max_leben
 	fabrik_zelle = p_fabrik
 	position = karte.mitte(p_fabrik)
-	_versatz = Vector2(randf_range(-10, 10), randf_range(-8, 8))
+	_versatz = Vector2(Zufall.von_bis(-10, 10), Zufall.von_bis(-8, 8))
 	_sprite = Figur.new()
 	add_child(_sprite)
 	_sprite.einrichten(daten)
@@ -215,7 +217,8 @@ func in_batterie() -> bool:
 	return zustand == Zustand.IN_BATTERIE
 
 
-func _process(delta: float) -> void:
+func _physics_process(_takt: float) -> void:
+	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if im_nest():
 		visible = false   # 21.11. (Paul): im MG-Nest sieht man nur das Nest, nicht die Besatzung
 	elif _war_im_nest:
@@ -227,6 +230,8 @@ func _process(delta: float) -> void:
 		_bruestung.visible = oben and not Werte.grafik_hd
 	if not spiel.im_kampf():
 		return
+	if kampfunfaehig or halt:
+		return   # 22.11.: Nemesis – kampfunfähig (wartet auf den Beam) bzw. eine Fähigkeit läuft
 	_abkling -= delta
 	_treffer -= delta
 	if not _ausstehend.is_empty():
@@ -307,7 +312,7 @@ func _process(delta: float) -> void:
 			pass   # die Batterie feuert (siehe main.gd)
 		Zustand.AUF_POSTEN:
 			# Von oben: mehr Reichweite und Schuss über das eigene Wallstück hinweg. Fremde Erdwälle versperren die Sicht.
-			var weite: float = (daten["reichweite"] + karte.posten_bonus(posten_zelle, daten)) * Werte.ZELLE
+			var weite: float = (daten["reichweite"] + karte.posten_bonus(posten_zelle, daten) + float(get_meta("wall_reichweite", 0.0))) * Werte.ZELLE   # 22.11.: Nemesis – Mauerkletterer +1,5
 			_sprite.bewegt(false)
 			# Alle Gegner weg, aber ein Checkpoint ist noch verloren: Die nächste Truppe verlässt dafür ihre Stellung.
 			_posten_check -= delta
@@ -379,7 +384,7 @@ func _process(delta: float) -> void:
 				if not ueber.is_empty():
 					ziel = ueber["ziel"]
 					_spiegel_punkt = ueber["spiegel"]
-			var drueckt: bool = spiel.im_endkampf() and karte.zelle_bei(position) != _marschziel and _marschziel != Karte.KEINE
+			var drueckt: bool = (spiel.im_endkampf() or (spiel.order24 != null and spiel.order24.drueckt(self))) and karte.zelle_bei(position) != _marschziel and _marschziel != Karte.KEINE   # 22.11.: Nemesis-Taktik – im Gehen schießen
 			if ziel != null and drueckt and (ziel is Zonenbau or position.distance_to(ziel.position) > Werte.ENDKAMPF_ABSTAND * Werte.ZELLE):
 				# Letzte Runde: im Gehen schießen und weiter auf das eigene Feld in der Zone vorrücken – stehen bleibt nur,
 				# wem ein Gegner zu nah kommt. Sonst stapeln sich alle am ersten Feld mit Schussweite.
@@ -539,7 +544,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 	var blind: bool = spiel.im_rauch(position) and not daten.get("klarsicht", false) and not (in_stellung() and spiel.peilung(posten_zelle)) and not (ziel is Gegner and (ziel as Gegner).markiert > 0.0)
 	if ziel == null or blind:
 		# Minigun: Rauch stoppt den Anlauf sofort, ohne Ziel läuft sie langsam aus
-		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * get_process_delta_time())
+		_anlauf = 0.0 if ziel != null else maxf(0.0, _anlauf - 0.4 * Werte.SIM_SCHRITT)
 		_laser_ziel = null
 		return   # im Rauch sieht die Einheit nichts
 	_sprite.flip_h = ziel.position.x < position.x
@@ -556,7 +561,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 
 	# Laserstrahl: kein Einzelschuss, sondern Dauerschaden, der am selben Ziel anwächst
 	if faehigkeit == "laser" and ziel is Gegner:
-		var dt := get_process_delta_time()
+		var dt := Werte.SIM_SCHRITT
 		if ziel != _laser_ziel:
 			_laser_ziel = ziel
 			_laser_zeit = 0.0
@@ -690,12 +695,35 @@ func _auf_brakk(e: Dictionary, schaden: float) -> void:
 	var typ := str(spiel.fabriken.get(fabrik_zelle, {}).get("typ", ""))
 	var h: float = 0.45 + (spiel.hd.H if spiel.hd != null and zustand == Zustand.AUF_POSTEN else 0.0)
 	var quelle: String = spiel.schadensquelle
+	var genau := 1.0
+	if spiel.order24 != null and spiel.order24.nemesis != null:
+		# 22.11.: Nemesis – der Schütze reist in der Quelle mit (wer trifft Brakk?), Begegnung läuft, Eliten streuen weniger
+		quelle += "#%d" % get_instance_id()
+		spiel.order24.nemesis.schuss(self)
+		genau = spiel.order24.nemesis.genau(self)
+		typ = Nemesis.art_von(self)   # Elite aus einer Fabrik anderer Art (Drei vom Appell: umgerüstet) schießt mit ihrer Waffe
+	var verz: float = spiel.order24.nemesis.gewohnheiten.verzoegerung(self) if spiel.order24 != null and spiel.order24.nemesis != null and typ != "scharfschuetze" else 0.0
+	if verz > 0.0:
+		# 22.11. (Nemesis Teil 4): Doppelblitz – zweimal Aufblitzen, der Schuss fällt erst nach dem Tumble-Fenster
+		var muendung: Vector2 = e["muendung"]
+		var farbe := Color(daten["schussfarbe"])
+		bg.aufblitzen(muendung, farbe)
+		bg.spaeter(verz * 0.5, bg.aufblitzen.bind(muendung, farbe))
+		if e["flaeche"]:
+			bg.spaeter(verz, bg.schiesse.bind("plasma", e["start"], h, schaden, "plasmawerfer", quelle, genau))
+		else:
+			bg.spaeter(verz, bg.schiesse.bind("laser", muendung, h, schaden, typ if typ != "" else "technogunner", quelle, genau))
+		return
 	if e["flaeche"]:
-		bg.schiesse("plasma", e["start"], h, schaden, "plasmawerfer", quelle)
+		bg.schiesse("plasma", e["start"], h, schaden, "plasmawerfer", quelle, genau)
 	elif typ == "scharfschuetze":
-		bg.scharf(self, e["muendung"], h, reichweite_jetzt() * Werte.ZELLE + Werte.ZELLE, schaden, quelle)
+		var extra: Dictionary = spiel.order24.nemesis.faehigkeiten.scharf_extras(self) if spiel.order24 != null and spiel.order24.nemesis != null else {}
+		bg.scharf(self, e["muendung"], h, reichweite_jetzt() * Werte.ZELLE + Werte.ZELLE, schaden, quelle, Werte.BRAKK_SCHARF_ZIEL_SEK, 1.0,
+			extra.get("farbe", Color(1.0, 0.12, 0.1)) as Color, extra.get("cb", Callable()) as Callable)   # 22.11.: Nemesis – Markierung
+		if not extra.is_empty():
+			spiel.order24.nemesis.faehigkeiten.nach_schuss(self)   # Markierung: nach jedem Schuss die Stellung wechseln
 	else:
-		bg.schiesse("laser", e["muendung"], h, schaden, typ if typ != "" else "technogunner", quelle)
+		bg.schiesse("laser", e["muendung"], h, schaden, typ if typ != "" else "technogunner", quelle, genau)
 
 
 ## Vom Kommandanten gesammelt: Stellung freigeben und ihm folgen.
@@ -812,7 +840,7 @@ func nimm_schaden(menge: float) -> void:
 func reichweite_jetzt() -> float:
 	if zustand == Zustand.AUF_POSTEN and Werte.mg_stellung():
 		return spiel.mg_reichweite(posten_zelle)   # 20.11. (Paul): MG-Stellung – die Reichweite hängt am Nest
-	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) if zustand == Zustand.AUF_POSTEN else _hoehe())
+	return daten["reichweite"] + (karte.posten_bonus(posten_zelle, daten) + float(get_meta("wall_reichweite", 0.0)) if zustand == Zustand.AUF_POSTEN else _hoehe())   # 22.11.: Nemesis – Mauerkletterer
 
 
 ## 18.11.: Anhöhe – mehr Reichweite am Boden (in der Stellung rechnet posten_bonus sie ein). Auch für Brakk.

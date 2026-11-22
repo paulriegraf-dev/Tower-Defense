@@ -335,6 +335,8 @@ func _frei() -> bool:
 		return false
 	if spiel.order24 != null and spiel.order24.sperrt_steuerung():
 		return false   # 20.11.: Befehl 24 – Verrat-Sequenz läuft
+	if spiel.tutorial is BrakkTutorial and (spiel.tutorial as BrakkTutorial).braucht_maus():
+		return false   # 22.11.: Brakk-Tutorial – die Frage braucht die Maus
 	return not Input.is_key_pressed(KEY_ALT)
 
 
@@ -784,6 +786,8 @@ func _gehen(dt: float) -> void:
 	r = r.limit_length(1.0) if touch != null else r.normalized()
 	var schwung := lerpf(1.0, SCHWUNG_MAL, clampf(_schwung / 0.3, 0.0, 1.0)) if _schwung > 0.0 else 1.0   # 19.11.: Nachschwung, klingt zum Ende aus
 	var v := (_vorne() * r.y + _rechts() * r.x) * TEMPO * float(Werte.ANFUEHRER_EGO[anfuehrer()]["tempo"]) * (kit.tempo_faktor() if kit != null else 1.0) * schwung * dt   # 20.11.: Tempo je Anführer
+	if spiel.order24 != null:
+		v *= spiel.order24.brakk_tempo_faktor()   # 22.11. (Nemesis Teil 3): im Kegel eines Unterdrückungsfeuers langsamer
 	_lauf = Vector2(v.x, v.z) / dt   # 19.11.: für Absprung und Schwingen
 	var schritt := Vector2(v.x, v.z) * Werte.ZELLE
 	_luft_schritt(Vector2(schritt.x, 0.0))   # 19.11.: hoch genug in der Luft landet Brakk auf einem Wall
@@ -807,7 +811,16 @@ func _schritt(s: Vector2) -> void:
 		if _auf_bruecke(z):
 			_setze_fuss(neu)   # 18.11.: auf der Lichtbrücke (der Posten bleibt das letzte Wallstück)
 			return
-		# über die Kante: runter, wenn dort Platz ist
+		# 22.11. (Paul): Zu Fuß hält die Wallkante – herunter nur mit [E], [Q] oder einem Sprung (Leertaste). Sonde 7
+		# (Schweben) ist ausgenommen.
+		if hoehe <= _boden() + 0.001 and steig <= 0.0 and not kit is EgoSonde:
+			return
+		# über die Kante: runter, wenn dort Platz ist. 21.11.: Die Mitte ist gerade erst über der Kante, die hintere
+		# Körperhälfte noch über der Mauer – dann um die halbe Körperbreite weiter nach vorn (sonst kommt man nicht herunter)
+		if not _passt_unten(neu):
+			var vorn := neu + s.normalized() * KOERPER * Werte.ZELLE * 1.05
+			if not hd.ist_hoch(karte.zelle_bei(vorn)) and _passt_unten(vorn):
+				neu = vorn
 		if _passt_unten(neu):
 			brakk.oben = false
 			brakk.posten_zelle = Karte.KEINE
@@ -1625,6 +1638,7 @@ func _male_bild() -> void:
 	if brakk.fortschritt != null:
 		_wurf_warnung()   # 18.11.: Steine auf Brakk
 		_gefahr_bild(g)
+	_einbruch_bild(g)   # 22.11.
 	if touch != null:
 		touch.male(_bild)   # 18.11.: Handy – Stick und Knöpfe statt Leisten
 		return
@@ -2077,6 +2091,8 @@ func _tumble_start() -> void:
 	_zaehle("rollen")   # 19.11.: Sieg-Übersicht
 	_tumble_rest = TUMBLE_ABKLING
 	brakk.unverwundbar = Werte.BRAKK_TUMBLE_DURCHLASS   # 20.11.: Schritt 6c – 0,25 s (vorher 0,4), Geschosse gehen hindurch
+	if spiel.order24 != null:
+		spiel.order24.brakk_gewohnheit("tumble")   # 22.11. (Nemesis Teil 4): zählt, wenn gerade etwas angeflogen kommt
 	_trauma = minf(1.0, _trauma + 0.15)
 	Ton.spiele(spiel, "hit-thud", -6.0)
 
@@ -2243,6 +2259,7 @@ func _faehigkeiten(g: Vector2) -> void:
 			if was == "tumble":
 				info = [_tumble_rest / TUMBLE_ABKLING, "", false]
 			liste.append([was, str(LEISTE_NAME.get(t, t)), info[0], info[1], info[2]])
+	var flucht: bool = spiel.order24 != null and spiel.order24.flucht_sperre()   # 21.11.: Befehl 24 – Q/E/R gesperrt bis zum Myriaden-HQ
 	var s := 46.0
 	var abst := 10.0
 	var breite := liste.size() * s + (liste.size() - 1) * abst
@@ -2276,6 +2293,10 @@ func _faehigkeiten(g: Vector2) -> void:
 			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.end.y - 7.0), str(e[1]), 14, Color.WHITE)
 		else:
 			Stil.schreibe_mittig(_bild, Vector2(r.get_center().x, r.end.y - 7.0), "St.%d" % int(BrakkFortschritt.ab_tabelle(f.anfuehrer)[art]), 14, Stil.TEXT_BLASS)
+		if flucht and str(e[1]) in Order24.FLUCHT_GESPERRT:
+			_bild.draw_rect(r, Color(0.02, 0.02, 0.04, 0.7))   # 21.11.: in der Flucht gedimmt
+	if flucht:
+		Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, y - 26.0), "Weg hier!", 18, Color("ff8a6a"))
 
 
 ## Ulti [R]: Anteil, der noch fehlt (0 = bereit).
@@ -2968,6 +2989,9 @@ func _fliessende_runden(dt: float) -> void:
 		return   # 20.11.: Befehl 24 – keine Wellen, die Uhr von Order24 zählt
 	if _briefing != null and _briefing.visible:
 		return   # 18.11.: die Einsatz-Tafel ist noch offen – der Countdown wartet
+	if spiel.tutorial is BrakkTutorial:
+		_countdown = -1.0
+		return   # 22.11.: Übungsgelände – die Welle startet erst die Probewelle des Tutorials
 	if not spiel.brakk_modus or spiel.phase != 0:
 		_countdown = -1.0
 		return
@@ -3797,6 +3821,64 @@ func _gefahr_bild(g: Vector2) -> void:
 		_bild.draw_arc(m, r - 10.0, rel - 0.18, rel + 0.18, 12, Color(1.0, 0.55, 0.5, 0.6 * a), 4.0)
 
 
+## 22.11. (Paul): Ein Gegner ist in die eigene Basis eingedrungen – deutlich anzeigen, nicht nur die Lebenszahl:
+## orangener Rand, Banner oben, Alarmton und ein Pfeil am Bildrand in Richtung der Basis. Mehrere kurz
+## hintereinander zählen im Banner hoch. Über Echtzeit (Zeitlupe und Tempo ändern die Anzeigedauer nicht).
+const EINBRUCH_SEK := 2.5
+const EINBRUCH_FARBE := Color(1.0, 0.55, 0.1)
+var einbrueche := 0               # alle Einbrüche dieser Partie (Tests)
+var _einbruch_ms := -100000       # Zeitpunkt des letzten Einbruchs
+var _einbruch_zahl := 0           # Einbrüche in der laufenden Anzeige
+var _einbruch_ort := Vector2.ZERO
+
+
+## Aufgerufen von main.gd (gegner_am_ziel).
+func einbruch(wo: Vector2) -> void:
+	einbrueche += 1
+	_einbruch_zahl = _einbruch_zahl + 1 if _einbruch_rest() > 0.0 else 1
+	_einbruch_ms = Time.get_ticks_msec()
+	_einbruch_ort = wo
+	_trauma = minf(1.0, _trauma + 0.15)
+	Ton.spiele(spiel, "alert", 3.0)
+
+
+## Restliche Anzeigedauer in Sekunden (0 = aus).
+func _einbruch_rest() -> float:
+	return maxf(0.0, EINBRUCH_SEK - float(Time.get_ticks_msec() - _einbruch_ms) / 1000.0)
+
+
+func _einbruch_bild(g: Vector2) -> void:
+	var rest := _einbruch_rest()
+	if rest <= 0.0:
+		return
+	var a := clampf(rest / 0.6, 0.0, 1.0)   # die letzten 0,6 s ausblenden
+	var puls := 0.65 + 0.35 * sin(Time.get_ticks_msec() / 90.0)
+	for i in 6:
+		var d := float(i) * 12.0
+		_bild.draw_rect(Rect2(Vector2(d, d), g - Vector2(d, d) * 2.0), Color(EINBRUCH_FARBE, 0.22 * a * puls * (1.0 - float(i) / 6.0)), false, 12.0)
+	# Banner oben
+	var bh := g.y * 0.11
+	var oben := g.y * 0.25   # unter dem Wellen-Countdown
+	_bild.draw_rect(Rect2(Vector2(g.x * 0.2, oben), Vector2(g.x * 0.6, bh)), Color(0.15, 0.03, 0.0, 0.88 * a))
+	_bild.draw_rect(Rect2(Vector2(g.x * 0.2, oben), Vector2(g.x * 0.6, bh)), Color(EINBRUCH_FARBE, 0.9 * a), false, 3.0)
+	var titel := "EINBRUCH IN DEINE BASIS!" + (" ×%d" % _einbruch_zahl if _einbruch_zahl > 1 else "")
+	Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, oben + bh * 0.38), titel, 30, Color(1.0, 0.75, 0.3, a * puls))
+	Stil.schreibe_mittig(_bild, Vector2(g.x / 2.0, oben + bh * 0.78), "−%d Leben · noch %d" % [_einbruch_zahl, int(spiel.leben)], 18, Color(1, 1, 1, 0.9 * a))
+	# Pfeil am Bildrand Richtung Basis (wie die Trefferbögen in _gefahr_bild)
+	if not is_instance_valid(brakk):
+		return
+	var blick := atan2(_vorne().z, _vorne().x)
+	var rel := (_einbruch_ort - brakk.position).angle() - blick - PI / 2.0
+	var m := g / 2.0
+	var r := g.y * 0.36
+	var dir := Vector2(cos(rel), sin(rel))   # gleiche Winkel wie _gefahr_bild: rel ist der Bildwinkel
+	var spitze := m + dir * r
+	var quer := Vector2(-dir.y, dir.x)
+	var s := g.y * 0.035
+	_bild.draw_colored_polygon(PackedVector2Array([spitze + dir * s, spitze - dir * s + quer * s, spitze - dir * s - quer * s]), Color(EINBRUCH_FARBE, 0.95 * a * puls))
+	_bild.draw_arc(m, r - s * 1.6, rel - 0.25, rel + 0.25, 16, Color(EINBRUCH_FARBE, 0.8 * a), 6.0)
+
+
 ## Steine, die auf Brakk zufliegen: roter Kreis am Landepunkt und ein Warnzeichen am Stein – mit [Shift] ausweichen.
 func _wurf_warnung() -> void:
 	var k := hd.kamera
@@ -4274,13 +4356,16 @@ func _luft_schritt(s: Vector2) -> bool:
 	var vorher := _fuss2d()
 	var neu := vorher + s
 	if not brakk.oben and hoehe >= hd.H - 0.05 and not _passt_unten(neu):
-		var z := karte.zelle_bei(neu)
+		# 21.11.: Die Körperkante stößt an, bevor die Mitte im Mauerfeld ist – die Kante vorn entscheidet, und die
+		# Mitte rückt aufs Mauerfeld (sonst bleibt man in der Luft an der Mauerfläche hängen)
+		var vorn := neu + s.normalized() * KOERPER * Werte.ZELLE * 1.05
+		var z := karte.zelle_bei(vorn)
 		if hd.ist_hoch(z) and karte.inhalt(z) == Karte.WALL:
 			brakk.oben = true
 			brakk.posten_zelle = z
 			brakk.zustand = Einheit.Zustand.AUF_POSTEN
 			hoehe = maxf(hoehe, hd.H)
-			_setze_fuss(neu)
+			_setze_fuss(vorn)
 			return true
 	_schritt(s)
 	return _fuss2d() != vorher

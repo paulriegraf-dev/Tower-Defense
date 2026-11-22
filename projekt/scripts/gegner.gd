@@ -90,7 +90,7 @@ func start(p_spiel: Node, p_karte: Karte, p_typ: String, p_leben_faktor: float, 
 	max_leben = (float(daten["leben"]) + grund) * leben_faktor
 	leben = max_leben
 	var v := Werte.VERSATZ * Werte.ZELLE
-	_versatz = Vector2(randf_range(-v, v), randf_range(-v, v))
+	_versatz = Vector2(Zufall.von_bis(-v, v), Zufall.von_bis(-v, v))
 	_ziel = erstes_ziel
 	position = karte.mitte(start_zelle) + _versatz
 	_sprite = Figur.new()
@@ -182,7 +182,7 @@ func _durchkommen(opfer: Einheit, delta: float) -> bool:
 		_aufgehalten = 0.0
 		_sprung_abkling = Werte.BRAKK_SPRUNG_ABKLING
 		_boden_frei = 1.2
-		var tw := create_tween()
+		var tw := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)   # 9a: im Simulationstakt
 		tw.tween_property(self, "position", ziel, 0.35).set_trans(Tween.TRANS_SINE)
 		var hoch := create_tween()
 		hoch.tween_property(_sprite, "position:y", _sprite.position.y - 26.0, 0.17).set_ease(Tween.EASE_OUT)
@@ -198,7 +198,7 @@ func _durchkommen(opfer: Einheit, delta: float) -> bool:
 		seite = -seite
 	var neu := opfer.position + seite * Werte.ZELLE * Werte.BRAKK_DURCHBRUCH_SCHUB
 	if karte.ist_frei(karte.zelle_bei(neu)):
-		var tw := opfer.create_tween()
+		var tw := opfer.create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)   # 9a: im Simulationstakt
 		tw.tween_property(opfer, "position", neu, 0.2)
 	spiel.effekte.welle(position, Werte.ZELLE * 0.8, Color("ff5a3a"), "staub", 0.4)
 	return true
@@ -305,7 +305,8 @@ func plane_neu() -> void:
 	_sonder_plan_in = 0.0   # Sprenger und Belagerungsturm wählen ihr Ziel neu
 
 
-func _process(delta: float) -> void:
+func _physics_process(_takt: float) -> void:
+	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if _tot or not spiel.im_kampf():
 		return
 	_abkling -= delta

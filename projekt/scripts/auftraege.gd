@@ -96,7 +96,7 @@ static func _gewichtet(gewichte: Array) -> int:
 	var summe := 0.0
 	for g: Variant in gewichte:
 		summe += float(g)
-	var r := randf() * summe
+	var r := Zufall.f() * summe
 	for i in gewichte.size():
 		r -= float(gewichte[i])
 		if r < 0.0:
@@ -144,7 +144,7 @@ static func neuer(spiel: Node) -> Dictionary:
 			moeglich.append(a)
 		if moeglich.is_empty():
 			continue
-		var a: Dictionary = moeglich.pick_random()
+		var a: Dictionary = Zufall.waehle(moeglich)
 		var ziele: Array = []
 		for b: Array in a["bed"]:
 			ziele.append(_ziel(b[1], welle))

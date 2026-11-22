@@ -219,7 +219,7 @@ func _process(delta: float) -> bool:
 		_beobachte()
 	if spiel.phase == 2:
 		_beobachte()
-		_halte_fest("sieg" if "Sieg" in spiel._ende_text.text else "niederlage")
+		_halte_fest(spiel.ausgang if spiel.ausgang != "" else "niederlage")
 		return _fertig()
 	elif sim_zeit - runde_start > 600.0 * Werte.SPIELTEMPO:
 		_halte_fest("abgebrochen")

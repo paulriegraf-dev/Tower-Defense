@@ -1,0 +1,64 @@
+{
+	"_hinweis": "Regeln von oben nach unten; die erste, die kauft, startet den Durchlauf neu. Felder: tu, ab, bis, max, reserve, je_runde, arten, art (stufe), zu (Zielstufe bei stufe und mg_stufe), zuerst_hoch. anfuehrer: Zusatzregeln je Anführer (hinten angehängt). anfuehrer_reserve: Rücklage für alle Regeln außer den ersten zwei Fabriken. einheiten: Gewichte technogunner/scharfschuetze/plasmawerfer für neue Fabriken. schwerpunkt: Anteil des Gegnerwegs, um den herum gebaut wird.",
+	"_anfuehrer": {
+		"irrtuermer": [{"tu": "pliplop", "ab": 3, "max": 2}, {"tu": "truppenturm", "ab": 4, "max": 1}, {"tu": "stufe", "art": "pliplop", "zu": 4}, {"tu": "stufe", "art": "turm", "zu": 4, "ab": 10}],
+		"sonde7": [{"tu": "mg_stufe", "zu": 3}, {"tu": "stufe", "art": "fabrik", "zu": 4, "ab": 12}],
+		"paul": []
+	},
+	"_anfuehrer_reserve": {"paul": 200},
+	"K1": {"name": "Fabrik-lastig", "einheiten": [2, 1, 1], "schwerpunkt": 0.4, "regeln": [
+		{"tu": "fabrik", "max": 10},
+		{"tu": "waelle", "je_runde": 8},
+		{"tu": "stufe", "art": "fabrik", "zu": 2, "zuerst_hoch": false},
+		{"tu": "stellung", "max": 6},
+		{"tu": "stufe", "art": "fabrik", "zu": 3}]},
+	"K2": {"name": "Turm-lastig", "einheiten": [1, 1, 1], "schwerpunkt": 0.45, "regeln": [
+		{"tu": "fabrik", "max": 3},
+		{"tu": "waelle", "je_runde": 12},
+		{"tu": "turm", "max": 8},
+		{"tu": "form", "shape": "t", "arten": [], "max": 3, "ab": 3},
+		{"tu": "stufe", "art": "turm", "zu": 3},
+		{"tu": "stellung", "max": 4},
+		{"tu": "fabrik", "max": 6}]},
+	"K3": {"name": "Batterie + Frost", "einheiten": [1, 2, 1], "schwerpunkt": 0.45, "regeln": [
+		{"tu": "fabrik", "max": 3},
+		{"tu": "form", "shape": "lange_ecke", "arten": ["frost"], "max": 2, "ab": 3},
+		{"tu": "batterie", "max": 2, "ab": 4},
+		{"tu": "stufe", "art": "batterie", "zu": 3},
+		{"tu": "waelle", "je_runde": 6},
+		{"tu": "fabrik", "max": 6},
+		{"tu": "stufe", "art": "fabrik", "zu": 2}]},
+	"K4": {"name": "Gemischt", "einheiten": [1, 1, 1], "schwerpunkt": 0.45, "regeln": [
+		{"tu": "fabrik", "max": 4},
+		{"tu": "waelle", "je_runde": 6},
+		{"tu": "stellung", "max": 4},
+		{"tu": "turm", "max": 3},
+		{"tu": "fabrik", "max": 8},
+		{"tu": "stufe", "art": "fabrik", "zu": 2, "zuerst_hoch": false},
+		{"tu": "stellung", "max": 10},
+		{"tu": "turm", "max": 6},
+		{"tu": "stufe", "art": "fabrik", "zu": 3},
+		{"tu": "stufe", "art": "turm", "zu": 3}]},
+	"K5": {"name": "Sparen, dann groß", "einheiten": [1, 1, 1], "schwerpunkt": 0.45, "sparen_bis": 8, "regeln": [
+		{"tu": "fabrik", "max": 3, "immer": true},
+		{"tu": "waelle", "je_runde": 4, "immer": true, "reserve": 250},
+		{"tu": "fabrik", "max": 8},
+		{"tu": "stufe", "art": "fabrik", "zu": 3},
+		{"tu": "turm", "max": 4},
+		{"tu": "stufe", "art": "turm", "zu": 3},
+		{"tu": "stellung", "max": 8},
+		{"tu": "waelle", "je_runde": 12}]},
+	"K6": {"name": "Alles Stufe 3", "einheiten": [1, 1, 1], "schwerpunkt": 0.45, "regeln": [
+		{"tu": "fabrik", "max": 4},
+		{"tu": "stufe", "art": "fabrik", "zu": 3},
+		{"tu": "waelle", "je_runde": 6},
+		{"tu": "turm", "max": 2},
+		{"tu": "stufe", "art": "turm", "zu": 3},
+		{"tu": "fabrik", "max": 6}]},
+	"K7": {"name": "Breit ohne Ausbau", "einheiten": [1, 1, 1], "schwerpunkt": 0.45, "regeln": [
+		{"tu": "fabrik", "max": 12},
+		{"tu": "waelle", "je_runde": 12},
+		{"tu": "stellung", "max": 20},
+		{"tu": "turm", "max": 10}]},
+	"Z": {"name": "Zufalls-Käufer", "art": "zufall"}
+}

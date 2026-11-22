@@ -2,8 +2,8 @@ class_name Tutorial
 extends CanvasLayer
 ## Tutorial (15.11.) im Stil von Terrain-Conquester: Sonde 7 meldet sich im Hologramm-Funkfenster und erklärt
 ## in einer echten Partie je Schritt EINEN Handgriff mit kurzem Warum. Ring und Pfeil zeigen auf die Kachel oder
-## den Knopf, dann wartet das Tutorial, bis der Spieler es getan hat. Nur reine Hinweise haben „Weiter“,
-## Handgriffe lassen sich überspringen. „Tutorial beenden“ geht jederzeit; danach läuft die Partie normal weiter.
+## den Knopf, dann wartet das Tutorial, bis der Spieler es getan hat. Jeder Schritt hat „Weiter“ (22.11.: auch die
+## Handgriffe – Sicherheitsnetz). „Tutorial beenden“ geht jederzeit; danach läuft die Partie normal weiter.
 ## Beim Start des normalen Spiels fragt Sonde 7 zuerst, ob man das Tutorial möchte.
 
 const BAU := 0                    # main.gd Phase.BAU
@@ -212,9 +212,10 @@ func _naechster() -> void:
 	if s.has("start"):
 		(s["start"] as Callable).call()
 	_setze_text(str(s["text"]))
-	var handgriff := s.has("fertig")
-	_btn_weiter.visible = not handgriff
-	_btn_skip.visible = false   # nur, wenn der Handgriff gerade nicht geht (siehe "kann" in _process)
+	# 22.11. (Paul): Sicherheitsnetz – auch Schritte, die auf einen Handgriff warten, haben „Weiter“, damit das
+	# Tutorial nie festhängt (vorher nur reine Hinweise; Handgriffe nur „Überspringen“, wenn sie gerade nicht gingen).
+	_btn_weiter.visible = true
+	_btn_skip.visible = false
 	# Statt „Schritt 3 / 33“ nur das Thema: Orientierung, ohne mit der Gesamtlänge abzuschrecken (21.11.)
 	for k in range(_index, -1, -1):
 		if (_schritte[k] as Dictionary).has("thema"):
@@ -231,6 +232,27 @@ func beenden() -> void:
 	if spiel != null:
 		spiel.tutorial = null
 	queue_free()
+
+
+## 22.11.: Übersicht öffnen/schließen über ihr Signal mitschreiben (in _merk – gilt für den laufenden Schritt).
+func _lexikon_beobachten() -> void:
+	var lx: CanvasItem = spiel.get("_lexikon")
+	if lx == null:
+		return
+	if lx.visible:
+		_merk["lexikon_auf"] = true
+	if not lx.visibility_changed.is_connected(_lexikon_gewechselt):
+		lx.visibility_changed.connect(_lexikon_gewechselt)
+
+
+func _lexikon_gewechselt() -> void:
+	var lx: CanvasItem = spiel.get("_lexikon") if spiel != null else null
+	if lx == null or _aus:
+		return
+	if lx.visible:
+		_merk["lexikon_auf"] = true
+	elif bool(_merk.get("lexikon_auf", false)):
+		_merk["lexikon_zu"] = true
 
 
 ## Darf die Welle gerade nicht starten? (vor der Antwort auf die Frage und bei Schritten mit "sperre")
@@ -267,7 +289,6 @@ func _process(delta: float) -> void:
 		if s.has("fertig") and (s["fertig"] as Callable).call():
 			_naechster()
 			return
-		_btn_skip.visible = s.has("kann") and not (s["kann"] as Callable).call()
 		var h: Variant = s.get("hinweis", "")
 		_hinweis.text = (h as Callable).call() if h is Callable else str(h)
 	_lege_box()
@@ -570,13 +591,14 @@ func _baue_schritte() -> Array:
 		# --- Checkpoints und Gegner
 		{"thema": "Checkpoints und Gegner", "text": "Ab Runde 5 nehmen die Gegner die Checkpoints ein, wenn sie dort stehen bleiben. Ein verlorener Checkpoint ist gefährlich: Die nächste Welle startet dort! Eine deiner Truppen geht ihn zurückholen, sobald es ruhig ist.",
 			"ziel": func(): return _feld(p.karte.checkpoints[1], 0.6)},
-		{"text": "Oben steht immer, was als Nächstes kommt. Bevor eine neue Gegnerart auftaucht, kündige ich sie an. Alles über Gegner, Truppen und Bauten steht in der Übersicht. Öffne sie.",
-			"hinweis": "Taste I · Übersicht",
+		# 22.11. (Paul): Die Übersicht hält das Spiel an, solange sie offen ist (19.11.) – dann läuft auch die Abfrage hier
+		# nicht und sah die offene Übersicht nie: Der Schritt hing. Jetzt meldet das Signal visibility_changed (kommt auch
+		# in der Pause) das Öffnen und Schließen; erledigt ist der Schritt nach einmal auf und wieder zu.
+		{"text": "Oben steht immer, was als Nächstes kommt. Bevor eine neue Gegnerart auftaucht, kündige ich sie an. Alles über Gegner, Truppen und Bauten steht in der Übersicht: Öffne sie, schau dich um und schließ sie wieder.",
+			"hinweis": func(): return "Übersicht schließen: Esc, I oder Rechtsklick" if bool(_merk.get("lexikon_auf", false)) else "Taste I · Übersicht öffnen",
 			"ziel": func(): return _oben(2),
-			"fertig": func(): return p._lexikon.visible},
-		{"text": "Hier findest du jederzeit alle Werte und was gegen wen hilft. Schließ die Übersicht wieder mit I.",
-			"hinweis": "Taste I · schließen",
-			"fertig": func(): return not p._lexikon.visible},
+			"start": func(): _lexikon_beobachten(),
+			"fertig": func(): return bool(_merk.get("lexikon_auf", false)) and bool(_merk.get("lexikon_zu", false)) and not p._lexikon.visible},
 		{"text": "Drück [Tab] oder den Knopf oben rechts: Die Schadensliste zeigt, welche Fabrik, welcher Turm und welche Batterie wie viel geleistet hat. Nochmal [Tab] schließt sie. Ein Klick auf einen Turm oder eine Batterie zeigt ihre Werte über die ganze Partie.",
 			"ziel": func(): return _oben(0)},
 		# --- Abschluss

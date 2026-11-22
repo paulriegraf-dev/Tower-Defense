@@ -24,7 +24,12 @@ static func _baum() -> SceneTree:
 	return Engine.get_main_loop() as SceneTree
 
 
+## 9a: Balance-Labor – Online-Teil hart aus (keine Rangliste, kein Phantom-Upload, keine Duelle).
+static var gesperrt := false
+
 static func aktiv() -> bool:
+	if gesperrt:
+		return false
 	return OS.get_environment("TD_OFFLINE") == "" and DisplayServer.get_name() != "headless" or OS.get_environment("TD_ONLINE") != ""
 
 

@@ -15,6 +15,8 @@ var merk := {}
 
 
 func _initialize() -> void:
+	Nemesis.datei = "user://nemesis_test.json"   # 22.11.: Tests schreiben nie in die echte Liste der Meistgesuchten
+	Nemesis.zuruecksetzen()
 	OS.set_environment("TD_KARTE_NAME", "paulland")
 	var main_skript: GDScript = load("res://scripts/main.gd")
 	main_skript.set("naechster_start", "brakk")

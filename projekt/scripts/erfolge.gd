@@ -23,6 +23,8 @@ const LISTE: Array[Dictionary] = [
 	{"id": "fester_platz", "name": "Fester Platz", "text": "Eine Stellung per Pfeil einer Fabrik zugewiesen.", "symbol": "fabrik", "versteckt": false, "belohnung": ""},
 	{"id": "sparfuchs", "name": "Sparfuchs", "text": "Am Rundenende die vollen Zinsen kassiert.", "symbol": "muenze", "versteckt": false, "belohnung": ""},
 	{"id": "doppelgaenger", "name": "Doppelgänger", "text": "Einen Gegner durch die Klonmaschine geschickt.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
+	## 21.11. (Paul): schaltet den Brakk-Mode im Startmenü frei (Profil.brakk_modus_frei); der Phantom-Modus hängt an „gegenangriff“
+	{"id": "aufgestellt", "name": "Zur Stelle", "text": "Brakk einmal in einer Partie aufgestellt – der Brakk-Mode ist frei.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
 	{"id": "kommandant", "name": "Kommandant", "text": "Brakk hat insgesamt 50 Gegner erledigt.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
 	{"id": "gegenangriff", "name": "Gegenangriff", "text": "Das HQ des Gegners in Runde 20 zerstört.", "symbol": "play", "versteckt": false, "belohnung": ""},
 	{"id": "spiegelbild", "name": "Spiegelbild", "text": "Dein Bau ist zum ersten Phantom geworden.", "symbol": "buch", "versteckt": false, "belohnung": ""},

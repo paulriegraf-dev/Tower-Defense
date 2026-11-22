@@ -1,0 +1,9 @@
+{
+	"W1": {"name": "Schlange", "art": "schlange", "reihen": 4, "text": "Wallreihen quer zum Weg über die ganze Höhe, die Lücken wechseln die Seite – langer Weg vor Checkpoint 1.", "abwandlungen": ["Grundform", "gespiegelt", "2 Felder versetzt", "versetzt, gespiegelt, eine Reihe mehr"]},
+	"W2": {"name": "Stellungsriegel", "art": "riegel", "stellung_alle": 2, "text": "Wallzeile quer hinter einem Checkpoint, jedes zweite Feld eine Stellung.", "abwandlungen": ["hinter CP1", "vor CP1", "hinter CP2", "vor CP2"]},
+	"W3": {"name": "Kanal", "art": "kanal", "laenge": 8, "text": "Wälle beidseits eines Wegabschnitts, Lücken für die Truppen; wenige Wälle, Geld in Fabriken.", "abwandlungen": ["ab 25 % des Wegs", "ab 35 %", "ab 45 %", "ab 55 %"]},
+	"W4": {"name": "Formturm-Nest", "art": "formturm", "formen": ["t", "kreuz", "lange_ecke", "klammer", "treppe"], "text": "T-Stück, Kreuzung, Lange Ecke, Klammer, Treppe als Bausteine neben dem Weg, Türme auf die Mitten.", "abwandlungen": ["Reihenfolge T zuerst", "Kreuzung zuerst, gespiegelt", "Lange Ecke zuerst", "Klammer zuerst, gespiegelt"]},
+	"W5": {"name": "Zitadelle", "art": "zitadelle", "text": "Wallring um einen kleinen Hof neben dem Weg, Schildgenerator innen, Stellungen auf dem Ring.", "abwandlungen": ["bei 30 % des Wegs, Hof 2×2", "bei 55 %, Hof 2×2", "bei 30 %, Hof 3×2", "bei 80 %, Hof 2×2"]},
+	"W6": {"name": "Wachposten", "art": "wachposten", "text": "Einzelne Wälle im Abstand 2 zum Weg, abwechselnd links und rechts, jeder mit Stellung.", "abwandlungen": ["alle 3 Felder", "alle 4 Felder, andere Seite zuerst", "alle 3, andere Seite", "alle 4"]},
+	"W7": {"name": "Fabrikmeer", "art": "keine", "text": "Keine geplanten Wälle; die geschenkten Erdwälle nutzen Stellungen, sonst Fabriken am Weg.", "abwandlungen": ["–", "–", "–", "–"]}
+}

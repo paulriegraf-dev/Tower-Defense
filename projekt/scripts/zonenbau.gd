@@ -62,7 +62,8 @@ func _figur(daten: Dictionary) -> void:
 	_sprite.einrichten(daten)
 
 
-func _process(delta: float) -> void:
+func _physics_process(_takt: float) -> void:
+	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	_zeit += delta
 	_treffer -= delta
 	modulate = (Color(1, 0.88, 0.86) if Werte.grafik_neu else Color(1, 0.6, 0.6)) if _treffer > 0.0 else Color.WHITE
@@ -96,7 +97,7 @@ func _process(delta: float) -> void:
 				return
 			_abkling = Werte.SCHLEUDER["abklingzeit"] * (0.5 if spiel.brakk_modus else 1.0)   # 18.11. (Paul): Brakk-Mode – doppelt so viele Würfe
 			_sprite.angriff(Werte.SCHLEUDER_ABWURF * 2.0)   # Arm holt aus und schlägt vor; der Stein löst sich zur Hälfte
-			get_tree().create_timer(Werte.SCHLEUDER_ABWURF).timeout.connect(ruck)
+			get_tree().create_timer(Werte.SCHLEUDER_ABWURF, true, true).timeout.connect(ruck)
 			spiel.wurf(self, ziel)
 		"laser":
 			var opfer: Einheit = spiel.laserziel(position, Werte.LASER["reichweite"] * Werte.ZELLE)

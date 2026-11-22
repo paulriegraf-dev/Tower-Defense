@@ -15,6 +15,12 @@ var spiel: Node
 var bericht: Dictionary = {}
 var _t := 0.0
 var _maus := Vector2(-100, -100)
+var _tod_gesehen := false   # 22.11. (Nemesis, Teil 7): erst der Deathscreen „Erledigt von …“, dann der Bericht
+
+
+## 22.11.: Deathscreen zeigen? (Befehl 24: Brakk fiel durch einen Soldaten – sonst gleich der Bericht wie bisher)
+func _tod_seite() -> bool:
+	return not _tod_gesehen and not (bericht.get("nemesis_tod", {}) as Dictionary).is_empty()
 
 
 func _ready() -> void:
@@ -34,6 +40,13 @@ func _gui_input(event: InputEvent) -> void:
 		_maus = (event as InputEventMouseMotion).position
 	elif event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var p := (event as InputEventMouseButton).position
+		if _tod_seite():
+			if KNOPF_NOCHMAL.has_point(p):
+				_tod_gesehen = true   # „Zum Bericht“
+				_t = 0.4
+			elif KNOPF_MENUE.has_point(p):
+				spiel._neustart()
+			return
 		if bool(bericht.get("weiter", false)) and KNOPF_WEITER.has_point(p):
 			spiel.befehl24_weiterspielen()
 		elif KNOPF_NOCHMAL.has_point(p):
@@ -45,6 +58,9 @@ func _gui_input(event: InputEvent) -> void:
 func _draw() -> void:
 	var a := clampf(_t * 3.0, 0.0, 1.0)
 	draw_rect(Rect2(-40, -40, 720, 440), Color(0.02, 0.03, 0.05, 0.55 * a))
+	if _tod_seite():
+		_male_tod(bericht["nemesis_tod"] as Dictionary)
+		return
 	Stil.platte(self, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.94), Stil.GOLD)
 	var af := str(bericht.get("anfuehrer", "brakk"))   # 20.11.: der Anführer steht mit drauf (Brakk wie bisher)
 	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), str(bericht.get("kopf", "SIEG")) + ("" if af == "brakk" else " · " + Anfuehrer.name(af).to_upper()), Stil.GROSS, Stil.GOLD)   # 20.11.: Kopf aus dem Bericht (Befehl 24: Überstanden / Gefallen)
@@ -53,6 +69,72 @@ func _draw() -> void:
 	if bool(bericht.get("weiter", false)):
 		knoepfe.append([KNOPF_WEITER, "Weiterspielen …?"])   # 20.11. (Paul)
 	for k: Array in knoepfe:
+		var r: Rect2 = k[0]
+		var an := r.has_point(_maus)
+		Stil.platte(self, r, 2.0, Stil.METALL if an else Stil.METALL_DUNKEL, Stil.LEUCHT if an else Stil.RAHMEN)
+		Stil.schreibe_mittig(self, r.get_center(), str(k[1]), Stil.NORMAL, Stil.LEUCHT if an else Stil.TEXT)
+
+
+## 22.11. (Paul, Nemesis Teil 7): Deathscreen – groß „Erledigt von <Dienstgrad Name ‚Beiname‘>“ mit Truppenart, Rang, die
+## wievielte Begegnung, Bilanz, womit er Brakk erwischt hat, und einer Zeile von ihm (Hologramm). War er namenlos:
+## „… wird befördert zu <Name>“ mit der Tat als Begründung.
+func _male_tod(d: Dictionary) -> void:
+	const ROT_TOD := Color("ff5a6e")
+	Stil.platte(self, TAFEL, 4.0, Color(0.06, 0.04, 0.06, 0.95), ROT_TOD)
+	var mx := TAFEL.get_center().x
+	var y := TAFEL.position.y + 16.0
+	Stil.schreibe_mittig(self, Vector2(mx, y), str(bericht.get("kopf", "GEFALLEN")), Stil.NORMAL, Stil.TEXT_BLASS)
+	y += 22.0
+	var namenlos := bool(d.get("namenlos", false))
+	Stil.schreibe_mittig(self, Vector2(mx, y), "Erledigt von einem namenlosen %s …" % str(d.get("art_dativ", d.get("art", ""))) if namenlos else "ERLEDIGT VON", Stil.NORMAL if namenlos else Stil.GROSS, ROT_TOD)
+	y += 14.0 if namenlos else 22.0
+	if namenlos:
+		Stil.schreibe_mittig(self, Vector2(mx, y), "… der dafür befördert wird – ab jetzt heißt er", Stil.KLEIN, Stil.TEXT_BLASS)
+		y += 18.0
+	# der Name groß (zweifach, wenn er passt)
+	var name_text := str(d.get("name", "?"))
+	var groesse := Stil.GROSS
+	for g: int in [Stil.GROSS * 2, roundi(Stil.GROSS * 1.5)]:
+		if Stil.breite(name_text, g) <= TAFEL.size.x - 24.0:
+			groesse = g
+			break
+	var flackern := 0.85 + 0.15 * sin(_t * 9.0)
+	y += float(groesse - Stil.GROSS) * 0.4
+	Stil.schreibe_mittig(self, Vector2(mx, y), name_text, groesse, Color(Stil.GOLD, flackern))
+	y += float(groesse) * 0.6 + 8.0
+	if namenlos:
+		Stil.schreibe_mittig(self, Vector2(mx, y), str(d.get("grund", "")), Stil.KLEIN, Stil.TEXT)
+		y += 12.0
+	elif str(d.get("aufstieg", "")) != "":
+		Stil.schreibe_mittig(self, Vector2(mx, y), "%s · „Brakks Bezwinger“" % str(d["aufstieg"]), Stil.KLEIN, Stil.GOLD)
+		y += 12.0
+	# Kacheln: Truppenart, Rang, Begegnung, Bilanz
+	var kacheln := [["TRUPPENART", str(d.get("art", "")), Stil.TEXT], ["RANG", "%d · %s" % [int(d.get("rang", 0)), str(d.get("dienstgrad", ""))], Stil.GOLD],
+		["BEGEGNUNG", "%d." % int(d.get("begegnung", 1)), Stil.LEUCHT], ["BILANZ", str(d.get("bilanz", "")).trim_prefix("Stand "), ROT_TOD]]
+	var kb := (TAFEL.size.x - 20.0 - 3.0 * 4.0) / 4.0
+	for i in kacheln.size():
+		var kr := Rect2(roundf(TAFEL.position.x + 10.0 + i * (kb + 4.0)), y, roundf(kb), 28.0)
+		Stil.platte(self, kr, 2.0, Stil.METALL_TIEF, Stil.RAHMEN)
+		Stil.schreibe_mittig(self, Vector2(kr.get_center().x, kr.position.y + 11.0), str(kacheln[i][1]), Stil.NORMAL, kacheln[i][2])
+		Stil.schreibe_mittig(self, Vector2(kr.get_center().x, kr.position.y + 22.0), str(kacheln[i][0]), Stil.KLEIN, Stil.TEXT_BLASS)
+	y += 40.0
+	Stil.schreibe(self, Vector2(TAFEL.position.x + 14.0, y), "Erwischt:", Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.schreibe(self, Vector2(TAFEL.position.x + 58.0, y), str(d.get("womit", "")), Stil.NORMAL, Stil.TEXT)
+	y += 12.0
+	Stil.schreibe(self, Vector2(TAFEL.position.x + 14.0, y), "Bilanz:", Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.schreibe(self, Vector2(TAFEL.position.x + 58.0, y), str(d.get("bilanz", "")), Stil.NORMAL, Stil.TEXT)
+	y += 16.0
+	# seine Zeile im Hologramm (cyan, Rasterzeilen, leichtes Flackern)
+	var holo := Rect2(TAFEL.position.x + 24.0, y, TAFEL.size.x - 48.0, 40.0)
+	var a := clampf((_t - 0.6) * 2.0, 0.0, 1.0)
+	draw_rect(holo, Color(0.3, 0.85, 1.0, 0.07 * a))
+	draw_rect(holo, Color(0.5, 0.9, 1.0, 0.5 * a), false, 1.0)
+	var zy := holo.position.y + 2.0
+	while zy < holo.end.y:
+		draw_line(Vector2(holo.position.x, zy), Vector2(holo.end.x, zy), Color(0.5, 0.9, 1.0, 0.05 * a), 1.0)
+		zy += 3.0
+	Stil.absatz(self, holo.position + Vector2(8, 8), "„%s“" % str(d.get("zeile", "")), holo.size.x - 16.0, Stil.NORMAL, Color(Stil.LEUCHT, a * (0.9 + 0.1 * sin(_t * 23.0))))
+	for k: Array in [[KNOPF_NOCHMAL, "Zum Bericht"], [KNOPF_MENUE, "Nochmal"]]:
 		var r: Rect2 = k[0]
 		var an := r.has_point(_maus)
 		Stil.platte(self, r, 2.0, Stil.METALL if an else Stil.METALL_DUNKEL, Stil.LEUCHT if an else Stil.RAHMEN)
@@ -150,3 +232,25 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 		ci.draw_rect(Rect2(bx + 64.0, by - 2.0, bw - 88.0, 4.0), Color(1, 1, 1, 0.06))
 		ci.draw_rect(Rect2(bx + 64.0, by - 2.0, (bw - 88.0) * v / spitze, 4.0), Color(Stil.GOLD, 0.6))
 		by += 10.0
+	# 22.11. (Paul, Nemesis Teil 7): Befehl 24 – Feldbeförderungen dieses Laufs, vertriebene und ausgeschaltete Benannte
+	var nem: Array = b.get("nemesis", [])
+	if not nem.is_empty():
+		by += 6.0
+		Stil.schreibe(ci, Vector2(bx, by), "Eliten dieses Laufs", Stil.KLEIN, Stil.LEUCHT)
+		by += 11.0
+		const MARKE := {"befoerdert": ["Befördert", Color("ffb84d")], "vertrieben": ["Vertrieben", Color("7fe0ff")], "ausgeschaltet": ["Ausgeschaltet", Color("ff5a6e")], "versetzt": ["Versetzt", Color("8b95a3")]}
+		var gezeigt_n := 0
+		for zeile: Array in nem:
+			if by > r.end.y - 4.0 or (kompakt and gezeigt_n >= 3):
+				Stil.schreibe(ci, Vector2(bx, by), "+ %d weitere" % (nem.size() - gezeigt_n), Stil.KLEIN, Stil.TEXT_BLASS)
+				break
+			var m: Array = MARKE.get(str(zeile[1]), ["", Stil.TEXT])
+			Stil.schreibe(ci, Vector2(bx, by), str(m[0]), Stil.KLEIN, m[1] as Color)
+			var nm := str(zeile[0]) + ("" if str(zeile[2]) == "" or str(zeile[1]) == "befoerdert" else " · " + str(zeile[2]))
+			if Stil.breite(nm, Stil.KLEIN) > bw - 50.0:
+				while nm.length() > 4 and Stil.breite(nm + "…", Stil.KLEIN) > bw - 50.0:
+					nm = nm.left(-1)
+				nm += "…"
+			Stil.schreibe(ci, Vector2(bx + 48.0, by), nm, Stil.KLEIN, Stil.TEXT)
+			by += 10.0
+			gezeigt_n += 1

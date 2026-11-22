@@ -1016,7 +1016,10 @@ func _baue_daten() -> void:
 	]
 
 	# 20.11. (Nachtrag): Normalmodus (Gegner, Truppen, Bauten, Regeln, Anführer) und Brakk-Mode (Brakk, Irrtürmer, Sonde 7, Ringe)
-	_daten = [gegner, truppen, bauten, regeln, _anfuehrer_karten(), _held_karten("brakk"), _held_karten("irrtuermer"), _held_karten("sonde7"), _ring_karten()]
+	var brakk_karten := _held_karten("brakk")
+	if Profil.rogue_frei():
+		brakk_karten.append(NemesisGewohnheiten.lexikon_karte(Nemesis.gesehen_gesamt()))   # 22.11. (Paul, Nemesis Teil 4): Angewohnheiten und Konter, sobald gesehen
+	_daten = [gegner, truppen, bauten, regeln, _anfuehrer_karten(), brakk_karten, _held_karten("irrtuermer"), _held_karten("sonde7"), _ring_karten()]
 	for i in _wahl.size():
 		_wahl[i] = clampi(_wahl[i], 0, maxi(0, (_daten[i] as Array).size() - 1))
 

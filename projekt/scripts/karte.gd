@@ -757,8 +757,11 @@ func _strahl_frei(von: Vector2, nach: Vector2) -> bool:
 	var ende := zelle_bei(nach)
 	var vorher := start
 	var schritte := int(von.distance_to(nach) / 2.0) + 1
+	var ursprung := position   # 9a (Leistung): zelle_bei hier ausgeschrieben – gleiche Rechnung, ohne Funktionsaufruf je Messpunkt
+	var zelle: float = Werte.ZELLE
 	for i in range(1, schritte + 1):
-		var z := zelle_bei(von.lerp(nach, float(i) / schritte))
+		var p := (von.lerp(nach, float(i) / schritte) - ursprung) / zelle
+		var z := Vector2i(floori(p.x), floori(p.y))
 		if z == vorher:
 			continue
 		if z != start and ((feld.has(z) and not (ziel_wall_sichtbar and z == ende)) or ist_fels(z) or (z != ende and boden.get(z, "") == "wald")):   # 18.11.: durch Wald nicht, hinein schon; 20.11.: Befehl 24
@@ -783,7 +786,7 @@ func _zufalls_checkpoints() -> Array[Vector2i]:
 	for versuch in 200:
 		var lagen: Array[Vector2i] = []
 		for r in b:
-			lagen.append(r.position + Vector2i(randi() % r.size.x, randi() % r.size.y))
+			lagen.append(r.position + Vector2i(Zufall.ganz(r.size.x), Zufall.ganz(r.size.y)))
 		if lagen.size() < 2:
 			return lagen
 		var a := lagen[0]

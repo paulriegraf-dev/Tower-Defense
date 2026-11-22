@@ -152,7 +152,8 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
-const VERSION: int = 63          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const SIM_SCHRITT: float = SPIELTEMPO / 60.0   # 9a: Spielsekunden je Simulationsschritt, bei jedem Tempo und jeder Bildrate gleich
+const VERSION: int = 64          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1760,6 +1761,9 @@ const BRAKK_DURCHBRUCH_STARK := 1.5    # ... und macht so lange so viel mehr Sch
 const BRAKK_DURCHBRUCH_DAUER := 4.0
 const BRAKK_SPRUNG_SEK := 0.8          # Hunde: so lange aufgehalten, dann springen sie über die Truppe hinweg
 const BRAKK_SPRUNG_ABKLING := 4.0
+## 22.11. (Paul): Brakk-Mode Classic – die eigene Basis steht ganz im letzten Drittel (ihre linke Spalte ab diesem Anteil
+## der Kartenbreite; PaulLand: Mitte in Spalte 20–26), damit die Gegner nicht zu schnell durchkommen.
+const BRAKK_BASIS_AB_ANTEIL := 2.0 / 3.0
 ## 20.11. (Paul): Elite-Trupps in genau diesen Runden (vorher „ab Runde 3 jede Runde“ – kam auch in Runde 4). Ein Trupp
 ## der Welle (nicht der erste) wird zur Elite, in Runde 20 nur im ersten Durchgang.
 const BRAKK_ELITE_RUNDEN: Array[int] = [8, 13, 19]
@@ -1768,6 +1772,82 @@ const BRAKK_ELITE_SCHADEN := 1.5
 const BRAKK_ELITE_FLAECHE := 0.9       # Felder: Elite-Treffer streifen Truppen in diesem Umkreis ...
 const BRAKK_ELITE_FLAECHE_ANTEIL := 0.4  # ... mit so viel vom Schaden
 const BRAKK_ELITE_PRAEMIE := 2.0
+## 21.11. (Paul): Rogue (Befehl 24) – Elitetrupps mit 200 % Leben (statt ELITE["leben"]); Classic bleibt bei BRAKK_ELITE_LEBEN.
+const ROGUE_ELITE_LEBEN := 2.0
+## 22.11. (Paul): Nemesis-System in Befehl 24 (scripts/nemesis.gd) – Eliten sind Personen, werden geborgen statt zu sterben
+## und verdienen sich Namen. Alle Zeiten in echten Sekunden (wie im Regelpaket von Befehl 24).
+const NEMESIS_BEGEGNUNG_RUHE := 8.0      # so lange kein Schuss zwischen Einheit und Brakk = Begegnung vorbei
+const NEMESIS_BEGEGNUNGEN := 2           # Feldbeförderung: so viele Begegnungen überlebt …
+const NEMESIS_BEGEGNUNG_ANTEIL := 0.25   # … oder in einer Begegnung mehr als diesen Anteil von Brakks Leben genommen …
+const NEMESIS_UNTERBRECHUNG_SEK := 1.5   # … oder ihn so kurz nach Med-Kit/Sprengladung (bzw. beim Sabotieren) getroffen …
+const NEMESIS_SICHTUNG_SEK := 12.0       # … oder ihn gesichtet, und der Trupp traf ihn binnen so vieler Sekunden
+const NEMESIS_TRUPP_MIN := 2             # „Letzte ihres Trupps“: der Trupp war beim Beginn der Begegnung mindestens so groß
+const NEMESIS_FELD_MAX := 3              # höchstens so viele Feldbeförderungen je Lauf (der letzte Treffer zählt nicht mit)
+const NEMESIS_GARANTIE_WELLE := 2        # bis zu dieser Elitewelle keine Feldbeförderung → die Einheit mit dem meisten Schaden
+const NEMESIS_ELITE_GRUNDZAHL := 3       # Elitetrupp: so viele Personen …
+const NEMESIS_ELITE_MAX := 5             # … mit weiteren Benannten höchstens so viele
+const NEMESIS_BERGUNG_SEK := 2.0         # kampfunfähig: so lange bis zum Beam in den Schild
+const NEMESIS_VERTRIEBEN_LEBEN := 0.85   # wer geborgen wurde, kommt mit so viel Leben zurück (−15 %)
+const NEMESIS_RANG_BONUS := 0.08         # je Rang so viel mehr Leben und Schaden
+const NEMESIS_RANG_MAX := 4
+const NEMESIS_LAUF_ANTEIL := 0.6         # Rang +1 nach einem Lauf, in dem die Person Brakk so viel eines Lebensbalkens nahm
+const NEMESIS_GENAU := 0.5               # Eliten streuen nur so viel (Anteil von BRAKK_STREUUNG) – treffsicherer
+const NEMESIS_ZAEH := 1.3                # Stärke „zäh“: Leben
+const NEMESIS_FLINK := 1.25              # Stärke „flink“: Tempo
+const NEMESIS_SPRENGFEST := 0.2          # Stärke „sprengfest“: Anteil des Schadens einer Sprengladung
+const NEMESIS_NACHLADEN := 1.4           # Schwäche „langsam beim Nachladen“: Abklingzeit
+const NEMESIS_RUECKZUG_ANTEIL := 0.3     # unter so viel Leben weicht eine Elite einmal je Begegnung zurück (nicht mit eisernen Nerven) …
+const NEMESIS_RUECKZUG_SEK := 3.0        # … so lange
+const NEMESIS_FEUER_ABSTAND := 3.0       # Schwäche „fürchtet Feuer“: so viele Felder Abstand zu Brandfeldern
+const NEMESIS_FERN := 9.0                # Beiname „Weitblick“: Treffer aus mehr als so vielen Feldern …
+const NEMESIS_NAH := 1.5                 # … „Tuchfühlung“: aus weniger als so vielen
+const NEMESIS_KNAPP := 0.15              # „Haaresbreite“: bei der Beförderung weniger Leben als dieser Anteil
+const NEMESIS_UMRISS := Color("ffb84d")  # Umriss der Benannten (mit Narben dunkler)
+## 22.11. (Paul, Nemesis Teil 3): Fähigkeiten der Benannten – Startwerte (Sekunden echt, Felder; Schaden als Anteil des
+## Truppenschadens). Abklingzeit sinkt je Rang um NEMESIS_CD_JE_RANG, ab Rang NEMESIS_BEIDE_AB hat die Person beide.
+const NEMESIS_FAEHIGKEITEN := {
+	"unterdrueckung": {"cd": 12.0, "anlegen": 0.6, "dauer": 3.0, "takt": 0.15, "winkel": 14.0, "streuung": 3.0, "weite_plus": 2.0, "schaden": 0.5, "bremse": 0.7},
+	"sturmlauf": {"cd": 14.0, "ruf": 0.5, "dauer": 2.0, "tempo": 2.0, "nah": 1.6, "schaden": 2.0, "taumel": 1.5, "weite": 8.0},
+	"markierung": {"dauer": 5.0, "umstellen": 3.0},
+	"durchschuss": {"cd": 10.0, "laden": 1.2, "schaden": 1.6, "breite": 1.6},
+	"sperrbrand": {"cd": 11.0, "warnung": 1.0, "radius": 1.0, "brand": 4.0, "vorlauf": 2.0, "dps": 0.6, "weite_plus": 2.0},
+	"ausraeuchern": {"cd": 12.0, "flug": 1.6, "radius": 1.2, "brand": 4.0, "dps": 0.6, "weite_plus": 3.0},
+}
+## 22.11. (Paul, Nemesis Teil 6): über Läufe hinweg (user://nemesis.json)
+const NEMESIS_LISTE_MAX := 6             # so viele Benannte hält die Liste (ein Neuer verdrängt den mit der schlechtesten Bilanz)
+const NEMESIS_LAUF_TRUPP := 3            # zu Beginn eines Laufs so viele aus der Liste als Elitetrupp
+const NEMESIS_HALTEN := 1.5              # endgültig ausschalten: so lange [E] am Kampfunfähigen halten …
+const NEMESIS_HALTEN_HOCH := 2.5         # … ab Rang NEMESIS_HALTEN_RANG so lange
+const NEMESIS_HALTEN_RANG := 3
+const NEMESIS_HALTEN_NAH := 1.3          # Felder: so nah muss Brakk an ihm stehen
+const NEMESIS_WIEDERSEHEN_SEK := 3.5     # Einblendung beim ersten Treffer auf einen Benannten im Lauf
+## 22.11. (Paul, Nemesis Teil 4): abgeschaute Angewohnheiten
+const NEMESIS_GEWOHNHEIT_ZWEI_AB := 4    # ab diesem Rang zwei Angewohnheiten
+const NEMESIS_GEWOHNHEIT_MIN := 3        # Laufende: Brakks häufigste Angewohnheit zählt erst ab so vielen Malen (und über dem Schnitt)
+const NEMESIS_KNAPP_VERTRIEBEN := 0.3    # Begegnung mit weniger Leben überstanden = knapp vertrieben
+const NEMESIS_FERN_LANZE := 6.0          # Ladestrahl-Treffer aus mehr als so vielen Feldern = Kampf aus der Ferne
+const NEMESIS_WALL_REICHWEITE := 1.5     # Mauerkletterer: so viel mehr Reichweite oben
+const NEMESIS_FALLE_ZUENDER := 3.0       # Fallensteller: Zünder (piept) …
+const NEMESIS_FALLE_RADIUS := 1.5        # … Umkreis in Feldern …
+const NEMESIS_FALLE_SCHADEN := 3.0       # … Schaden (× Truppenschaden) …
+const NEMESIS_FALLE_ABSTAND := 25.0      # … und so viele Sekunden bis zur nächsten Falle derselben Person
+const NEMESIS_DOPPELBLITZ := 0.35        # Doppelblitz: so viel später fällt der Schuss
+const NEMESIS_FRONTSCHILD := 0.25        # Frontschild: Anteil des Schadens von vorn
+## 22.11. (Paul, Nemesis Teil 5): Lernen (Sutton/Barto 2.4/2.6 – feste Schrittweite, UCB)
+const NEMESIS_TAKTIKEN: Array[String] = ["direkt", "flanke", "hinterhalt", "sperrfeuer"]
+const NEMESIS_ALPHA := 0.2               # feste Schrittweite: Q ← Q + α (R − Q)
+const NEMESIS_UCB_C := 8.0               # UCB-Aufschlag c · √(ln t / N) (Belohnung in Prozentpunkten)
+const NEMESIS_STIL_BONUS := 6.0          # Antwort auf den Spielstil: so viel Aufschlag für die passende Taktik
+const NEMESIS_FLANKE := 4.0              # Felder seitlich für die Flanke
+const NEMESIS_HINTERHALT_LOS := 6.0      # aus dem Hinterhalt los, sobald Brakk so nah ist (und zu sehen)
+const NEMESIS_SUCH_FELDER := 12.0        # Eliten suchen an Brakks häufigsten Orten in so vielen Feldern um den letzten Punkt …
+const NEMESIS_KILL_ORT := 2              # … und meiden Felder, von denen aus er so oft getötet hat
+const NEMESIS_STIL_TAKT := 15.0          # so oft wird Brakks Spielstil neu eingeordnet
+const NEMESIS_ANSAGE_ABSTAND := 15.0     # höchstens eine Sonde-7-Ansage zum Lernen in so vielen Sekunden
+const NEMESIS_EROEFFNUNG := 6.0          # Zusammenspiel: so lange nach Markierung/Unterdrückungsfeuer darf der Trupp nachsetzen
+const NEMESIS_CD_JE_RANG := 0.1
+const NEMESIS_BEIDE_AB := 3
+const NEMESIS_FAEHIGKEIT_ABSTAND := 1.0  # so viele Sekunden zwischen zwei Fähigkeiten desselben Elitetrupps (nicht alles auf einmal)
 ## 20.11.: Schritt 6c – Ausweichen (Classic und Rogue). Schüsse auf Brakk sind echte Geschosse (brakk_geschosse.gd); die
 ## 2D-Logik für alle anderen Figuren bleibt. Tempo in Feldern je Sekunde Echtzeit (Brakk läuft 3), Radien in Feldern.
 const BRAKK_AUSWEICH_SCHADEN := {   # Schaden je Treffer auf Brakk – die Trefferquote sinkt, darum mehr (Paul 20.11.)

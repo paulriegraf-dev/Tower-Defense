@@ -202,6 +202,29 @@ var verrat: Verrat24 = null       # 20.11.: läuft gerade die Verrat-Sequenz?
 var verrat_fertig := false
 var _verraeter: Array = []        # die drei Technogunner der Sequenz
 var schild_auf := 1.0             # 0..1 Kuppel des Schilds (schließt sich in der Sequenz)
+var nemesis: Nemesis = null       # 22.11. (Paul): Nemesis-System – Eliten sind Personen (scripts/nemesis.gd)
+var sichter: Einheit = null       # 22.11.: Stellung, die Brakk zuletzt gesehen hat (Nemesis: Sichtung)
+var markiert_bis := -1.0          # 22.11. (Nemesis Teil 3): bis hier kennen alle Trupps Brakks Ort (Markierung)
+
+
+## 22.11. (Nemesis Teil 4): Brakk tut etwas, das sich die Benannten abschauen können (Tumble, Klonmaschine …).
+func brakk_gewohnheit(a: String) -> void:
+	if nemesis == null or nemesis.gewohnheiten == null or not laeuft:
+		return
+	if a == "tumble":
+		nemesis.gewohnheiten.tumble()
+	else:
+		nemesis.gewohnheiten.zaehle(a)
+
+
+## 22.11. (Nemesis Teil 5): Elite im Gehen schießen lassen (direkt und Flanke rücken nach, Sperrfeuer weicht zurück).
+func drueckt(e: Einheit) -> bool:
+	return nemesis != null and nemesis.lernen != null and nemesis.lernen.drueckt(e)
+
+
+## 22.11. (Nemesis Teil 3): Brakks Lauftempo (Ego-Sicht) – im Kegel eines Unterdrückungsfeuers langsamer.
+func brakk_tempo_faktor() -> float:
+	return nemesis.faehigkeiten.tempo_faktor() if nemesis != null and nemesis.faehigkeiten != null else 1.0
 
 
 func w(schluessel: String) -> Variant:
@@ -246,6 +269,9 @@ func einrichten(p_spiel: Node) -> void:
 	brakk_ziel.rolle = "hund"
 	brakk_ziel.visible = false
 	_zuflucht_legen()
+	nemesis = Nemesis.new()
+	add_child(nemesis)
+	nemesis.einrichten(self)
 
 
 func _karte_aufbauen() -> void:
@@ -856,6 +882,7 @@ func starten() -> void:
 	_schnellstart = true
 	if not spiel.gegner.has(brakk_ziel):
 		spiel.gegner.append(brakk_ziel)
+	nemesis.appell([])   # 22.11.: die Drei vom Appell gibt es auch ohne Sequenz (übersprungen, Test)
 	spiel.melde("Befehl 24: Der Technoclan hat sich gegen dich gewandt. Übersteh %d Minuten." % roundi(wf("ueberleben_sek") / 60.0), 10.0)
 
 
@@ -878,6 +905,7 @@ func _verrat_beginnen() -> void:
 		e.position = q
 		e._sprite.flip_h = m.x < e.position.x   # Blick zum HQ, Rücken zu Brakk
 		_verraeter.append(e)
+	nemesis.appell(_verraeter)   # 22.11. (Paul): die Drei vom Appell sind von Anfang an Personen mit Namen
 	schild_auf = 0.0
 	var ego: EgoModus = spiel.ego
 	ego.gier = atan2(-zum_hq.x, -zum_hq.y)   # Blick zum HQ (gier 0 = Norden)
@@ -929,6 +957,8 @@ func _verrat_ende() -> void:
 	for e: Einheit in _verraeter:
 		if is_instance_valid(e):
 			e.zustand = Einheit.Zustand.BODEN
+	nemesis.appell_abtreten(_verraeter)   # 22.11. (Paul): Beam in den Schild – sie rüsten um und kommen mit dem ersten Elitetrupp
+	_verraeter.clear()
 	schild_auf = 1.0
 	verrat_fertig = true
 	spiel.erfolg("befehl24")   # 20.11. (Paul): Erfolg – die Flucht beginnt
@@ -1103,6 +1133,7 @@ func _deckung_pruefen(k: Kommandant) -> void:
 			continue
 		if e.position.distance_to(k.position) <= e.reichweite_jetzt() * Werte.ZELLE and karte.sicht_von_wall(e.posten_zelle, e.position, k.position):
 			in_deckung = false
+			sichter = e   # 22.11.: Nemesis – wer ihn gesichtet hat
 			return
 
 
@@ -1120,8 +1151,8 @@ func _ziele_pflegen() -> void:
 	var noch := {}
 	var bp: Vector2 = spiel.kommandant.position
 	for e in spiel.einheiten:
-		if not is_instance_valid(e) or e == spiel.kommandant or not (e as Einheit).visible or (e as Einheit).in_batterie():
-			continue
+		if not is_instance_valid(e) or e == spiel.kommandant or not (e as Einheit).visible or (e as Einheit).in_batterie() or (e as Einheit).kampfunfaehig:
+			continue   # 22.11.: kampfunfähige Personen sind kein Ziel mehr
 		var schl := "e%d" % e.get_instance_id()
 		noch[schl] = true
 		var t: TechnoZiel = _ziele.get(schl, null)
@@ -1206,13 +1237,24 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			t._tot = true
 			return
 		var e: Einheit = t.einheit
+		if e.kampfunfaehig:
+			t._tot = true   # 22.11.: Nemesis – liegt schon am Boden (zählt nicht noch einmal als Kill)
+			return
+		nemesis.von_brakk(e)   # 22.11.: Begegnung läuft
+		nemesis.faehigkeiten.von_brakk(e, str(spiel.brakk_quelle) == "lanze")   # 22.11. (Teil 3): Ladestrahl stoppt den Sturmlauf
+		if str(spiel.brakk_quelle) == "lanze":
+			nemesis.gewohnheiten.fernschuss(e)   # 22.11. (Teil 4): Kampf aus der Ferne zählt
+		menge *= nemesis.gewohnheiten.schild_faktor(e)   # 22.11. (Teil 4): Frontschild – von vorn nur 25 %
 		var war_stellung := e.in_stellung()
 		var kg_ort := ("s:%s" % str(e.posten_zelle)) if war_stellung else ("f:%s" % str(e.fabrik_zelle))
 		var elite := bool(e.daten.get("elite", false))
 		_alarm_auf_brakk(spiel.kommandant)   # 20.11. (Paul): wer angegriffen wird, ruft Hilfe
+		var vor := e.leben
 		e.nimm_schaden(menge)
+		nemesis.erlitten(e, vor - maxf(e.leben, 0.0))   # 22.11. (Teil 5): eigener Schaden in der Begegnung
 		t.leben = e.leben
 		if e.leben <= 0.0 or not is_instance_valid(e):
+			nemesis.lernen.kill()   # 22.11. (Teil 5): Aufenthaltskarte – von hier aus hat Brakk getötet
 			t._tot = true
 			sabotage["truppen"] = int(sabotage["truppen"]) + 1
 			kills += 1
@@ -1382,6 +1424,7 @@ func ladung_setzen(z: Vector2i) -> String:
 		if zu["zelle"] == z:
 			return "Hier tickt schon eine Ladung."
 	ladungen -= 1
+	nemesis.ladung()   # 22.11.: Treffer gleich danach = „unterbrochen“
 	zuender.append({"zelle": z, "rest": wf("spreng_zuender"), "knoten": null})
 	spiel.melde("Sprengladung gesetzt – %d s!" % int(w("spreng_zuender")), 2.0)
 	Ton.spiele(spiel, "ui-klick")
@@ -1423,11 +1466,13 @@ func sprengen(z: Vector2i) -> void:
 	var p := karte.mitte(z)
 	spiel.schadensquelle = "fabrik:-1,-1"
 	for x in spiel.einheiten.duplicate():
-		if is_instance_valid(x) and x != spiel.kommandant and (x as Einheit).position.distance_to(p) <= 1.3 * Werte.ZELLE:
-			(x as Einheit).nimm_schaden(LADUNG_SCHADEN)
+		if is_instance_valid(x) and x != spiel.kommandant and (x as Einheit).position.distance_to(p) <= 1.3 * Werte.ZELLE and not (x as Einheit).kampfunfaehig:
+			(x as Einheit).nimm_schaden(LADUNG_SCHADEN * nemesis.spreng_faktor(x as Einheit))   # 22.11.: Nemesis – sprengfest
 			if not is_instance_valid(x) or (x as Einheit).leben <= 0.0:
 				kills += 1
 				sabotage["truppen"] = int(sabotage["truppen"]) + 1
+			else:
+				nemesis.sprengung_ueberlebt(x as Einheit)   # 22.11.: Feldbeförderung „Taubes Ohr“
 	spiel.schadensquelle = ""
 	spiel.effekte.flaeche(p, Werte.ZELLE * 1.3, Color("ff9a3d"))
 	if Werte.grafik_neu:
@@ -1501,6 +1546,7 @@ func _fabriken_pflegen(k: Kommandant, echt: float) -> void:
 
 ## Fabrik sabotiert: sabotage_lahm Sekunden kein Ersatz; pilot_verzug Sekunden später macht sich ein Pilot auf den Weg.
 func sabotieren(z: Vector2i) -> void:
+	brakk_gewohnheit("sabotage")   # 22.11. (Nemesis Teil 4)
 	karte.ausgefallen[z] = true
 	karte.fortschritt.erase(z)
 	lahm[z] = wf("sabotage_lahm")
@@ -1580,6 +1626,9 @@ func _neue_truppe(typ: String, von: Vector2i, stufe: int, faehigkeit: String = "
 	var e := Einheit.new()
 	spiel.figuren.add_child(e)
 	e.start(spiel, karte, typ, von, stufe, faehigkeit)
+	if stufe >= 4:   # 21.11. (Paul): Elitetrupp – 200 % Leben statt des Elite-Aufschlags der Fabrik-Stufe 4
+		e.max_leben *= Werte.ROGUE_ELITE_LEBEN / float(Werte.ELITE["leben"])
+		e.leben = e.max_leben
 	neue_einheit(e)
 	spiel.einheiten.append(e)
 	return e
@@ -1614,6 +1663,8 @@ func reparaturziel(p: Einheit) -> Dictionary:
 
 ## Darf diese Truppe in eine Stellung? Jäger, Pilot und Begleiter nie.
 func darf_in_stellung(e: Einheit) -> bool:
+	if nemesis != null and nemesis.gewohnheiten != null and nemesis.gewohnheiten.darf_auf_wall(e):
+		return true   # 22.11. (Nemesis Teil 4): der Mauerkletterer steigt auf einen Erdwall – auch als Jäger, auch nah an Brakk
 	var k: Kommandant = spiel.kommandant
 	if laeuft and k != null and not k.gefallen and e.position.distance_to(k.position) <= BRAKK_NAH * Werte.ZELLE:
 		return false   # 20.11. (Paul): ist Brakk nah, bleibt die Truppe unten und kämpft (wie sonst auch) statt in die Stellung zu laufen
@@ -1626,6 +1677,9 @@ func marschziel(e: Einheit) -> Vector2i:
 	if eskorte.has(e):
 		return karte.zelle_bei(pilot.position) if is_instance_valid(pilot) else Karte.KEINE
 	var id := e.get_instance_id()
+	var nz := nemesis.marschziel(e)   # 22.11.: Nemesis – Schwächen und Rückzug gehen vor
+	if nz != Karte.KEINE:
+		return nz
 	if alarm.has(id):
 		return (alarm[id] as Dictionary)["ziel"]
 	var nr := int(jaeger.get(id, -1))
@@ -1761,7 +1815,7 @@ func _hq_aggro(k: Kommandant) -> void:
 
 ## Brakk gesehen: von einer Stellung (nicht in Deckung) oder von einem Jäger in Sichtweite – dann ist sein Ort bekannt.
 func _bekannt_pflegen(k: Kommandant) -> void:
-	if not in_deckung:
+	if not in_deckung or zeit < markiert_bis:   # 22.11.: Markierung – Ort bekannt, auch hinter Wällen
 		bekannt = karte.zelle_bei(k.position)
 		bekannt_zeit = zeit
 
@@ -1820,6 +1874,9 @@ func _jagdwelle() -> void:
 	var n := 3 if elite else maxi(1, int(w("welle_groesse")) + wachsen - int(sabotage["fabriken"]))
 	var stufe := 4 if elite else (3 if zeit >= wf("faehigkeit_ab") else (2 if zeit >= wf("stufe2_ab") else 1))
 	var neu: Array = []
+	if elite:
+		neu = nemesis.elitetrupp(quellen)   # 22.11. (Paul): der Elitetrupp sind Personen (Benannte zuerst, bis zu fünf)
+		n = 0
 	for i in n:
 		var z: Vector2i = quellen[i % quellen.size()]
 		var typ := str(spiel.fabriken[z]["typ"])
@@ -1830,6 +1887,7 @@ func _jagdwelle() -> void:
 				faehig = str(liste.pick_random())
 		neu.append(_neue_truppe(typ, z, stufe, faehig))
 	_neuer_trupp(neu, "jagd")
+	n = neu.size()
 	spiel.melde("Ein %s verlässt den Schild (%d)." % ["Elitetrupp" if elite else "Jagdtrupp", n], 3.0)
 	print("ORDER24 Welle %d bei %.0f s: %d%s · Stufe %d · Takt %.0f s" % [wellen, zeit, n, " Elite" if elite else "", stufe, welle_takt_jetzt()])
 
@@ -1843,21 +1901,30 @@ func _trupps_lenken(k: Kommandant) -> void:
 		if (t["mitglieder"] as Array).is_empty() or str(t["modus"]) == "vorstoss":
 			continue
 		var sieht := false
+		var erster: Einheit = null   # 22.11.: Nemesis – wer ihn für den Trupp aufdeckt
 		var schwerpunkt := Vector2.ZERO
 		for e: Variant in t["mitglieder"]:
 			var p: Vector2 = (e as Node2D).position
 			schwerpunkt += p
 			if p.distance_to(k.position) <= SICHT_JAEGER * Werte.ZELLE and karte.sicht_frei(p, k.position):
 				sieht = true
+				if erster == null:
+					erster = e as Einheit
 		schwerpunkt /= float((t["mitglieder"] as Array).size())
 		t["mitte"] = schwerpunkt
+		if zeit < markiert_bis and str(t["modus"]) != "jagd":
+			sieht = true   # 22.11. (Nemesis Teil 3): markiert – alle Trupps kennen Brakks Ort
 		if sieht:
+			if str(t["modus"]) != "jagd":
+				nemesis.sichtung(erster, trupps.find(t))
 			bekannt = bz
 			bekannt_zeit = zeit
 			t["zuletzt"] = bz
 			t["gesehen"] = zeit
 			t["modus"] = "jagd"
 		elif str(t["modus"]) != "jagd" and zeit - bekannt_zeit < 1.5 and schwerpunkt.distance_to(karte.mitte(bekannt)) <= 10.0 * Werte.ZELLE:
+			if not in_deckung and is_instance_valid(sichter):
+				nemesis.sichtung(sichter, trupps.find(t))
 			t["zuletzt"] = bekannt   # eine Stellung hat ihn gemeldet
 			t["gesehen"] = zeit
 			t["modus"] = "jagd"
@@ -1882,6 +1949,9 @@ func _trupp_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 		"streife":
 			return _streifenziel(e)
 		"suche":
+			var nz := nemesis.lernen.suchziel(e, t) if nemesis != null and nemesis.lernen != null else Karte.KEINE
+			if nz != Karte.KEINE:
+				return nz   # 22.11. (Nemesis Teil 5): Eliten suchen an Brakks häufigsten Orten
 			var id := e.get_instance_id()
 			var s: Dictionary = _suchziel.get(id, {})
 			if s.is_empty() or zeit >= float(s["bis"]) or karte.zelle_bei(e.position) == (s["z"] as Vector2i):
@@ -2239,6 +2309,7 @@ func _medkits_pflegen(k: Kommandant, echt: float) -> void:
 	for m: Dictionary in medkits:
 		if bool(m["da"]) and k.leben < k.max_leben and k.position.distance_to(karte.mitte(m["zelle"] as Vector2i)) <= 0.7 * Werte.ZELLE:
 			m["da"] = false
+			nemesis.medkit()   # 22.11.: Treffer gleich danach = „am Med-Kit erwischt“
 			k.leben = minf(k.max_leben, k.leben + k.max_leben * wf("medkit_heilung") / 100.0)
 			spiel.melde("Med-Kit: +%d %% Leben" % int(w("medkit_heilung")), 2.0)
 			Ton.spiele(spiel, "ui-klick")
@@ -2600,9 +2671,24 @@ func _myr_3d(hd: HdAnsicht) -> void:
 
 ## Aus ego_modus._aktion: [C] ist in Befehl 24 nur die Sprengladung (Brakk baut nicht), [F] an der Rückseite einer Fabrik
 ## sabotiert (gehalten; 20.11., Paul: vorher [E] – das war zugleich die Lichttreppe). true = erledigt.
+## 21.11. (Paul): Fluchtphase – vom Ende der Verrat-Sequenz bis zur Ankunft am Myriaden-HQ (Funkspruch dort) sind
+## Q, E und R gesperrt; nur Laufen, Springen und Tumble. Verfolgung und Beschuss bleiben dabei unverändert.
+const FLUCHT_GESPERRT: Array[String] = ["Q", "E", "R"]
+
+
+func flucht_sperre() -> bool:
+	return laeuft and not vorbei and not _terminal_erklaert
+
+
 func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 	if not laeuft or vorbei:
 		return false
+	if taste in FLUCHT_GESPERRT and flucht_sperre():
+		if gedrueckt:
+			spiel.melde("Weg hier! Erst zum Myriaden-HQ im Westen.", 1.5)
+		return true
+	if taste == "E" and nemesis != null and nemesis.ausschalten_taste(gedrueckt):
+		return true   # 22.11. (Nemesis Teil 6): [E] halten am kampfunfähigen Benannten – endgültig ausschalten
 	match taste:
 		"C":
 			if geheim:
@@ -2687,6 +2773,43 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 		pts.append(pts[0])
 		bild.draw_polyline(pts, Color("6ee6ff"), 2.0)
 		Stil.schreibe(bild, s + Vector2(16, 0), "In Deckung", 16, Color("6ee6ff"))
+	# 22.11. (Nemesis Teil 3): markiert (alle Trupps kennen deinen Ort) bzw. im Feuerkegel (langsamer)
+	if zeit < markiert_bis:
+		var blink := 0.6 + 0.4 * sin(zeit * 10.0)
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), "MARKIERT – alle Trupps wissen, wo du bist (%d s)" % ceili(markiert_bis - zeit), 16, Color(Color("ffa21c"), blink))
+		y += 20.0
+	if nemesis != null and nemesis.faehigkeiten != null and nemesis.faehigkeiten.tempo_faktor() < 1.0:
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Unterdrückungsfeuer – raus aus dem Kegel!", 16, Color("ff9a3d"))
+		y += 20.0
+	# 22.11. (Nemesis Teil 6): [E] halten am Kampfunfähigen – Hinweis bzw. Fortschritt
+	var aus: Dictionary = nemesis.ausschalten_hinweis() if nemesis != null else {}
+	if not aus.is_empty():
+		var anteil := float(aus["anteil"])
+		if anteil >= 0.0:
+			var r := Rect2(m.x - 150.0, y - 8.0, 300.0, 16.0)
+			bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.8))
+			bild.draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(anteil, 0.0, 1.0), r.size.y)), Color("ff5a6e", 0.85))
+			bild.draw_rect(r, Color("ff5a6e"), false, 1.5)
+			Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), str(aus["text"]), 14, Color.WHITE)
+			y += 24.0
+		else:
+			Stil.schreibe_mittig(bild, Vector2(m.x, y), str(aus["text"]), 16, Color("ff5a6e"))
+			y += 20.0
+	# 22.11. (Nemesis Teil 6): Wiedersehen – Hologramm mit Namensschild und seiner Zeile (das Spiel läuft weiter)
+	if nemesis != null and not nemesis.wiedersehen.is_empty() and zeit < float(nemesis.wiedersehen["bis"]):
+		var ws: Dictionary = nemesis.wiedersehen
+		var rest := float(ws["bis"]) - zeit
+		var a := clampf(minf(rest, Werte.NEMESIS_WIEDERSEHEN_SEK - rest) * 4.0, 0.0, 1.0) * (0.9 + 0.1 * sin(zeit * 23.0))
+		var hr := Rect2(m.x - 240.0, y + 4.0, 480.0, 58.0)
+		bild.draw_rect(hr, Color(0.3, 0.85, 1.0, 0.08 * a))
+		bild.draw_rect(hr, Color(0.5, 0.9, 1.0, 0.6 * a), false, 1.5)
+		var zy := hr.position.y + 2.0
+		while zy < hr.end.y:
+			bild.draw_line(Vector2(hr.position.x, zy), Vector2(hr.end.x, zy), Color(0.5, 0.9, 1.0, 0.06 * a), 1.0)
+			zy += 3.0
+		Stil.schreibe_mittig(bild, Vector2(m.x, hr.position.y + 16.0), "%s · %s" % [str(ws["name"]), str(ws["stand"])], 16, Color(ws["farbe"] as Color, a))
+		Stil.schreibe_mittig(bild, Vector2(m.x, hr.position.y + 40.0), "„%s“" % str(ws["zeile"]), 16, Color(Color("7fe0ff"), a))
+		y += 68.0
 	# Zünder
 	for zu: Dictionary in zuender:
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Sprengladung: %d s" % ceili(float(zu["rest"])), 16, Color("ff9a3d"))
@@ -2923,6 +3046,7 @@ func _ende(sieg: bool) -> void:
 		return
 	vorbei = true
 	sabo = {}
+	nemesis.lauf_ende()   # 22.11.: Rang +1 für die, die Brakk hart zugesetzt oder ohne Bergung überstanden haben
 	print("ORDER24 Ende: %s nach %.0f s · Sabotage %s · Kills %d · Deckung %d %% · Schaden an Brakk %s" % ["Sieg" if sieg else "Niederlage", zeit, str(sabotage), kills, roundi(100.0 * deckung_sek / maxf(1.0, zeit)), str(schaden_an_brakk)])
 	spiel.phase = 2
 	spiel.loesche_sitzung()
@@ -2981,6 +3105,10 @@ func bericht(sieg: bool) -> Dictionary:
 	]
 	if geheim:
 		(b["hoehepunkte"] as Array).append(["Überläufer: Myriaden-Fabriken", str(myr_fabriken.size())])
+	if nemesis != null:
+		b["nemesis"] = nemesis.lauf_liste()   # 22.11. (Teil 7): Feldbeförderungen, Vertriebene, Ausgeschaltete
+		if not sieg:
+			b["nemesis_tod"] = nemesis.tod_bericht()   # Deathscreen „Erledigt von …“ (leer: kein Soldat – bisheriger Schluss)
 	return b
 
 
@@ -3012,7 +3140,15 @@ class BrakkZiel extends Gegner:
 			var anteil := o24.wf("brakk_schaden") / 100.0 * (o24.wf("sabotage_schaden") / 100.0 if not o24.sabo.is_empty() else 1.0)   # 20.11. (Paul): beim Sabotieren verwundbarer
 			anteil *= 1.0 + o24.wf("hq_aggro_schaden") / 100.0 * o24.hq_naehe()   # 20.11. (Paul): je näher am Technoclan-HQ, desto gefährlicher
 			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * anteil
+			var vor := k.leben
 			k.nimm_schaden(menge * anteil)
+			# 22.11. (Paul): Nemesis – der Schütze steht hinter „#“ in der Quelle (Einheit._auf_brakk)
+			var q := str(spiel.schadensquelle)
+			if o24.nemesis != null and q.contains("#"):
+				var id := int(q.get_slice("#", 1))
+				o24.nemesis.brakk_getroffen(id, maxf(0.0, vor - maxf(k.leben, 0.0)))
+				if k.gefallen or k.leben <= 0.0:
+					o24.nemesis.brakk_erledigt(id)
 
 	func kommender_weg(_hoechstens: int) -> Array[Vector2i]:
 		return []

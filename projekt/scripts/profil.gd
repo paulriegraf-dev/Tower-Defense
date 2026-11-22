@@ -31,10 +31,16 @@ static func _lade() -> void:
 	if not (_d.get("kills") is Dictionary):
 		_d["kills"] = {}
 	_wende_codes_an()   # 20.11.: Entwicklercodes
+	_uebernimm_freischaltung()   # 21.11.
 	_speichere()
 
 
+## 9a: Balance-Labor – das Profil wird nie geschrieben (keine Erfolge, Kills, Freischaltungen aus Bot-Partien).
+static var nur_lesen := false
+
 static func _speichere() -> void:
+	if nur_lesen:
+		return
 	var f := FileAccess.open(DATEI, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(_d, "\t"))
@@ -206,6 +212,36 @@ static func hat_code(code: String) -> bool:
 ## 20.11. (Paul): Rogue (Befehl 24) ist frei, wenn Classic einmal gewonnen wurde (oder per Code „befehl24“/„allesfrei“).
 static func rogue_frei() -> bool:
 	return bool(einstellung("rogue_frei", false)) or hat_code("befehl24") or hat_code("allesfrei")
+
+
+## 21.11. (Paul): Freischaltung im Startmenü – Brakk-Mode (Classic und Rogue) nach dem ersten Aufstellen von Brakk
+## (Erfolg „aufgestellt“), Phantom-Modus nach einem Sieg in Runde 20 (Erfolg „gegenangriff“); „allesfrei“ schaltet beide frei.
+static func brakk_modus_frei() -> bool:
+	return hat_erfolg("aufgestellt") or hat_code("allesfrei")
+
+
+static func phantom_frei() -> bool:
+	return hat_erfolg("gegenangriff") or hat_code("allesfrei")
+
+
+## Profile von vor der Freischaltung: wer schon gewonnen oder Brakk aufgestellt hat (Statistik), bekommt sie beim ersten Start.
+static func _uebernimm_freischaltung() -> void:
+	if bool(_d.get("freischaltung_geprueft", false)):
+		return
+	_d["freischaltung_geprueft"] = true
+	if not (_d.get("erfolge") is Dictionary):
+		_d["erfolge"] = {}
+	var erf: Dictionary = _d["erfolge"]
+	var st: Dictionary = _d["stat"]
+	var jetzt := Time.get_datetime_string_from_system()
+	if int(st.get("siege", 0)) > 0 and not erf.has("gegenangriff"):
+		erf["gegenangriff"] = jetzt
+	var brakk := int((_d["kills"] as Dictionary).get("brakk", 0)) > 0 or erf.has("kommandant") or erf.has("doppelgaenger")
+	for k: String in st:
+		if k.begins_with("brakk_") and int(st[k]) > 0:
+			brakk = true   # im Brakk-Mode gespielt
+	if brakk and not erf.has("aufgestellt"):
+		erf["aufgestellt"] = jetzt
 
 
 ## Erfolg wirklich verdient (nicht über den Code „erfolge“)?

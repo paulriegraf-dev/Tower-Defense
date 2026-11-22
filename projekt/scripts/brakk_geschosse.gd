@@ -23,6 +23,8 @@ var geschosse: Array = []      # fliegende Geschosse (Dictionary)
 var zielstrahlen: Array = []   # Scharfschützen, die gerade zielen
 var gluehen: Array = []        # Türme, die gerade aufglühen
 var braende: Array = []        # Brandflächen des Plasmas: {"mitte", "r", "rest", "dps", "quelle"}
+var wuerfe: Array = []         # 22.11. (Nemesis Teil 3): Würfe auf eine Stelle (Sperrbrand, Ausräuchern)
+var spaeter_liste: Array = []  # 22.11. (Nemesis Teil 4): {"t", "was": Callable} – verzögerte Schüsse (Doppelblitz)
 var treffer_von := Vector2.INF # woher der letzte Treffer kam (für den Randblitz der Ego-Sicht) …
 var treffer_ms := -100000      # … und wann (ms)
 var abgefeuert := 0            # Zähler für den Test
@@ -59,17 +61,20 @@ func _tempo_mal(art: String) -> float:
 
 ## Fliegendes Geschoss (`art`: laser, sph, plasma) von `von` (Mündungshöhe `von_h` in Feldern) auf Brakk.
 ## `typ` bestimmt den Schadensfaktor (Werte.BRAKK_AUSWEICH_SCHADEN), `quelle` die Schadensquelle (Statistik).
-func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: String, quelle: String) -> void:
+## 22.11.: `genau` – Anteil der Streuung (Nemesis: Eliten treffen sicherer), sonst 1.
+## 22.11. (Nemesis Teil 3): `punkt` – auf diese Stelle statt auf Brakk (Unterdrückungsfeuer im Kegel; ohne Vorhalt und Streuung).
+func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: String, quelle: String, genau: float = 1.0, punkt: Vector2 = Vector2.INF) -> void:
 	var z := _ziel()
 	if z.is_empty():
 		return
 	var w: Dictionary = Werte.BRAKK_GESCHOSS[art]
-	var ziel: Vector2 = z["pos"]
-	if vorhalt > 0.0:
+	var ziel: Vector2 = z["pos"] if punkt == Vector2.INF else punkt
+	if vorhalt > 0.0 and punkt == Vector2.INF:
 		var flug := von.distance_to(ziel) / (float(w["tempo"]) * _tempo_mal(art) * Werte.ZELLE)
 		ziel += (z.get("v", Vector2.ZERO) as Vector2) * flug * vorhalt
 	var r :=(ziel - von).normalized() if ziel.distance_to(von) > 1.0 else Vector2.RIGHT
-	ziel += Vector2(-r.y, r.x) * zufall.randf_range(-1.0, 1.0) * Werte.BRAKK_STREUUNG * Werte.ZELLE   # Streuung quer zur Bahn
+	if punkt == Vector2.INF:
+		ziel += Vector2(-r.y, r.x) * zufall.randf_range(-1.0, 1.0) * Werte.BRAKK_STREUUNG * genau * Werte.ZELLE   # Streuung quer zur Bahn
 	r = (ziel - von).normalized() if ziel.distance_to(von) > 1.0 else r
 	var d_ziel := maxf(von.distance_to(ziel), 1.0)
 	var boden := art == "plasma"
@@ -91,14 +96,73 @@ func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: Stri
 
 
 ## Scharfschütze: 0,6 s roter Zielstrahl in fester Richtung, dann Hitscan entlang der Linie.
-func scharf(wer: Node2D, von: Vector2, von_h: float, weite: float, schaden: float, quelle: String) -> void:
+## 22.11. (Nemesis Teil 3): eigene Ladezeit `sek`, Breite (`breite_mal`), Farbe (Durchschuss hell und dick, Markierung
+## orange) und `bei_treffer` (wird mit dem Trefferpunkt gerufen).
+func scharf(wer: Node2D, von: Vector2, von_h: float, weite: float, schaden: float, quelle: String, sek: float = Werte.BRAKK_SCHARF_ZIEL_SEK,
+		breite_mal: float = 1.0, farbe: Color = Color(1.0, 0.12, 0.1), bei_treffer: Callable = Callable()) -> void:
 	var z := _ziel()
 	if z.is_empty():
 		return
 	var r := ((z["pos"] as Vector2) - von).normalized()
 	abgefeuert += 1
 	zielstrahlen.append({"wer": wer, "von": von, "h": von_h, "ende": von + r * weite, "t": 0.0, "schaden": schaden,
-		"quelle": quelle, "ziel_h": float(z.get("fuss", 0.0)) + 0.5, "bild": null})
+		"quelle": quelle, "ziel_h": float(z.get("fuss", 0.0)) + 0.5, "bild": null, "sek": sek, "breite_mal": breite_mal, "farbe": farbe, "bei_treffer": bei_treffer})
+
+
+## 22.11. (Nemesis Teil 3): Wurf auf eine Stelle – Sperrbrand (flach, kurz) und Ausräuchern (hoher Bogen über einen Wall,
+## langsam, mit Schatten am Boden). Vorwarnkreis für die ganze Flugzeit; beim Aufschlag Schaden im Umkreis (nicht im
+## Sprung, nicht im Tumble) und ein Brandfeld für `brand_sek`.
+func wurf(von: Vector2, punkt: Vector2, flug: float, radius: float, brand_sek: float, dps: float, schaden: float, quelle: String, hoch: bool) -> void:
+	abgefeuert += 1
+	var w := {"von": von, "nach": punkt, "t": 0.0, "flug": maxf(0.1, flug), "r": radius, "brand": brand_sek, "dps": dps, "schaden": schaden,
+		"quelle": quelle, "hoch": hoch, "bild": null, "schatten": null}
+	if spiel != null:
+		spiel.effekte.warnung(punkt, flug * Werte.BRAKK_TEMPO)
+		_ring(_zu3d(punkt, 0.04), radius / Werte.ZELLE, _farbe("plasma"), flug)
+		w["bild"] = _geschoss_bild("plasma", float((Werte.BRAKK_GESCHOSS["plasma"] as Dictionary)["dicke"]) * (1.4 if hoch else 1.0))
+		if hoch:
+			w["schatten"] = _schatten_bild()
+	wuerfe.append(w)
+
+
+## 22.11. (Nemesis Teil 4): Sprengfalle des Fallenstellers – liegt still, blinkt und piept `zuender` Sekunden, dann Knall.
+func falle(punkt: Vector2, zuender: float, radius: float, schaden: float, quelle: String) -> void:
+	abgefeuert += 1
+	var w := {"von": punkt, "nach": punkt, "t": 0.0, "flug": zuender, "r": radius, "brand": 0.0, "dps": 0.0, "schaden": schaden,
+		"quelle": quelle, "hoch": false, "falle": true, "bild": null, "schatten": null, "piep": 0.0}
+	if spiel != null:
+		spiel.effekte.warnung(punkt, zuender * Werte.BRAKK_TEMPO)
+		_ring(_zu3d(punkt, 0.04), radius / Werte.ZELLE, Color("ff9a3d"), zuender)
+		var hd := _hd()
+		if hd != null:
+			var m := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(0.22, 0.12, 0.22)
+			m.mesh = box
+			m.material_override = _leucht_mat(Color("ff9a3d"), 0.95)
+			hd.add_child(m)
+			m.position = _zu3d(punkt, 0.07)
+			w["schatten"] = m
+	wuerfe.append(w)
+
+
+## 22.11. (Nemesis Teil 4): etwas nach `sek` echten Sekunden ausführen (Doppelblitz: Schuss nach dem Tumble-Fenster).
+func spaeter(sek: float, was: Callable) -> void:
+	spaeter_liste.append({"t": sek, "was": was})
+
+
+## Mündungsblitz (Doppelblitz-Ankündigung).
+func aufblitzen(wo: Vector2, farbe: Color) -> void:
+	_blitz(_zu3d(wo, 0.5), farbe, 0.35)
+
+
+## Kegel am Boden (Unterdrückungsfeuer): zwei Randlinien und die Mitte, verblassen über `dauer`.
+func kegel_bild(von: Vector2, richtung: Vector2, winkel_grad: float, weite: float, farbe: Color, dauer: float) -> void:
+	if _hd() == null:
+		return
+	for g: float in [-winkel_grad, 0.0, winkel_grad]:
+		var ende := von + richtung.rotated(deg_to_rad(g)) * weite
+		_balken(_zu3d(von, 0.06), _zu3d(ende, 0.06), farbe, 0.05 if g == 0.0 else 0.035, dauer)
 
 
 ## Geschütz- oder Lanzenturm auf Brakk: Aufglühen, dann Schuss auf die Stelle von jetzt. `breite` in Bildpunkten.
@@ -115,7 +179,8 @@ func turm(z: Vector2i, von: Vector2, art: String, schaden: float, weite: float, 
 
 # ------------------------------------------------------------------ Ablauf
 
-func _process(delta: float) -> void:
+func _physics_process(_takt: float) -> void:
+	var delta := Werte.SIM_SCHRITT   # 9a: feste Schrittweite, unabhaengig von Tempo und Bildrate
 	if spiel == null:
 		return
 	if spiel.phase != 1:
@@ -142,10 +207,14 @@ func weiter(dt: float) -> void:
 		if s["wer"] != null and (not is_instance_valid(s["wer"]) or (s["wer"] is Einheit and (s["wer"] as Einheit).leben <= 0.0)):
 			_bild_weg(s)
 			continue   # der Schütze ist gefallen
-		if float(s["t"]) >= Werte.BRAKK_SCHARF_ZIEL_SEK:
+		if float(s["t"]) >= float(s.get("sek", Werte.BRAKK_SCHARF_ZIEL_SEK)):
 			_bild_weg(s)
-			_hitscan(s["von"], s["ende"], Werte.BRAKK_SCHARF_BREITE * Werte.ZELLE, float(s["schaden"]), "scharfschuetze", str(s["quelle"]), z)
-			_balken(_zu3d(s["von"], float(s["h"])), _zu3d(s["ende"], float(s["ziel_h"])), Color("9dff8a"), 0.05, 0.14)
+			var bm := float(s.get("breite_mal", 1.0))
+			var tp := _hitscan(s["von"], s["ende"], Werte.BRAKK_SCHARF_BREITE * bm * Werte.ZELLE, float(s["schaden"]), "scharfschuetze", str(s["quelle"]), z)
+			_balken(_zu3d(s["von"], float(s["h"])), _zu3d(s["ende"], float(s["ziel_h"])), Color("9dff8a") if bm <= 1.0 else Color("fff4c2"), 0.05 * bm, 0.14 * bm)
+			var cb: Variant = s.get("bei_treffer", Callable())
+			if tp != Vector2.INF and cb is Callable and (cb as Callable).is_valid():
+				(cb as Callable).call(tp)   # 22.11.: Nemesis – Markierung nach einem Treffer
 			continue
 		_zielstrahl_bild(s)
 		noch.append(s)
@@ -170,7 +239,86 @@ func weiter(dt: float) -> void:
 				and (z["pos"] as Vector2).distance_to(b["mitte"]) <= float(b["r"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
 			_treffe_brakk(float(b["dps"]) * dt, "plasmawerfer", str(b["quelle"]), b["mitte"], false)
 	braende = braende.filter(func(b: Dictionary) -> bool: return float(b["rest"]) > 0.0)
+	noch = []
+	for w: Dictionary in wuerfe:
+		w["t"] = float(w["t"]) + dt
+		if float(w["t"]) >= float(w["flug"]):
+			_wurf_landet(w, z)
+			continue
+		_wurf_bild(w)
+		noch.append(w)
+	wuerfe = noch
+	var faellig: Array = []
+	for s: Dictionary in spaeter_liste:
+		s["t"] = float(s["t"]) - dt
+		if float(s["t"]) <= 0.0:
+			faellig.append(s)
+	for s: Dictionary in faellig:
+		spaeter_liste.erase(s)
+		if (s["was"] as Callable).is_valid():
+			(s["was"] as Callable).call()
 	_bilder_weiter(dt)
+
+
+## 22.11. (Nemesis Teil 3): Wurf schlägt auf – Schaden im Umkreis, dann Brandfeld.
+func _wurf_landet(w: Dictionary, z: Dictionary) -> void:
+	_bild_weg(w)
+	if w.get("schatten") != null and is_instance_valid(w["schatten"]):
+		(w["schatten"] as Node).queue_free()
+	var wo: Vector2 = w["nach"]
+	var r := float(w["r"])
+	if not z.is_empty() and not bool(z["durchlass"]) and float(z["sprung"]) <= Werte.BRAKK_SPRUNG_BODEN \
+			and (z["pos"] as Vector2).distance_to(wo) <= r + Werte.BRAKK_RUMPF * Werte.ZELLE:
+		getroffen += 1
+		_treffe_brakk(float(w["schaden"]), "plasmawerfer", str(w["quelle"]), w["von"], true)
+	if float(w["brand"]) > 0.0:
+		braende.append({"mitte": wo, "r": r, "rest": float(w["brand"]), "dps": float(w["dps"]), "quelle": w["quelle"]})
+	if spiel != null:
+		if float(w["brand"]) > 0.0:
+			spiel.effekte.brand(wo, r, float(w["brand"]) * Werte.BRAKK_TEMPO)
+		spiel.effekte.flaeche(wo, r, _farbe("plasma"))
+		_blitz(_zu3d(wo, 0.2), _farbe("plasma"), 0.8)
+		Ton.am_ort(spiel, "hit-boom", wo)
+
+
+## Ball auf der Wurfbahn (Bogen: hoch beim Ausräuchern) und sein Schatten am Boden. Falle: blinkt und piept, schneller zum Ende.
+func _wurf_bild(w: Dictionary) -> void:
+	if bool(w.get("falle", false)):
+		var rest := float(w["flug"]) - float(w["t"])
+		w["piep"] = float(w["piep"]) - 1.0 / 60.0
+		if float(w["piep"]) <= 0.0:
+			w["piep"] = clampf(rest / 6.0, 0.12, 0.5)
+			if spiel != null:
+				Ton.am_ort(spiel, "ui-klick", w["nach"] as Vector2)
+		if w.get("schatten") != null and is_instance_valid(w["schatten"]):
+			(w["schatten"] as Node3D).visible = fmod(float(w["t"]), clampf(rest / 3.0, 0.15, 0.6)) < 0.08 + clampf(rest / 6.0, 0.0, 0.25)
+		return
+	var a := float(w["t"]) / float(w["flug"])
+	var p := (w["von"] as Vector2).lerp(w["nach"] as Vector2, a)
+	var h := lerpf(0.5, 0.05, a) + (3.5 if bool(w["hoch"]) else 1.0) * 4.0 * a * (1.0 - a)
+	if w.get("bild") != null and is_instance_valid(w["bild"]):
+		var kopf := (w["bild"] as Node3D).get_child(0) as Node3D
+		kopf.position = _zu3d(p, h)
+		((w["bild"] as Node3D).get_child(1) as Node3D).visible = false
+	if w.get("schatten") != null and is_instance_valid(w["schatten"]):
+		(w["schatten"] as Node3D).position = _zu3d(p, 0.03)
+		(w["schatten"] as Node3D).scale = Vector3.ONE * lerpf(0.6, 1.2, a)
+
+
+func _schatten_bild() -> Node3D:
+	var hd := _hd()
+	if hd == null:
+		return null
+	var m := MeshInstance3D.new()
+	var c := CylinderMesh.new()
+	c.top_radius = 0.3
+	c.bottom_radius = 0.3
+	c.height = 0.01
+	m.mesh = c
+	var mat := _leucht_mat(Color(0, 0, 0), 0.45)
+	m.material_override = mat
+	hd.add_child(m)
+	return m
 
 
 ## Ein Geschoss ein Stück weiter. false = es ist weg (Treffer oder Einschlag).
@@ -327,6 +475,12 @@ func leeren() -> void:
 	zielstrahlen.clear()
 	gluehen.clear()
 	braende.clear()
+	for w: Dictionary in wuerfe:
+		_bild_weg(w)
+		if w.get("schatten") != null and is_instance_valid(w["schatten"]):
+			(w["schatten"] as Node).queue_free()
+	wuerfe.clear()
+	spaeter_liste.clear()
 
 
 func _exit_tree() -> void:
@@ -498,11 +652,11 @@ func _zielstrahl_bild(s: Dictionary) -> void:
 	if _hd() == null:
 		return
 	if s["bild"] == null:
-		s["bild"] = _balken(_zu3d(s["von"], float(s["h"])), _zu3d(s["ende"], float(s["ziel_h"])), Color(1.0, 0.12, 0.1), 0.035, 0.0)
+		s["bild"] = _balken(_zu3d(s["von"], float(s["h"])), _zu3d(s["ende"], float(s["ziel_h"])), s.get("farbe", Color(1.0, 0.12, 0.1)) as Color, 0.035 * float(s.get("breite_mal", 1.0)), 0.0)
 	var m: MeshInstance3D = s["bild"]
 	if m == null:
 		return
-	var anteil := clampf(float(s["t"]) / Werte.BRAKK_SCHARF_ZIEL_SEK, 0.0, 1.0)
+	var anteil := clampf(float(s["t"]) / float(s.get("sek", Werte.BRAKK_SCHARF_ZIEL_SEK)), 0.0, 1.0)
 	var puls := 0.5 + 0.5 * sin(float(s["t"]) * lerpf(20.0, 60.0, anteil))
 	(m.material_override as StandardMaterial3D).albedo_color.a = lerpf(0.5, 1.0, anteil) * (0.6 + 0.4 * puls)
 	m.scale = Vector3(1.0 + anteil, 1.0 + anteil, 1.0)

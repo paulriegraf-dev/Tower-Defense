@@ -313,8 +313,18 @@ func _bau_eintrag_bei(p: Vector2) -> int:
 	return -1
 
 
+## 21.11.: Befehl 24, Flucht – die Knöpfe für Q/E/R (Anker, Ulti, Lichttreppe) sind gesperrt.
+func _flucht_gesperrt(id: String) -> bool:
+	if id in ["anker", "ulti", "treppe"] and spiel.order24 != null and spiel.order24.flucht_sperre():
+		spiel.melde("Weg hier! Erst zum Myriaden-HQ im Westen.", 1.5)
+		return true
+	return false
+
+
 ## Kurz getippt.
 func _tippen(id: String) -> void:
+	if _flucht_gesperrt(id):
+		return
 	match id:
 		"tumble":
 			ego._tumble_start()
@@ -345,6 +355,8 @@ func _tippen(id: String) -> void:
 
 ## Nach dem Ziehen losgelassen: dort auslösen, wohin jetzt das Fadenkreuz zeigt.
 func _ausloesen(id: String) -> void:
+	if _flucht_gesperrt(id):
+		return
 	match id:
 		"treppe":
 			_e_ausloesen()

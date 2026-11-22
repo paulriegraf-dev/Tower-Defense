@@ -28,6 +28,7 @@ var _wand_in := 0.0
 var _bilder := {}               # instance_id eines Sprite2D -> Sprite3D
 var _umrisse := {}              # instance_id -> Sprite3D: Umriss, der durch Wände scheint (wie in der Stilprobe)
 var _umriss_shader: Shader
+var _umriss_shader_immer: Shader   # 22.11.: Befehl 24 – Umriss der Benannten (immer sichtbar)
 var _umriss_mat := {}           # Farbe (html) -> ShaderMaterial je Textur
 var umriss_an := true
 var _balken := {}               # instance_id -> [Hintergrund, Füllung] (Lebensbalken über der Figur)
@@ -390,7 +391,11 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 	_lebensbalken(id, traeger, b, groesse)
 	# Umriss durch Wände: Gegner rot, eigene Bodentruppen violett (nicht für Türme und Truppen oben auf dem Wall)
 	var farbe := Color(0, 0, 0, 0)
-	if umriss_an and hoehe == 0.0 and _hinter_wall(traeger.global_position):
+	var immer := false
+	if traeger is Einheit and traeger.has_meta("nemesis_umriss") and s == (traeger as Einheit)._sprite:
+		farbe = traeger.get_meta("nemesis_umriss")   # 22.11. (Paul): Befehl 24 – Benannte immer mit farbigem Umriss (Narben dunkler)
+		immer = true
+	elif umriss_an and hoehe == 0.0 and _hinter_wall(traeger.global_position):
 		# nur hinter einem Erdwall (16.11.: sonst lenkt das Rot ab – Bäume, Kulisse und Bauten lösen keinen Umriss aus)
 		if traeger is Gegner:
 			farbe = Color(1.0, 0.35, 0.4, 0.12)   # Alpha = Füllung innen; der Rand ist immer kräftig
@@ -421,7 +426,7 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 		u.offset = b.offset
 	if u.position != b.position:
 		u.position = b.position
-	var mat := _umriss_material(b.texture, farbe)
+	var mat := _umriss_material(b.texture, farbe, immer)
 	if u.material_override != mat:
 		u.material_override = mat
 
@@ -495,10 +500,44 @@ func _lebensbalken(id: int, traeger: Node, b: Sprite3D, groesse: Vector2) -> voi
 
 
 ## Material für den Umriss: zeichnet nur dort, wo etwas davor steht (umgekehrter Tiefentest), einfarbig und halb durchsichtig.
-func _umriss_material(tex: Texture2D, farbe: Color) -> ShaderMaterial:
-	var schluessel := str(tex.get_instance_id()) + farbe.to_html()
+func _umriss_material(tex: Texture2D, farbe: Color, immer: bool = false) -> ShaderMaterial:
+	var schluessel := str(tex.get_instance_id()) + farbe.to_html() + ("i" if immer else "")
 	if _umriss_mat.has(schluessel):
 		return _umriss_mat[schluessel]
+	if immer:
+		# 22.11. (Paul): Befehl 24 – Umriss der Benannten: ein Bildpunkt außen um die Figur, immer sichtbar (normaler Tiefentest)
+		if _umriss_shader_immer == null:
+			_umriss_shader_immer = Shader.new()
+			_umriss_shader_immer.code = """shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
+uniform sampler2D bild : filter_nearest, source_color;
+uniform vec4 farbe : source_color;
+void vertex() {
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0] * length(MODEL_MATRIX[0].xyz), INV_VIEW_MATRIX[1] * length(MODEL_MATRIX[1].xyz), INV_VIEW_MATRIX[2] * length(MODEL_MATRIX[2].xyz), MODEL_MATRIX[3]);
+	MODELVIEW_MATRIX[3].z += 0.02;
+	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+}
+void fragment() {
+	vec4 c = texture(bild, UV);
+	if (c.a >= 0.5) { discard; }
+	vec2 px = 1.0 / vec2(textureSize(bild, 0));
+	float nah = 0.0;
+	nah = max(nah, texture(bild, UV + vec2(px.x, 0.0)).a);
+	nah = max(nah, texture(bild, UV - vec2(px.x, 0.0)).a);
+	nah = max(nah, texture(bild, UV + vec2(0.0, px.y)).a);
+	nah = max(nah, texture(bild, UV - vec2(0.0, px.y)).a);
+	if (nah < 0.5) { discard; }
+	ALBEDO = farbe.rgb;
+	ALPHA = 0.95;
+}
+"""
+		var mi := ShaderMaterial.new()
+		mi.shader = _umriss_shader_immer
+		mi.set_shader_parameter("bild", tex)
+		mi.set_shader_parameter("farbe", farbe)
+		mi.render_priority = 5
+		_umriss_mat[schluessel] = mi
+		return mi
 	if _umriss_shader == null:
 		_umriss_shader = Shader.new()
 		_umriss_shader.code = """shader_type spatial;

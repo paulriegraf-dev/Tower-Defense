@@ -21,6 +21,8 @@ var modi_gesehen := {}
 
 
 func _initialize() -> void:
+	Nemesis.datei = "user://nemesis_test.json"   # 22.11.: Tests schreiben nie in die echte Liste der Meistgesuchten
+	Nemesis.zuruecksetzen()
 	var a := OS.get_cmdline_user_args()
 	OS.set_environment("TD_KARTE_NAME", "szenario_order24")
 	Werte.lade_karte("szenario_order24")

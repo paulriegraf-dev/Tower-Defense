@@ -133,8 +133,8 @@ func _baue() -> void:
 			_eintraege = [
 				# 18.11. (Paul): Reihenfolge nach Wichtigkeit
 				["Spielen", _zeige.bind("spielen"), "", LICHT],
-				["Phantom-Modus", _zeige.bind("phantom"), "", Stil.TEXT],
-				["Brakk-Mode", _zeige.bind("brakk"), "", Stil.TEXT],   # 20.11. (Schritt 5b): Unterseite Classic / Rogue
+				["Phantom-Modus", _zeige.bind("phantom"), "", Stil.TEXT] if Profil.phantom_frei() else ["Phantom-Modus", _tafel_auf.bind("phantom"), SPERR_TAFEL["phantom"]["bedingung"], GESPERRT],   # 21.11. (Paul): erst nach einem Sieg
+				["Brakk-Mode", _zeige.bind("brakk"), "", Stil.TEXT] if Profil.brakk_modus_frei() else ["Brakk-Mode", _tafel_auf.bind("brakk"), SPERR_TAFEL["brakk"]["bedingung"], GESPERRT],   # 20.11. (Schritt 5b): Unterseite Classic / Rogue; 21.11.: erst nach dem ersten Brakk
 				["Sandbox", _zeige.bind("sandbox"), "", Stil.TEXT],
 				["Herausforderungen", _zeige.bind("herausforderung"), "", Stil.TEXT],
 				["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT],
@@ -152,6 +152,16 @@ func _baue() -> void:
 				["Rogue · Befehl 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL] if Profil.rogue_frei() else ["Rogue · gesperrt", _rogue_gesperrt, "erst Classic gewinnen (Runde 20) – dann geht es weiter …", Stil.TEXT_BLASS],   # 20.11. (Paul)
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
+			if Profil.rogue_frei():
+				_eintraege.insert(2, ["Meistgesuchte", _zeige.bind("meistgesucht"), "die Benannten des Technoclans, die dich jagen", Stil.TEXT])   # 22.11. (Paul): Nemesis
+		"meistgesucht":
+			# 22.11. (Paul, Nemesis Teil 7): bis zu 6 Benannte; rechts der Steckbrief der gewählten Person
+			_gesucht = Nemesis.meistgesuchte()
+			for p: Dictionary in _gesucht:
+				_eintraege.append([Nemesis.voller_name(p), _nichts, "%s · %s" % [str(Nemesis.ART_TEXT.get(str(p.get("art", "")), "")), Nemesis.bilanz_text(p)], KUPFER_HELL])
+			if _gesucht.is_empty():
+				_eintraege.append(["Noch niemand", _nichts, "wer dich in Befehl 24 ärgert, verdient sich hier einen Namen", Stil.TEXT_BLASS])
+			_eintraege.append(["Zurück", _zeige.bind("brakk"), "", Stil.TEXT_BLASS])
 		"rogue":
 			# 20.11. (Schritt 5b): Order 24 mit Standardwerten oder eine eigene Rogue-Karte aus dem Editor
 			_eintraege = [["Befehl 24 · Standardwerte", _rogue_los.bind("szenario_order24"), _karten_text("szenario_order24"), LICHT]]
@@ -244,8 +254,12 @@ func _baue() -> void:
 			_eintraege.append(["Übersicht", func(): uebersicht_gewaehlt.emit(), "Gegner, Truppen, Bauten, Regeln", Stil.TEXT])
 			_eintraege.append(["Code: " + _code_text(), _starte_code, "Enter löst ein" if _tippt() else "zum Eingeben klicken", Stil.TEXT])   # 20.11.: Entwicklercodes
 			_eintraege.append(["Einlösen", _loese_code, "", Stil.TEXT])
+			if not Nemesis.meistgesuchte().is_empty():   # 22.11. (Paul, Nemesis Teil 6/8)
+				_eintraege.append(["Meistgesuchte zurücksetzen", _meistgesuchte_weg, "Klick noch einmal: alle Benannten aus Befehl 24 löschen" if _weg_frage else "die Benannten aus Befehl 24 vergessen – nächster Lauf beginnt mit dem Appell", Stil.WARN if _weg_frage else Stil.TEXT])
 			_eintraege.append(["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS])
 	_wahl = clampi(_wahl, 0, _eintraege.size() - 1)
+	if _seite == "brakk":   # 22.11. (Paul): Brakk-Tutorial jederzeit wiederholen (brakk_tutorial.gd)
+		_eintraege.insert(1, ["Tutorial", func() -> void: BrakkTutorial.aus_menue(self), "Sonde 7 zeigt Parkour, Schießstand, Bauen und Ringe – ohne Risiko", Stil.TEXT])
 
 
 ## 18.11.: Kartenwahl auf der Seite „Herausforderungen“ (Titel und Beschreibung stehen in karten/<name>.json).
@@ -506,6 +520,84 @@ func _brakk_mode() -> void:
 
 
 ## 20.11. (Paul): Rogue ist gesperrt, bis Classic einmal gewonnen wurde.
+## 21.11. (Paul): gesperrte Modi im Hauptmenü – grau mit Schloss; ein Klick öffnet eine kleine Tafel mit Teaser
+## (Bild, zwei Sätze, Bedingung) und „Verstanden“. Sie rüttelt beim Öffnen kurz wie an einem Schloss.
+const GESPERRT := Color(0.42, 0.44, 0.5)
+const SPERR_TAFEL := {
+	"brakk": {"titel": "BRAKK-MODE", "bedingung": "Stelle Brakk einmal in einer Partie auf",
+		"text": "Nimm selbst das Gewehr in die Hand – der Krieg aus Brakks Augen. In Classic hältst du 20 Runden in der Ego-Sicht, in Rogue kämpfst du allein ums Überleben."},
+	"phantom": {"titel": "PHANTOM-MODUS", "bedingung": "Überstehe Runde 20",
+		"text": "Deine Verteidigung bleibt als Phantom zurück. Greife die der anderen an."},
+}
+const TAFEL_RECHT := Rect2(150, 105, 340, 150)
+const TAFEL_KNOPF := Rect2(260, 225, 120, 20)
+## Silhouette einer Verteidigung für die Phantom-Tafel ('#' Erdwall, 'T' Turm, 'F' Fabrik).
+const PHANTOM_BAU := [
+	"..##....##",
+	"..#T.##.#.",
+	"..##..#.#.",
+	"F.....#T#.",
+	"..##..###.",
+	"..#T......",
+	"..##.F..##",
+]
+var _tafel := ""
+var _tafel_ab := 0.0
+
+
+func _tafel_auf(art: String) -> void:
+	_tafel = art
+	_tafel_ab = _zeit
+	Ton.spiele(self, "hit-thud", -6.0)
+
+
+func _tafel_zu() -> void:
+	_tafel = ""
+	_klick()
+
+
+func _male_tafel(ci: Control) -> void:
+	var d: Dictionary = SPERR_TAFEL[_tafel]
+	var t := _zeit - _tafel_ab
+	var wackeln := Vector2(roundf(sin(t * 70.0) * 4.0 * maxf(0.0, 1.0 - t / 0.35)), 0.0)   # Rütteln am Schloss
+	ci.draw_rect(Rect2(0, 0, 640, 360), Color(0.02, 0.03, 0.05, 0.7))
+	var r := Rect2(TAFEL_RECHT.position + wackeln, TAFEL_RECHT.size)
+	Stil.platte(ci, r, 6.0, Color(0.05, 0.06, 0.09, 0.96), Stil.RAHMEN)
+	ci.draw_rect(Rect2(r.position.x + 12.0, r.position.y + 3.0, 60.0, 1.0), LICHT)
+	# Bild links
+	var bild := Rect2(r.position + Vector2(12, 14), Vector2(96, 96))
+	ci.draw_rect(bild, Color(0.08, 0.1, 0.14))
+	if _tafel == "brakk":
+		var p: Texture2D = Anfuehrer.portraet("brakk")
+		if p != null:
+			ci.draw_texture_rect(p, bild, false)
+	else:
+		var px := 8.0
+		var o := bild.position + (bild.size - Vector2(PHANTOM_BAU[0].length(), PHANTOM_BAU.size()) * px) / 2.0
+		var geist := Color(0.62, 0.86, 1.0)
+		for y in PHANTOM_BAU.size():
+			for x in (PHANTOM_BAU[y] as String).length():
+				var c: String = PHANTOM_BAU[y][x]
+				if c == ".":
+					continue
+				var zr := Rect2(o + Vector2(x, y) * px, Vector2(px - 1.0, px - 1.0))
+				ci.draw_rect(zr, Color(geist, 0.22 if c == "#" else 0.45))
+				ci.draw_rect(zr, Color(geist, 0.6), false, 1.0)
+	ci.draw_rect(bild, Stil.RAHMEN, false, 1.0)
+	# Text rechts
+	var x := bild.end.x + 12.0
+	var weite := r.end.x - 12.0 - x
+	Stil.schreibe(ci, Vector2(x, r.position.y + 20.0), str(d["titel"]), Stil.GROSS, LICHT)
+	Stil.absatz(ci, Vector2(x, r.position.y + 34.0), str(d["text"]), weite, Stil.KLEIN, Stil.TEXT)
+	Stil.symbol(ci, "schloss", Vector2(x + 4.0, r.position.y + 100.0), 1.0, KUPFER_HELL)
+	Stil.absatz(ci, Vector2(x + 13.0, r.position.y + 96.0), str(d["bedingung"]), weite - 13.0, Stil.KLEIN, KUPFER_HELL)
+	# Knopf
+	var k := Rect2(TAFEL_KNOPF.position + wackeln, TAFEL_KNOPF.size)
+	var an := k.has_point(_maus)
+	Stil.platte(ci, k, 3.0, Color(LICHT, 0.2 if an else 0.1), LICHT)
+	Stil.schreibe_mittig(ci, k.get_center() + Vector2(0, 1), "Verstanden", Stil.NORMAL, Color.WHITE if an else LICHT)
+
+
 func _rogue_gesperrt() -> void:
 	_meldung = "Rogue schaltest du frei, wenn du Classic bis Runde 20 gewinnst."
 
@@ -1168,6 +1260,11 @@ func _zurueck() -> void:
 func _input(event: InputEvent) -> void:
 	if not _welt.visible or not (event is InputEventKey and event.pressed):
 		return
+	if _tafel != "":
+		if not event.echo and (event as InputEventKey).keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE, KEY_BACKSPACE]:
+			_tafel_zu()   # 21.11.: Teaser-Tafel eines gesperrten Modus
+		get_viewport().set_input_as_handled()
+		return
 	if _auto > 0:
 		if not event.echo:
 			if (event as InputEventKey).keycode == KEY_ESCAPE:
@@ -1236,6 +1333,13 @@ func _klick() -> void:
 
 
 func _maus_eingabe(event: InputEvent) -> void:
+	if _tafel != "":
+		# 21.11.: „Verstanden“ oder ein Klick neben die Tafel schließt sie
+		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			var p := (event as InputEventMouseButton).position
+			if TAFEL_KNOPF.has_point(p) or not TAFEL_RECHT.has_point(p) or event.button_index == MOUSE_BUTTON_RIGHT:
+				_tafel_zu()
+		return
 	if _auto > 0:
 		if event is InputEventMouseButton and event.pressed:
 			_klick()
@@ -1318,7 +1422,7 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
 	else:
 		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "anfuehrer": "Anführer", "szenarien": "Szenarien", "brakk": "Brakk-Mode", "rogue": "Rogue"}[_seite]
+	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "anfuehrer": "Anführer", "szenarien": "Szenarien", "brakk": "Brakk-Mode", "rogue": "Rogue", "meistgesucht": "Brakk-Mode · Meistgesuchte"}[_seite]
 	if unter != "":
 		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
 	# Liste
@@ -1333,6 +1437,8 @@ func _male(ci: Control) -> void:
 			ci.draw_colored_polygon(PackedVector2Array([m + Vector2(-5, -4), m + Vector2(0, 0), m + Vector2(-5, 4)]), LICHT)
 			if farbe == Stil.TEXT_BLASS or farbe == Stil.TEXT:
 				farbe = Color.WHITE
+		if e[3] == GESPERRT:
+			Stil.symbol(ci, "schloss", Vector2(r.end.x - 14.0, r.get_center().y), 1.0, GESPERRT.lightened(0.25 if an else 0.0))   # 21.11.
 		var mit_unter := str(e[2]) != ""
 		Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + (6.0 if mit_unter else 10.0)), e[0], Stil.NORMAL, farbe)
 		if mit_unter:
@@ -1345,6 +1451,8 @@ func _male(ci: Control) -> void:
 		_male_kartenbild(ci, _wahl_karte)
 	elif _seite == "szenarien" and _wahl < Werte.SZENARIEN.size():
 		_male_kartenbild(ci, Werte.SZENARIEN[_wahl])   # 20.11.
+	elif _seite == "meistgesucht" and _wahl < _gesucht.size():
+		_male_steckbrief(ci, _gesucht[_wahl] as Dictionary)   # 22.11. (Nemesis)
 	elif _seite == "grafik":
 		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
 	elif _seite == "profil":
@@ -1358,6 +1466,8 @@ func _male(ci: Control) -> void:
 	_male_profil_schild(ci)
 	_male_tc_emblem(ci)
 	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
+	if _tafel != "":
+		_male_tafel(ci)   # 21.11.
 
 
 ## 18.11.: Steckbrief der gewählten Karte rechts neben der Liste. (Paul 18.11.: statt des Minikarten-Bilds –
@@ -1370,6 +1480,71 @@ const GELAENDE_NAMEN := {"fels": "Fels", "wasser": "Wasser", "anhoehe": "Anhöhe
 	"wald": "Wald", "erz": "Erzader", "eis": "Eis", "minen": "Minen", "mauern": "Mauern"}
 
 var _kartenbild_daten := {}   # Kartenname -> Daten (nicht jedes Bild die Datei lesen)
+var _gesucht: Array = []       # 22.11. (Nemesis): die Meistgesuchten (beim Öffnen der Seite gelesen)
+const STECKBRIEF := Rect2(372, 118, 252, 216)
+
+
+func _nichts() -> void:
+	pass
+
+
+var _weg_frage := false   # 22.11.: „Meistgesuchte zurücksetzen“ – erster Klick fragt, der zweite löscht
+
+func _meistgesuchte_weg() -> void:
+	if not _weg_frage:
+		_weg_frage = true
+	else:
+		_weg_frage = false
+		Nemesis.zuruecksetzen()
+		_meldung = "Die Meistgesuchten sind vergessen."
+	var w := _wahl
+	_baue()
+	_wahl = clampi(w, 0, _eintraege.size() - 1)
+
+
+## 22.11. (Paul, Nemesis Teil 7): Steckbrief eines Meistgesuchten – Rang, Bilanz, Fähigkeit, „Gelernt von dir“, Stärke
+## und Schwäche (unbekannt: „???“, bis Brakk sie einmal gesehen hat) und die letzten drei Ereignisse der Chronik.
+func _male_steckbrief(ci: Control, p: Dictionary) -> void:
+	var r := STECKBRIEF
+	Stil.platte(ci, r, 4.0, Color(0.06, 0.05, 0.06, 0.94), KUPFER_HELL)
+	var x := r.position.x + 12.0
+	var weite := r.size.x - 24.0
+	var y := r.position.y + 12.0
+	Stil.schreibe(ci, Vector2(x, y), "GESUCHT", Stil.KLEIN, Stil.ROT)
+	if str(p.get("titel", "")) != "":
+		var t := "„%s“" % str(p["titel"])
+		Stil.schreibe(ci, Vector2(r.end.x - 12.0 - Stil.breite(t, Stil.KLEIN), y), t, Stil.KLEIN, Stil.GOLD)
+	y += 6.0
+	var nm := Nemesis.voller_name(p)
+	Stil.absatz(ci, Vector2(x, y), nm, weite, Stil.GROSS, Stil.GOLD)
+	y += Stil.absatz_groesse(nm, weite, Stil.GROSS).y + 4.0
+	var zeilen: Array = [
+		["Truppe", "%s · Rang %d" % [str(Nemesis.ART_TEXT.get(str(p.get("art", "")), "?")), int(p.get("rang", 1))]],
+		["Bilanz", Nemesis.bilanz_text(p)],
+		["Fähigkeit", " · ".join(PackedStringArray(NemesisFaehigkeiten.von_person(p).map(func(f: Variant) -> String: return NemesisFaehigkeiten.name_von(str(f))))) if not NemesisFaehigkeiten.von_person(p).is_empty() else "—"],
+		["Gelernt von dir", " · ".join(PackedStringArray(NemesisGewohnheiten.von_person(p).map(func(a: Variant) -> String: return NemesisGewohnheiten.name_von(str(a))))) if not NemesisGewohnheiten.von_person(p).is_empty() else "—"],
+		["Taktik", ("bevorzugt " + NemesisLernen.name_von(NemesisLernen.beste(p))) if NemesisLernen.beste(p) != "" else "—"],   # 22.11. (Nemesis Teil 5)
+		["Stärke", str(Nemesis.STAERKEN.get(str(p.get("staerke", "")), "?")) if bool(p.get("staerke_bekannt", false)) else "???"],
+		["Schwäche", str(Nemesis.SCHWAECHEN.get(str(p.get("schwaeche", "")), "?")) if bool(p.get("schwaeche_bekannt", false)) else "???"],
+	]
+	for z: Array in zeilen:
+		Stil.schreibe(ci, Vector2(x, y + 4.0), str(z[0]), Stil.KLEIN, Stil.TEXT_BLASS)
+		var wert := str(z[1])
+		Stil.absatz(ci, Vector2(x + 62.0, y), wert, weite - 62.0, Stil.KLEIN, Stil.TEXT_BLASS if wert in ["???", "—"] else Stil.TEXT)
+		y += Stil.absatz_groesse(wert, weite - 62.0, Stil.KLEIN).y + 2.0
+	y += 4.0
+	Stil.schreibe(ci, Vector2(x, y + 4.0), "Chronik", Stil.KLEIN, LICHT)
+	y += 10.0
+	var chronik: Array = p.get("chronik", [])
+	for i in range(chronik.size() - 1, maxi(-1, chronik.size() - 4), -1):
+		var c: Variant = chronik[i]
+		var text := str((c as Dictionary).get("text", "")) if c is Dictionary else str(c)
+		var datum := str((c as Dictionary).get("datum", "")) if c is Dictionary else ""
+		var zeile := ("%s · %s" % [datum, text]) if datum != "" else text
+		if y + Stil.absatz_groesse(zeile, weite, Stil.KLEIN).y > r.end.y - 6.0:
+			break
+		Stil.absatz(ci, Vector2(x, y), zeile, weite, Stil.KLEIN, Stil.TEXT)
+		y += Stil.absatz_groesse(zeile, weite, Stil.KLEIN).y + 2.0
 
 func _male_kartenbild(ci: Control, kname: String) -> void:
 	if not _kartenbild_daten.has(kname):

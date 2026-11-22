@@ -7,3 +7,6 @@ partien/
 *.tar.gz
 _vor_profil_18-11/
 md5-liste.txt
+
+# Balance-Labor: Ergebnisse der Läufe (groß, jederzeit neu erzeugbar)
+labor/laeufe/*.jsonl
