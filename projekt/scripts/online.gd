@@ -9,7 +9,7 @@ const URL := "https://eobvzyzofesmvjupyvys.supabase.co"
 const SCHLUESSEL := "sb_publishable_w-ig0uKSfEwrLXoe0N5kxQ_MJR2wRwm"
 const ZEITLIMIT := 12.0
 const CACHE := "user://Phantom Online"
-const FELDER := "id,art,datei,spieler,profil,version,spalten,wertung,elo,spiele,siege,erstellt"
+const FELDER := "id,art,datei,spieler,profil,version,spalten,wertung,elo,spiele,siege,erstellt,anfuehrer:daten-%3E%3Eanfuehrer"   # 22.11.: Anführer aus den Daten (Rangliste)
 
 ## "unbekannt", "laedt", "online", "offline"
 static var zustand := "unbekannt"
@@ -90,6 +90,8 @@ static func lade_listen() -> void:
 	var ok := true
 	for art: String in ["angriff", "verteidigung"]:
 		var l: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=%s&art=eq.%s&version=eq.%d&order=elo.desc&limit=300" % [FELDER, art, Phantom.PHANTOM_VERSION])
+		if not (l is Array):   # 22.11.: Rückfall ohne das Anführer-Feld, falls die Abfrage damit scheitert
+			l = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=%s&art=eq.%s&version=eq.%d&order=elo.desc&limit=300" % [FELDER.split(",anfuehrer")[0], art, Phantom.PHANTOM_VERSION])
 		if l is Array:
 			listen[art] = l
 		else:
