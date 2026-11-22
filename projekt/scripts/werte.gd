@@ -153,7 +153,7 @@ const STELLUNG_BAU_RUHE: float = 2.0   # während der Welle: Stellung nur bauen,
 # --- Tempo -------------------------------------------------------------
 const SPIELTEMPO: float = 0.7      # 1.0 = volle Geschwindigkeit; gilt für alles (Laufen, Schießen, Produktion)
 const SIM_SCHRITT: float = SPIELTEMPO / 60.0   # 9a: Spielsekunden je Simulationsschritt, bei jedem Tempo und jeder Bildrate gleich
-const VERSION: int = 65          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 66          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1803,6 +1803,8 @@ const NEMESIS_FERN := 9.0                # Beiname „Weitblick“: Treffer aus 
 const NEMESIS_NAH := 1.5                 # … „Tuchfühlung“: aus weniger als so vielen
 const NEMESIS_KNAPP := 0.15              # „Haaresbreite“: bei der Beförderung weniger Leben als dieser Anteil
 const NEMESIS_UMRISS := Color("ffb84d")  # Umriss der Benannten (mit Narben dunkler)
+const NEMESIS_SCHILD_NAH := 8.0          # 22.11. (Paul): Namensschild voll (Dienstgrad, Name, Beiname) bis so viele Felder …
+const NEMESIS_SCHILD_FERN := 14.0        # … nur der Eigenname bis so viele, dahinter keins (Fähigkeits-Ansagen immer)
 ## 22.11. (Paul, Nemesis Teil 3): Fähigkeiten der Benannten – Startwerte (Sekunden echt, Felder; Schaden als Anteil des
 ## Truppenschadens). Abklingzeit sinkt je Rang um NEMESIS_CD_JE_RANG, ab Rang NEMESIS_BEIDE_AB hat die Person beide.
 const NEMESIS_FAEHIGKEITEN := {

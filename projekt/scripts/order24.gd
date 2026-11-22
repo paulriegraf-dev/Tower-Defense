@@ -39,7 +39,7 @@ const STANDARD := {
 	"geheim_hq_leben": 3000,    # Leben des Technoclan-HQ
 	"myr_rueck_sek": 10,        # so lange am besetzten Myriaden-HQ stehen (ohne Technoclan in der Nähe) = zurückerobert
 	"flucht_sek": 45,           # Flucht: niemand jagt, die Truppen gehen in Stellung
-	"jagd_start": 150,          # Sabotage bis hier (Verteidiger statisch), dann Jagd …
+	"jagd_start": 90,           # Sabotage bis hier (Verteidiger statisch), dann Jagd … – 22.11. (Paul): 90 statt 150, die Haufen standen zu lange
 	"sabotage_ende_fabriken": 2,  # … oder schon, sobald so viele Fabriken zerstört sind
 	"jagd_anteil": 80,          # Prozent der Truppen, die Jagdtrupps bilden (der Rest bleibt in den Nestern)
 	"trupp_min": 3,             # Jagdtrupps zu 3–5
@@ -1061,11 +1061,6 @@ func uhr_sek() -> float:
 	return zeit if wf("ueberleben_sek") <= 0.0 else restzeit()
 
 
-func uhr_anteil() -> float:
-	if wf("ueberleben_sek") <= 0.0:
-		return fmod(zeit, 60.0) / 60.0
-	return clampf(zeit / maxf(1.0, wf("ueberleben_sek")), 0.0, 1.0)
-
 
 # ------------------------------------------------------------------ Truppen der Fabriken (20.11.)
 
@@ -1735,18 +1730,28 @@ func phase() -> String:
 	return p
 
 
+## 22.11. (Paul): unter der Uhr nur noch die Phase – wann es weitergeht, zeigt der Balken (balken_anteil).
 func phase_text() -> String:
 	match phase():
 		"flucht":
 			return "Flucht · zum Myriaden-HQ im Westen"
 		"sabotage":
-			return "Sabotage · Jagd in %s" % _uhr(maxf(0.0, wf("jagd_start") - zeit))
-		"flucht", "sabotage":
-			pass
+			return "Sabotage"
 	if geheim:
-		return "Überläufer · %s" % geheim_text()
+		return "Überläufer"
 	# 20.11. (Paul): der Vorstoß aufs Myriaden-HQ bleibt geheim – angezeigt wird nur die Jagd
-	return "Jagd · %d Trupps · Druck ×%.1f%s" % [trupps.size(), druck(), " · Myriaden-HQ gefallen" if hq_eingenommen else ""]
+	return "Jagd · Myriaden-HQ gefallen" if hq_eingenommen else "Jagd"
+
+
+## 22.11. (Paul): Balken unter der Uhr – läuft bis zum nächsten Ereignis: in Flucht und Sabotage bis zum Jagdbeginn,
+## in der Jagd bis zur nächsten Welle aus dem Schild, im Überläufer-Verlauf bis zur nächsten Myriaden-Welle.
+func balken_anteil() -> float:
+	if geheim:
+		return clampf(_myr_uhr / maxf(1.0, wf("myr_takt")), 0.0, 1.0)
+	if not jagd:
+		return clampf(zeit / maxf(1.0, wf("jagd_start")), 0.0, 1.0)
+	var takt := maxf(1.0, welle_takt_jetzt())
+	return clampf(1.0 - (_naechste_welle - zeit) / takt, 0.0, 1.0)
 
 
 static func _uhr(sek: float) -> String:

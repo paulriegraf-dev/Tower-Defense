@@ -1425,38 +1425,82 @@ func _exit_tree() -> void:
 
 
 ## Namensschilder in der Ego-Sicht (rein optisch, im Bildtakt).
+## 22.11. (Paul: „die Namen sind zu groß“, sie überlappten zu Textbrei): kleiner; nah (NEMESIS_SCHILD_NAH) Dienstgrad +
+## Name und darunter der Beiname (und Titel), weiter weg nur der Eigenname, ab NEMESIS_SCHILD_FERN nichts. Eine
+## laufende Fähigkeit wird immer angesagt. Stehen Benannte dicht beieinander, rücken ihre Schilder in der Höhe auseinander.
 func _process(_delta: float) -> void:
 	var hd: HdAnsicht = spiel.hd if spiel != null else null
 	var noch := {}
+	var k: Kommandant = spiel.kommandant if spiel != null else null
 	if hd != null:
-		for id: int in _person_von:
+		var orte: Array = []   # [Einheit-ID, Position, Zeilen] der gezeigten Schilder, für die Staffelung
+		# voll beschriftet nur der Benannte, auf den Brakk gerade zielt (kleinster Winkel zur Blickrichtung, höchstens 15°)
+		var fokus := -1
+		var ego: EgoModus = spiel.ego
+		if ego != null and k != null:
+			var blick := Vector2(-sin(ego.gier), -cos(ego.gier))
+			var bester := deg_to_rad(15.0)
+			for id: int in _person_von:
+				var x: Variant = instance_from_id(id)
+				if benannt(_person_von[id] as Dictionary) and is_instance_valid(x):
+					var zu := (x as Einheit).position - k.position
+					if zu.length() > 1.0 and absf(blick.angle_to(zu)) < bester:
+						bester = absf(blick.angle_to(zu))
+						fokus = id
+		var reihe: Array = _person_von.keys()
+		if reihe.has(fokus):
+			reihe.erase(fokus)
+			reihe.append(fokus)   # das volle Schild zuletzt: es landet oben auf dem Stapel
+		for id: int in reihe:
 			var p: Dictionary = _person_von[id]
 			var e: Variant = instance_from_id(id)
 			if not benannt(p) or not is_instance_valid(e) or not (e as Einheit).is_visible_in_tree():
 				continue
 			var u := e as Einheit
-			noch[id] = true
 			var fs := u.get_node_or_null("Frontschild") as Sprite2D   # 22.11. (Teil 4): Frontschild immer zur Blickrichtung
 			if fs != null:
 				fs.offset.x = -12.0 if u._sprite.flip_h else 6.0
+			var d := u.position.distance_to(k.position) / Werte.ZELLE if k != null else 0.0
+			var ansage := faehigkeiten.schild_zeile(u) if faehigkeiten != null else ""
+			if d > Werte.NEMESIS_SCHILD_FERN and ansage == "":
+				continue
+			noch[id] = true
 			var schild: Label3D = _schilder.get(id, null)
 			if schild == null:
 				schild = Label3D.new()
 				schild.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 				schild.font_size = 30
 				schild.outline_size = 8
-				schild.pixel_size = 0.0035
+				schild.fixed_size = true   # gleich groß auf dem Bildschirm, egal wie weit (vorher wuchs es nah zu riesigem Text)
+				schild.pixel_size = 0.0012   # ≈ 17 Bildpunkte je Zeile bei 720p
 				schild.outline_modulate = Color(0.05, 0.03, 0.08, 0.9)
 				hd.add_child(schild)
 				_schilder[id] = schild
-			var text := voller_name(p) + ("\n„%s“" % str(p["titel"]) if str(p["titel"]) != "" else "")
-			var ansage := faehigkeiten.schild_zeile(u) if faehigkeiten != null else ""
+			var text := ""
+			if d <= Werte.NEMESIS_SCHILD_NAH and (id == fokus or fokus < 0 and _person_von.size() == 1):
+				text = "%s %s" % [dienstgrad(p), str(p["name"])]
+				if str(p["beiname"]) != "":
+					text += "\n‚%s‘" % str(p["beiname"])
+				if str(p["titel"]) != "":
+					text += "\n„%s“" % str(p["titel"])
+			elif d <= Werte.NEMESIS_SCHILD_FERN:
+				text = str(p["name"])
 			if ansage != "":
-				text += "\n" + ansage   # 22.11. (Teil 3): Fähigkeit angekündigt bzw. läuft
+				text += ("\n" if text != "" else "") + ansage   # 22.11. (Teil 3): Fähigkeit angekündigt bzw. läuft
 			if schild.text != text:
 				schild.text = text
 			schild.modulate = umriss_farbe(p).lightened(0.25)
-			var h := 1.35 + (hd.H if u.in_stellung() else 0.0)
+			# Staffeln: Schilder, die sich auf dem Bildschirm überdecken würden (nah beieinander im Verhältnis zur
+			# Entfernung), rücken um die Zeilen der schon gesetzten nach oben – feste Bildschirmgröße, also mit d skaliert
+			var zeilen := text.count("\n") + 1
+			var zeile_welt := 0.04 * maxf(1.0, d)   # Höhe einer Zeile in Feldern bei dieser Entfernung
+			var breite := 0.018 * maxf(1.0, d) * float(maxi(8, text.get_slice("\n", 0).length()))   # Breite der ersten Zeile in Feldern (≈ 8 px je Zeichen)
+			var hoch := 0
+			for o: Array in orte:
+				if (o[1] as Vector2).distance_to(u.position) / Werte.ZELLE < breite:
+					hoch += int(o[2])
+			orte.append([id, u.position, zeilen])
+			var h := (1.75 if bool(u.daten.get("elite", false)) else 1.35) + (hd.H if u.in_stellung() else 0.0) + zeile_welt * (0.5 * float(zeilen - 1) + float(hoch))   # über der Krone der Eliten
 			schild.position = Vector3(u.position.x / Werte.ZELLE, h, (u.position.y - Werte.KARTE_OBEN) / Werte.ZELLE)
 	for id: int in _schilder.keys():
 		if not noch.has(id):

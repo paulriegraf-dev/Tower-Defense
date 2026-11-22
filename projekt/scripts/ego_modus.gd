@@ -3034,8 +3034,8 @@ func _order24_anzeige(g: Vector2) -> void:
 	_bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.75))
 	_bild.draw_rect(r, farbe, false, 2.0)
 	Stil.schreibe_mittig(_bild, m + Vector2(0, -2), "Befehl 24 · %d:%02d" % [rest / 60, rest % 60], 20, farbe)
-	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * o.uhr_anteil(), 3)), farbe)
-	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), "%s · Budget %d" % [o.phase_text(), int(spiel.budget)], 14, Stil.TEXT_BLASS)
+	_bild.draw_rect(Rect2(r.position + Vector2(4, r.size.y - 6), Vector2((r.size.x - 8.0) * o.balken_anteil(), 3)), farbe)   # 22.11. (Paul): bis zum nächsten Ereignis
+	Stil.schreibe_mittig(_bild, m + Vector2(0, 30), o.phase_text(), 14, Stil.TEXT_BLASS)   # 22.11. (Paul): nur die Phase (Budget steht im HUD)
 	if o.am_terminal(_fuss2d()) and (_terminal == null or not _terminal.visible):
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 52), "[F] Lichtterminal", 16, Stil.GOLD)
 	o.hud(_bild, g, self)   # 20.11.: Befehl 24 – Sprengladungen, In Deckung, Sabotage (order24.gd)

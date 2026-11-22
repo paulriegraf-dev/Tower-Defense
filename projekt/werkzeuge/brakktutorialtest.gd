@@ -51,6 +51,12 @@ func _neue_partie() -> void:
 	tut = null
 	ego = null
 	Werte.setze_anfuehrer("brakk")
+	# wie das Startmenü (_starte): Brakk-Mode spielt auf der großen Hauptkarte – sonst gälte die zuletzt gespielte
+	# Karte aus den Einstellungen (z. B. Befehl 24 mit gesperrten Erdwällen); main.gd lädt die Einstellungen neu
+	if Werte.karte_name != "paulland" or not Werte.karte_gross:
+		Werte.karte_name = "paulland"
+		Werte.setze_karte(true)
+		Werte.speichere_einstellungen()
 	var main_skript: GDScript = load("res://scripts/main.gd")
 	main_skript.set("naechster_start", "brakk")
 	spiel = load("res://main.tscn").instantiate()
