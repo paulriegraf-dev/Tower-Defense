@@ -33,6 +33,8 @@ var _bezahlt: Dictionary = {}       # Feld -> was in dieser Bauphase dort bezahl
 var _abriss_merk := Karte.KEINE     # teures Bauwerk, das auf den zweiten Rechtsklick wartet
 var _abriss_ms := 0
 const ABRISS_FRIST_MS: int = 4000   # so lange gilt der erste Rechtsklick auf Fabrik, Batterie oder Turm
+const BAU_STAPEL_MAX := 5           # 22.11.: Brakk-Mode – so viele Bauschritte der Bauphase lassen sich mit [Z] zurücknehmen
+var _bau_stapel: Array = []         # 22.11.: [{"z": Feld, "typ": Bautyp}], jüngster zuletzt; wird am Wellenstart geleert
 var _export_knoepfe: HBoxContainer
 var _export_hinweis: Label
 var _export_text := ""              # Schlussbild: die Datei, die sich herunterladen / kopieren lässt (Partie oder Phantom)
@@ -3201,6 +3203,7 @@ func starte_welle(erzwingen: bool = false) -> void:
 	_schild_fuer = Karte.KEINE
 	_schild_start = Karte.KEINE
 	_bezahlt.clear()   # ab jetzt gilt für alles Gebaute die normale Erstattung
+	_bau_stapel.clear()
 	_abriss_merk = Karte.KEINE
 	if budget >= Erfolge.SPARER_BUDGET and not brakk_modus and phantom_modus == "" and herausforderung == "":
 		_protokoll["sparer"] = true   # 19.11.: Erfolg „Deutscher Sparer“ (zählt beim Sieg)
@@ -5248,6 +5251,10 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 	if phase == Phase.KAMPF:
 		eintrag["t"] = snappedf(_kampf_sek, 0.1)   # während der Welle gebaut
 	_notiere(eintrag)
+	if brakk_modus and order24 == null and phase == Phase.BAU and not still and typ != Karte.KOMMANDANT and not _ist_ausbau(typ):
+		_bau_stapel.append({"z": z, "typ": typ})   # 22.11.: für [Z] in der Ego-Sicht
+		while _bau_stapel.size() > BAU_STAPEL_MAX:
+			_bau_stapel.pop_front()
 	if typ == Karte.KOMMANDANT:
 		_setze_kommandant(z)
 		werkzeug = Karte.FREI
@@ -5388,6 +5395,78 @@ func reisse_ab(z: Vector2i) -> bool:
 	karte.entferne(z)
 	budget += zurueck
 	return true
+
+
+## 22.11.: Brakk-Mode – warum Abbauen / Zurücknehmen gerade nicht geht ("" = es geht).
+func brakk_abbau_grund() -> String:
+	if order24 != null:
+		return "In Befehl 24 gehören die Bauten dem Feind."
+	if phantom_modus == "angriff":
+		return "Der Bau gehört dem Phantom."
+	if phase != Phase.BAU:
+		return "Abbauen nur in der Bauphase."
+	return ""
+
+
+func abbau_name(z: Vector2i) -> String:
+	var war: int = karte.inhalt(z)
+	if karte.ausbau.get(z, Karte.FREI) == Karte.TURM:
+		return "Turm"
+	return "Schildgenerator" if war == Karte.GENERATOR else ("Batterie" if karte.paar.has(z) else ("Fabrik" if war == Karte.FABRIK else "Erdwall"))
+
+
+## 22.11.: Brakk-Mode – Bauwerk abbauen (Menü-Knopf nach Rückfrage, [Entf] gehalten). Erstattung und Regeln wie im
+## Normalspiel (reisse_ab / erstattung): in derselben Bauphase voll, sonst nach Anführer.
+func brakk_abbauen(z: Vector2i) -> bool:
+	var grund := brakk_abbau_grund()
+	if grund != "":
+		melde(grund, 2.0)
+		return false
+	if karte.inhalt(z) == Karte.FREI or karte.fest.has(z):
+		return false
+	var name := abbau_name(z)
+	var zurueck := erstattung(z)
+	if not reisse_ab(z):
+		return false
+	melde("Abgebaut: %s (+%d)" % [name, zurueck], 2.5, "geld")
+	return true
+
+
+## 22.11.: Brakk-Mode – [Z] nimmt das zuletzt gesetzte Bauwerk dieser Bauphase zurück (volle Erstattung).
+func nimm_bau_zurueck() -> bool:
+	var grund := brakk_abbau_grund()
+	if grund != "":
+		melde(grund.replace("Abbauen", "Zurücknehmen"), 2.0)
+		return false
+	while not _bau_stapel.is_empty():
+		var e: Dictionary = _bau_stapel.pop_back()
+		var z: Vector2i = e["z"]
+		var typ := int(e["typ"])
+		if typ == Karte.PANZER:
+			if not karte.panzer.has(z):
+				continue   # schon anders weg
+			var b := int((_bezahlt.get(z, {}) as Dictionary).get("panzer", 0))
+			karte.panzer.erase(z)
+			if _bezahlt.has(z):
+				(_bezahlt[z] as Dictionary).erase("panzer")
+			budget += b
+			karte.queue_redraw()
+			melde("Zurückgenommen: Panzerung (+%d)" % b, 2.5, "geld")
+			return true
+		if karte.inhalt(z) != typ:
+			continue   # inzwischen abgerissen oder zerstört
+		var name := abbau_name(z)
+		var zurueck := erstattung(z)
+		if _gratis.has(z):
+			if typ == Karte.WALL:
+				freie_waelle += 1   # der Gratis-Wall wird wieder frei
+			elif typ == Karte.FABRIK:
+				gratis_fabriken += 1
+		if reisse_ab(z):
+			melde("Zurückgenommen: %s (+%d)" % [name, zurueck], 2.5, "geld")
+			return true
+	melde("Nichts zum Zurücknehmen in dieser Bauphase.", 2.0)
+	return false
 
 
 ## Rechtsklick auf ein Bauwerk: Erdwälle (auch mit Stellung oder Tor) fallen sofort. Fabrik, Batterie und Turm
@@ -6067,8 +6146,8 @@ func _ziehe_waelle(ziel: Vector2i) -> void:
 
 
 func _oeffne_fabrikmenue(z: Vector2i) -> void:
-	if brakk_modus and fabriken.has(z) and not karte.paar.has(z):
-		return   # 19.11. (Paul): Brakk-Mode – Fabriken lassen sich nicht bearbeiten (Ringe laufen über Brakk)
+	# 22.11. (Paul): Brakk-Mode – das Menü einer Fabrik öffnet wieder: Ausbauten gibt es dort nicht (Ringe laufen über
+	# Brakk), aber den Knopf „Abbauen“ (fabrikmenue.gd)
 	if phantom_modus == "angriff":
 		return   # der Bau gehört dem Phantom
 	if karte.paar.has(z) and not fabriken.has(z):

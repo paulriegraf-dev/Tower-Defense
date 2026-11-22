@@ -162,7 +162,7 @@ static var sim_mal: int = 1
 
 static func sim_schritt() -> float:
 	return SIM_SCHRITT * float(sim_mal)
-const VERSION: int = 67          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 68          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1770,6 +1770,13 @@ const BRAKK_DURCHBRUCH_STARK := 1.5    # ... und macht so lange so viel mehr Sch
 const BRAKK_DURCHBRUCH_DAUER := 4.0
 const BRAKK_SPRUNG_SEK := 0.8          # Hunde: so lange aufgehalten, dann springen sie über die Truppe hinweg
 const BRAKK_SPRUNG_ABKLING := 4.0
+## 22.11. (Paul): Hunde-Sprung in Phasen (Auslösezeit, Abklingzeit, Reichweite und Schaden bleiben): Ducken – Flug – Erholung
+const BRAKK_SPRUNG_ANLAUF := 0.3       # Ducken vor dem Absprung (Telegrafieren; bricht ab, wenn die Truppe davor stirbt)
+const BRAKK_SPRUNG_FLUG := 0.35        # Parabel von Absprung- zu Landepunkt
+const BRAKK_SPRUNG_ERHOLUNG := 0.25    # nach der Landung: kein Angriff, kein Laufen
+const BRAKK_SPRUNG_HOEHE_PX := 28.0    # Scheitelhöhe im 2D (26–32 Bildpunkte)
+const BRAKK_SPRUNG_HOEHE_FELD := 1.0   # Scheitelhöhe in der Ego-Sicht (Felder)
+const BRAKK_SPRUNG_LANDESTAUCH := 0.12 # kurz gestaucht bei der Landung
 ## 22.11. (Paul): Brakk-Mode Classic – die eigene Basis steht ganz im letzten Drittel (ihre linke Spalte ab diesem Anteil
 ## der Kartenbreite; PaulLand: Mitte in Spalte 20–26), damit die Gegner nicht zu schnell durchkommen.
 const BRAKK_BASIS_AB_ANTEIL := 2.0 / 3.0

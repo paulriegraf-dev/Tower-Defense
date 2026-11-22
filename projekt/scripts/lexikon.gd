@@ -870,7 +870,7 @@ func _baue_daten() -> void:
 				"Zwei Pistolen im Wechsel. Jede überhitzt bei Dauerfeuer (Bögen am Fadenkreuz) und ist dann kurz gesperrt.",
 				"Runden laufen von selbst: Countdown in der Bauphase, [Enter] startet früher. Keine Fabrik nötig, jede Runde 5 Erdwälle gratis.",
 				"Viele Gegner, Schleudern werfen auch auf Brakk: roter Landekreis – mit [Shift] ausweichen. Der rote Bogen am Rand zeigt, woher Treffer kommen.",
-				"Bauen mit [1]–[7] (5 Felder Reichweite), [F] baut aus. Der Schild der Gegnerzone fängt Schüsse ab."]],
+				"Bauen mit [1]–[7] (5 Felder Reichweite), [F] baut aus (bei Fabriken: abbauen), [Entf] halten baut das Gebäude im Blick ab, [Z] nimmt das zuletzt Gebaute zurück (nur Bauphase, nicht in Befehl 24). Der Schild der Gegnerzone fängt Schüsse ab."]],
 				["Fähigkeiten (frei mit der Stufe)", Stil.GOLD, [
 				"[E] Lichttreppe auf den Wall im Blick (bis 5 Felder, steht 8 s) – oben auf dem Wall [E] Lichtbrücke zum nächsten Wall.",
 				"St. 2 [Shift] Tumble · St. 3 [Q] Lichtanker (werfen, nochmal [Q] zieht dich hin, dazwischen schwingen) · St. 4 Rechtsklick halten: Ladestrahl (lässt die Hitze ab).",
@@ -1109,7 +1109,7 @@ func _brakk_karten() -> Array:
 		_faehigkeit("Lichtsäule", "Einschlag von oben", {"glyphe": "saeule", "farbe": Stil.LEUCHT}, int(ab["saeule"]), "X + Klick", "Säule", [["Schaden", _z(E.SAEULE_SCHADEN)], ["Weite", _z(E.SAEULE_WEITE) + " Felder"], ["Cooldown", _z(E.SAEULE_ABKLING) + " s"]], [
 			["Zielen und setzen", Stil.LEUCHT, [
 				"[X] zielt (Marke am Boden), Linksklick setzt, Rechtsklick bricht ab. Nach %s s schlägt die Säule ein: %s × Fähigkeitsschaden im Umkreis von %s Feldern." % [_z(E.SAEULE_VORLAUF), _z(E.SAEULE_SCHADEN), _z(E.SAEULE_RADIUS)],
-				"Die Art hängt vom aktiven Ring ab."]],
+				"Die Art hängt vom aktiven Ring ab; die Marke zeigt vorher die Form des Einschlags. Beim Durchschlagring dreht Linksklick halten + Maus die Linie, ein kurzer Klick nimmt die Blickrichtung."]],
 			["Ringe (aktiver Ring)", Stil.GOLD, _brakk_ring_zeilen("saeule")]]),   # 20.11. (Nachtrag): aus dem Reiter Ringe hierher
 		_faehigkeit("Klonmaschine", "Ultimative", {"glyphe": "ulti", "farbe": Stil.GOLD}, int(ab["ulti"]), "R", "Klon", [["lädt durch", "%d Kills" % B.ULTI_KILLS]], [
 			["Klonen", Stil.LEUCHT, [

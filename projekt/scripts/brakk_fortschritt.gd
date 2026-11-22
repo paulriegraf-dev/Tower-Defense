@@ -67,11 +67,11 @@ static func gross(g: Gegner) -> bool:
 ## 19.11. (Paul): `brakk_stufen` – was der Ring Brakk auf Ringstufe 1 / 2 / 3 gibt (Stufe 3 = früherer Vollwert).
 ## Ring und Feld passen zusammen: der Ring gibt Brakk dieselbe Wirkung, die das Feld als Truppe baut.
 const RINGE := {
-	"durchschuss": {"saeule_kurz": "5er-Linie", "name": "Durchschlagring", "truppe": "scharfschuetze", "saeule": "fünf schmale Säulen in einer Linie quer durch 5 Felder", "brakk_stufen": [
+	"durchschuss": {"saeule_kurz": "5er-Linie", "name": "Durchschlagring", "truppe": "scharfschuetze", "saeule": "Linie über 5 Felder in Blickrichtung (Linksklick halten und Maus bewegen dreht sie)", "brakk_stufen": [
 		{"weitere": [0.5], "text": "durch 1 weiteren Gegner (halber Schaden)"},
 		{"weitere": [0.5, 0.5], "text": "durch 2 weitere Gegner (halber Schaden)"},
 		{"weitere": [1.0, 0.5], "text": "durch 2 weitere (der erste voll, dann halb)"}]},
-	"laser": {"saeule_kurz": "2× Schaden", "name": "Glutstrahlring", "truppe": "scharfschuetze", "saeule": "kleiner Einschlag mit doppeltem Schaden", "brakk_stufen": [
+	"laser": {"saeule_kurz": "2× Schaden", "name": "Glutstrahlring", "truppe": "scharfschuetze", "saeule": "ein kleiner Einschlag mit doppeltem Schaden", "brakk_stufen": [
 		{"schaden": 1.2, "text": "+20 % Schaden"},
 		{"schaden": 1.3, "text": "+30 % Schaden"},
 		{"schaden": 1.4, "text": "+40 % Schaden"}]},
@@ -79,11 +79,11 @@ const RINGE := {
 		{"mark_bonus": 1.15, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +15 % Schaden"},
 		{"mark_bonus": 1.25, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +25 % Schaden"},
 		{"mark_bonus": 1.35, "mark_sek": 3.0, "text": "Treffer markieren 3 s: andere +35 % Schaden"}]},
-	"feuerteam": {"saeule_kurz": "3 Einschläge", "name": "Taktring", "truppe": "technogunner", "saeule": "drei kleinere Einschläge kurz nacheinander rund um die Marke", "brakk_stufen": [
+	"feuerteam": {"saeule_kurz": "3 Einschläge", "name": "Taktring", "truppe": "technogunner", "saeule": "3 Einschläge im Dreieck rund um die Marke (0°/120°/240° ab Blickrichtung)", "brakk_stufen": [
 		{"takt": 1.0 / 1.15, "text": "15 % schneller, heizt weniger"},
 		{"takt": 1.0 / 1.2, "text": "20 % schneller, heizt weniger"},
 		{"takt": 1.0 / 1.25, "text": "25 % schneller, heizt weniger"}]},
-	"minigun": {"saeule_kurz": "steht 3 s", "name": "Wirbelring", "truppe": "technogunner", "saeule": "die Säule bleibt 3 s stehen, dreht sich und schadet laufend", "brakk_stufen": [
+	"minigun": {"saeule_kurz": "steht 3 s", "name": "Wirbelring", "truppe": "technogunner", "saeule": "ein Einschlag, die Säule bleibt 3 s stehen, dreht sich und schadet laufend", "brakk_stufen": [
 		{"anlauf": 1.3, "text": "Dauerfeuer läuft an bis 1,3×"},
 		{"anlauf": 1.45, "text": "Dauerfeuer läuft an bis 1,45×"},
 		{"anlauf": 1.6, "text": "Dauerfeuer läuft an bis 1,6×"}]},
@@ -91,15 +91,15 @@ const RINGE := {
 		{"schutz": 0.10, "text": "Brakk nimmt 10 % weniger Schaden"},
 		{"schutz": 0.15, "text": "Brakk nimmt 15 % weniger Schaden"},
 		{"schutz": 0.20, "text": "Brakk nimmt 20 % weniger Schaden"}]},
-	"abpraller": {"saeule_kurz": "springt auf 3", "name": "Sprungring", "truppe": "plasmawerfer", "saeule": "Einschlag, dann springt ein Blitz auf bis zu 3 Gegner in der Nähe", "brakk_stufen": [
+	"abpraller": {"saeule_kurz": "springt auf 3", "name": "Sprungring", "truppe": "plasmawerfer", "saeule": "Einschlag, dann springt ein Blitz auf bis zu 3 Gegner im Umkreis von 4 Feldern", "brakk_stufen": [
 		{"spruenge": 1, "sprung_anteil": 0.4, "text": "1 Sprung mit 40 % Schaden"},
 		{"spruenge": 1, "sprung_anteil": 0.6, "text": "1 Sprung mit 60 % Schaden"},
 		{"spruenge": 2, "sprung_anteil": 0.6, "text": "2 Sprünge mit 60 % Schaden"}]},
-	"brandfeld": {"saeule_kurz": "+ Brandfeld", "name": "Brandring", "truppe": "plasmawerfer", "saeule": "Einschlag und ein großes Brandfeld", "brakk_stufen": [
+	"brandfeld": {"saeule_kurz": "+ Brandfeld", "name": "Brandring", "truppe": "plasmawerfer", "saeule": "Einschlag und ein Brandfeld (30 % größer als der Einschlag)", "brakk_stufen": [
 		{"brand_takt": 2.5, "text": "Treffer setzen alle 2,5 s den Boden in Brand"},
 		{"brand_takt": 2.0, "text": "Treffer setzen alle 2 s den Boden in Brand"},
 		{"brand_takt": 1.5, "text": "Treffer setzen alle 1,5 s den Boden in Brand"}]},
-	"plasmagel": {"saeule_kurz": "bremst 4 s", "name": "Gelring", "truppe": "plasmawerfer", "saeule": "wenig Schaden, aber alle im Feld 4 s stark gebremst", "brakk_stufen": [
+	"plasmagel": {"saeule_kurz": "bremst 4 s", "name": "Gelring", "truppe": "plasmawerfer", "saeule": "Gelfeld (20 % größer als der Einschlag): wenig Schaden, aber alle im Feld 4 s stark gebremst", "brakk_stufen": [
 		{"bremse": 1.0, "gel_bonus": 1.2, "text": "bremst 1 s, Gebremste nehmen +20 %"},
 		{"bremse": 1.5, "gel_bonus": 1.3, "text": "bremst 1,5 s, Gebremste nehmen +30 %"},
 		{"bremse": 2.0, "gel_bonus": 1.4, "text": "bremst 2 s, Gebremste nehmen +40 %"}]},

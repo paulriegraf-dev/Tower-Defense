@@ -180,14 +180,8 @@ func _durchkommen(opfer: Einheit, delta: float) -> bool:
 		if not karte.ist_frei(karte.zelle_bei(ziel)):
 			return false
 		_aufgehalten = 0.0
-		_sprung_abkling = Werte.BRAKK_SPRUNG_ABKLING
-		_boden_frei = 1.2
-		var tw := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)   # 9a: im Simulationstakt
-		tw.tween_property(self, "position", ziel, 0.35).set_trans(Tween.TRANS_SINE)
-		var hoch := create_tween()
-		hoch.tween_property(_sprite, "position:y", _sprite.position.y - 26.0, 0.17).set_ease(Tween.EASE_OUT)
-		hoch.tween_property(_sprite, "position:y", _sprite.position.y, 0.18).set_ease(Tween.EASE_IN)
-		return true
+		_sprung_start(opfer, ziel, vor)
+		return false   # in diesem Bild noch einmal wie bisher; ab dem nächsten läuft _sprung_weiter
 	if _aufgehalten < Werte.BRAKK_DURCHBRUCH_SEK or opfer is Kommandant:
 		return false
 	_aufgehalten = 0.0
@@ -202,6 +196,98 @@ func _durchkommen(opfer: Einheit, delta: float) -> bool:
 		tw.tween_property(opfer, "position", neu, 0.2)
 	spiel.effekte.welle(position, Werte.ZELLE * 0.8, Color("ff5a3a"), "staub", 0.4)
 	return true
+
+
+# ------------------------------------------------------------------ Hunde-Sprung (22.11., Paul)
+# Phasen: 1 Anlauf (ducken, abbrechbar) – 2 Flug (Parabel, gleichmäßig nach vorn) – 3 Erholung (Landung, kein Angriff).
+var _sp_phase := 0
+var _sp_t := 0.0                    # Sekunden in der Phase
+var _sp_gesamt := 0.0               # Sekunden seit dem Anlauf
+var _sp_von := Vector2.ZERO
+var _sp_ziel := Vector2.ZERO
+var _sp_opfer: Einheit = null
+var _sp_basis := Vector2.ONE        # Maßstab der Figur vor dem Sprung
+var _sp_y0 := 0.0
+var sprung_hoch := 0.0              # 0..1: Höhe im Bogen (Schatten schrumpft, Ego-Billboard hebt ab)
+var sprung_log := {}                # Phase -> Sekunden seit dem Anlauf (Prüfung: werkzeuge/hundetest.gd)
+
+
+func springt() -> bool:
+	return _sp_phase != 0
+
+
+func _sprung_start(opfer: Einheit, ziel: Vector2, vor: Vector2) -> void:
+	_sp_phase = 1
+	_sp_t = 0.0
+	_sp_gesamt = 0.0
+	_sp_opfer = opfer
+	_sp_ziel = ziel
+	_sp_basis = _sprite.scale
+	_sp_y0 = _sprite.position.y
+	sprung_log = {"anlauf": 0.0}
+	_sprite.flip_h = (vor.x < 0.0) != _blickt_links   # Blick nach vorn in Sprungrichtung
+
+
+func _sprung_ende() -> void:
+	_sp_phase = 0
+	sprung_hoch = 0.0
+	_sp_opfer = null
+	_sprite.scale = _sp_basis
+	_sprite.position.y = _sp_y0
+
+
+## Ein Bild des Sprungs. true = dieses Bild gehört ganz dem Sprung (kein Laufen, kein Angriff).
+func _sprung_weiter(delta: float) -> bool:
+	_sp_t += delta
+	_sp_gesamt += delta
+	_sprite.bewegt(false)
+	match _sp_phase:
+		1:
+			# Anlauf: auf 90 % Höhe und 108 % Breite ducken, Position bleibt stehen. Stirbt die Truppe davor, fällt der Sprung aus.
+			var reichweite: float = float(daten["reichweite"]) * Werte.ZELLE * 1.5
+			if not is_instance_valid(_sp_opfer) or _sp_opfer.leben <= 0.0 or _sp_opfer.position.distance_to(position) > reichweite:
+				_sprung_ende()
+				_aufgehalten = 0.0
+				return false
+			var f := clampf(_sp_t / minf(0.1, Werte.BRAKK_SPRUNG_ANLAUF), 0.0, 1.0)
+			_sprite.scale = _sp_basis * Vector2(lerpf(1.0, 1.08, f), lerpf(1.0, 0.9, f))
+			if _sp_t >= Werte.BRAKK_SPRUNG_ANLAUF:
+				_sp_phase = 2
+				_sp_t = 0.0
+				_sp_von = position
+				_sprung_abkling = Werte.BRAKK_SPRUNG_ABKLING
+				_boden_frei = 1.2
+				sprung_log["flug"] = _sp_gesamt
+			return true
+		2:
+			# Flug: horizontal gleichmäßig, Höhe als Parabel; im Flug 110 % Höhe und 92 % Breite
+			var s := clampf(_sp_t / Werte.BRAKK_SPRUNG_FLUG, 0.0, 1.0)
+			position = _sp_von.lerp(_sp_ziel, s)
+			sprung_hoch = 4.0 * s * (1.0 - s)
+			_sprite.position.y = _sp_y0 - Werte.BRAKK_SPRUNG_HOEHE_PX * sprung_hoch
+			_sprite.scale = _sp_basis * Vector2(0.92, 1.10)
+			if _sp_t >= Werte.BRAKK_SPRUNG_FLUG:
+				position = _sp_ziel
+				sprung_hoch = 0.0
+				_sprite.position.y = _sp_y0
+				_sp_phase = 3
+				_sp_t = 0.0
+				sprung_log["landung"] = _sp_gesamt
+				sprung_log["landepunkt"] = position
+				spiel.effekte.welle(position, Werte.ZELLE * 0.5, Color("c9b48a"), "staub", 0.3)   # Staubkringel wie beim Durchbruch
+				Ton.spiele(spiel, "tf-earth", -16.0)
+			return true
+		3:
+			# Erholung: kurz gestaucht (88 % Höhe, 112 % Breite), dann zurück
+			var st := Werte.BRAKK_SPRUNG_LANDESTAUCH
+			var back := clampf((_sp_t - st) / maxf(0.01, Werte.BRAKK_SPRUNG_ERHOLUNG - st), 0.0, 1.0)
+			_sprite.scale = _sp_basis * Vector2(lerpf(1.12, 1.0, back), lerpf(0.88, 1.0, back))
+			if _sp_t >= Werte.BRAKK_SPRUNG_ERHOLUNG:
+				sprung_log["ende"] = _sp_gesamt
+				_sprung_ende()
+				return false
+			return true
+	return false
 
 
 func _schild_gleichschritt() -> float:
@@ -358,6 +444,8 @@ func _physics_process(_takt: float) -> void:
 	if elite:
 		_sprite.modulate *= Color(1.25, 0.72, 0.45)   # Brakk-Mode: Elite – glühend rot-orange
 		queue_redraw()
+	if _sp_phase != 0 and _sprung_weiter(delta):
+		return   # 22.11.: Hunde-Sprung läuft (Ducken, Flug, Erholung)
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
 	if reichweite > 0.0:
 		reichweite += karte.anhoehe_bonus(karte.zelle_bei(position)) * Werte.ZELLE   # 18.11.: Anhöhe gilt auch für Gegner

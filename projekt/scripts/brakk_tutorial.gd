@@ -199,7 +199,7 @@ func _input(event: InputEvent) -> void:
 	elif k.keycode == KEY_BACKSPACE and s.has("fertig"):
 		_weiter()
 		get_viewport().set_input_as_handled()
-	elif k.keycode == KEY_DELETE:
+	elif k.keycode == KEY_DELETE and not (spiel.ego != null and spiel.ego.gebaeude_im_blick() != Karte.KEINE):   # 22.11.: Gebäude im Blick = Abbauen, nicht Tutorial beenden
 		if _entf_rest > 0.0:
 			beenden()
 		else:
@@ -652,7 +652,16 @@ func _baue_schritte() -> Array:
 			"hinweis": "1 · Linksklick auf ein freies Feld",
 			"start": func(): _merk["n"] = _anzahl_fabriken(),
 			"fertig": func(): return _anzahl_fabriken() > int(_merk.get("n", 0))},
-		{"text": "Türme, Batterien und Schildgeneratoren baust du mit F aus: anschauen, F, das gewohnte Menü öffnet sich. Fabriken nicht – keine Fabrik-Ausbauten im Brakk-Mode, Stufe 1 gibt dort +20 % Leben statt einer dritten Truppe.",
+		{"text": "Falsch gebaut? Mit Z nimmst du das zuletzt gesetzte Bauwerk dieser Bauphase zurück, mit vollem Geld. Bau eine Fabrik (1) und nimm sie mit Z zurück. Älteres baust du ab: Gebäude anschauen, Entf halten (oder F, dann „Abbauen“) – nur in der Bauphase.",
+			"hinweis": "1 · Linksklick, dann Z",
+			"start": func():
+				_merk["n"] = _anzahl_fabriken()
+				_merk["hoch"] = false,
+			"fertig": func():
+				if _anzahl_fabriken() > int(_merk.get("n", 0)):
+					_merk["hoch"] = true
+				return bool(_merk.get("hoch", false)) and _anzahl_fabriken() <= int(_merk.get("n", 0))},
+		{"text": "Türme, Batterien und Schildgeneratoren baust du mit F aus: anschauen, F, das gewohnte Menü öffnet sich. Bei Fabriken zeigt F nur „Abbauen“ – keine Fabrik-Ausbauten im Brakk-Mode, Stufe 1 gibt dort +20 % Leben statt einer dritten Truppe.",
 			},
 		# --- Ringe
 		{"text": "Deine Ringe kaufst du am Lichtterminal der Basis. Geh zur Basis und drück dort F – das geht nur in der Bauphase.",

@@ -338,6 +338,16 @@ func _handle(i: int) -> void:
 			var z := freies_feld()
 			if z != Karte.KEINE and spiel.bau_hindernis(z, Karte.FABRIK) == "":
 				spiel.baue(z, Karte.FABRIK)
+	elif text.begins_with("Falsch gebaut"):
+		# 22.11.: eine Fabrik bauen, dann mit [Z] zurücknehmen
+		var n0 := int(tut._merk.get("n", 0))
+		if takt % 20 == 1 and tut._anzahl_fabriken() <= n0:
+			var z := freies_feld()
+			if z != Karte.KEINE and spiel.bau_hindernis(z, Karte.FABRIK) == "":
+				spiel.baue(z, Karte.FABRIK)
+		elif takt % 20 == 10 and tut._anzahl_fabriken() > n0:
+			taste(KEY_Z, true)
+			taste(KEY_Z, false)
 	elif text.begins_with("Deine Ringe kaufst"):
 		if takt == 1:
 			if ego._haken >= 0.0:

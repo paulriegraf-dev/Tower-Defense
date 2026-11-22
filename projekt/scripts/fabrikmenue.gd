@@ -170,7 +170,49 @@ func _stats_zeile() -> void:
 	_y += 10.0
 
 
+## 22.11. (Paul): Brakk-Mode – Knopf „Abbauen (+N)“; der erste Druck fragt nach, der zweite (binnen 3 s) baut ab.
+const ABBAU_FRIST_MS := 3000
+var _abbau_ms := 0
+var _abbau_z := Karte.KEINE
+
+
+func _abbau_knopf() -> void:
+	if not spiel.brakk_modus or spiel.order24 != null or spiel.phantom_modus == "angriff":
+		return
+	var z := zelle
+	var b := Feld.new()
+	Stil.leerer_knopf(b)
+	b.position = Vector2(PAD, _y + 1.0)
+	b.size = Vector2(BREITE - 2.0 * PAD, 12)
+	b.pressed.connect(_abbau_druck)
+	b.malen = func(ci: Button):
+		var grund: String = spiel.brakk_abbau_grund()
+		var wartet := _abbau_z == z and Time.get_ticks_msec() - _abbau_ms <= ABBAU_FRIST_MS
+		var plus: int = spiel.erstattung(z)
+		var text := grund if grund != "" else (("Nochmal drücken zum Bestätigen (+%d)" if wartet else "Abbauen (+%d)") % plus)
+		var dr := ci.is_hovered() and grund == ""
+		Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 2.0, Stil.METALL if dr else Stil.METALL_DUNKEL, Stil.WARN if wartet else (Stil.RAHMEN_HELL if dr else Stil.RAHMEN))
+		Stil.schreibe_mittig(ci, ci.size / 2.0, text, Stil.KLEIN, Stil.WARN if wartet else (Stil.TEXT if grund == "" else Stil.TEXT_BLASS))
+	add_child(b)
+	_y += 15.0
+
+
+func _abbau_druck() -> void:
+	var grund: String = spiel.brakk_abbau_grund()
+	if grund != "":
+		spiel.melde(grund, 2.0)
+		return
+	var jetzt := Time.get_ticks_msec()
+	if _abbau_z != zelle or jetzt - _abbau_ms > ABBAU_FRIST_MS:
+		_abbau_z = zelle
+		_abbau_ms = jetzt
+		return
+	_abbau_ms = 0
+	spiel.brakk_abbauen(zelle)
+
+
 func _fertig() -> void:
+	_abbau_knopf()
 	size = Vector2(BREITE, _y + PAD - 2.0)
 	_setze_ort()
 	queue_redraw()
@@ -377,7 +419,7 @@ func _baue_fabrik() -> void:
 	_chips("Ziel", zw)
 	var n_zu: int = spiel.zugewiesen(zelle).size()
 	_zeile("Stellungen: frei (ziehen = zuweisen)" if n_zu == 0 else "Stellungen: %d zugewiesen" % n_zu, Stil.KLEIN, Stil.TEXT_BLASS)
-	if stufe == 0:
+	if stufe == 0 and not spiel.brakk_modus:   # 22.11.: im Brakk-Mode bestimmen die Ringe die Truppe
 		var tw: Array = []
 		for typ: String in Werte.FABRIK_EINHEITEN:
 			tw.append([str(Werte.EINHEITEN[typ]["name"]), typ == f["typ"], spiel.stelle_um.bind(zelle, typ), typ == f["typ"]])

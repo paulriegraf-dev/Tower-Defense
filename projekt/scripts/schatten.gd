@@ -27,7 +27,8 @@ func _draw() -> void:
 	for g in spiel.gegner:
 		if not is_instance_valid(g) or not g.visible:
 			continue
-		_fleck((g as Node2D).position - oben, 22.0 if g.typ == "belagerung" else (16.0 if g.typ == "sphaere" else 12.0), FARBE_GEGNER)
+		var gr := 22.0 if g.typ == "belagerung" else (16.0 if g.typ == "sphaere" else 12.0)
+		_fleck((g as Node2D).position - oben, gr * (1.0 - 0.4 * g.sprung_hoch), FARBE_GEGNER)   # 22.11.: im Sprung schrumpft der Schatten am Boden
 	for t in spiel.turmbilder.values():
 		if is_instance_valid(t):
 			_fleck((t as Node2D).position - oben + Vector2(0, -4), 24.0, FARBE)

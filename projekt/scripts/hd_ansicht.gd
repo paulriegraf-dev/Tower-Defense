@@ -380,6 +380,9 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 		billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 		if traeger is Gegner or traeger is Einheit:
 			ort = _welt_3d(traeger.global_position, hoehe + 0.002)
+			if traeger is Gegner:
+				# 22.11.: der Hunde-Sprung hebt das Billboard ab (die Sprite-Position y zählt hier nicht, nur die Trägerposition)
+				ort.y += (traeger as Gegner).sprung_hoch * Werte.BRAKK_SPRUNG_HOEHE_FELD
 		versatz.y -= _leer_unten(s.texture, s.region_rect if s.region_enabled else Rect2(Vector2.ZERO, s.texture.get_size()))
 	if b.offset != versatz:
 		b.offset = versatz

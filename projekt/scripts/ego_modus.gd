@@ -214,7 +214,7 @@ func starten(p_spiel: Node) -> void:
 		spiel.melde("Brakk-Mode: links laufen · rechts wischen zum Zielen · Fadenkreuz auf dem Gegner: Brakk schießt · Fähigkeit tippen oder halten und ziehen", 10.0)
 		return
 	if kit != null:
-		spiel.melde("Brakk-Mode mit %s: WASD + Maus · [F] ausbauen, an der Basis Ringe · [I] Übersicht → Brakk-Mode · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
+		spiel.melde("Brakk-Mode mit %s: WASD + Maus · [F] ausbauen, [Entf] abbauen, [Z] zurück, an der Basis Ringe · [I] Übersicht → Brakk-Mode · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
 		return
 	spiel.melde("Brakk-Mode: WASD + Maus · Klick schießt · Leertaste springt · [E] Lichttreppe · [F] ausbauen, an der Basis Ringe · Enter: Welle" + ("" if spiel.brakk_modus else " · [G] zurück"), 10.0)
 
@@ -366,6 +366,11 @@ func _input(event: InputEvent) -> void:
 		return   # 18.11.: am Handy steuert ego_touch.gd – die nachgemachte Maus der Finger zählt hier nicht
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var m := event as InputEventMouseMotion
+		if _saeule_dreht:
+			# 22.11.: Durchschlagring – bei gehaltenem Linksklick dreht die Maus die Linie, der Blick bleibt stehen
+			_saeule_dir = _saeule_dir.rotated(m.relative.x * BLICK * 2.0)
+			_saeule_pix += absf(m.relative.x) + absf(m.relative.y)
+			return
 		gier -= m.relative.x * BLICK
 		nick = clampf(nick - m.relative.y * BLICK, -1.25, 1.25)
 		_sway = (_sway - m.relative * SWAY_STAERKE).limit_length(SWAY_MAX)   # 19.11.: Waffen hängen nach
@@ -384,7 +389,12 @@ func _input(event: InputEvent) -> void:
 			return
 		if b.button_index == MOUSE_BUTTON_LEFT:
 			if _saeule_zielt:
-				if b.pressed:
+				if _saeule_ring == "durchschuss":
+					if b.pressed:
+						_saeule_dreh_start()   # 22.11.: Marke festhalten, Maus dreht die Linie
+					else:
+						_saeule_dreh_ende()
+				elif b.pressed:
 					_saeule_bestaetigen()   # 18.11.: Lichtsäule setzen
 				get_viewport().set_input_as_handled()
 				return
@@ -439,6 +449,16 @@ func _input(event: InputEvent) -> void:
 			KEY_ENTER, KEY_KP_ENTER:
 				spiel.starte_welle()
 				get_viewport().set_input_as_handled()
+			KEY_Z:
+				if spiel.brakk_modus and spiel.order24 == null:
+					spiel.nimm_bau_zurueck()   # 22.11. (Paul): letztes Bauwerk der Bauphase zurücknehmen
+					get_viewport().set_input_as_handled()
+			KEY_DELETE:
+				if spiel.brakk_modus and spiel.order24 == null and gebaeude_im_blick() != Karte.KEINE:
+					var grund: String = spiel.brakk_abbau_grund()
+					if grund != "":
+						spiel.melde(grund, 2.0)   # in der Welle gesperrt
+					get_viewport().set_input_as_handled()
 			KEY_F:
 				# 18.11. (Paul): Gebäude im Blick ausbauen – öffnet dasselbe Menü wie ein Klick in der Übersicht
 				var z := gebaeude_im_blick()
@@ -448,6 +468,31 @@ func _input(event: InputEvent) -> void:
 				elif (z == Karte.KEINE or spiel.order24 != null) and _am_terminal():
 					_terminal_auf()   # 18.11.: Lichtterminal an der Basis
 					get_viewport().set_input_as_handled()
+
+
+## 22.11. (Paul): Brakk-Mode – [Entf] auf das Gebäude im Blick halten (ABBAU_HALTEN s, Fortschrittsring), Loslassen bricht ab.
+const ABBAU_HALTEN := 0.6
+var _abbau_t := 0.0
+var _abbau_z := Karte.KEINE
+var _abbau_fertig := false   # nach dem Abbau erst loslassen
+
+
+func _abbau_weiter(dt: float) -> void:
+	var z := Karte.KEINE
+	if spiel.brakk_modus and spiel.order24 == null and Input.is_key_pressed(KEY_DELETE) and not _saeule_zielt and not _feld_zielt:
+		z = gebaeude_im_blick()
+	elif not Input.is_key_pressed(KEY_DELETE):
+		_abbau_fertig = false
+	if z == Karte.KEINE or z != _abbau_z or _abbau_fertig or spiel.brakk_abbau_grund() != "":
+		_abbau_t = 0.0
+	_abbau_z = z
+	if z == Karte.KEINE or _abbau_fertig or spiel.brakk_abbau_grund() != "":
+		return
+	_abbau_t += dt
+	if _abbau_t >= ABBAU_HALTEN:
+		_abbau_t = 0.0
+		_abbau_fertig = true
+		spiel.brakk_abbauen(z)
 
 
 ## 18.11.: Eigenes Gebäude unter dem Fadenkreuz in Bau-Reichweite (Fabrik, Batterie, Turm, Schildgenerator), sonst KEINE.
@@ -471,8 +516,8 @@ func gebaeude_im_blick() -> Vector2i:
 
 func _ist_ausbaubar(z: Vector2i) -> bool:
 	var was: int = karte.inhalt(z)
-	if spiel.fabriken.has(z) and spiel.brakk_modus and not karte.paar.has(z):
-		return false   # 19.11. (Paul): Brakk-Mode – Fabriken nicht bearbeitbar (Pilotenfabrik der Batterie schon)
+	if spiel.order24 != null and spiel.fabriken.has(z) and not karte.paar.has(z):
+		return false   # 22.11.: Befehl 24 – die Fabriken gehören dem Feind (Brakk-Mode: sonst öffnet [F] das Menü mit „Abbauen“)
 	return spiel.fabriken.has(z) or was == Karte.BATTERIE or was == Karte.GENERATOR or karte.ausbau.get(z, Karte.FREI) == Karte.TURM
 
 
@@ -762,6 +807,7 @@ func _process(delta: float) -> void:
 	_bruecke_weiter(echt)
 	_treffer_merken(echt)   # 18.11.
 	_saeule_weiter(echt)
+	_abbau_weiter(echt)
 	_zeitlupe_weiter(echt)
 	SichererRand.einpassen(_karte_klein)   # 19.11.: Minikarte nicht unter der Notch
 	_bild.queue_redraw()
@@ -1797,7 +1843,12 @@ func _fadenkreuz(g: Vector2, px: float) -> void:
 	var treppe_an := hat_aktion("treppe")   # 20.11.: nur wer die Lichttreppe hat
 	var gb := gebaeude_im_blick()   # 18.11.: Hinweis zum Ausbauen
 	if gb != Karte.KEINE:
-		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[F] %s ausbauen" % _gebaeude_name(gb)), 18, LICHT)
+		var gb_text := "[F] %s ausbauen" % _gebaeude_name(gb)
+		if spiel.brakk_modus and spiel.order24 == null:
+			gb_text = "[F] %s · [Entf] halten: abbauen · [Z] zurück" % _gebaeude_name(gb)   # 22.11.
+		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t(gb_text), 18, LICHT)
+		if _abbau_t > 0.0:
+			_bild.draw_arc(m, 11.0 * px, -PI / 2.0, -PI / 2.0 + TAU * clampf(_abbau_t / ABBAU_HALTEN, 0.0, 1.0), 32, Stil.WARN, 2.0 * px)   # Fortschrittsring
 	elif treppe_an and not brakk.oben and _klettern < 0.0 and brakk.e_rest <= 0.0 and not _treppe_ziel().is_empty():
 		Stil.schreibe_mittig(_bild, m + Vector2(0, 12.0 * px), _t("[E] Lichttreppe"), 18, LICHT)   # 18.11.
 	elif treppe_an and brakk.oben and _klettern < 0.0 and _bruecke == null and not _bruecke_ziel().is_empty():
@@ -3413,7 +3464,14 @@ var _saeule_t := 0.0             # Sekunden seit dem Bestätigen
 var _saeule_marke: Node3D = null
 var _saeule_farbe := Color("fff3a0")
 var _saeule_ring := ""
-var _saeule_blick := Vector2.UP  # Blickrichtung beim Bestätigen (für die Linie des Durchschlagrings)
+var _saeule_blick := Vector2.UP  # Richtung beim Bestätigen (Linie des Durchschlagrings, Dreieck des Feuerteams)
+const SAEULE_DREH_MIN := 14.0    # Bildpunkte Mausweg, ab dem ein gehaltener Klick als Drehen zählt
+var _saeule_dreht := false       # Durchschlagring: Linksklick gehalten, Maus dreht die Linie
+var _saeule_dir := Vector2.UP    # gedrehte Richtung
+var _saeule_fix := Vector2.INF   # festgehaltene Marke beim Drehen
+var _saeule_pix := 0.0
+var _saeule_form: Node3D = null  # Form des Einschlags (Vorschau und Vorlauf)
+var _saeule_form_ring := "?"
 var _einschlaege: Array = []     # noch ausstehende Einschläge: [Restzeit, Punkt, Radius, Schaden]
 var _wirbel_saeule: Array = []   # Wirbelring: [Punkt, Restzeit, Takt]
 var _saeulen: Array = []         # sichtbare Lichtsäulen: [MeshInstance3D, Alter, Dauer]
@@ -3442,22 +3500,55 @@ func _saeule_x() -> void:
 
 func _saeule_abbrechen() -> void:
 	_saeule_zielt = false
+	_saeule_dreht = false
 	if _saeule_marke != null:
 		_saeule_marke.visible = false
+	if _saeule_form != null:
+		_saeule_form.visible = false
 
 
-## Linksklick beim Zielen: hier soll sie einschlagen.
-func _saeule_bestaetigen() -> void:
+func _blick2d() -> Vector2:
+	return Vector2(_vorne().x, _vorne().z).normalized()
+
+
+## 22.11.: Durchschlagring – Linksklick gehalten fixiert die Marke, die Maus dreht die Linie, Loslassen setzt.
+func _saeule_dreh_start() -> void:
 	var p := ziel_welt()
 	if p.x < -9000.0 or p.distance_to(_fuss2d()) > SAEULE_WEITE * Werte.ZELLE:
 		spiel.melde("Zu weit für die Lichtsäule (höchstens %d Felder)." % int(SAEULE_WEITE), 1.5)
 		return
+	_saeule_dreht = true
+	_saeule_fix = p
+	_saeule_dir = _blick2d()
+	_saeule_pix = 0.0
+
+
+func _saeule_dreh_ende() -> void:
+	if not _saeule_dreht:
+		return
+	_saeule_dreht = false
+	# kurzer Klick (Maus kaum bewegt) = Blickrichtung wie bisher
+	_saeule_bestaetigen(_saeule_fix, _saeule_dir if _saeule_pix >= SAEULE_DREH_MIN else _blick2d())
+
+
+## Richtung der Form: beim Drehen die gedrehte, sonst live die Blickrichtung (Vorschau = Einschlag).
+func _saeule_richtung() -> Vector2:
+	return _saeule_dir if _saeule_dreht else _blick2d()
+
+
+## Linksklick beim Zielen: hier soll sie einschlagen. Ohne Angabe: Punkt unter dem Fadenkreuz, Blickrichtung.
+func _saeule_bestaetigen(punkt: Vector2 = Vector2.INF, richtung: Vector2 = Vector2.ZERO) -> void:
+	var p := ziel_welt() if punkt == Vector2.INF else punkt
+	if p.x < -9000.0 or p.distance_to(_fuss2d()) > SAEULE_WEITE * Werte.ZELLE:
+		spiel.melde("Zu weit für die Lichtsäule (höchstens %d Felder)." % int(SAEULE_WEITE), 1.5)
+		return
 	_saeule_zielt = false
+	_saeule_dreht = false
 	_saeule_ziel = p
 	_saeule_t = 0.0
 	_zaehle("saeulen")
 	_saeule_rest = SAEULE_ABKLING
-	_saeule_blick = Vector2(_vorne().x, _vorne().z).normalized()
+	_saeule_blick = richtung if richtung != Vector2.ZERO else _blick2d()
 	_hand_zeigen = maxf(_hand_zeigen, SAEULE_VORLAUF + 0.3)   # Brakk wirbelt mit dem Finger, bis die Säule einschlägt
 	Ton.spiele(spiel, "alert", -6.0)
 
@@ -3482,6 +3573,110 @@ func _baue_saeule_marke() -> void:
 		mm.albedo_color = Color(_saeule_farbe.lightened(0.3), 0.9)
 		mm.emission = _saeule_farbe
 	_saeule_marke.visible = true
+	_baue_saeule_form()
+
+
+## 22.11.: Einschlagpunkte je Ring [[Verzögerung, Punkt, Radius, Schaden]] – Vorschau und Einschlag rechnen hier gleich.
+func saeule_punkte(ring: String, p: Vector2, dir: Vector2) -> Array:
+	var r := SAEULE_RADIUS * Werte.ZELLE
+	var aus: Array = []
+	match ring:
+		"durchschuss":   # schmale Säulen in einer Linie durch 5 Felder
+			for i in 5:
+				aus.append([0.06 * i, p + dir * (float(i) - 2.0) * Werte.ZELLE, Werte.ZELLE * 0.65, SAEULE_SCHADEN])
+		"feuerteam":   # drei kleinere Einschläge im Dreieck: 0°/120°/240° ab Blickrichtung
+			for i in 3:
+				aus.append([0.22 * i, p + dir.rotated(TAU * float(i) / 3.0) * Werte.ZELLE * 0.8, r * 0.7, SAEULE_SCHADEN * 0.55])
+	return aus
+
+
+func _form_ring(radius: float, alpha: float, dick: float = 0.07) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = maxf(0.01, radius - dick)
+	tor.outer_radius = radius
+	tor.rings = 40
+	m.mesh = tor
+	m.material_override = _leucht(_saeule_farbe.lightened(0.3), alpha, 2.0)
+	return m
+
+
+func _form_klotz(groesse: Vector3, pos: Vector3, alpha: float) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var b := BoxMesh.new()
+	b.size = groesse
+	m.mesh = b
+	m.position = pos
+	m.material_override = _leucht(_saeule_farbe.lightened(0.3), alpha, 2.0)
+	return m
+
+
+## Form des Einschlags (halbtransparent in der Ringfarbe). Lokal zeigt +X in Wirkrichtung.
+func _baue_saeule_form() -> void:
+	if _saeule_form == null:
+		_saeule_form = Node3D.new()
+		hd.add_child(_saeule_form)
+	for k in _saeule_form.get_children():
+		_saeule_form.remove_child(k)
+		k.queue_free()
+	_saeule_form_ring = _saeule_ring
+	var z := Werte.ZELLE
+	match _saeule_ring:
+		"durchschuss":
+			for e: Array in saeule_punkte("durchschuss", Vector2.ZERO, Vector2.RIGHT):
+				var pt := (e[1] as Vector2) / z
+				var ring := _form_ring(float(e[2]) / z, 0.6)
+				ring.position = Vector3(pt.x, 0.0, pt.y)
+				_saeule_form.add_child(ring)
+			_saeule_form.add_child(_form_klotz(Vector3(5.0, 0.03, 0.12), Vector3.ZERO, 0.5))
+			var pfeil := MeshInstance3D.new()
+			var kegel := CylinderMesh.new()
+			kegel.top_radius = 0.0
+			kegel.bottom_radius = 0.5
+			kegel.height = 0.9
+			pfeil.mesh = kegel
+			pfeil.material_override = _leucht(_saeule_farbe.lightened(0.3), 0.7, 2.5)
+			pfeil.rotation.z = -PI / 2.0   # Spitze nach +X
+			pfeil.position = Vector3(3.25, 0.05, 0.0)
+			_saeule_form.add_child(pfeil)
+		"feuerteam":
+			for e: Array in saeule_punkte("feuerteam", Vector2.ZERO, Vector2.RIGHT):
+				var pt := (e[1] as Vector2) / z
+				var ring := _form_ring(float(e[2]) / z, 0.6)
+				ring.position = Vector3(pt.x, 0.0, pt.y)
+				_saeule_form.add_child(ring)
+		"brandfeld":   # gestrichelter Außenring in Brandfeldgröße
+			var rb := SAEULE_RADIUS * 1.3
+			for i in 24:
+				var a := TAU * float(i) / 24.0
+				var s := _form_klotz(Vector3(0.45, 0.04, 0.1), Vector3(cos(a) * rb, 0.0, sin(a) * rb), 0.65)
+				s.rotation.y = -(a + PI / 2.0)   # Längsachse tangential
+				_saeule_form.add_child(s)
+		"plasmagel":
+			_saeule_form.add_child(_form_ring(SAEULE_RADIUS * 1.2, 0.5))
+		"abpraller":   # blasser Ring: Reichweite der Sprünge
+			_saeule_form.add_child(_form_ring(4.0, 0.25, 0.05))
+		"minigun":
+			var l := Label3D.new()
+			l.text = "bleibt 3 s"
+			l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			l.pixel_size = 0.012
+			l.font_size = 48
+			l.modulate = _saeule_farbe.lightened(0.4)
+			l.no_depth_test = true
+			l.position = Vector3(0.0, 1.0, 0.0)
+			_saeule_form.add_child(l)
+
+
+## Form an den Punkt setzen (Richtung als 2D-Vektor, Maßstab für das Zusammenziehen im Vorlauf).
+func _saeule_form_setze(p: Vector2, dir: Vector2, massstab: float) -> void:
+	if _saeule_form == null:
+		return
+	var h0 := hd.H if hd.ist_hoch(karte.zelle_bei(p)) else 0.0
+	_saeule_form.position = _zu3d(p, h0 + 0.06)
+	_saeule_form.rotation.y = -dir.angle()
+	_saeule_form.scale = Vector3(massstab, 1.0, massstab)
+	_saeule_form.visible = true
 
 
 func _saeule_weiter(dt: float) -> void:
@@ -3491,12 +3686,15 @@ func _saeule_weiter(dt: float) -> void:
 	if _saeule_zielt:
 		# Marke folgt dem Fadenkreuz (halb durchsichtig, solange nicht bestätigt)
 		_hand_zeigen = maxf(_hand_zeigen, 0.3)
-		var p := ziel_welt()
+		var p := _saeule_fix if _saeule_dreht else ziel_welt()
 		_saeule_marke.visible = p.x > -9000.0
 		if _saeule_marke.visible:
 			var h0 := hd.H if hd.ist_hoch(karte.zelle_bei(p)) else 0.0
 			_saeule_marke.position = _zu3d(p, h0 + 0.05)
 			_saeule_marke.rotation.y += dt * 1.5
+			_saeule_form_setze(p, _saeule_richtung(), 1.0)
+		elif _saeule_form != null:
+			_saeule_form.visible = false
 		return
 	if _saeule_ziel == Vector2.INF:
 		return
@@ -3508,11 +3706,16 @@ func _saeule_weiter(dt: float) -> void:
 	var h := hd.H if hd.ist_hoch(karte.zelle_bei(_saeule_ziel)) else 0.0
 	_saeule_marke.position = _zu3d(_saeule_ziel, h + 0.05)
 	_saeule_marke.visible = int(_saeule_t * (4.0 + 12.0 * f)) % 2 == 0 or f > 0.9
+	_saeule_form_setze(_saeule_ziel, _saeule_blick, lerpf(1.5, 1.0, f))   # zieht sich zusammen
+	if _saeule_form != null:
+		_saeule_form.visible = _saeule_marke.visible
 	if _saeule_t < SAEULE_VORLAUF:
 		return
 	var p2 := _saeule_ziel
 	_saeule_ziel = Vector2.INF
 	_saeule_marke.visible = false
+	if _saeule_form != null:
+		_saeule_form.visible = false
 	_saeule_ausloesen(p2)
 
 
@@ -3520,15 +3723,10 @@ func _saeule_weiter(dt: float) -> void:
 func _saeule_ausloesen(p: Vector2) -> void:
 	var r := SAEULE_RADIUS * Werte.ZELLE
 	match _saeule_ring:
-		"durchschuss":   # schmale Säulen in einer Linie durch 5 Felder
-			for i in 5:
-				_einschlaege.append([0.06 * i, p + _saeule_blick * (float(i) - 2.0) * Werte.ZELLE, Werte.ZELLE * 0.65, SAEULE_SCHADEN])
+		"durchschuss", "feuerteam":   # Linie über 5 Felder bzw. drei kleinere Einschläge im Dreieck
+			_einschlaege.append_array(saeule_punkte(_saeule_ring, p, _saeule_blick))
 		"laser":   # klein, aber doppelter Schaden
 			_einschlag(p, r * 0.6, SAEULE_SCHADEN * 2.0, 1.0)
-		"feuerteam":   # drei kleinere Einschläge kurz nacheinander rund um die Marke
-			for i in 3:
-				var a := TAU * float(i) / 3.0 + randf() * 0.5
-				_einschlaege.append([0.22 * i, p + Vector2(cos(a), sin(a)) * Werte.ZELLE * 0.8, r * 0.7, SAEULE_SCHADEN * 0.55])
 		"minigun":   # die Säule bleibt 3 s stehen, dreht und schadet laufend
 			_wirbel_saeule = [p, 3.0, 0.0]
 			_neue_saeule(p, r * 0.8, 3.0)
