@@ -559,8 +559,33 @@ func starte_phantom_angriff(pfad: String) -> bool:
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
 	_lade_phantom_stand()
 	_zeige_laufband()
+	_taktik_fuehrung.call_deferred()   # 23.11.: erster Angriff – Sonde 7 führt durch die erste Runde
 	melde("Angriff auf %s: Plane jede Runde eine Welle im Taktikplaner. Ziel: die %d Leben der Verteidigung." % [str(_phantom.get("spieler", "ein Phantom")), leben], 8.0)
 	return true
+
+
+## 23.11. (Phantom-Einführung D): Beim allerersten Angriff führt Sonde 7 durch die erste Runde im Taktikplaner:
+## Vorlage/Einheiten aufs Band, Kärtchen anfassen, Budget, Welle starten. Kein Zwang – „Weiter“ geht immer, „Später“ schließt.
+var _funk: Funkfenster
+
+func _taktik_fuehrung() -> void:
+	if phantom_modus != "angriff" or bool(Profil.einstellung("pe_taktik", false)) or tutorial != null:
+		return
+	Profil.setze_einstellung("pe_taktik", true)
+	var lb := _laufband
+	_funk = Funkfenster.zeige(self, [
+		{"text": "Du planst jetzt die Welle gegen diesen fremden Bau. „Vorlage“ füllt dir eine Runde vor – klick darauf.",
+			"ziel": func() -> Rect2: return lb.knopf_bildschirm("Vorlage") if lb.visible else Rect2(),
+			"fertig": func() -> bool: return not lb.plan.is_empty(),
+			"hinweis": "Oder zieh selbst Einheiten aus der Leiste aufs Band."},
+		{"text": "Jedes Kärtchen ist ein Trupp. Schieb es für Reihenfolge und Pausen, klick es an für Ausgang und Start.",
+			"ziel": func() -> Rect2: return lb.bildschirm(Laufband.RAHMEN_R) if lb.visible else Rect2()},
+		{"text": "Unten steht dein Budget für diese Runde – mehr Einheiten kosten mehr. Jede Runde planst du neu.",
+			"ziel": func() -> Rect2: return lb.bildschirm(Laufband.KONSOLE_R) if lb.visible else Rect2()},
+		{"text": "Bereit? Starte die Welle mit dem Emblem unten rechts oder [Leertaste]. Dein Ergebnis zählt für deine Elo.",
+			"ziel": func() -> Rect2: return (_hud.start.get_global_transform() * Rect2(Vector2.ZERO, _hud.start.size)) if _hud != null and _hud.start != null else Rect2(),
+			"fertig": func() -> bool: return phase != Phase.BAU},
+	], "TAKTIKPLANER")
 
 
 func phantom_runden() -> int:
@@ -867,7 +892,7 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 		zeilen.append("Kein Ersatz-Phantom mehr da – der Angriff endet vor Runde %d und zählt nicht für die Rangliste." % Werte.LETZTE_RUNDE)
 	elif pfad == "":
 		zeilen.append("(Speichern hat nicht geklappt.)")
-	_zeige_tafel({
+	var tafel_conf := {
 		"kicker": "PHANTOM-ANGRIFF  ·  GEGEN %s" % str(_phantom.get("spieler", "?")).to_upper(), "titel": titel, "titel_farbe": farbe, "rahmen": farbe,
 		"untertitel": unter, "effekt": "kupfer" if grund != "hq" else "asche", "glitch": grund == "hq",
 		"kacheln": [
@@ -878,7 +903,12 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 		"kaesten": [_protokoll_kasten("DEIN ANGRIFF IST JETZT EIN PHANTOM", "Andere Spieler verteidigen ab jetzt gegen deine Wellen.")] if pfad != "" else [],
 		"zeilen": zeilen,
 		"knoepfe": [["Nochmal angreifen", _neustart, _F_KUPFER_HELL], ["Startmenü", _zum_menue, _F_TEXT]],
-	})
+	}
+	if pfad != "":
+		var elo := _elo_platz("angriff")   # 23.11. (Einführung F): Elo-Änderung zählt auf der Tafel
+		if not elo.is_empty():
+			tafel_conf["elo"] = elo
+	_zeige_tafel(tafel_conf)
 
 
 # ------------------------------------------------------------ Profil und Online-Pool (18.11.)
@@ -1131,6 +1161,7 @@ func _online_hinweis(ok: bool, was: String) -> void:
 func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 	if not Online.aktiv():
 		return
+	var elo_vor: Dictionary = await Online.meine_elo("angriff")   # 23.11.: Spieler-Elo vor dem Lauf (für die Anzeige)
 	var id := ""
 	if await _platz_frei("angriff"):   # 23.11.: höchstens 3 eigene Angriffe im Pool – sonst wählt der Spieler, welcher weicht
 		id = await Online.hochladen("angriff", pfad.get_file(), daten)
@@ -1155,6 +1186,7 @@ func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 		var vid := Online.id_von(g)
 		if vid != "":
 			await Online.duell(id, vid, Phantom.duell_ergebnis(int(je[g][0]), bool(je[g][1]), int(je[g][2]), int(je[g][3])), wertung, "angriff")   # 23.11.: Runde und Anteil zählen mit; Spieler-Elo
+	await _elo_anzeigen("angriff", elo_vor)
 
 
 ## Verteidigung gegen ein Angriffs-Phantom (oder ein Sieg im normalen Spiel) zu Ende: Bau hochladen, Duell melden.
@@ -1162,6 +1194,9 @@ func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
 	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer) or _protokoll.has("code"):   # 19.11.: Paul meldet nichts an die Rangliste; 20.11.: per Code freigeschaltet auch nicht
 		return
 	var vid := ""
+	var elo_vor: Dictionary = {}
+	if phantom_modus == "verteidigung":
+		elo_vor = await Online.meine_elo("verteidigung")   # 23.11.: Spieler-Elo vor dem Duell (für die Anzeige)
 	if pfad != "":
 		if await _platz_frei("verteidigung"):   # 23.11.: höchstens 3 eigene Verteidigungen im Pool
 			vid = await Online.hochladen("verteidigung", pfad.get_file(), daten)
@@ -1176,6 +1211,47 @@ func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
 		var genommen := Werte.START_LEBEN - leben
 		if aid != "":
 			await Online.duell(aid, vid, Phantom.duell_ergebnis(genommen, leben <= 0, welle), 0, "verteidigung")   # 23.11.: Runde des Falls zählt mit; Spieler-Elo
+	await _elo_anzeigen("verteidigung", elo_vor)
+
+
+## 23.11. (Phantom-Einführung F): Platzhalter „Elo wird berechnet“ für die Endtafel – leer, wenn gar nichts gemeldet wird.
+func _elo_platz(art: String) -> Dictionary:
+	var id := Profil.id()
+	if not Online.aktiv() or id == "" or id == "pool":
+		return {}
+	if art == "verteidigung":
+		if phantom_modus != "verteidigung" or _angriff_pfad == "" or Online.id_von(_angriff_pfad) == "" or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer) or _protokoll.has("code"):
+			return {}
+	return {"label": "DEINE ANGRIFFS-ELO" if art == "angriff" else "DEINE VERTEIDIGUNGS-ELO", "vorher": 1000, "nachher": -1, "hinweis": ""}
+
+
+## Nach dem Duell: neue Spieler-Elo holen und auf der Tafel hochzählen lassen (Rückfall: Anzeige weg).
+func _elo_anzeigen(art: String, vor: Dictionary) -> void:
+	if _tafel == null or not _tafel.conf.has("elo"):
+		return
+	var nach: Dictionary = await Online.meine_elo(art)
+	if _tafel == null or not _tafel.conf.has("elo"):
+		return
+	if vor.is_empty() or nach.is_empty():
+		_tafel.conf.erase("elo")
+		return
+	var hinweis := ""
+	var spiele := int(nach.get("spiele", 0))
+	if spiele < Online.LISTE_AB:
+		hinweis = "noch %d %s bis zur Rangliste" % [Online.LISTE_AB - spiele, "Lauf" if Online.LISTE_AB - spiele == 1 else "Läufe"]
+	else:
+		await Online.lade_listen()
+		var platz := 0
+		var n := 0
+		for e: Dictionary in Online.spieler_listen[art]:
+			if int(e.get("spiele", 0)) >= Online.LISTE_AB:
+				n += 1
+				if platz == 0 and str(e.get("profil", "")) == Profil.id():
+					platz = n
+		if platz > 0:
+			hinweis = "Platz %d in der Rangliste" % platz
+	if _tafel != null and _tafel.conf.has("elo"):
+		_tafel.elo_setze(roundi(float(vor.get("elo", 1000))), roundi(float(nach.get("elo", 1000))), hinweis)
 
 
 var _duell_gemeldet := false   # 23.11.: Phantom-Verteidigung – das Duell wird nur einmal gemeldet
@@ -1345,6 +1421,14 @@ func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
 	}
 	if _phantom_neu:
 		(conf["zeilen"] as Array).append("Phantom-Modus freigeschaltet")   # 21.11. (Paul)
+	if phantom_modus == "verteidigung":
+		var elo := _elo_platz("verteidigung")
+		if not elo.is_empty():
+			conf["elo"] = elo
+	elif info["phantom"] and not bool(Profil.einstellung("pe_comic", false)):
+		# 23.11. (Einführung B): beim ersten Phantom-Bau ein Mini-Comic – was jetzt mit dem Bau geschieht
+		Profil.setze_einstellung("pe_comic", true)
+		conf["comic"] = [["wall", "Dein Bau", _F_LEUCHT], ["panzer", "Andere greifen an", _F_KUPFER_HELL], ["buch", "Bericht für dich", _F_GOLD]]
 	_zeige_tafel(conf)
 
 
@@ -1399,7 +1483,9 @@ func _zeige_niederlage(vw: String, rekord_vorher: int, besiegt: int) -> void:
 	if vw != "":
 		zeilen.append(vw)
 	var untertitel := ["Die Myriaden sind durch.", "Das war knapp. Also, für die Myriaden nicht.", "Die Basis macht jetzt eine kurze Pause.", "Zurück auf Anfang – diesmal mit Plan."]
-	_zeige_tafel({
+	if not Profil.phantom_frei() and phantom_modus == "" and welle >= 10 and not brakk_modus and not sandbox and herausforderung == "" and Werte.ist_hauptkarte():
+		zeilen.append("Hältst du Runde 20, wird dein Bau zum Phantom für andere.")   # 23.11. (Einführung A)
+	var tafel_conf := {
 		"kicker": ("RUNDE %d · ENDLOS" % welle) if Werte.ziel() == "endlos" else ("RUNDE %d VON %d" % [welle, Werte.LETZTE_RUNDE]), "titel": "BASIS GEFALLEN" if leben <= 0 else "CHECKPOINTS VERLOREN", "titel_farbe": _F_ROT, "rahmen": _F_ROT,
 		"untertitel": untertitel[randi() % untertitel.size()], "effekt": "asche", "glitch": true, "wackeln": true,
 		"kacheln": [
@@ -1412,7 +1498,12 @@ func _zeige_niederlage(vw: String, rekord_vorher: int, besiegt: int) -> void:
 			{"titel": "SONDE 7 RÄT", "farbe": _F_LEUCHT, "text": str(_TIPPS.get(meiste, _TIPP_SONST))}],
 		"zeilen": zeilen,
 		"knoepfe": [["Revanche!", _neustart, _F_LEUCHT], ["Startmenü", _zum_menue, _F_TEXT]],
-	})
+	}
+	if phantom_modus == "verteidigung":
+		var elo := _elo_platz("verteidigung")
+		if not elo.is_empty():
+			tafel_conf["elo"] = elo
+	_zeige_tafel(tafel_conf)
 
 
 ## Merkt sich die Datei dieser Partie fürs Schlussbild (Herunterladen im Browser).
@@ -3331,6 +3422,12 @@ func starte_welle(erzwingen: bool = false) -> void:
 	_auftrag_pruefen("welle")   # 20.11.: Pauls Aufträge
 	phase = Phase.KAMPF
 	_kampf_tick = 0
+	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
+		# 23.11. (Phantom-Einführung E): wessen Welle ist das?
+		_einblendung.banner("DIESE WELLE HAT %s GEPLANT" % str(_angriff_phantom.get("spieler", "EIN SPIELER")).to_upper(), "Phantom-Angriff · Runde %d" % welle, _F_KUPFER_HELL)
+		if not bool(Profil.einstellung("pe_verteidigung", false)):
+			Profil.setze_einstellung("pe_verteidigung", true)
+			melde("Das ist die echte Welle eines anderen Spielers – halte alle Runden, dann steigt deine Elo.", 8.0)
 	_merke_sitzung("Welle")   # 19.11.: Diagnose – brach die Sitzung ab?
 	karte.brut_aktualisieren()   # Brut-Boden: Stand zu Rundenbeginn
 	runde_stats.clear()   # Schadensliste [Tab]: zählt je Runde neu

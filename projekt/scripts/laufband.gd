@@ -94,6 +94,19 @@ func _flaeche(r: Rect2, malen: Callable) -> Flaeche:
 	return f
 
 
+## 23.11. (Einführung D): Bildschirm-Rechteck (1280×720) eines Rechtecks im Laufband-Raster.
+func bildschirm(r: Rect2) -> Rect2:
+	return get_global_transform() * r
+
+
+## Bildschirm-Rechteck des Knopfs mit diesem Text (z. B. „Vorlage“); leer, wenn es ihn gerade nicht gibt.
+func knopf_bildschirm(text: String) -> Rect2:
+	for k: Array in _knoepfe:
+		if str(k[2]) == text:
+			return bildschirm(k[0] as Rect2)
+	return Rect2()
+
+
 func _process(_delta: float) -> void:
 	if visible:
 		_maus = get_local_mouse_position()

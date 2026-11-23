@@ -7,6 +7,8 @@ class_name EndTafel extends Control
 ##   kacheln: [{name, zahl, max, zeit, text, farbe, symbol}]  – zählen beim Erscheinen hoch
 ##   kaesten: [{titel, farbe, text | text_fn (Callable), tippen (bool), knopf [Text, Callable]}]
 ##   punkte: [[Symbol, Text]]  – Aufzählung (Symbole aus Stil.SYMBOLE)
+##   comic: [[Symbol, Text, Farbe]] (3 Kacheln mit Pfeilen: Bau → Angriff → Bericht, 23.11.)
+##   elo: {label, vorher, nachher (-1 = wartet), hinweis} – zählt hoch/runter (scripts/ui/elo_anzeige.gd); elo_setze() füllt nach
 ##   zeilen: [Text]  – goldene Zusatzzeilen
 ##   knoepfe: [[Text, Callable, Farbe]]  – der erste ist der wichtigste
 ##   esc: Callable  – Taste Esc (sonst nichts)
@@ -28,6 +30,7 @@ var _kasten_knoepfe: Array = []  # [Rect2, Callable]
 var _teilchen: Array = []
 var _messen := false
 var _a := 1.0                    # Deckkraft der Tafel beim Erscheinen
+var _elo_t0 := -1.0              # Sekunde, ab der die Elo-Zahl zählt (-1 = noch nicht)
 
 
 func _init() -> void:
@@ -44,9 +47,21 @@ func _init() -> void:
 func zeige(neu: Dictionary) -> void:
 	conf = neu
 	_t = 0.0
+	_elo_t0 = -1.0
 	_wahl = 0
 	visible = true
 	queue_redraw()
+
+
+## 23.11.: Ergebnis der Elo-Anzeige nachtragen (kommt erst, wenn die Datenbank geantwortet hat).
+func elo_setze(vorher: int, nachher: int, hinweis: String = "") -> void:
+	var d: Dictionary = conf.get("elo", {})
+	if d.is_empty():
+		return
+	d["vorher"] = vorher
+	d["nachher"] = nachher
+	d["hinweis"] = hinweis
+	_elo_t0 = maxf(_t, 1.2) + 0.2   # frühestens, wenn die Tafel steht
 
 
 func _process(delta: float) -> void:
@@ -125,6 +140,18 @@ func _inhalt(y0: float) -> float:
 	# Kästen
 	for k: Dictionary in conf.get("kaesten", []):
 		y += _kasten(k, y) + 8.0
+	# Comic (Bau -> Angriff -> Bericht)
+	var comic: Array = conf.get("comic", [])
+	if not comic.is_empty():
+		_comic(comic, y)
+		y += 56.0
+	# Elo-Anzeige
+	if conf.has("elo"):
+		if not _messen:
+			var d: Dictionary = conf["elo"]
+			d["t0"] = _elo_t0
+			EloAnzeige.male(self, MITTE_X, y, d, _t, _a)
+		y += EloAnzeige.HOEHE + (12.0 if str((conf["elo"] as Dictionary).get("hinweis", "")) != "" else 2.0)
 	# Zusatzzeilen
 	if not (conf.get("punkte", []) as Array).is_empty() and not (conf.get("zeilen", []) as Array).is_empty():
 		y += 4.0
@@ -233,6 +260,30 @@ func _kasten(k: Dictionary, y: float) -> float:
 		Stil.platte(self, kr, 2.0, Color(farbe, 0.22 if drueber else 0.1), farbe)
 		Stil.schreibe_mittig(self, kr.get_center(), str(k["knopf"][0]), Stil.KLEIN, Color.WHITE if drueber else farbe)
 	return h
+
+
+## Drei Kacheln mit Symbol und kurzer Beschriftung, dazwischen Pfeile; sie erscheinen nacheinander.
+func _comic(kacheln: Array, y: float) -> void:
+	if _messen:
+		return
+	var n := kacheln.size()
+	var pfeil := 14.0
+	var kb := (INNEN_B - pfeil * (n - 1)) / n
+	var x := MITTE_X - INNEN_B / 2.0
+	for i in n:
+		var k: Array = kacheln[i]
+		var farbe: Color = k[2] if k.size() > 2 else Stil.LEUCHT
+		var ein := _aus(_anteil(0.9 + 0.35 * i, 0.35))
+		var kr := Rect2(roundf(x), y + 4.0 * (1.0 - ein), roundf(kb), 44.0)
+		Stil.platte(self, kr, 2.0, Color(Stil.METALL_TIEF, ein), Color(farbe, 0.6 * ein))
+		Stil.symbol(self, str(k[0]), Vector2(kr.get_center().x, kr.position.y + 15.0), 2.0, Color(farbe, ein))
+		Stil.schreibe_mittig(self, Vector2(kr.get_center().x, kr.position.y + 34.0), str(k[1]), Stil.KLEIN, Color(Stil.TEXT, ein))
+		x += kb
+		if i < n - 1:
+			var pa := _aus(_anteil(1.05 + 0.35 * i, 0.3))
+			var pm := Vector2(x + pfeil / 2.0, kr.get_center().y)
+			draw_colored_polygon(PackedVector2Array([pm + Vector2(-3, -4), pm + Vector2(3, 0), pm + Vector2(-3, 4)]), Color(Stil.GOLD, pa))
+			x += pfeil
 
 
 func _male_knoepfe(y: float) -> void:

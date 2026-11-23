@@ -38,6 +38,8 @@ var _tutorial := false
 var _wahl_karte := "felsenpass"    # 18.11.: Karte auf der Seite „Herausforderungen“
 var _wahl_herausforderung := ""      # 18.11.: Herausforderung auf derselben Seite ("" = keine)
 var _meldung := ""
+var _meldung_gold := false          # 23.11.: Hinweis statt Warnung (Phantom-Bericht)
+var _funk: Funkfenster              # 23.11.: Sonde 7 im Phantom-Menü (Einführung)
 var _eintraege: Array = []         # [Text, Aktion, Untertitel, Farbe]
 # Titelbild (NES/Mega-Drive-Art): nur beim ersten Öffnen nach Programmstart, eine Taste/ein Klick führt zur Liste
 static var _titel_gesehen := false
@@ -99,6 +101,8 @@ func _init() -> void:
 	_eingabe.context_menu_enabled = false
 	add_child(_eingabe)
 	Online.lade_listen()   # Phantom-Liste und Rangliste schon vorab holen
+	if Profil.phantom_frei():
+		Online.lade_bericht(str(Profil.einstellung("phantom_bericht_seit", "")))   # 23.11.: Phantom-Bericht (was seit dem letzten Besuch geschah)
 	if not _titel:
 		_frage_namen_beim_ersten_mal()
 
@@ -122,7 +126,12 @@ func _zeige(seite: String) -> void:
 	_kartenbild_daten.clear()   # 18.11.: Karten können sich geändert haben (Import, Editor)
 	_wahl = 0
 	_meldung = ""
+	_meldung_gold = false
+	if seite != "phantom" and is_instance_valid(_funk):
+		_funk.schliessen()
 	_baue()
+	if seite == "phantom":
+		_phantom_einfuehrung()
 
 
 func _baue() -> void:
@@ -133,7 +142,7 @@ func _baue() -> void:
 			_eintraege = [
 				# 18.11. (Paul): Reihenfolge nach Wichtigkeit
 				["Spielen", _zeige.bind("spielen"), "", LICHT],
-				["Phantom-Modus", _zeige.bind("phantom"), "", Stil.TEXT] if Profil.phantom_frei() else ["Phantom-Modus", _tafel_auf.bind("phantom"), SPERR_TAFEL["phantom"]["bedingung"], GESPERRT],   # 21.11. (Paul): erst nach einem Sieg
+				["Phantom-Modus", _zeige.bind("phantom"), "Neuer Bericht: dein Phantom war im Einsatz" if Online.bericht_text() != "" else "", Stil.TEXT] if Profil.phantom_frei() else ["Phantom-Modus", _tafel_auf.bind("phantom"), SPERR_TAFEL["phantom"]["bedingung"], GESPERRT],   # 21.11. (Paul): erst nach einem Sieg
 				["Brakk-Mode", _zeige.bind("brakk"), "", Stil.TEXT] if Profil.brakk_modus_frei() else ["Brakk-Mode", _tafel_auf.bind("brakk"), SPERR_TAFEL["brakk"]["bedingung"], GESPERRT],   # 20.11. (Schritt 5b): Unterseite Classic / Rogue; 21.11.: erst nach dem ersten Brakk
 				["Sandbox", _zeige.bind("sandbox"), "", Stil.TEXT],
 				["Herausforderungen", _zeige.bind("herausforderung"), "", Stil.TEXT],
@@ -216,6 +225,7 @@ func _baue() -> void:
 				["Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · " + _anzahl(nv, "Phantom" + wo, "Phantome" + wo, "noch keine Phantome hinterlegt"), KUPFER_HELL],
 				["Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · " + _anzahl(na, "Angriff" + wo, "Angriffe" + wo, "noch keine Angriffe hinterlegt"), LICHT],
 				["Gegner: " + ("Stärkste" if staerkste else "Zufall"), _wahl_umschalten, "die fünf Besten der Rangliste" if staerkste else "irgendein Phantom aus dem Pool", Stil.TEXT],
+				["So funktioniert's", _phantom_erklaeren, "Phantome, Elo und Rangliste in 20 Sekunden", Stil.TEXT_BLASS],   # 23.11.: „?“ der Einführung
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 		"profil":
@@ -590,7 +600,10 @@ func _male_tafel(ci: Control) -> void:
 	Stil.schreibe(ci, Vector2(x, r.position.y + 20.0), str(d["titel"]), Stil.GROSS, LICHT)
 	Stil.absatz(ci, Vector2(x, r.position.y + 34.0), str(d["text"]), weite, Stil.KLEIN, Stil.TEXT)
 	Stil.symbol(ci, "schloss", Vector2(x + 4.0, r.position.y + 100.0), 1.0, KUPFER_HELL)
-	Stil.absatz(ci, Vector2(x + 13.0, r.position.y + 96.0), str(d["bedingung"]), weite - 13.0, Stil.KLEIN, KUPFER_HELL)
+	var bedingung := str(d["bedingung"])
+	if _tafel == "phantom" and int(Profil.stat("beste_runde")) > 0:
+		bedingung += "\nBisher: Runde %d von %d" % [mini(int(Profil.stat("beste_runde")), Werte.LETZTE_RUNDE), Werte.LETZTE_RUNDE]   # 23.11. (Einführung A)
+	Stil.absatz(ci, Vector2(x + 13.0, r.position.y + 96.0), bedingung, weite - 13.0, Stil.KLEIN, KUPFER_HELL)
 	# Knopf
 	var k := Rect2(TAFEL_KNOPF.position + wackeln, TAFEL_KNOPF.size)
 	var an := k.has_point(_maus)
@@ -792,6 +805,32 @@ func _phantom(art: String) -> void:
 		_starte(int(f.get("spalten", 20)) == 28, "angriff:" + str(f["pfad"]))   # der Bau bringt seine Kartengröße mit
 	else:
 		_starte(true, "verteidigt:" + str(f["pfad"]))
+
+
+## 23.11. (Einführung C): erster Besuch im Phantom-Menü – Sonde 7 erklärt in drei Sätzen; „So funktioniert's“ ruft sie wieder auf.
+## Danach, falls vorhanden, der Phantom-Bericht (G): was seit dem letzten Besuch mit deinen Phantomen geschah.
+func _phantom_einfuehrung() -> void:
+	var bt := Online.bericht_text()
+	if bt != "":
+		_meldung = bt
+		_meldung_gold = true
+		Profil.setze_einstellung("phantom_bericht_seit", Time.get_datetime_string_from_system(true) + "Z")
+		Online.bericht = {}
+	if not bool(Profil.einstellung("pe_menue", false)):
+		Profil.setze_einstellung("pe_menue", true)
+		_phantom_erklaeren()
+
+
+func _phantom_erklaeren() -> void:
+	if is_instance_valid(_funk):
+		_funk.schliessen()
+	_funk = Funkfenster.zeige(self, [
+		{"text": "Ein Phantom ist die Aufzeichnung eines echten Spielers: Dein Bau bleibt zurück, andere greifen ihn an – und du greifst ihre an."},
+		{"text": "Angreifen: Du planst Wellen gegen einen fremden Bau. Verteidigen: Du hältst gegen einen fremden Angriff."},
+		{"text": "Jeder Lauf zählt für deine Elo: gegen Stärkere zu gewinnen bringt mehr. Ab 5 Läufen stehst du in der Rangliste."},
+	])
+	_funk.unten = 716.0
+	_funk.layer = 101   # das Startmenü selbst liegt auf Ebene 100
 
 
 ## Phantom direkt starten (main.gd: „Nochmal angreifen“).
@@ -1180,6 +1219,13 @@ func _male_rangliste(ci: Control) -> void:
 		var kr := Rect2((k[1] as Vector2).x, y - 5.0, (k[1] as Vector2).y, 10.0)
 		Stil.platte(ci, kr, 2.0, Color(0.11, 0.12, 0.15), Stil.RAHMEN)
 		Stil.schreibe_mittig(ci, kr.get_center(), str(k[0]), Stil.KLEIN, Stil.TEXT_BLASS)
+	var kopf_hinweis := ""
+	var kopf_rect := Rect2()
+	for k: Array in koepfe:
+		var kr2 := Rect2((k[1] as Vector2).x, y - 5.0, (k[1] as Vector2).y, 10.0)
+		if kr2.has_point(_maus):
+			kopf_hinweis = str(_KOPF_HINWEISE.get(str(k[0]), ""))
+			kopf_rect = kr2
 	y += 9.0
 	var alle := _ranglisten_zeilen(_rang_reiter)
 	var mein := Profil.id()
@@ -1203,6 +1249,23 @@ func _male_rangliste(ci: Control) -> void:
 		Stil.platte(ci, r, 3.0, Stil.METALL_TIEF, Color(LICHT, 0.35))
 		Stil.schreibe(ci, Vector2(x + 7.0, r.get_center().y), "DU", Stil.NORMAL, LICHT)
 		Stil.schreibe(ci, Vector2(x + 26.0, r.get_center().y), _rang_du_text(), Stil.KLEIN, Stil.TEXT_BLASS)
+	if kopf_hinweis != "":
+		# 23.11. (Einführung C): kleine Erklärung beim Darüberfahren
+		var tb := minf(Stil.breite(kopf_hinweis, Stil.KLEIN) + 12.0, TAFEL.size.x - 24.0)
+		var tr := Rect2(clampf(kopf_rect.get_center().x - tb / 2.0, TAFEL.position.x + 8.0, TAFEL.end.x - tb - 8.0), kopf_rect.end.y + 3.0, tb, 14.0)
+		Stil.platte(ci, tr, 2.0, Color(0.02, 0.03, 0.05, 0.97), LICHT)
+		Stil.schreibe_mittig(ci, tr.get_center(), kopf_hinweis, Stil.KLEIN, Stil.TEXT)
+
+
+const _KOPF_HINWEISE := {
+	"#": "Platz nach Elo",
+	"NAME": "Wer dahintersteckt (bei Phantomen mit Anführer)",
+	"LÄUFE": "Gespielte Phantom-Läufe – ab 5 stehst du in der Liste",
+	"BESTER": "Beste Wertung dieses Angriffs",
+	"GEHALTEN": "So oft hat die Verteidigung gehalten",
+	"DUELLE": "Duelle gegen echte Spieler – ab 5 in der Liste",
+	"ELO": "Stärke: gegen Stärkere gewinnen bringt mehr",
+}
 
 
 ## Spalten: Name -> Vector2(x, breite).
@@ -1601,7 +1664,7 @@ func _male(ci: Control) -> void:
 		if mit_unter:
 			Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + 15.0), e[2], Stil.KLEIN, Stil.TEXT_BLASS)
 	if _meldung != "":
-		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else Stil.WARN)
+		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else (Stil.GOLD if _meldung_gold else Stil.WARN))
 	if _seite == "phantom":
 		_male_rangliste(ci)
 	elif _seite == "herausforderung":

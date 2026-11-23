@@ -23,6 +23,7 @@ static var spieler_listen := {"angriff": [], "verteidigung": []}   # 23.11.: Spi
 static var pfad_id := {}            # lokaler Pfad eines geladenen oder hochgeladenen Phantoms -> ID online
 static var ersatz_pfade: Array = [] # Angriff: online gezogene Ersatz-Phantome für die nächste Partie
 static var _abgeglichen := false
+static var bericht := {}            # 23.11.: Phantom-Bericht (G): was seit dem letzten Besuch mit den eigenen Phantomen geschah
 static var geaendert := 0           # zählt hoch, wenn neue Daten da sind (das Menü zeichnet dann neu)
 
 
@@ -252,3 +253,99 @@ static func waehle(art: String, wie: String, ohne: Array = []) -> Dictionary:
 
 static func bereit() -> bool:
 	return zustand == "online" and not ((listen["angriff"] as Array).is_empty() and (listen["verteidigung"] as Array).is_empty())
+
+
+## 23.11.: Aktuelle Spieler-Elo des eigenen Profils für eine Seite ("angriff" | "verteidigung"): {elo, spiele}; {} = unbekannt.
+static func meine_elo(art: String) -> Dictionary:
+	var id := Profil.id()
+	if id == "" or id == "pool":
+		return {}
+	var l: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=elo,spiele&profil=eq.%s&art=eq.%s" % [id.uri_encode(), art])
+	if l is Array and not (l as Array).is_empty():
+		return (l[0] as Dictionary)
+	if l is Array:
+		return {"elo": 1000.0, "spiele": 0}   # noch keine Zeile: Startwert
+	return {}
+
+
+## Elo vor einem Duell aus dem Zwischenspeicher der Listen (1000, wenn der Spieler dort noch nicht steht).
+static func elo_im_speicher(art: String) -> int:
+	var id := Profil.id()
+	for e: Dictionary in spieler_listen.get(art, []):
+		if str(e.get("profil", "")) == id:
+			return roundi(float(e.get("elo", 1000)))
+	return 1000
+
+
+## 23.11. (Phantom-Einführung G): Was ist seit `seit` (ISO-Zeit, "" = je) mit den eigenen Phantomen geschehen?
+## {verteidigt, gehalten, angriffe, geknackt, elo_aenderung, von: [Namen]}; leer, wenn nichts war oder offline.
+static func lade_bericht(seit: String) -> void:
+	bericht = {}
+	var id := Profil.id()
+	if id == "" or id == "pool" or not aktiv():
+		return
+	var meine: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=id,art,elo&profil=eq.%s&version=eq.%d" % [id.uri_encode(), Phantom.PHANTOM_VERSION])
+	if not (meine is Array) or (meine as Array).is_empty():
+		return
+	var art_von := {}
+	var elo_jetzt := {}
+	var ids: Array = []
+	for e: Dictionary in meine:
+		art_von[str(e["id"])] = str(e["art"])
+		elo_jetzt[str(e["id"])] = float(e.get("elo", 1000))
+		ids.append(str(e["id"]))
+	var liste := ",".join(PackedStringArray(ids))
+	var filter := "&or=(angriff.in.(%s),verteidigung.in.(%s))&profil=neq.%s" % [liste, liste, id.uri_encode()]
+	if seit != "":
+		filter += "&erstellt=gt." + seit.uri_encode()
+	var d: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/duelle?select=angriff,verteidigung,ergebnis,spieler,erstellt,elo_angriff_vorher,elo_verteidigung_vorher&order=erstellt.asc&limit=200" + filter)
+	if not (d is Array) or (d as Array).is_empty():
+		return
+	var b := {"verteidigt": 0, "gehalten": 0, "angriffe": 0, "geknackt": 0, "elo_aenderung": 0, "von": []}
+	var erste := {}   # Phantom-ID -> Elo vor dem ersten Duell im Zeitraum
+	for e: Dictionary in d:
+		var sieg := float(e.get("ergebnis", 0.0)) >= Phantom.DUELL_SIEG_AB   # Angreifer hat geknackt
+		var v := str(e.get("verteidigung", ""))
+		var a := str(e.get("angriff", ""))
+		var wer := str(e.get("spieler", ""))
+		if v != "" and art_von.get(v, "") == "verteidigung":
+			b["verteidigt"] = int(b["verteidigt"]) + 1
+			if not sieg:
+				b["gehalten"] = int(b["gehalten"]) + 1
+			if not erste.has(v):
+				erste[v] = float(e.get("elo_verteidigung_vorher", 1000))
+			if wer != "" and not (b["von"] as Array).has(wer):
+				(b["von"] as Array).append(wer)
+		if a != "" and art_von.get(a, "") == "angriff":
+			b["angriffe"] = int(b["angriffe"]) + 1
+			if sieg:
+				b["geknackt"] = int(b["geknackt"]) + 1
+			if not erste.has(a):
+				erste[a] = float(e.get("elo_angriff_vorher", 1000))
+			if wer != "" and not (b["von"] as Array).has(wer):
+				(b["von"] as Array).append(wer)
+	var delta := 0.0
+	for pid: String in erste:
+		delta += float(elo_jetzt.get(pid, 1000.0)) - float(erste[pid])
+	b["elo_aenderung"] = roundi(delta)
+	if int(b["verteidigt"]) + int(b["angriffe"]) > 0:
+		bericht = b
+	geaendert += 1
+
+
+## Der Bericht als kurzer Text ("" = nichts Neues).
+static func bericht_text() -> String:
+	if bericht.is_empty():
+		return ""
+	var teile: Array = []
+	var v := int(bericht["verteidigt"])
+	if v > 0:
+		teile.append("Dein Bau wurde %d× angegriffen – %d× gehalten" % [v, int(bericht["gehalten"])])
+	var a := int(bericht["angriffe"])
+	if a > 0:
+		teile.append("Gegen deinen Angriff wurde %d× verteidigt – %d× hat er gesiegt" % [a, int(bericht["geknackt"])])
+	var t := " · ".join(PackedStringArray(teile))
+	var e := int(bericht["elo_aenderung"])
+	if e != 0:
+		t += " (Phantom-Elo %+d)" % e
+	return t
