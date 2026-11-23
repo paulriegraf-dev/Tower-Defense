@@ -115,6 +115,7 @@ var _nachschlag: Nachschlag          # Nachschlagekarte mit Formationen [H]
 var _fabrikmenue: Fabrikmenue        # Tafel an der angeklickten Fabrik: Truppe wählen, Upgrades kaufen
 var _nachspiel := 0.0               # Sekunden, die nach dem letzten Gegner noch für die Rückeroberung liefen
 var _kampf_sek := 0.0               # Spielzeit seit Rundenbeginn
+var weg_info: Array = [0, 0, 0]      # 23.11.: zuletzt angezeigter Gegnerweg [Felder, Umweg, unter Beschuss]
 var _im_flug := 0                   # geworfene Hunde, die noch in der Luft sind
 var _tempo_faktor := 1.0            # 1, 2 oder 3 (Taste F schaltet weiter), wird mit Werte.SPIELTEMPO multipliziert
 var _spawn_in := 0.0
@@ -748,7 +749,7 @@ func _angriff_aufgeben() -> void:
 	_angriff_fertig = true
 	var vid := Online.id_von(_aktiv_pfad)
 	if vid != "" and Online.aktiv():
-		Online.duell("", vid, 0.0, 0)
+		Online.duell("", vid, 0.0, 0, "angriff")   # 23.11.: zählt auch für die Spieler-Elo
 
 
 ## Angriff: Eine Verteidigung ist gefallen und ein Ersatz-Phantom steht bereit. Zwischenwertung zeigen (15.11.):
@@ -1130,25 +1131,30 @@ func _online_hinweis(ok: bool, was: String) -> void:
 func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 	if not Online.aktiv():
 		return
-	var id: String = await Online.hochladen("angriff", pfad.get_file(), daten)
-	_online_hinweis(id != "", "dein Angriff")
-	if id == "":
-		return
-	Online.pfad_id[pfad] = id
-	var je: Dictionary = {}   # Pfad der Verteidigung -> [genommen, geknackt]
+	var id := ""
+	if await _platz_frei("angriff"):   # 23.11.: höchstens 3 eigene Angriffe im Pool – sonst wählt der Spieler, welcher weicht
+		id = await Online.hochladen("angriff", pfad.get_file(), daten)
+		_online_hinweis(id != "", "dein Angriff")
+		if id != "":
+			Online.pfad_id[pfad] = id
+	else:
+		_online_hinweis_text("Nicht hochgeladen – deine bisherigen Angriffe bleiben im Pool. Dein Lauf zählt trotzdem für deine Spieler-Elo.")
+	var je: Dictionary = {}   # Pfad der Verteidigung -> [genommen, geknackt, Runde des Knackens, Runden gegen sie]
 	var folge: Array = []
 	for r: Dictionary in daten.get("runden", []):
 		var g := str(r.get("gegen_pfad", ""))
 		if not je.has(g):
-			je[g] = [0, false]
+			je[g] = [0, false, 0, 0]
 			folge.append(g)
 		je[g][0] = int(je[g][0]) + int(r.get("leben_genommen", 0))
+		je[g][3] = int(je[g][3]) + 1
 		if r.get("geknackt", false):
 			je[g][1] = true
+			je[g][2] = int(r.get("runde", 0))
 	for g: String in folge:
 		var vid := Online.id_von(g)
 		if vid != "":
-			await Online.duell(id, vid, Phantom.duell_ergebnis(int(je[g][0]), bool(je[g][1])), wertung)
+			await Online.duell(id, vid, Phantom.duell_ergebnis(int(je[g][0]), bool(je[g][1]), int(je[g][2]), int(je[g][3])), wertung, "angriff")   # 23.11.: Runde und Anteil zählen mit; Spieler-Elo
 
 
 ## Verteidigung gegen ein Angriffs-Phantom (oder ein Sieg im normalen Spiel) zu Ende: Bau hochladen, Duell melden.
@@ -1157,15 +1163,95 @@ func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
 		return
 	var vid := ""
 	if pfad != "":
-		vid = await Online.hochladen("verteidigung", pfad.get_file(), daten)
-		_online_hinweis(vid != "", "dein Bau")
-		if vid != "":
-			Online.pfad_id[pfad] = vid
-	if phantom_modus == "verteidigung" and _angriff_pfad != "":
+		if await _platz_frei("verteidigung"):   # 23.11.: höchstens 3 eigene Verteidigungen im Pool
+			vid = await Online.hochladen("verteidigung", pfad.get_file(), daten)
+			_online_hinweis(vid != "", "dein Bau")
+			if vid != "":
+				Online.pfad_id[pfad] = vid
+		else:
+			_online_hinweis_text("Nicht hochgeladen – deine bisherigen Verteidigungen bleiben im Pool.")
+	if phantom_modus == "verteidigung" and _angriff_pfad != "" and not _duell_gemeldet:
+		_duell_gemeldet = true
 		var aid := Online.id_von(_angriff_pfad)
 		var genommen := Werte.START_LEBEN - leben
 		if aid != "":
-			await Online.duell(aid, vid, Phantom.duell_ergebnis(genommen, leben <= 0), 0)
+			await Online.duell(aid, vid, Phantom.duell_ergebnis(genommen, leben <= 0, welle), 0, "verteidigung")   # 23.11.: Runde des Falls zählt mit; Spieler-Elo
+
+
+var _duell_gemeldet := false   # 23.11.: Phantom-Verteidigung – das Duell wird nur einmal gemeldet
+
+
+## 23.11. (Paul): Phantom-Verteidigung mittendrin verlassen (Hauptmenü, Neustart) zählt als Niederlage in dieser Runde.
+func _verteidigung_aufgeben() -> void:
+	if phantom_modus != "verteidigung" or phase == Phase.ENDE or _duell_gemeldet or _angriff_pfad == "":
+		return
+	_duell_gemeldet = true
+	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer) or _protokoll.has("code"):
+		return
+	var aid := Online.id_von(_angriff_pfad)
+	if aid != "":
+		Online.duell(aid, "", Phantom.duell_ergebnis(Werte.START_LEBEN - leben, true, welle), 0, "verteidigung")   # statisch: läuft weiter, auch wenn die Szene wechselt
+
+
+# ------------------------------------------------------------ Plätze im Pool (23.11.)
+
+## 23.11. (Paul): Jeder Spieler hat Online.PLAETZE Plätze je Art. Sind sie voll, wählt er auf einer Tafel, welches
+## Phantom weicht (das schwächste ist vorausgewählt) – oder er lädt nicht hoch. Verdrängte Phantome kommen ins Archiv
+## (bleiben in der Datenbank, aber nicht mehr im Pool und nicht in der Rangliste). Esc / Schließen = nicht hochladen.
+## Hat jemand aus der Zeit vor der Regel mehr Phantome, bleiben die stärksten zur Wahl, die übrigen gehen ins Archiv.
+## true = hochladen.
+var _platz_wahl := "?"
+
+func _platz_frei(art: String) -> bool:
+	var eigene: Variant = await Online.eigene(art)
+	if not (eigene is Array) or (eigene as Array).size() < Online.PLAETZE:
+		return true   # Platz frei, offline oder Datenbank noch ohne Plätze
+	var liste: Array = (eigene as Array).duplicate()   # schwächstes zuerst (Elo aufsteigend)
+	var ueberzaehlig: Array = liste.slice(0, liste.size() - Online.PLAETZE)
+	var wahl: Array = liste.slice(liste.size() - Online.PLAETZE)
+	_platz_wahl = "?"
+	var punkte: Array = []
+	var knoepfe: Array = []
+	for i in wahl.size():
+		var e: Dictionary = wahl[i]
+		var datum := str(e.get("erstellt", "")).left(10)
+		var teile := datum.split("-")
+		if teile.size() == 3:
+			datum = "%s.%s." % [teile[2], teile[1]]
+		punkte.append(["panzer" if art == "angriff" else "wall", "%d: Elo %d · %d Duelle · vom %s%s" % [i + 1, roundi(float(e.get("elo", 1000))), int(e.get("spiele", 0)), datum, "  (schwächstes)" if i == 0 else ""]])
+		var id := str(e["id"])
+		knoepfe.append(["Ersetze %d" % (i + 1), func(): _platz_wahl = id; _bestaetigung.visible = false, _F_KUPFER_HELL if i == 0 else _F_LEUCHT])
+	var behalten := func(): _platz_wahl = ""; _bestaetigung.visible = false
+	knoepfe.append(["Behalten", behalten, _F_TEXT])
+	var zeilen: Array = ["Dein neues Phantom nimmt den Platz eines alten ein. Das alte kommt ins Archiv."]
+	if not ueberzaehlig.is_empty():
+		zeilen.append("Neu: %d Plätze je Art. Deine %d schwächeren älteren Phantome kommen ebenfalls ins Archiv." % [Online.PLAETZE, ueberzaehlig.size()])
+	(_bestaetigung as EndTafel).zeige({
+		"kicker": "PHANTOM-POOL", "titel": "PLÄTZE VOLL", "titel_farbe": _F_KUPFER_HELL, "rahmen": _F_KUPFER_HELL,
+		"untertitel": "Du hast schon %d %s im Pool. Welches soll weichen?" % [Online.PLAETZE, "Angriffe" if art == "angriff" else "Verteidigungen"],
+		"punkte": punkte, "zeilen": zeilen, "knoepfe": knoepfe, "esc": behalten,
+	})
+	while _platz_wahl == "?":
+		if not is_inside_tree():
+			return false
+		if not _bestaetigung.visible:
+			_platz_wahl = ""   # anders geschlossen: nichts verdrängen
+			break
+		await get_tree().process_frame
+	if _platz_wahl == "":
+		return false
+	if not await Online.archivieren(_platz_wahl):
+		_online_hinweis_text("Der alte Platz ließ sich nicht freimachen – nicht hochgeladen.")
+		return false
+	if not ueberzaehlig.is_empty():
+		for e: Dictionary in ueberzaehlig:
+			await Online.archivieren(str(e["id"]))
+	return true
+
+
+func _online_hinweis_text(text: String) -> void:
+	if is_instance_valid(_export_hinweis):
+		_export_hinweis.text = text
 
 
 # ------------------------------------------------------------ Schlussbild
@@ -1364,6 +1450,7 @@ func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Butt
 func _neustart() -> void:
 	if phase != Phase.ENDE:
 		_angriff_aufgeben()   # 19.11.: Angriff abgebrochen – zählt für die Verteidigung
+		_verteidigung_aufgeben()   # 23.11.
 	loesche_sitzung()   # 19.11.
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
@@ -1385,6 +1472,7 @@ func _abbruch_klick() -> void:
 func _zum_menue() -> void:
 	if phase != Phase.ENDE or (_tafel != null and _tafel.visible and not _angriff_fertig):
 		_angriff_aufgeben()   # 19.11.: Angriff abgebrochen – zählt für die Verteidigung
+	_verteidigung_aufgeben()   # 23.11.: Verteidigung abgebrochen – zählt für den Angriff
 	loesche_sitzung()   # 19.11.
 	if _menue == null and not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.: bewusst verlassen – kein „Fortsetzen“ mehr
@@ -1462,6 +1550,36 @@ func _schliesse_runde(ausgang: String) -> void:
 		"waelle": karte.feld.values().count(Karte.WALL),
 		"sekunden": snappedf((Time.get_ticks_msec() - _runde_start_ms) / 1000.0, 0.1),
 	}
+	if brakk_modus and kommandant != null and kommandant.fortschritt != null:
+		eintrag["brakk"] = kommandant.fortschritt.protokoll.abschluss(self, kommandant, kommandant.fortschritt)   # 23.11.
+	_speichere_protokoll()
+
+
+## 23.11.: Ereignis für das Brakk-Protokoll (nur im Brakk-Mode).
+func brakk_ereignis(art: String, daten: Dictionary = {}) -> void:
+	if brakk_modus and kommandant != null and kommandant.fortschritt != null:
+		kommandant.fortschritt.protokoll.ereignis(self, art, daten)
+
+
+## 23.11.: Befehl 24 hat keine Runden – Abschnitte je Jagdwelle und am Ende (mit Brakk-Block) unter "befehl24".
+func befehl24_protokoll(art: String, daten: Dictionary = {}) -> void:
+	if not protokoll_an or _protokoll.is_empty() or order24 == null:
+		return
+	var e := {"t": snappedf(float(order24.zeit), 0.1), "a": art}
+	e.merge(daten)
+	if art in ["welle", "ende"] and kommandant != null and kommandant.fortschritt != null:
+		e["brakk"] = kommandant.fortschritt.protokoll.abschluss(self, kommandant, kommandant.fortschritt)
+	if not _protokoll.has("befehl24"):
+		_protokoll["befehl24"] = []
+	(_protokoll["befehl24"] as Array).append(e)
+	_speichere_protokoll()
+
+
+## 23.11.: Sieg-Bericht des Brakk-Mode mit ins Protokoll.
+func brakk_bericht_merken(bericht: Dictionary) -> void:
+	if not protokoll_an or _protokoll.is_empty():
+		return
+	_protokoll["brakk_bericht"] = bericht
 	_speichere_protokoll()
 
 
@@ -2509,6 +2627,7 @@ func _checkpoints_halten(delta: float) -> void:
 			if OS.get_environment("TD_WURF_LOG") != "":
 				print("CP R%d t=%.1f  Checkpoint %d zurückerobert" % [welle, _kampf_sek, i + 1])
 			karte.aktualisiere_pfad()
+			brakk_ereignis("cp_zurueck", {"cp": i + 1})   # 23.11.
 			melde("Checkpoint %d zurückerobert." % (i + 1), 4.0)
 
 
@@ -2526,6 +2645,7 @@ func checkpoint_erreicht(i: int) -> void:
 	for g in gegner:
 		if is_instance_valid(g) and not g._auf_wall and g._ziel == i:
 			g.plane_neu()   # dieser Checkpoint ist erledigt: direkt weiter zum nächsten
+	brakk_ereignis("cp_verloren", {"cp": i + 1})   # 23.11.
 	melde("Checkpoint %d verloren! Die nächste Welle startet dort." % (i + 1), 4.0)
 
 
@@ -2889,6 +3009,7 @@ func _aktualisiere_weganzeige(delta: float) -> void:
 				beschossen += 1
 				break
 	_lbl_weg.text = "Gegnerweg %d Felder · +%d durch deine Bauten · %d unter Beschuss" % [weg.size() - 1, umweg, beschossen]
+	weg_info = [weg.size() - 1, umweg, beschossen]   # 23.11.: Brakk-Protokoll
 
 
 ## Heilturm: alle paar Sekunden eigene Truppen im Umkreis heilen.
@@ -4859,6 +4980,7 @@ func sprengung(g: Gegner, wall: Vector2i) -> void:
 		gegner_entfernt(g)
 		karte.panzer.erase(wall)
 		erfolg("doppelt_haelt")   # 18.11.
+		brakk_ereignis("panzer_haelt", {"x": wall.x, "y": wall.y})   # 23.11.
 		karte.queue_redraw()
 		effekte.flaeche(mitte, 30.0, Color("d8dee9"))
 		melde("Die Panzerung hat einen Sprenger abgefangen – der Erdwall steht noch.", 3.0)
@@ -4868,6 +4990,7 @@ func sprengung(g: Gegner, wall: Vector2i) -> void:
 	if OS.get_environment("TD_WURF_LOG") != "":
 		print("SPRENG R%d t=%.1f  von %s auf %s (%s) + %s" % [welle, _kampf_sek, karte.zelle_bei(g.position), wall, karte.ausbau.get(wall, 0), reihe])
 	karte.schade(wall, 100000.0)
+	brakk_ereignis("sprengung", {"x": wall.x, "y": wall.y, "tiefe": reihe.size() + 1})   # 23.11.
 	for hinter: Vector2i in reihe:
 		var m2 := karte.mitte(hinter)
 		for i in 8:

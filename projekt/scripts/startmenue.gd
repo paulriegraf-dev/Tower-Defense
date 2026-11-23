@@ -1092,6 +1092,7 @@ const SILBER := Color("c9d4e0")
 const RANG_ZEILE := 16.0
 const RANG_ZAHL := 10
 var _rang_reiter := "angriff"       # 22.11.: angriff | verteidigung
+var _rang_ansicht := "spieler"      # 23.11. (Paul): spieler (Spieler-Elo) | phantome (Phantom-Elo)
 
 
 ## Reiterflächen (für Zeichnen und Klick): [art, Rechteck].
@@ -1102,10 +1103,24 @@ func _rang_reiter_rects() -> Array:
 	return [["angriff", Rect2(x, y, b, 14.0)], ["verteidigung", Rect2(x + b + 4.0, y, b, 14.0)]]
 
 
+## 23.11.: Umschalter Spieler / Phantome oben neben dem Titel: [ansicht, Rechteck].
+func _rang_ansicht_rects() -> Array:
+	var b := 46.0
+	var x := TAFEL.position.x + 84.0
+	var y := TAFEL.position.y + 8.0
+	return [["spieler", Rect2(x, y, b, 12.0)], ["phantome", Rect2(x + b + 2.0, y, b, 12.0)]]
+
+
 ## Klick auf einen Reiter: true, wenn der Klick verbraucht ist.
 func _rang_klick(p: Vector2) -> bool:
 	if _seite != "phantom":
 		return false
+	for r: Array in _rang_ansicht_rects():
+		if (r[1] as Rect2).has_point(p):
+			if _rang_ansicht != str(r[0]):
+				_rang_ansicht = str(r[0])
+				Ton.spiele(_welt, "ui-klick", -6.0)
+			return true
 	for r: Array in _rang_reiter_rects():
 		if (r[1] as Rect2).has_point(p):
 			if _rang_reiter != str(r[0]):
@@ -1133,6 +1148,13 @@ func _male_rangliste(ci: Control) -> void:
 	Stil.platte(ci, pille, 3.0, Color(sf, 0.1), Color(sf, 0.6))
 	ci.draw_circle(pille.position + Vector2(7.0, 6.0), 2.0, Color(sf, 0.55 + 0.45 * absf(sin(_zeit * 3.0))) if gruen else Color(sf, 0.6))
 	Stil.schreibe(ci, pille.position + Vector2(12.0, 6.0), stand, Stil.KLEIN, sf)
+	# 23.11.: Umschalter Spieler / Phantome
+	for r: Array in _rang_ansicht_rects():
+		var rr: Rect2 = r[1]
+		var an := str(r[0]) == _rang_ansicht
+		var drueber := rr.has_point(_maus)
+		Stil.platte(ci, rr, 3.0, Color(LICHT, 0.16) if an else (Color(LICHT, 0.06) if drueber else Stil.METALL_TIEF), LICHT if an else Color(LICHT, 0.4 if drueber else 0.22))
+		Stil.schreibe_mittig(ci, rr.get_center(), "SPIELER" if str(r[0]) == "spieler" else "PHANTOME", Stil.KLEIN, LICHT if an else Stil.TEXT_BLASS)
 	# Reiter
 	for r: Array in _rang_reiter_rects():
 		var art := str(r[0])
@@ -1150,7 +1172,10 @@ func _male_rangliste(ci: Control) -> void:
 	var farbe_art: Color = KUPFER_HELL if _rang_reiter == "angriff" else LICHT
 	# Spaltenköpfe als kleine Pillen (wie die Star-Fox-Tafel)
 	var sp := _rang_spalten(x, rechts)
-	var koepfe := [["#", sp["rang"]], ["NAME", sp["name"]], ["PUNKTE" if _rang_reiter == "angriff" else "GEHALTEN", sp["wert"]], ["ELO", sp["elo"]]]
+	var wert_kopf := "LÄUFE" if _rang_ansicht == "spieler" else ("BESTER" if _rang_reiter == "angriff" else "GEHALTEN")
+	var koepfe := [["#", sp["rang"]], ["NAME", sp["name"]], [wert_kopf, sp["wert"]], ["ELO", sp["elo"]]]
+	if sp.has("duelle"):
+		koepfe.insert(3, ["DUELLE", sp["duelle"]])
 	for k: Array in koepfe:
 		var kr := Rect2((k[1] as Vector2).x, y - 5.0, (k[1] as Vector2).y, 10.0)
 		Stil.platte(ci, kr, 2.0, Color(0.11, 0.12, 0.15), Stil.RAHMEN)
@@ -1177,8 +1202,7 @@ func _male_rangliste(ci: Control) -> void:
 		var r := Rect2(x, unten, rechts - x, RANG_ZEILE - 2.0)
 		Stil.platte(ci, r, 3.0, Stil.METALL_TIEF, Color(LICHT, 0.35))
 		Stil.schreibe(ci, Vector2(x + 7.0, r.get_center().y), "DU", Stil.NORMAL, LICHT)
-		var t := "noch kein Angriff in der Liste" if _rang_reiter == "angriff" else "noch keine Verteidigung in der Liste"
-		Stil.schreibe(ci, Vector2(x + 26.0, r.get_center().y), t, Stil.KLEIN, Stil.TEXT_BLASS)
+		Stil.schreibe(ci, Vector2(x + 26.0, r.get_center().y), _rang_du_text(), Stil.KLEIN, Stil.TEXT_BLASS)
 
 
 ## Spalten: Name -> Vector2(x, breite).
@@ -1187,9 +1211,17 @@ func _rang_spalten(x: float, rechts: float) -> Dictionary:
 	var wert_b := 42.0
 	var rang_b := 16.0
 	var elo_x := rechts - elo_b
-	var wert_x := elo_x - 3.0 - wert_b
+	var aus := {"rang": Vector2(x, rang_b), "elo": Vector2(elo_x, elo_b)}
+	var vor_elo := elo_x
+	if _rang_ansicht == "phantome" and Online.bereit():
+		var duell_b := 28.0   # 23.11.: Zahl der Duelle
+		vor_elo = elo_x - 3.0 - duell_b
+		aus["duelle"] = Vector2(vor_elo, duell_b)
+	var wert_x := vor_elo - 3.0 - wert_b
 	var name_x := x + rang_b + 3.0
-	return {"rang": Vector2(x, rang_b), "name": Vector2(name_x, wert_x - 3.0 - name_x), "wert": Vector2(wert_x, wert_b), "elo": Vector2(elo_x, elo_b)}
+	aus["name"] = Vector2(name_x, wert_x - 3.0 - name_x)
+	aus["wert"] = Vector2(wert_x, wert_b)
+	return aus
 
 
 ## Eine Zeile: Platzziffer, dann dunkle Felder für Name (+ Anführer), Wert (Gold) und Elo (Kupfer).
@@ -1221,6 +1253,12 @@ func _rang_zeile(ci: Control, y: float, sp: Dictionary, i: int, z: Array, eigen:
 	var wr := Rect2(ws.x, y, ws.y, h)
 	Stil.platte(ci, wr, 2.0, Color(0.03, 0.035, 0.05), Stil.RAHMEN)
 	_rang_ziffern(ci, wr, str(z[1]), Stil.GOLD, 5)
+	# 23.11.: Duelle (Silber)
+	if sp.has("duelle") and z.size() > 5:
+		var ds: Vector2 = sp["duelle"]
+		var dr := Rect2(ds.x, y, ds.y, h)
+		Stil.platte(ci, dr, 2.0, Color(0.03, 0.035, 0.05), Stil.RAHMEN)
+		_rang_ziffern(ci, dr, str(z[5]), SILBER, 3)
 	# Elofeld (Kupfer)
 	var es: Vector2 = sp["elo"]
 	var er := Rect2(es.x, y, es.y, h)
@@ -1245,8 +1283,17 @@ func _rang_ziffern(ci: Control, r: Rect2, text: String, farbe: Color, stellen: i
 ## [Name, Wert, Elo-Text, Profil-ID, Anführer] für die ganze Liste einer Art (Elo-Reihenfolge wie bisher).
 func _ranglisten_zeilen(art: String) -> Array:
 	var aus: Array = []
+	if Online.bereit() and _rang_ansicht == "spieler":
+		# 23.11.: Spieler-Elo – ab Online.LISTE_AB Läufen
+		for e: Dictionary in (Online.spieler_listen[art] as Array):
+			if int(e.get("spiele", 0)) < Online.LISTE_AB:
+				continue
+			aus.append([str(e.get("spieler", "?")).left(12), "%d" % int(e.get("spiele", 0)), "%d" % roundi(float(e.get("elo", 1000))), str(e.get("profil", "")), ""])
+		return aus
 	if Online.bereit():
 		for e: Dictionary in (Online.listen[art] as Array):
+			if int(e.get("spiele", 0)) < Online.LISTE_AB:
+				continue   # 23.11.: Phantome erst ab LISTE_AB Duellen
 			var wert := ""
 			if art == "angriff":
 				wert = "%d" % int(e.get("wertung", 0))
@@ -1256,13 +1303,32 @@ func _ranglisten_zeilen(art: String) -> Array:
 			var af := ""
 			if art == "verteidigung":
 				af = Anfuehrer.name(Anfuehrer.gueltig(str(e.get("anfuehrer", "brakk")) if e.get("anfuehrer") != null else "brakk"))
-			aus.append([str(e.get("spieler", "?")).left(12), wert, "%d" % roundi(float(e.get("elo", 1000))), str(e.get("profil", "")), af])
+			aus.append([str(e.get("spieler", "?")).left(12), wert, "%d" % roundi(float(e.get("elo", 1000))), str(e.get("profil", "")), af, "%d" % int(e.get("spiele", 0))])
 		return aus
 	var funde := Phantom.liste(art, true)
 	funde.sort_custom(func(a, b): return int(a["wert"]) > int(b["wert"]))
 	for f: Dictionary in funde:
 		aus.append([str(f.get("spieler", "?")).left(12), "%d" % int(f["wert"]) if art == "angriff" else "–", "–", "", ""])
 	return aus
+
+
+## 23.11.: Text in der „DU“-Zeile, wenn man (noch) nicht in der Liste steht – mit dem Weg dorthin.
+func _rang_du_text() -> String:
+	var mein := Profil.id()
+	var spieler := _rang_ansicht == "spieler"
+	if Online.bereit() and mein != "":
+		var beste := -1
+		for e: Dictionary in ((Online.spieler_listen if spieler else Online.listen)[_rang_reiter] as Array):
+			if str(e.get("profil", "")) == mein:
+				beste = maxi(beste, int(e.get("spiele", 0)))
+		if beste >= 0 and beste < Online.LISTE_AB:
+			var rest := Online.LISTE_AB - beste
+			if spieler:
+				return "neu – noch %d %s bis zur Liste" % [rest, "Lauf" if rest == 1 else "Läufe"]
+			return "dein Phantom ist neu – noch %d %s bis zur Liste" % [rest, "Duell" if rest == 1 else "Duelle"]
+	if spieler:
+		return "noch kein Lauf als Angreifer" if _rang_reiter == "angriff" else "noch kein Lauf als Verteidiger"
+	return "noch kein Angriff in der Liste" if _rang_reiter == "angriff" else "noch keine Verteidigung in der Liste"
 
 
 func _naechste_grafik() -> void:

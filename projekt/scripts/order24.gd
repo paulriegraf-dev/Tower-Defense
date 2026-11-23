@@ -115,6 +115,19 @@ const STANDARD := {
 }
 const SCHILD_RADIUS := 3.2       # Felder um das Technoclan-HQ, in die Brakk nicht hineinkommt
 const SICHT_JAEGER := 7.0        # Felder: so weit sieht ein Jäger Brakk (mit freier Sicht)
+# 23.11. (Paul): Zange – Jagdtrupps kommen über eigene Seiten und schlagen gleichzeitig zu; im Angriff fächern sie auf,
+# und wer am Ziel keine Sicht hat, sucht sich ein Schussfeld.
+const ZANGE_AB := 7.0            # Felder: ist ein Trupp weiter weg, marschiert er erst zu einem eigenen Anmarschpunkt
+const ZANGE_ABSTAND := 5         # Felder: so weit von Brakks letztem Ort liegt der Anmarschpunkt
+const ZANGE_WARTE := 8.0         # Sekunden: so lange warten die Bereiten höchstens auf die anderen Trupps
+const ZANGE_NAH := 4.0           # Felder: sieht ein Trupp Brakk so nah, schlägt er sofort zu
+const ZANGE_NEU := 4.0           # Felder: so weit muss Brakk sich bewegen, damit die Zange neu angesetzt wird
+const ZANGE_MAX_SEK := 25.0      # nach so viel Anmarsch schlägt ein Trupp auf jeden Fall zu
+const ZANGE_UMWEG := 2.5         # Anmarschweg höchstens so viel länger als der direkte Weg (sonst andere Seite)
+const WEG_STRAFE := 6.0          # Wegkosten auf Feldern, die schon ein anderer Trupp nimmt (getrennte Anmarschwege)
+const FAECHER_RADIUS := 1.6      # Felder: so weit vor Brakk verteilen sich die Mitglieder im Halbkreis
+const SCHUSSFELD_SEK := 2.0      # so lange ohne Sicht am Ziel, dann sucht ein Jäger ein Feld mit Sicht
+const SCHUSSFELD_WEITE := 5      # Felder: so weit sucht er
 const BAU_SCHADEN := 0.6         # Brakks Schüsse auf Gebäude wirken mit diesem Anteil
 const LANZE_FABRIK := 0.10       # 20.11.: der Ladestrahl nimmt einer Fabrik mindestens 10 % ihres Lebens
 const LADUNG_REICHWEITE := 1.8   # 20.11.: Felder – so weit vor Brakk darf der Erdwall für die Sprengladung liegen
@@ -205,6 +218,9 @@ var schild_auf := 1.0             # 0..1 Kuppel des Schilds (schließt sich in d
 var nemesis: Nemesis = null       # 22.11. (Paul): Nemesis-System – Eliten sind Personen (scripts/nemesis.gd)
 var sichter: Einheit = null       # 22.11.: Stellung, die Brakk zuletzt gesehen hat (Nemesis: Sichtung)
 var markiert_bis := -1.0          # 22.11. (Nemesis Teil 3): bis hier kennen alle Trupps Brakks Ort (Markierung)
+var _zange := {}                 # 23.11.: {"ziel": Vector2i, "erst_bereit": float, "los": bool}
+var _ohne_sicht := {}            # 23.11.: Einheit-ID -> Zeit, seit der sie am Ziel nichts sieht
+var _schussfeld := {}            # 23.11.: Einheit-ID -> {"z", "bis"}
 
 
 ## 22.11. (Nemesis Teil 4): Brakk tut etwas, das sich die Benannten abschauen können (Tumble, Klonmaschine …).
@@ -1855,6 +1871,20 @@ func _jagd_eroeffnen(k: Kommandant) -> void:
 	_wege_loggen()
 
 
+## 23.11.: In Trupps zu trupp_min..trupp_max teilen (der Rest geht im letzten Trupp mit, wenn er sonst zu klein wäre).
+func _aufteilen(liste: Array) -> Array:
+	var aus: Array = []
+	var groesse := clampi(roundi((wf("trupp_min") + wf("trupp_max")) / 2.0), 1, 12)
+	var i := 0
+	while i < liste.size():
+		var n := groesse
+		if liste.size() - (i + n) < int(w("trupp_min")) and liste.size() - i <= int(w("trupp_max")):
+			n = liste.size() - i
+		aus.append(liste.slice(i, i + n))
+		i += n
+	return aus
+
+
 func _neuer_trupp(mitglieder: Array, modus: String) -> Dictionary:
 	var t := {"mitglieder": mitglieder, "modus": modus, "zuletzt": bekannt, "gesehen": zeit, "suche_bis": 0.0}
 	trupps.append(t)
@@ -1891,9 +1921,18 @@ func _jagdwelle() -> void:
 			if not liste.is_empty():
 				faehig = str(liste.pick_random())
 		neu.append(_neue_truppe(typ, z, stufe, faehig))
-	_neuer_trupp(neu, "jagd")
 	n = neu.size()
-	spiel.melde("Ein %s verlässt den Schild (%d)." % ["Elitetrupp" if elite else "Jagdtrupp", n], 3.0)
+	var anzahl := 1
+	if elite:
+		_neuer_trupp(neu, "jagd")
+	else:
+		anzahl = 0
+		for teil: Array in _aufteilen(neu):   # 23.11. (Paul): mehrere kleine Trupps statt eines großen Pulks
+			_neuer_trupp(teil, "jagd")
+			anzahl += 1
+	spiel.melde(("Ein Elitetrupp verlässt den Schild (%d)." % n) if elite else ("Jagdtrupps verlassen den Schild (%d in %d Trupps)." % [n, anzahl] if anzahl > 1 else "Ein Jagdtrupp verlässt den Schild (%d)." % n), 3.0)
+	if spiel.has_method("befehl24_protokoll"):
+		spiel.befehl24_protokoll("welle", {"welle": wellen, "n": n, "elite": elite, "trupps": anzahl, "stufe": stufe})   # 23.11.
 	print("ORDER24 Welle %d bei %.0f s: %d%s · Stufe %d · Takt %.0f s" % [wellen, zeit, n, " Elite" if elite else "", stufe, welle_takt_jetzt()])
 
 
@@ -1943,6 +1982,12 @@ func _trupps_lenken(k: Kommandant) -> void:
 			"suche":
 				if zeit > float(t["suche_bis"]):
 					t["modus"] = "streife"
+		if str(t["modus"]) != "jagd":
+			t.erase("anflug")
+			t.erase("zu")
+		elif sieht and erster != null and erster.position.distance_to(k.position) <= ZANGE_NAH * Werte.ZELLE:
+			t["zu"] = true   # 23.11.: so nah dran – nicht mehr auf die anderen warten
+	_zange_pflegen(k)
 
 
 ## Ziel eines Jägers je nach Modus des Trupps: auffächern auf den letzten bekannten Ort (einer direkt, zwei über die Flanken),
@@ -1963,17 +2008,199 @@ func _trupp_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 				s = {"z": _freies_feld_nahe(t["zuletzt"] as Vector2i, 4), "bis": zeit + 5.0}
 				_suchziel[id] = s
 			return s["z"]
+	return _jagd_ziel(e, t)
+
+
+# ------------------------------------------------------------------ Zange (23.11.)
+
+## Jäger im Modus „jagd“: erst über den eigenen Anmarschweg zum Anmarschpunkt, dort warten, bis die Zange zuschlägt;
+## dann aufgefächert auf Brakks letzten Ort – und wer dort nichts sieht, sucht sich ein Schussfeld.
+func _jagd_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 	var ziel: Vector2i = t.get("ziel_ok", t["zuletzt"])
-	var nr := (t["mitglieder"] as Array).find(e)
-	if nr <= 0 or nr > 2:
-		return ziel
-	var von: Vector2 = t.get("mitte", e.position)
-	var r := (karte.mitte(ziel) - von)
-	if r.length() < Werte.ZELLE * 1.5:
-		return ziel   # schon da: alle direkt
-	var flanke := r.normalized().orthogonal() * (3.0 if nr == 1 else -3.0) * Werte.ZELLE
-	var fz := _freies_feld_bei(karte.mitte(ziel) + flanke, ziel)
-	return fz if not karte.einheiten_weg(karte.zelle_bei(e.position), fz).is_empty() else ziel
+	var id := e.get_instance_id()
+	var hier := karte.zelle_bei(e.position)
+	var a: Dictionary = t.get("anflug", {})
+	if not a.is_empty() and not bool(t.get("zu", false)):
+		_ohne_sicht.erase(id)
+		_schussfeld.erase(id)
+		if not bool(a.get("zw_ok", false)):
+			var zw: Vector2i = a["zwischen"]
+			if zw == Karte.KEINE or (t.get("mitte", e.position) as Vector2).distance_to(karte.mitte(zw)) <= 1.5 * Werte.ZELLE:
+				a["zw_ok"] = true
+			else:
+				return zw
+		return _faecher_feld(e, t, a["punkt"], (karte.mitte(a["punkt"]) - karte.mitte(ziel)).normalized(), 0.8)
+	# Zuschlagen: Schussfeld (D) geht vor, sonst der eigene Platz im Halbkreis (C)
+	var sf: Dictionary = _schussfeld.get(id, {})
+	if not sf.is_empty():
+		if zeit < float(sf["bis"]) and hier != (sf["z"] as Vector2i):
+			return sf["z"]
+		_schussfeld.erase(id)
+	var richtung := ((t.get("mitte", e.position) as Vector2) - karte.mitte(ziel))
+	var platz := _faecher_feld(e, t, ziel, richtung.normalized() if richtung.length() > 1.0 else Vector2.RIGHT, FAECHER_RADIUS)
+	var punkt := karte.mitte(t["zuletzt"] as Vector2i)
+	if e.position.distance_to(karte.mitte(platz)) <= 1.2 * Werte.ZELLE and not karte.sicht_frei(e.position, punkt):
+		var seit := float(_ohne_sicht.get(id, zeit))
+		_ohne_sicht[id] = seit
+		if zeit - seit >= SCHUSSFELD_SEK:
+			_ohne_sicht.erase(id)
+			var sz := _schussfeld_suchen(hier, punkt, float(e.daten["reichweite"]))
+			if sz != Karte.KEINE:
+				_schussfeld[id] = {"z": sz, "bis": zeit + 6.0}
+				return sz
+	else:
+		_ohne_sicht.erase(id)
+	return platz
+
+
+## Platz des Mitglieds im Halbkreis um `mitte` (zur Seite `richtung`), `radius` Felder weit; erreichbar, sonst `mitte`.
+func _faecher_feld(e: Einheit, t: Dictionary, mitte: Vector2i, richtung: Vector2, radius: float) -> Vector2i:
+	var glieder: Array = t["mitglieder"]
+	var n := glieder.size()
+	var nr := maxi(0, glieder.find(e))
+	if n <= 1:
+		return mitte
+	var winkel := lerpf(-1.2, 1.2, float(nr) / float(n - 1))   # gut ±70°
+	var p := karte.mitte(mitte) + richtung.rotated(winkel) * radius * Werte.ZELLE
+	var z := _freies_feld_bei(p, mitte)
+	if z == mitte or karte.einheiten_weg(karte.zelle_bei(e.position), z).is_empty():
+		return mitte
+	return z
+
+
+## Nächstes erreichbare Feld (bis SCHUSSFELD_WEITE) mit freier Sicht auf `punkt` und in Reichweite.
+func _schussfeld_suchen(von: Vector2i, punkt: Vector2, reichweite: float) -> Vector2i:
+	var bestes := Karte.KEINE
+	var beste := INF
+	for dy in range(-SCHUSSFELD_WEITE, SCHUSSFELD_WEITE + 1):
+		for dx in range(-SCHUSSFELD_WEITE, SCHUSSFELD_WEITE + 1):
+			var z := von + Vector2i(dx, dy)
+			if not karte.in_karte(z) or z.x < Werte.ZONE_SPALTEN or not karte.ist_begehbar(z) or not karte.ist_frei(z):
+				continue
+			var m := karte.mitte(z)
+			if m.distance_to(punkt) > maxf(2.0, reichweite) * Werte.ZELLE or not karte.sicht_frei(m, punkt):
+				continue
+			var d := float(absi(dx) + absi(dy))
+			if d < beste and not karte.einheiten_weg(von, z).is_empty():
+				beste = d
+				bestes = z
+	return bestes
+
+
+## Einmal je Bild: Anmarschpunkte verteilen, Bereitschaft prüfen, gemeinsam zuschlagen.
+func _zange_pflegen(k: Kommandant) -> void:
+	var jagende: Array = trupps.filter(func(x: Dictionary) -> bool: return str(x["modus"]) == "jagd" and not (x["mitglieder"] as Array).is_empty())
+	if jagende.is_empty():
+		_zange = {}
+		return
+	var ziel: Vector2i = bekannt
+	if ziel == Karte.KEINE:
+		return
+	if _zange.is_empty() or Vector2(ziel - (_zange["ziel"] as Vector2i)).length() > ZANGE_NEU:
+		_zange = {"ziel": ziel, "erst_bereit": -1.0, "los": false}
+		for t: Dictionary in jagende:
+			t.erase("anflug")
+	if bool(_zange["los"]) and zeit - float(_zange.get("los_t", zeit)) > 10.0:
+		_zange["los"] = false   # Nachschub: die nächsten Trupps setzen wieder eine eigene Zange an
+		_zange["erst_bereit"] = -1.0
+	var ziel_p := karte.mitte(ziel)
+	var belegt: Array[Vector2i] = []   # Felder der schon geplanten Anmarschwege
+	var seiten: Array[float] = []
+	for t: Dictionary in jagende:
+		if t.has("anflug"):
+			seiten.append(float((t["anflug"] as Dictionary)["winkel"]))
+			belegt.append_array((t["anflug"] as Dictionary).get("weg", []) as Array)
+	for t: Dictionary in jagende:
+		if bool(t.get("zu", false)) or t.has("anflug"):
+			continue
+		var mitte: Vector2 = t.get("mitte", ziel_p)
+		if bool(_zange["los"]) or mitte.distance_to(ziel_p) <= ZANGE_AB * Werte.ZELLE:
+			t["zu"] = true   # schon nah dran oder die Zange läuft schon: direkt angreifen
+			continue
+		var start := karte.zelle_bei(((t["mitglieder"] as Array)[0] as Node2D).position)
+		var a := _anflug_planen(start, ziel, (mitte - ziel_p).angle(), seiten, belegt)
+		if a.is_empty():
+			t["zu"] = true
+			continue
+		t["anflug"] = a
+		seiten.append(float(a["winkel"]))
+		belegt.append_array(a["weg"] as Array)
+	# Bereit, wer an seinem Anmarschpunkt steht. Alle bereit – oder die ersten warten schon ZANGE_WARTE – dann los.
+	var alle := true
+	var irgendwer := false
+	for t: Dictionary in jagende:
+		if not t.has("anflug") or bool(t.get("zu", false)):
+			continue
+		var a: Dictionary = t["anflug"]
+		if zeit - float(a.get("seit", zeit)) >= ZANGE_MAX_SEK:
+			t["zu"] = true   # zu lange unterwegs: nicht mehr warten
+			continue
+		var bereit := (t.get("mitte", Vector2.INF) as Vector2).distance_to(karte.mitte(a["punkt"])) <= 1.8 * Werte.ZELLE
+		if bereit:
+			irgendwer = true
+		else:
+			alle = false
+	if irgendwer and float(_zange["erst_bereit"]) < 0.0:
+		_zange["erst_bereit"] = zeit
+	if irgendwer and (alle or zeit - float(_zange["erst_bereit"]) >= ZANGE_WARTE) and not bool(_zange["los"]):
+		_zange["los"] = true
+		_zange["los_t"] = zeit
+		var n := 0
+		for t: Dictionary in jagende:
+			if t.has("anflug") and not bool(t.get("zu", false)):
+				t["zu"] = true
+				n += 1
+		if n >= 2:
+			spiel.melde("Sonde 7: „Zange steht. Zugriff!“", 3.0)
+		if spiel.has_method("befehl24_protokoll"):
+			spiel.befehl24_protokoll("zange", {"trupps": n, "warten": snappedf(zeit - float(_zange["erst_bereit"]), 0.1)})
+
+
+## Anmarschpunkt auf einer eigenen Seite (möglichst weit weg von den Seiten der anderen Trupps) und ein Zwischenpunkt auf
+## einem Weg, der die Felder der anderen meidet. {} = kein erreichbarer Punkt.
+func _anflug_planen(start: Vector2i, ziel: Vector2i, grund: float, seiten: Array[float], belegt: Array[Vector2i]) -> Dictionary:
+	var kandidaten: Array = []
+	for i in 8:
+		var wkl := grund + TAU * float(i) / 8.0
+		var abstand := PI
+		for s: float in seiten:
+			abstand = minf(abstand, absf(angle_difference(wkl, s)))
+		# Wertung: weit weg von den anderen Seiten zählt viel, nahe der eigenen Herkunft ein wenig (kurzer Anmarsch)
+		kandidaten.append([abstand * 2.0 - absf(angle_difference(wkl, grund)) * 0.4 if not seiten.is_empty() else -absf(angle_difference(wkl, grund)), wkl])
+	kandidaten.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
+	var direkt := karte.einheiten_weg(start, _erreichbar_nahe(ziel, start)).size()
+	var grenze := maxf(float(direkt) * ZANGE_UMWEG, float(direkt + 12)) if direkt > 0 else INF
+	var ersatz := {}
+	for k: Array in kandidaten:
+		var wkl: float = k[1]
+		var p := karte.mitte(ziel) + Vector2.from_angle(wkl) * float(ZANGE_ABSTAND) * Werte.ZELLE
+		var punkt := _freies_feld_bei(p, Karte.KEINE)
+		if punkt == Karte.KEINE:
+			continue
+		var weg := _weg_mit_strafe(start, punkt, belegt)
+		if weg.is_empty():
+			continue
+		var zw: Vector2i = weg[int(weg.size() * 0.55)] if weg.size() >= 6 else Karte.KEINE
+		var plan := {"punkt": punkt, "winkel": wkl, "zwischen": zw, "zw_ok": false, "weg": weg, "seit": zeit}
+		if float(weg.size()) <= grenze:
+			return plan
+		if ersatz.is_empty():
+			ersatz = plan   # zu weiter Umweg: nur, wenn keine Seite näher liegt
+	return ersatz
+
+
+## Weg für Truppen, auf dem schon geplante Felder anderer Trupps teurer sind (danach wieder zurückgesetzt).
+func _weg_mit_strafe(von: Vector2i, nach: Vector2i, belegt: Array[Vector2i]) -> Array[Vector2i]:
+	var astar: AStarGrid2D = karte._astar_einheiten
+	var gesetzt: Array[Vector2i] = []
+	for z: Vector2i in belegt:
+		if astar.is_in_boundsv(z) and not astar.is_point_solid(z) and astar.get_point_weight_scale(z) == 1.0:
+			astar.set_point_weight_scale(z, WEG_STRAFE)
+			gesetzt.append(z)
+	var weg := karte.einheiten_weg(von, nach)
+	for z: Vector2i in gesetzt:
+		astar.set_point_weight_scale(z, 1.0)
+	return weg
 
 
 ## 20.11.: `ziel` selbst, wenn es von `von` zu Fuß erreichbar ist – sonst das nächste erreichbare Feld bis 4 Felder daneben.
@@ -3053,6 +3280,7 @@ func _ende(sieg: bool) -> void:
 	sabo = {}
 	nemesis.lauf_ende()   # 22.11.: Rang +1 für die, die Brakk hart zugesetzt oder ohne Bergung überstanden haben
 	print("ORDER24 Ende: %s nach %.0f s · Sabotage %s · Kills %d · Deckung %d %% · Schaden an Brakk %s" % ["Sieg" if sieg else "Niederlage", zeit, str(sabotage), kills, roundi(100.0 * deckung_sek / maxf(1.0, zeit)), str(schaden_an_brakk)])
+	spiel.befehl24_protokoll("ende", {"sieg": sieg, "sabotage": sabotage.duplicate(), "kills": kills, "wellen": wellen, "deckung_prozent": roundi(100.0 * deckung_sek / maxf(1.0, zeit))})   # 23.11.
 	spiel.phase = 2
 	spiel.loesche_sitzung()
 	if sieg and spiel.ego != null:

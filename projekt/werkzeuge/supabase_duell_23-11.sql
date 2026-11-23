@@ -1,0 +1,2 @@
+-- ERSETZT (23.11., 23:50): Diese Änderung steckt vollständig in werkzeuge/supabase_ranking_23-11.sql.
+-- Bitte NICHT diese Datei einspielen, sondern nur supabase_ranking_23-11.sql (zusammen mit der Web-Version).

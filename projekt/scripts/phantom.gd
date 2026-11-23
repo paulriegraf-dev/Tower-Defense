@@ -169,10 +169,30 @@ static func verteidigungs_wertung(runden: int, leben: int, sieg: bool) -> Dictio
 
 
 ## Elo-Ergebnis für den Angreifer gegen eine Verteidigung: Anteil der genommenen Leben, geknackt = 1.
-static func duell_ergebnis(leben_genommen: int, geknackt: bool) -> float:
+## 23.11. (Paul): Ergebnis für den Angreifer, 0..1 (Elo, `duell_melden` online).
+##   geknackt vor Runde 20: 0,85–1,0 – je früher, desto mehr (die Runden, die die Verteidigung gehalten hat, zählen mild)
+##   erst in Runde 20 gefallen (Jagd aufs HQ): DUELL_RUNDE20 – sie hat das reguläre Spiel gehalten
+##   nicht geknackt: genommene Leben × DUELL_LEBEN (höchstens knapp unter Runde 20)
+## `runden` = so viele Runden lief dieses Duell (Ersatz-Phantom: nur der Rest). Weniger als alle und nicht geknackt:
+## Ergebnis zur Mitte hin gedämpft – ein Ersatz-Phantom, das nur die letzten Runden hält, ist kein voller Sieg.
+const DUELL_RUNDE20: float = 0.75
+const DUELL_LEBEN: float = 0.7
+const DUELL_GEKNACKT_MIN: float = 0.85
+## Ab diesem Ergebnis zählt ein Duell online als Sieg des Angreifers (sonst „gehalten“, siehe duell_melden).
+const DUELL_SIEG_AB: float = 0.749
+
+static func duell_ergebnis(leben_genommen: int, geknackt: bool, runde: int = 0, runden: int = 0) -> float:
+	var letzte := Werte.LETZTE_RUNDE
 	if geknackt:
-		return 1.0
-	return clampf(float(leben_genommen) / float(Werte.START_LEBEN), 0.0, 1.0)
+		if runde >= letzte:
+			return DUELL_RUNDE20
+		if runde <= 0:
+			return 1.0
+		return clampf(DUELL_GEKNACKT_MIN + (1.0 - DUELL_GEKNACKT_MIN) * float(letzte - runde) / float(maxi(1, letzte - 1)), DUELL_GEKNACKT_MIN, 1.0)
+	var s := DUELL_LEBEN * clampf(float(leben_genommen) / float(Werte.START_LEBEN), 0.0, 1.0)
+	if runden > 0 and runden < letzte:
+		s = 0.5 + (s - 0.5) * float(runden) / float(letzte)
+	return s
 
 
 ## Alle Phantome einer Art ("verteidigung" oder "angriff"), neueste zuerst: [{"pfad", "titel"}].

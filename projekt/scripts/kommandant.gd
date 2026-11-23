@@ -282,6 +282,8 @@ func nimm_schaden(menge: float) -> void:
 
 func faellt() -> void:
 	gefallen = true
+	if spiel.has_method("brakk_ereignis"):
+		spiel.brakk_ereignis("brakk_tod")   # 23.11.: Run-Protokoll
 	visible = false
 	for e in gesammelt:
 		if is_instance_valid(e):

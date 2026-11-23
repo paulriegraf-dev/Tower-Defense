@@ -11,9 +11,15 @@ const ZEITLIMIT := 12.0
 const CACHE := "user://Phantom Online"
 const FELDER := "id,art,datei,spieler,profil,version,spalten,wertung,elo,spiele,siege,erstellt,anfuehrer:daten-%3E%3Eanfuehrer"   # 22.11.: Anführer aus den Daten (Rangliste)
 
+## 23.11. (Paul): höchstens so viele Phantome je Spieler und Art im Pool (ein neues verdrängt eins – der Spieler wählt);
+## in der Rangliste stehen Phantome erst ab LISTE_AB Duellen, Spieler erst ab LISTE_AB Läufen.
+const PLAETZE := 3
+const LISTE_AB := 5
+
 ## "unbekannt", "laedt", "online", "offline"
 static var zustand := "unbekannt"
 static var listen := {"angriff": [], "verteidigung": []}
+static var spieler_listen := {"angriff": [], "verteidigung": []}   # 23.11.: Spieler-Elo (Profil, Name, Elo, Läufe)
 static var pfad_id := {}            # lokaler Pfad eines geladenen oder hochgeladenen Phantoms -> ID online
 static var ersatz_pfade: Array = [] # Angriff: online gezogene Ersatz-Phantome für die nächste Partie
 static var _abgeglichen := false
@@ -89,13 +95,23 @@ static func lade_listen() -> void:
 	zustand = "laedt"
 	var ok := true
 	for art: String in ["angriff", "verteidigung"]:
-		var l: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=%s&art=eq.%s&version=eq.%d&order=elo.desc&limit=300" % [FELDER, art, Phantom.PHANTOM_VERSION])
+		var basis := "/rest/v1/phantome?select=%s&art=eq.%s&version=eq.%d&order=elo.desc&limit=300"
+		var l: Variant = await _anfrage(HTTPClient.METHOD_GET, (basis + "&archiviert=eq.false") % [FELDER, art, Phantom.PHANTOM_VERSION])   # 23.11.: ohne Archiv
+		if not (l is Array):   # 23.11.: Datenbank noch ohne Archiv-Spalte
+			l = await _anfrage(HTTPClient.METHOD_GET, basis % [FELDER, art, Phantom.PHANTOM_VERSION])
 		if not (l is Array):   # 22.11.: Rückfall ohne das Anführer-Feld, falls die Abfrage damit scheitert
-			l = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=%s&art=eq.%s&version=eq.%d&order=elo.desc&limit=300" % [FELDER.split(",anfuehrer")[0], art, Phantom.PHANTOM_VERSION])
+			l = await _anfrage(HTTPClient.METHOD_GET, basis % [FELDER.split(",anfuehrer")[0], art, Phantom.PHANTOM_VERSION])
 		if l is Array:
 			listen[art] = l
 		else:
 			ok = false
+	# 23.11.: Spieler-Elo (fehlt die Tabelle noch, bleibt die Spieler-Ansicht leer – kein Grund für „offline“)
+	var sp: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,spiele,siege&order=elo.desc&limit=500")
+	spieler_listen = {"angriff": [], "verteidigung": []}
+	if sp is Array:
+		for e: Dictionary in (sp as Array):
+			if spieler_listen.has(str(e.get("art", ""))):
+				(spieler_listen[str(e["art"])] as Array).append(e)
 	zustand = "online" if ok else "offline"
 	geaendert += 1
 	# 18.11.: Erfolg „Spitze“ – Platz 1 in einer der beiden Ranglisten
@@ -143,13 +159,37 @@ static func hochladen(art: String, datei: String, daten: Dictionary, profil: Str
 
 
 ## Meldet ein Duell: `ergebnis` ist der Anteil für den Angreifer (1 = geknackt, 0 = nichts genommen).
-static func duell(angriff_id: String, verteidigung_id: String, ergebnis: float, wertung: int) -> bool:
+## 23.11.: `mensch` = auf welcher Seite der Spieler selbst gespielt hat ("angriff" / "verteidigung") – zählt für seine
+## Spieler-Elo, und das gegnerische Phantom rechnet gegen seine Spieler-Elo. Kennt die Datenbank das noch nicht, ohne.
+static func duell(angriff_id: String, verteidigung_id: String, ergebnis: float, wertung: int, mensch: String = "") -> bool:
 	if angriff_id == "" and verteidigung_id == "":
 		return false
-	var antwort: Variant = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", {
+	var koerper := {
 		"p_angriff": null if angriff_id == "" else angriff_id, "p_verteidigung": null if verteidigung_id == "" else verteidigung_id,
-		"p_ergebnis": clampf(ergebnis, 0.0, 1.0), "p_wertung": wertung, "p_spieler": Profil.name(), "p_profil": Profil.id()})
+		"p_ergebnis": clampf(ergebnis, 0.0, 1.0), "p_wertung": wertung, "p_spieler": Profil.name(), "p_profil": Profil.id()}
+	if mensch != "":
+		koerper["p_mensch"] = mensch
+	var antwort: Variant = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
+	if antwort == null and mensch != "":
+		koerper.erase("p_mensch")   # Datenbank noch ohne Spieler-Elo
+		antwort = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
 	return antwort != null
+
+
+## 23.11.: Eigene Phantome einer Art im Pool (nicht archiviert), schwächstes zuerst. null = unbekannt (offline oder
+## Datenbank ohne Archiv) – dann gibt es keine Plätze-Regel.
+static func eigene(art: String) -> Variant:
+	var id := Profil.id()
+	if id == "" or id == "pool":
+		return null
+	var l: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=id,elo,spiele,siege,wertung,erstellt,datei&art=eq.%s&profil=eq.%s&version=eq.%d&archiviert=eq.false&order=elo.asc" % [art, id.uri_encode(), Phantom.PHANTOM_VERSION])
+	return l if l is Array else null
+
+
+## 23.11.: Eigenes Phantom ins Archiv (macht einen Platz frei). true = geklappt.
+static func archivieren(id: String) -> bool:
+	var antwort: Variant = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/phantom_archivieren", {"p_id": id, "p_profil": Profil.id()})
+	return antwort is bool and bool(antwort)
 
 
 ## Lädt die Daten eines Phantoms und legt sie im Benutzerordner ab. Gibt den Pfad zurück ("" = nicht geklappt).
@@ -198,7 +238,16 @@ static func waehle(art: String, wie: String, ohne: Array = []) -> Dictionary:
 	if wie == "staerkste":
 		l.sort_custom(func(a, b): return float(a["elo"]) > float(b["elo"]))
 		return l.slice(0, 5).pick_random()
-	return l.pick_random()
+	# 23.11.: Zufall bevorzugt wenig gespielte Phantome (Gewicht 1 / (1 + Duelle)) – neue erreichen so schneller die Liste
+	var summe := 0.0
+	for e: Dictionary in l:
+		summe += 1.0 / (1.0 + float(e.get("spiele", 0)))
+	var zahl := randf() * summe
+	for e: Dictionary in l:
+		zahl -= 1.0 / (1.0 + float(e.get("spiele", 0)))
+		if zahl <= 0.0:
+			return e
+	return l.back()
 
 
 static func bereit() -> bool:

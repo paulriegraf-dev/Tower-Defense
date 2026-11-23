@@ -743,6 +743,7 @@ func _process(delta: float) -> void:
 			brakk.fortschritt.zaehle_zeit("kampf_sek", echt)   # 19.11.: Sieg-Übersicht
 			if brakk.oben:
 				brakk.fortschritt.zaehle_zeit("wall_sek", echt)
+			brakk.fortschritt.protokoll.tick(spiel, brakk, brakk.fortschritt)   # 23.11.: Run-Protokoll
 	for i in 2:
 		_rueckstoss[i] = maxf(0.0, float(_rueckstoss[i]) - echt * 6.0)
 		_blitz[i] = maxf(0.0, float(_blitz[i]) - echt)
@@ -3122,6 +3123,7 @@ func _heize(seite: int) -> void:
 		_trauma = minf(1.0, _trauma + 0.12)
 		Ton.spiele(spiel, "tc-arc", -2.0)   # Zischen
 		spiel.melde("Überhitzt! %s Pistole kühlt ab." % ("Linke" if seite == 0 else "Rechte"), 1.2)
+		_zaehle("ueberhitzt")   # 23.11.: Run-Protokoll
 
 
 func _kuehlen(dt: float) -> void:
@@ -5035,6 +5037,7 @@ func sieg(sekunden: float) -> void:
 	if brakk.fortschritt != null:
 		_sieg_bericht = brakk.fortschritt.sieg_bericht(spiel, sekunden)
 		Profil.brakk_sieg(_sieg_bericht)
+		spiel.brakk_bericht_merken(_sieg_bericht)   # 23.11.: Run-Protokoll
 	Engine.time_scale = 0.15
 	_trauma = 0.6
 	Ton.spiele(spiel, "alert", 0.0)

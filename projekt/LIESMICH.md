@@ -349,9 +349,15 @@ Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme
   Verteidiger bleiben statisch: Nester, Streifen um ihre Fabrik, Alarm nur lokal). Die Sabotage endet früher, wenn
   `sabotage_ende_fabriken` 2 Fabriken zerstört sind · Jagd: Banner „Befehl 24 · Stufe 2“, Sonde 7 „Findet ihn.“ `jagd_anteil`
   67 % der Truppen bilden Trupps zu `trupp_min`–`trupp_max` (3–5), der Rest bleibt in den Nestern. Ein Trupp läuft auf Brakks
-  letzten bekannten Ort und fächert dort auf (einer direkt, zwei über die Flanken), Wegesuche durch die Wälle wie bisher.
+  letzten bekannten Ort, Wegesuche durch die Wälle wie bisher. **Zange (23.11.):** Ist ein Trupp weiter als 7 Felder weg, geht er
+  erst zu einem eigenen Anmarschpunkt 5 Felder neben Brakk, auf einer Seite möglichst weit weg von den Seiten der anderen Trupps;
+  sein Weg meidet die Felder der anderen (Wegstrafe, Zwischenpunkt), höchstens 2,5-mal so lang wie der direkte. Sind alle bereit
+  (oder warten die ersten 8 s, oder ein Trupp ist 25 s unterwegs, oder sieht Brakk auf 4 Felder), schlagen sie gleichzeitig zu.
+  Bewegt sich Brakk um mehr als 4 Felder, wird neu angesetzt; Nachschub setzt nach 10 s eine eigene Zange an. Im Angriff fächert
+  jeder Trupp im Halbkreis auf (jedes Mitglied ein eigener Platz). Wer am Platz 2 s keine Sicht auf Brakks Ort hat, sucht das
+  nächste erreichbare Feld mit Sicht in Reichweite (bis 5 Felder). Prüfen: `werkzeuge/zangetest.gd -- [Formation] [x y]`.
   Verliert er Brakk `sicht_verlust` 8 s aus der Sicht, sucht er `such_sek` 20 s um den letzten Punkt und geht dann wieder Streife.
-  Meldet eine Stellung Brakk in der Nähe, jagt er wieder. Alle `welle_takt` 90 s kommt ein neuer Trupp aus den Schild-Fabriken
+  Meldet eine Stellung Brakk in der Nähe, jagt er wieder. Alle `welle_takt` 90 s kommt eine neue Welle aus den Schild-Fabriken, aufgeteilt in Trupps zu 3–5 (23.11.)
   (`welle_groesse` 4, je zerstörte Fabrik draußen dauerhaft einer weniger), jede `elite_jede` 3. Welle ist ein Elitetrupp aus
   genau drei · Vorstoß ab `vorstoss_start` 600: Ein Jagdtrupp marschiert zum Myriaden-HQ. Hält er es `vorstoss_sek` 15 s, fällt
   es: zweiter Schild, das Ringterminal darin ist unerreichbar, das Med-Kit dort ist weg. Danach erscheint alle `medkit_takt` 60 s

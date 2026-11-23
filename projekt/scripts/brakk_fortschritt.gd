@@ -308,6 +308,7 @@ func kaufe(ring: String, spiel: Node) -> String:
 		_gekauft_in[ring] = int(spiel.welle)
 	ring_stufen[ring] = st + 1
 	_bezahlt[ring] = int(_bezahlt.get(ring, 0)) + preis
+	protokoll.ring("kauf" if st == 0 else "stufe", ring, {"stufe": st + 1, "preis": preis})   # 23.11.
 	return ""
 
 
@@ -319,7 +320,9 @@ func erstattung(ring: String, welle: int) -> int:
 func verkaufe(ring: String, spiel: Node) -> void:
 	if not ringe.has(ring):
 		return
-	spiel.budget += erstattung(ring, int(spiel.welle))
+	var zurueck := erstattung(ring, int(spiel.welle))
+	spiel.budget += zurueck
+	protokoll.ring("verkauf", ring, {"stufe": ring_stufe(ring), "erstattung": zurueck})   # 23.11.
 	while ringe.has(ring):   # 20.11.: der Irrtürmer verkauft je Satz und Stelle (verkaufe_in)
 		ringe.erase(ring)
 	ring_stufen.erase(ring)
@@ -333,6 +336,7 @@ func verkaufe(ring: String, spiel: Node) -> void:
 func setze_feld(ring: String, ecke: Vector2i) -> void:
 	felder.erase(ring)
 	felder[ring] = ecke
+	protokoll.ring("feld", ring, {"x": ecke.x, "y": ecke.y})   # 23.11.
 
 
 ## Liegt die Zelle `z` im 2×2-Feld mit der linken oberen Zelle `ecke`?
@@ -574,6 +578,7 @@ const TITEL_JE := {
 		["Allrounderin", "", 0.0, "von allem etwas"],
 	],
 }
+var protokoll := BrakkProtokoll.new()  # 23.11.: Run-Protokoll je Runde (brakk_protokoll.gd)
 var zaehler := {}                      # 19.11.: rollen, anker, spruenge, saeulen, lanzen, zeitlupen, wall_sek, kampf_sek
 
 
@@ -724,6 +729,7 @@ func kaufe_in(name: String, ring: String, spiel: Node) -> String:
 	(s[1] as Array).append(1)
 	(s[2] as Array).append(preis)
 	(s[3] as Array).append(int(spiel.welle))
+	protokoll.ring("kauf", ring, {"stufe": 1, "preis": preis, "satz": name})   # 23.11.
 	return ""
 
 
@@ -741,6 +747,7 @@ func baue_aus(name: String, i: int, spiel: Node) -> String:
 	spiel.budget -= preis
 	(s[1] as Array)[i] = st + 1
 	(s[2] as Array)[i] = int((s[2] as Array)[i]) + preis
+	protokoll.ring("stufe", str((s[0] as Array)[i]), {"stufe": st + 1, "preis": preis, "satz": name})   # 23.11.
 	return ""
 
 
@@ -754,8 +761,10 @@ func verkaufe_in(name: String, i: int, spiel: Node) -> void:
 	var s := _satz(name)
 	if i < 0 or i >= (s[0] as Array).size():
 		return
-	spiel.budget += satz_erstattung(name, i, int(spiel.welle))
+	var zurueck := satz_erstattung(name, i, int(spiel.welle))
+	spiel.budget += zurueck
 	var ring := str((s[0] as Array)[i])
+	protokoll.ring("verkauf", ring, {"stufe": int((s[1] as Array)[i]), "erstattung": zurueck, "satz": name})   # 23.11.
 	for a: Array in s:
 		a.remove_at(i)
 	if name == "held":
