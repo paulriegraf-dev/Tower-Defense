@@ -195,6 +195,15 @@ static func duell_ergebnis(leben_genommen: int, geknackt: bool, runde: int = 0, 
 	return s
 
 
+## 24.11. (Paul, Version 72): Ergebnis eines Angriffs gegen EINE Verteidigung für die Spieler-Angriffs-Elo – ohne weiche
+## Faktoren (kein Früh-Bonus, keine Dämpfung bei Ersatz-Phantomen): geknackt vor Runde 20 = 1,0 · erst in Runde 20 gefallen
+## = 0,75 · nicht geknackt = 0,7 × genommene Leben / 15. (Die Phantom-Elo rechnet weiter mit `duell_ergebnis`.)
+static func spieler_ergebnis(leben_genommen: int, geknackt: bool, runde: int = 0) -> float:
+	if geknackt:
+		return DUELL_RUNDE20 if runde >= Werte.LETZTE_RUNDE else 1.0
+	return DUELL_LEBEN * clampf(float(leben_genommen) / float(Werte.START_LEBEN), 0.0, 1.0)
+
+
 ## Alle Phantome einer Art ("verteidigung" oder "angriff"), neueste zuerst: [{"pfad", "titel"}].
 static func liste(art: String, alle_groessen: bool = false) -> Array:
 	var funde: Array = []

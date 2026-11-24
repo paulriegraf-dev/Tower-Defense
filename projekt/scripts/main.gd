@@ -774,7 +774,7 @@ func _angriff_aufgeben() -> void:
 	_angriff_fertig = true
 	var vid := Online.id_von(_aktiv_pfad)
 	if vid != "" and Online.aktiv():
-		Online.duell("", vid, 0.0, 0, "angriff")   # 23.11.: zählt auch für die Spieler-Elo
+		Online.angriff_abgebrochen(vid)   # 23.11.: zählt auch für die Spieler-Elo; 24.11. (72): als ein Lauf
 
 
 ## Angriff: Eine Verteidigung ist gefallen und ein Ersatz-Phantom steht bereit. Zwischenwertung zeigen (15.11.):
@@ -1170,22 +1170,12 @@ func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 			Online.pfad_id[pfad] = id
 	else:
 		_online_hinweis_text("Nicht hochgeladen – deine bisherigen Angriffe bleiben im Pool. Dein Lauf zählt trotzdem für deine Spieler-Elo.")
-	var je: Dictionary = {}   # Pfad der Verteidigung -> [genommen, geknackt, Runde des Knackens, Runden gegen sie]
-	var folge: Array = []
-	for r: Dictionary in daten.get("runden", []):
-		var g := str(r.get("gegen_pfad", ""))
-		if not je.has(g):
-			je[g] = [0, false, 0, 0]
-			folge.append(g)
-		je[g][0] = int(je[g][0]) + int(r.get("leben_genommen", 0))
-		je[g][3] = int(je[g][3]) + 1
-		if r.get("geknackt", false):
-			je[g][1] = true
-			je[g][2] = int(r.get("runde", 0))
-	for g: String in folge:
-		var vid := Online.id_von(g)
-		if vid != "":
-			await Online.duell(id, vid, Phantom.duell_ergebnis(int(je[g][0]), bool(je[g][1]), int(je[g][2]), int(je[g][3])), wertung, "angriff")   # 23.11.: Runde und Anteil zählen mit; Spieler-Elo
+	# 24.11. (Paul, Version 72): Phantom-Elo je Verteidigung einzeln (Duell mit Runde und Anteil), die Spieler-Angriffs-Elo
+	# aber nur EINMAL für den ganzen Lauf (Budget-gewichtet, Datenbank `angriff_lauf_melden`).
+	var duelle: Array = Online.lauf_duelle(daten)
+	for d: Dictionary in duelle:
+		await Online.duell(id, str(d["id"]), float(d["phantom_s"]), wertung, "angriff")
+	await Online.lauf(duelle)
 	await _elo_anzeigen("angriff", elo_vor)
 
 

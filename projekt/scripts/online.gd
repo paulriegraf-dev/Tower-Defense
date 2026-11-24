@@ -107,7 +107,7 @@ static func lade_listen() -> void:
 		else:
 			ok = false
 	# 23.11.: Spieler-Elo (fehlt die Tabelle noch, bleibt die Spieler-Ansicht leer – kein Grund für „offline“)
-	var sp: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,elo_max,spiele,siege&order=elo.desc&limit=500")   # 24.11.: beste Elo
+	var sp: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,elo_max,spiele,siege,duelle&order=elo.desc&limit=500")   # 24.11.: beste Elo; 24.11. (72): duelle
 	if not (sp is Array):
 		sp = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,spiele,siege&order=elo.desc&limit=500")   # Datenbank noch ohne elo_max
 	spieler_listen = {"angriff": [], "verteidigung": []}
@@ -177,6 +177,58 @@ static func duell(angriff_id: String, verteidigung_id: String, ergebnis: float, 
 		koerper.erase("p_mensch")   # Datenbank noch ohne Spieler-Elo
 		antwort = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
 	return antwort != null
+
+
+## 24.11. (Paul, Version 72): Aus den Runden eines vollständigen Angriffs die Duelle je Verteidigung bilden:
+## [{pfad, id, phantom_s (für die Phantom-Elo), s (Spieler-Ergebnis), w (Gewicht = Budget der Runden gegen sie), geknackt}]
+## in der Reihenfolge, in der die Verteidigungen auftraten. Verteidigungen ohne Online-ID fehlen.
+static func lauf_duelle(daten: Dictionary) -> Array:
+	var je: Dictionary = {}   # Pfad -> [genommen, geknackt, Runde des Knackens, Runden gegen sie, Budget gegen sie]
+	var folge: Array = []
+	for r: Dictionary in daten.get("runden", []):
+		var g := str(r.get("gegen_pfad", ""))
+		if not je.has(g):
+			je[g] = [0, false, 0, 0, 0]
+			folge.append(g)
+		je[g][0] = int(je[g][0]) + int(r.get("leben_genommen", 0))
+		je[g][3] = int(je[g][3]) + 1
+		je[g][4] = int(je[g][4]) + Phantom.budget(maxi(int(r.get("runde", 1)), 1))
+		if r.get("geknackt", false):
+			je[g][1] = true
+			je[g][2] = int(r.get("runde", 0))
+	var aus: Array = []
+	for g: String in folge:
+		var vid := id_von(g)
+		if vid == "":
+			continue
+		aus.append({"pfad": g, "id": vid,
+			"phantom_s": Phantom.duell_ergebnis(int(je[g][0]), bool(je[g][1]), int(je[g][2]), int(je[g][3])),
+			"s": Phantom.spieler_ergebnis(int(je[g][0]), bool(je[g][1]), int(je[g][2])),
+			"w": float(maxi(int(je[g][4]), 1)), "geknackt": bool(je[g][1])})
+	return aus
+
+
+## 24.11. (Paul, Version 72): Ein ganzer Angriffslauf = EIN Elo-Update der Spieler-Angriffs-Elo (Erwartung und Ergebnis je
+## Verteidigung, nach Budget gewichtet gemittelt, K 64; Datenbank `angriff_lauf_melden`). `duelle` = Einträge von lauf_duelle().
+## Die Lauf-Nummer macht die Meldung doppelt-sicher. false = Datenbank kennt es nicht (dann zählt der Lauf nicht für die Spieler-Elo).
+static func lauf(duelle: Array) -> bool:
+	if duelle.is_empty() or Profil.id() == "" or Profil.id() == "pool":
+		return false
+	var liste: Array = []
+	for d: Dictionary in duelle:
+		liste.append({"id": d["id"], "s": clampf(float(d["s"]), 0.0, 1.0), "w": float(d["w"])})
+	var koerper := {"p_profil": Profil.id(), "p_spieler": Profil.name(),
+		"p_lauf": "%s-%d-%d" % [Profil.id(), int(Time.get_unix_time_from_system() * 1000.0), randi()], "p_duelle": liste}
+	var antwort: Variant = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/angriff_lauf_melden", koerper)
+	return antwort != null
+
+
+## 24.11.: Angriff aufgegeben: die stehende Verteidigung bekommt den Sieg, der Lauf zählt als Niederlage (ein Update).
+static func angriff_abgebrochen(verteidigung_id: String) -> void:
+	if verteidigung_id == "":
+		return
+	await duell("", verteidigung_id, 0.0, 0, "angriff")
+	await lauf([{"id": verteidigung_id, "s": 0.0, "w": 1.0}])
 
 
 ## 23.11.: Eigene Phantome einer Art im Pool (nicht archiviert), schwächstes zuerst. null = unbekannt (offline oder
@@ -356,7 +408,8 @@ static func bericht_text() -> String:
 ## 24.11. (Paul): Bilanz eines Spielers aus den geladenen Listen – für die Spielerkarte und die eigene Bilanz.
 ## {name, angriff: {elo, elo_max, spiele, siege}, verteidigung: {…}, phantome: {angriff: n, verteidigung: n}}
 ## (leere Wörterbücher, wenn der Spieler noch keine Läufe hat). Angriff: siege = geknackte Verteidigungen,
-## Verteidigung: siege = gehaltene Angriffe; „spiele“ zählt Duelle (jede Verteidigung, gegen die ein Angriff lief, einzeln).
+## Verteidigung: siege = gehaltene Angriffe; „spiele“ zählt seit Version 72 Läufe (ein ganzer Angriff = 1), „duelle“ die
+## einzelnen Verteidigungen, gegen die er lief (Quote Angriff = siege / duelle).
 static func spieler_daten(profil: String) -> Dictionary:
 	var d := {"name": "", "angriff": {}, "verteidigung": {}, "phantome": {"angriff": 0, "verteidigung": 0}}
 	if profil == "" or profil == "pool":

@@ -703,3 +703,12 @@ Langfristiges Fortschrittsgefühl neben der Elo (Elo bleibt reine Leistung, die 
 - **Profilseite** zeigt im Abschnitt Phantom-Modus dieselben Zahlen.
 - Daten: `spieler_elo` (neu `elo_max`, Migration `werkzeuge/supabase_elo_max_24-11.sql`, am 24.11. live eingespielt und rückwärtskompatibel), `Online.spieler_daten()`, `Online.spieler_platz()`. Ohne Spalte `elo_max` (alte Datenbank) fällt die beste Elo auf die aktuelle zurück. „Angriffe“ zählt Duelle: jede Verteidigung, gegen die ein Angriff lief, einzeln.
 Bilder: `werkzeuge/bilanzbild.gd`.
+
+## Ein Elo-Update je Angriffslauf (24.11., Version 72)
+Die Spieler-Angriffs-Elo ändert sich pro **ganzem Angriff** genau **einmal**, auch wenn Ersatz-Phantome übernehmen. Entscheidung und Simulation: Projektdokument „Ranking-Umbau-Spieler-Elo“, Skripte `werkzeuge/ranking_sim/`.
+- Je Verteidigung: Ergebnis S (`Phantom.spieler_ergebnis`: geknackt vor Runde 20 = 1,0 · erst in Runde 20 gefallen = 0,75 · nicht geknackt = 0,7 × genommene Leben / 15) und Erwartung E (aus deiner Elo **zu Laufbeginn** gegen die Elo der Verteidigung). Beides wird **nach Budget gewichtet** gemittelt (Gewicht = Summe `Phantom.budget` der Runden gegen sie). Änderung = **K 64** × (S − E).
+- Auf der Endtafel steht nur die eine Änderung. Die Phantom-Elo je Verteidigung läuft weiter einzeln (`duell_ergebnis`, mit früh/spät und Dämpfung) und ist für den Angreifer unsichtbar.
+- Zähler in `spieler_elo`: `spiele` = Läufe (zählt für „ab 5 Läufen in der Liste“), `siege` = geknackte Verteidigungen, `duelle` = angetroffene Verteidigungen (Quote = siege / duelle). Abbruch = ein Lauf mit einer Niederlage.
+- Datenbank: `werkzeuge/supabase_angriff_lauf_24-11.sql` (`angriff_lauf_melden`, Tabelle `angriff_laeufe`, `duell_melden` ohne Spieler-Angriffs-Elo). Ältere Browser-Versionen melden weiter je Duell – ihre Spieler-Angriffs-Elo zählt nicht mehr.
+- Verteidigungs-Elo unverändert (ein Verteidigungslauf = ein Duell, K 32).
+Test: `werkzeuge/laufmeldung_test.gd`.

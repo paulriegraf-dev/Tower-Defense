@@ -1742,9 +1742,10 @@ func _male(ci: Control) -> void:
 func _zahlen(profil: String, art: String) -> Dictionary:
 	var e: Dictionary = Online.spieler_daten(profil).get(art, {})
 	if e.is_empty():
-		return {"da": false, "elo": 1000, "elo_max": 1000, "spiele": 0, "siege": 0}
+		return {"da": false, "elo": 1000, "elo_max": 1000, "spiele": 0, "siege": 0, "duelle": 0}
 	var elo := roundi(float(e.get("elo", 1000)))
-	return {"da": true, "elo": elo, "elo_max": maxi(elo, roundi(float(e.get("elo_max", elo)))), "spiele": int(e.get("spiele", 0)), "siege": int(e.get("siege", 0))}
+	return {"da": true, "elo": elo, "elo_max": maxi(elo, roundi(float(e.get("elo_max", elo)))), "spiele": int(e.get("spiele", 0)), "siege": int(e.get("siege", 0)),
+		"duelle": int(e.get("duelle", e.get("spiele", 0)))}   # 24.11. (72): spiele = Läufe, duelle = einzelne Verteidigungen/Angriffe
 
 
 ## Kleine Bilanz im Phantom-Menü unter der Liste: beide Elo-Werte mit bester Elo und Zählern; Klick öffnet die eigene Karte.
@@ -1816,7 +1817,7 @@ func _male_spielerkarte(ci: Control) -> void:
 		var liste_text := "Platz %d in der Rangliste" % platz if platz > 0 else "noch %d %s bis zur Liste" % [maxi(Online.LISTE_AB - int(z["spiele"]), 0), "Lauf" if Online.LISTE_AB - int(z["spiele"]) == 1 else "Läufe"]
 		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y + 22.0), liste_text, Stil.KLEIN, Stil.GOLD if platz > 0 else Stil.TEXT_BLASS)
 		y += 42.0
-		var quote := roundi(100.0 * float(z["siege"]) / float(maxi(int(z["spiele"]), 1)))
+		var quote := roundi(100.0 * float(z["siege"]) / float(maxi(int(z["duelle"]), 1)))   # 24.11. (72): geknackte Verteidigungen je angetroffene
 		var zeilen: Array = [
 			["Beste Elo", str(z["elo_max"])],
 			["Angriffe" if i == 0 else "Verteidigungen", str(z["spiele"])],
