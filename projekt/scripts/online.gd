@@ -107,7 +107,9 @@ static func lade_listen() -> void:
 		else:
 			ok = false
 	# 23.11.: Spieler-Elo (fehlt die Tabelle noch, bleibt die Spieler-Ansicht leer – kein Grund für „offline“)
-	var sp: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,spiele,siege&order=elo.desc&limit=500")
+	var sp: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,elo_max,spiele,siege&order=elo.desc&limit=500")   # 24.11.: beste Elo
+	if not (sp is Array):
+		sp = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/spieler_elo?select=profil,art,spieler,elo,spiele,siege&order=elo.desc&limit=500")   # Datenbank noch ohne elo_max
 	spieler_listen = {"angriff": [], "verteidigung": []}
 	if sp is Array:
 		for e: Dictionary in (sp as Array):
@@ -349,3 +351,36 @@ static func bericht_text() -> String:
 	if e != 0:
 		t += " (Phantom-Elo %+d)" % e
 	return t
+
+
+## 24.11. (Paul): Bilanz eines Spielers aus den geladenen Listen – für die Spielerkarte und die eigene Bilanz.
+## {name, angriff: {elo, elo_max, spiele, siege}, verteidigung: {…}, phantome: {angriff: n, verteidigung: n}}
+## (leere Wörterbücher, wenn der Spieler noch keine Läufe hat). Angriff: siege = geknackte Verteidigungen,
+## Verteidigung: siege = gehaltene Angriffe; „spiele“ zählt Duelle (jede Verteidigung, gegen die ein Angriff lief, einzeln).
+static func spieler_daten(profil: String) -> Dictionary:
+	var d := {"name": "", "angriff": {}, "verteidigung": {}, "phantome": {"angriff": 0, "verteidigung": 0}}
+	if profil == "" or profil == "pool":
+		return d
+	for art: String in ["angriff", "verteidigung"]:
+		for e: Dictionary in (spieler_listen[art] as Array):
+			if str(e.get("profil", "")) == profil:
+				d[art] = e
+				d["name"] = str(e.get("spieler", ""))
+		for e: Dictionary in (listen[art] as Array):
+			if str(e.get("profil", "")) == profil:
+				d["phantome"][art] = int(d["phantome"][art]) + 1
+				if str(d["name"]) == "":
+					d["name"] = str(e.get("spieler", ""))
+	return d
+
+
+## Platz in der Spieler-Rangliste einer Seite (0 = nicht in der Liste, weil noch zu wenige Läufe).
+static func spieler_platz(art: String, profil: String) -> int:
+	var n := 0
+	for e: Dictionary in (spieler_listen[art] as Array):
+		if int(e.get("spiele", 0)) < LISTE_AB:
+			continue
+		n += 1
+		if str(e.get("profil", "")) == profil:
+			return n
+	return 0

@@ -695,3 +695,11 @@ Spieler sollen den Phantom-Modus ohne Erklärung von Paul verstehen: kurze Anst�
 - **G** Phantom-Bericht im Startmenü: „Dein Bau wurde 3× angegriffen – 2× gehalten“ (`Online.lade_bericht`, liest `duelle` seit dem letzten Besuch, Zeitstempel `phantom_bericht_seit`).
 - **B** Siegbild: beim ersten Phantom-Bau ein Mini-Comic (Bau → Angriff → Bericht). **A** Niederlage ab Runde 10 vor der Freischaltung: „Hältst du Runde 20, wird dein Bau zum Phantom“; gesperrte Tafel zeigt „Bisher: Runde N von 20“.
 Tests: `werkzeuge/einfuehrungsbild.gd` (Bilder), `werkzeuge/einfuehrungstest.gd` (D und E im Spiel).
+
+## Spielerkarte und Bilanz (24.11., Version 71)
+Langfristiges Fortschrittsgefühl neben der Elo (Elo bleibt reine Leistung, die Zähler sind Aktivität):
+- **Bilanz im Phantom-Menü** (unter der Liste): Angriffs- und Verteidigungs-Elo mit bester Elo, Angriffe/geknackt, Verteidigungen/gehalten. Klick öffnet die eigene **Spielerkarte**.
+- **Spielerkarte** (`Startmenue._male_spielerkarte`): je Seite Elo, Platz bzw. „noch N Läufe bis zur Liste“, beste Elo, Anzahl, Geknackt/Gehalten, Quote, Phantome im Pool. **Jede Zeile der Rangliste ist anklickbar** (Spieler- und Phantom-Ansicht; bei Phantomen öffnet sich die Karte des Besitzers). Schließen: Knopf, Klick daneben, Esc.
+- **Profilseite** zeigt im Abschnitt Phantom-Modus dieselben Zahlen.
+- Daten: `spieler_elo` (neu `elo_max`, Migration `werkzeuge/supabase_elo_max_24-11.sql`, am 24.11. live eingespielt und rückwärtskompatibel), `Online.spieler_daten()`, `Online.spieler_platz()`. Ohne Spalte `elo_max` (alte Datenbank) fällt die beste Elo auf die aktuelle zurück. „Angriffe“ zählt Duelle: jede Verteidigung, gegen die ein Angriff lief, einzeln.
+Bilder: `werkzeuge/bilanzbild.gd`.

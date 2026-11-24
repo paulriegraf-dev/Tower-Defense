@@ -39,6 +39,9 @@ var _wahl_karte := "felsenpass"    # 18.11.: Karte auf der Seite „Herausforder
 var _wahl_herausforderung := ""      # 18.11.: Herausforderung auf derselben Seite ("" = keine)
 var _meldung := ""
 var _meldung_gold := false          # 23.11.: Hinweis statt Warnung (Phantom-Bericht)
+var _karte_profil := ""                # 24.11.: offene Spielerkarte (Profil-ID), "" = zu
+var _rang_treffer: Array = []        # [Rechteck, Profil-ID] der Ranglistenzeilen (Klick öffnet die Spielerkarte)
+var _bilanz_rect := Rect2()          # eigene Bilanz im Phantom-Menü (klickbar)
 var _funk: Funkfenster              # 23.11.: Sonde 7 im Phantom-Menü (Einführung)
 var _eintraege: Array = []         # [Text, Aktion, Untertitel, Farbe]
 # Titelbild (NES/Mega-Drive-Art): nur beim ersten Öffnen nach Programmstart, eine Taste/ein Klick führt zur Liste
@@ -1056,10 +1059,14 @@ func _male_profil_tafel(ci: Control) -> void:
 	# Abschnitt Phantom-Modus
 	var ba := Profil.stat("beste_angriffswertung")
 	var bv := Profil.stat("beste_verteidigung")
+	var za := _zahlen(Profil.id(), "angriff")   # 24.11. (Paul): langfristige Bilanz neben der Elo
+	var zv := _zahlen(Profil.id(), "verteidigung")
 	_abschnitt(ci, x, rechts, y, "PHANTOM-MODUS", KUPFER_HELL, [
-		["Angriffe", "%d · %d geknackt" % [Profil.stat("angriffe"), Profil.stat("geknackt")]],
+		["Angriffe", ("%d · %d geknackt" % [za["spiele"], za["siege"]]) if za["da"] else "%d · %d geknackt" % [Profil.stat("angriffe"), Profil.stat("geknackt")]],
+		["Verteidigungen", ("%d · %d gehalten" % [zv["spiele"], zv["siege"]]) if zv["da"] else "–"],
+		["Angriffs-Elo", ("%d (beste %d)" % [za["elo"], za["elo_max"]]) if za["da"] else "–"],
+		["Verteidigungs-Elo", ("%d (beste %d)" % [zv["elo"], zv["elo_max"]]) if zv["da"] else "–"],
 		["Beste Angriffswertung", str(ba) if ba > 0 else "–"],
-		["Beste Verteidigung", str(bv) if bv > 0 else "–"],
 		["Eigene Phantome", str(Profil.stat("phantome"))]])
 	Stil.schreibe(ci, Vector2(x, TAFEL.end.y - 10.0), "gespeichert in diesem Browser", Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.6))
 	_male_erfolge(ci)
@@ -1166,10 +1173,21 @@ func _rang_klick(p: Vector2) -> bool:
 				_rang_reiter = str(r[0])
 				Ton.spiele(_welt, "ui-klick", -6.0)
 			return true
+	# 24.11. (Paul): Klick auf eine Zeile öffnet die Spielerkarte; Klick auf die eigene Bilanz die eigene
+	for t: Array in _rang_treffer:
+		if (t[0] as Rect2).has_point(p):
+			_karte_profil = str(t[1])
+			Ton.spiele(_welt, "ui-klick", -6.0)
+			return true
+	if _bilanz_rect.has_point(p) and Profil.id() != "":
+		_karte_profil = Profil.id()
+		Ton.spiele(_welt, "ui-klick", -6.0)
+		return true
 	return false
 
 
 func _male_rangliste(ci: Control) -> void:
+	_rang_treffer = []
 	Stil.platte(ci, TAFEL, 6.0, Color(0.05, 0.06, 0.09, 0.9), Stil.RAHMEN)
 	var x := TAFEL.position.x + 12.0
 	var rechts := TAFEL.end.x - 12.0
@@ -1239,13 +1257,16 @@ func _male_rangliste(ci: Control) -> void:
 		Stil.schreibe(ci, Vector2(x + 8.0, y + 7.0), "noch niemand – sei der Erste", Stil.KLEIN, Stil.TEXT_BLASS)
 	for i in mini(alle.size(), RANG_ZAHL):
 		_rang_zeile(ci, y + i * RANG_ZEILE, sp, i, alle[i], i == mein_platz, farbe_art)
+		_rang_klickbar(ci, Rect2(x, y + i * RANG_ZEILE, rechts - x, RANG_ZEILE - 2.0), str(alle[i][3]))
 	# eigener Platz, fest unten
 	var unten := TAFEL.end.y - 12.0 - (RANG_ZEILE - 2.0)
 	ci.draw_rect(Rect2(x, unten - 4.0, rechts - x, 1.0), Color(farbe_art, 0.3))
 	if mein_platz >= 0:
 		_rang_zeile(ci, unten, sp, mein_platz, alle[mein_platz], true, farbe_art)
+		_rang_klickbar(ci, Rect2(x, unten, rechts - x, RANG_ZEILE - 2.0), mein)
 	else:
 		var r := Rect2(x, unten, rechts - x, RANG_ZEILE - 2.0)
+		_rang_klickbar(ci, r, mein)
 		Stil.platte(ci, r, 3.0, Stil.METALL_TIEF, Color(LICHT, 0.35))
 		Stil.schreibe(ci, Vector2(x + 7.0, r.get_center().y), "DU", Stil.NORMAL, LICHT)
 		Stil.schreibe(ci, Vector2(x + 26.0, r.get_center().y), _rang_du_text(), Stil.KLEIN, Stil.TEXT_BLASS)
@@ -1255,6 +1276,15 @@ func _male_rangliste(ci: Control) -> void:
 		var tr := Rect2(clampf(kopf_rect.get_center().x - tb / 2.0, TAFEL.position.x + 8.0, TAFEL.end.x - tb - 8.0), kopf_rect.end.y + 3.0, tb, 14.0)
 		Stil.platte(ci, tr, 2.0, Color(0.02, 0.03, 0.05, 0.97), LICHT)
 		Stil.schreibe_mittig(ci, tr.get_center(), kopf_hinweis, Stil.KLEIN, Stil.TEXT)
+
+
+## 24.11.: Zeile der Rangliste klickbar machen (Spielerkarte); Hover hebt sie hervor. Eingebaute Pool-Phantome haben keine Karte.
+func _rang_klickbar(ci: Control, r: Rect2, profil: String) -> void:
+	if profil == "" or profil == "pool":
+		return
+	_rang_treffer.append([r, profil])
+	if r.has_point(_maus) and _karte_profil == "":
+		ci.draw_rect(r, Color(LICHT, 0.7), false, 1.0)
 
 
 const _KOPF_HINWEISE := {
@@ -1478,6 +1508,12 @@ func _zurueck() -> void:
 func _input(event: InputEvent) -> void:
 	if not _welt.visible or not (event is InputEventKey and event.pressed):
 		return
+	if _karte_profil != "":
+		if not event.echo and (event as InputEventKey).keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE, KEY_BACKSPACE]:
+			_karte_profil = ""   # 24.11.: Spielerkarte schließen
+			_klick()
+		get_viewport().set_input_as_handled()
+		return
 	if _tafel != "":
 		if not event.echo and (event as InputEventKey).keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE, KEY_BACKSPACE]:
 			_tafel_zu()   # 21.11.: Teaser-Tafel eines gesperrten Modus
@@ -1551,6 +1587,14 @@ func _klick() -> void:
 
 
 func _maus_eingabe(event: InputEvent) -> void:
+	if _karte_profil != "":
+		# 24.11.: „Schließen“ oder ein Klick neben die Karte schließt sie
+		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			var pk := (event as InputEventMouseButton).position
+			if KARTE_KNOPF.has_point(pk) or not KARTE_R.has_point(pk) or event.button_index == MOUSE_BUTTON_RIGHT:
+				_karte_profil = ""
+				_klick()
+		return
 	if _tafel != "":
 		# 21.11.: „Verstanden“ oder ein Klick neben die Tafel schließt sie
 		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
@@ -1667,6 +1711,7 @@ func _male(ci: Control) -> void:
 		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else (Stil.GOLD if _meldung_gold else Stil.WARN))
 	if _seite == "phantom":
 		_male_rangliste(ci)
+		_male_bilanz(ci)
 	elif _seite == "herausforderung":
 		_male_kartenbild(ci, _wahl_karte)
 	elif _seite == "szenarien" and _wahl < Werte.SZENARIEN.size():
@@ -1688,6 +1733,106 @@ func _male(ci: Control) -> void:
 	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
 	if _tafel != "":
 		_male_tafel(ci)   # 21.11.
+	if _karte_profil != "":
+		_male_spielerkarte(ci)   # 24.11.
+
+
+## 24.11. (Paul): Zahlen eines Spielers für eine Seite aus den geladenen Online-Listen.
+## da = false: noch keine Läufe (oder offline) – dann „–“ anzeigen.
+func _zahlen(profil: String, art: String) -> Dictionary:
+	var e: Dictionary = Online.spieler_daten(profil).get(art, {})
+	if e.is_empty():
+		return {"da": false, "elo": 1000, "elo_max": 1000, "spiele": 0, "siege": 0}
+	var elo := roundi(float(e.get("elo", 1000)))
+	return {"da": true, "elo": elo, "elo_max": maxi(elo, roundi(float(e.get("elo_max", elo)))), "spiele": int(e.get("spiele", 0)), "siege": int(e.get("siege", 0))}
+
+
+## Kleine Bilanz im Phantom-Menü unter der Liste: beide Elo-Werte mit bester Elo und Zählern; Klick öffnet die eigene Karte.
+func _male_bilanz(ci: Control) -> void:
+	var r := Rect2(LISTE_X, 290.0, BREITE, 52.0)
+	_bilanz_rect = r
+	var an := r.has_point(_maus) and _karte_profil == ""
+	Stil.platte(ci, r, 3.0, Color(0.05, 0.06, 0.09, 0.88), LICHT if an else Stil.RAHMEN)
+	Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + 8.0), "DEINE BILANZ", Stil.KLEIN, LICHT)
+	var hint := "Karte öffnen ▸"
+	Stil.schreibe(ci, Vector2(r.end.x - 8.0 - Stil.breite(hint, Stil.KLEIN), r.position.y + 8.0), hint, Stil.KLEIN, Color(Stil.TEXT_BLASS, 1.0 if an else 0.6))
+	var mein := Profil.id()
+	for i in 2:
+		var art: String = ["angriff", "verteidigung"][i]
+		var farbe: Color = KUPFER_HELL if i == 0 else LICHT
+		var z := _zahlen(mein, art)
+		var x := r.position.x + 8.0 + i * (BREITE / 2.0)
+		Stil.schreibe(ci, Vector2(x, r.position.y + 19.0), "ANGRIFFS-ELO" if i == 0 else "VERTEIDIGUNGS-ELO", Stil.KLEIN, Stil.TEXT_BLASS)
+		if z["da"]:
+			var elo_text := str(z["elo"])
+			Stil.schreibe(ci, Vector2(x, r.position.y + 31.0), elo_text, Stil.GROSS, farbe)
+			Stil.schreibe(ci, Vector2(x + Stil.breite(elo_text, Stil.GROSS) + 6.0, r.position.y + 31.0), "beste %d" % z["elo_max"], Stil.KLEIN, Stil.TEXT_BLASS)
+			Stil.schreibe(ci, Vector2(x, r.position.y + 43.0), "%d %s · %d %s" % [z["spiele"], "Angriffe" if i == 0 else "Verteidigungen", z["siege"], "geknackt" if i == 0 else "gehalten"], Stil.KLEIN, Stil.TEXT)
+		else:
+			Stil.schreibe(ci, Vector2(x, r.position.y + 31.0), "–", Stil.GROSS, Color(farbe, 0.6))
+			Stil.schreibe(ci, Vector2(x, r.position.y + 43.0), "noch kein Lauf", Stil.KLEIN, Stil.TEXT_BLASS)
+
+
+const KARTE_R := Rect2(106, 52, 428, 252)
+const KARTE_KNOPF := Rect2(272, 276, 96, 20)
+
+
+## 24.11. (Paul): Spielerkarte – langfristige Bilanz eines Spielers (aus der Rangliste anklickbar, auch die eigene).
+## Elo bleibt reine Leistung; die Zähler sind eine Aktivitätsstatistik.
+func _male_spielerkarte(ci: Control) -> void:
+	ci.draw_rect(Rect2(0, 0, 640, 360), Color(0.02, 0.03, 0.05, 0.72))
+	var r := KARTE_R
+	Stil.platte(ci, r, 6.0, Color(0.05, 0.06, 0.09, 0.98), Stil.RAHMEN)
+	ci.draw_rect(Rect2(r.position.x + 12.0, r.position.y + 3.0, 60.0, 1.0), LICHT)
+	var d := Online.spieler_daten(_karte_profil)
+	var eigen := _karte_profil == Profil.id()
+	var name := str(d["name"])
+	if name == "":
+		name = Profil.name() if eigen else "Spieler"
+	Stil.schreibe(ci, Vector2(r.position.x + 14.0, r.position.y + 14.0), "SPIELERKARTE", Stil.KLEIN, Stil.TEXT_BLASS)
+	Stil.schreibe(ci, Vector2(r.position.x + 14.0, r.position.y + 29.0), name, Stil.GROSS, Color.WHITE)
+	if eigen:
+		var tw := Stil.breite("DU", Stil.KLEIN) + 8.0
+		var tx := r.position.x + 14.0 + Stil.breite(name, Stil.GROSS) + 8.0
+		Stil.platte(ci, Rect2(tx, r.position.y + 23.0, tw, 12.0), 2.0, Color(LICHT, 0.14), LICHT)
+		Stil.schreibe(ci, Vector2(tx + 4.0, r.position.y + 29.0), "DU", Stil.KLEIN, LICHT)
+	var sp := (r.size.x - 28.0 - 8.0) / 2.0
+	for i in 2:
+		var art: String = ["angriff", "verteidigung"][i]
+		var farbe: Color = KUPFER_HELL if i == 0 else LICHT
+		var z := _zahlen(_karte_profil, art)
+		var sr := Rect2(r.position.x + 14.0 + i * (sp + 8.0), r.position.y + 46.0, sp, 160.0)
+		Stil.platte(ci, sr, 3.0, Stil.METALL_TIEF, Color(farbe, 0.45))
+		ci.draw_rect(Rect2(sr.position.x + 3.0, sr.position.y + 2.0, sr.size.x - 6.0, 1.0), Color(farbe, 0.6))
+		Stil.symbol(ci, "panzer" if i == 0 else "wall", Vector2(sr.position.x + 12.0, sr.position.y + 13.0), 1.0, farbe)
+		Stil.schreibe(ci, Vector2(sr.position.x + 22.0, sr.position.y + 13.0), "ALS ANGREIFER" if i == 0 else "ALS VERTEIDIGER", Stil.KLEIN, farbe)
+		var y := sr.position.y + 36.0
+		if not z["da"]:
+			Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y + 8.0), "noch kein Lauf", Stil.NORMAL, Stil.TEXT_BLASS)
+			continue
+		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y), str(z["elo"]), 28, Color.WHITE)
+		Stil.schreibe(ci, Vector2(sr.position.x + 10.0 + Stil.breite(str(z["elo"]), 28) + 6.0, y + 3.0), "SPIELER-ELO", Stil.KLEIN, Stil.TEXT_BLASS)
+		var platz := Online.spieler_platz(art, _karte_profil)
+		var liste_text := "Platz %d in der Rangliste" % platz if platz > 0 else "noch %d %s bis zur Liste" % [maxi(Online.LISTE_AB - int(z["spiele"]), 0), "Lauf" if Online.LISTE_AB - int(z["spiele"]) == 1 else "Läufe"]
+		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y + 22.0), liste_text, Stil.KLEIN, Stil.GOLD if platz > 0 else Stil.TEXT_BLASS)
+		y += 42.0
+		var quote := roundi(100.0 * float(z["siege"]) / float(maxi(int(z["spiele"]), 1)))
+		var zeilen: Array = [
+			["Beste Elo", str(z["elo_max"])],
+			["Angriffe" if i == 0 else "Verteidigungen", str(z["spiele"])],
+			["Geknackt" if i == 0 else "Gehalten", "%d" % z["siege"]],
+			["Quote", "%d %%" % quote]]
+		for zl: Array in zeilen:
+			Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y), str(zl[0]), Stil.KLEIN, Stil.TEXT_BLASS)
+			var w := str(zl[1])
+			Stil.schreibe(ci, Vector2(sr.end.x - 10.0 - Stil.breite(w, Stil.NORMAL), y), w, Stil.NORMAL, Stil.TEXT)
+			y += 14.0
+	var ph: Dictionary = d["phantome"]
+	Stil.schreibe(ci, Vector2(r.position.x + 14.0, r.position.y + 218.0), "Im Pool: %d %s · %d %s" % [ph["verteidigung"], "Verteidigung" if int(ph["verteidigung"]) == 1 else "Verteidigungen", ph["angriff"], "Angriff" if int(ph["angriff"]) == 1 else "Angriffe"], Stil.KLEIN, Stil.TEXT_BLASS)
+	var k := KARTE_KNOPF
+	var an := k.has_point(_maus)
+	Stil.platte(ci, k, 3.0, Color(LICHT, 0.2 if an else 0.1), LICHT)
+	Stil.schreibe_mittig(ci, k.get_center() + Vector2(0, 1), "Schließen", Stil.NORMAL, Color.WHITE if an else LICHT)
 
 
 ## 18.11.: Steckbrief der gewählten Karte rechts neben der Liste. (Paul 18.11.: statt des Minikarten-Bilds –
