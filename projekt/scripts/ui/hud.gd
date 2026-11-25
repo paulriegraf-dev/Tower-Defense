@@ -54,6 +54,8 @@ var weg_grund: Control             # Weganzeige (main.gd setzt Text und Sichtbar
 var weg_text: Label
 
 var _status: Malflaeche
+var _gegenueber: Malflaeche        # 25.11.: Portrait und Name des Phantom-Gegners
+var _gegenueber_info: Dictionary = {}
 var _welle: Malflaeche
 var _auftraege: Malflaeche          # 20.11. (Paul): Liste der laufenden Aufträge
 var _auftrag_zeilen: Array = []
@@ -243,6 +245,8 @@ func _ready() -> void:
 	add_child(wurzel)
 
 	_status = _flaeche(_male_status)
+	_gegenueber = _flaeche(_male_gegenueber)   # 25.11.: Phantom-Modus
+	_gegenueber.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_welle = _flaeche(_male_welle)
 	_auftraege = _flaeche(_male_auftraege)   # 20.11. (Paul): Pauls Aufträge, oben links unter Leben und Budget
 	_tipp_oben = _flaeche(_male_tipp_oben)
@@ -374,6 +378,8 @@ func aktualisiere(_delta: float) -> void:
 	_leben = s.leben
 	_budget_text = "∞" if s.sandbox else str(s.budget)
 	_zins = Werte.zinsen(s.budget)
+	_gegenueber_info = s.gegner_portrait()   # 25.11.
+	_gegenueber.visible = not _gegenueber_info.is_empty()
 
 	# --- Welle
 	_runde_text = ("Runde %d · endlos" % s.welle) if Werte.ziel() == "endlos" else ("Runde %d/%d" % [s.welle, Werte.LETZTE_RUNDE])   # 18.11.
@@ -393,6 +399,9 @@ func aktualisiere(_delta: float) -> void:
 			_welle_zeile = "Dein HQ hält %d/%d · Durchgang %d" % [hq_leben, int(Werte.hq_leben()), s._durchgang]
 		else:
 			_welle_zeile = "Zerstöre das HQ: %d/%d" % [hq_leben, int(Werte.hq_leben())]
+		var rest: float = s.patt_rest()
+		if rest >= 0.0 and rest <= Phantom.PATT_WARNUNG_SEK:
+			_welle_zusatz = tr("Patt in %d s") % ceili(rest)   # 25.11.
 	elif phase == KAMPF:
 		w = s._welle
 		_runde_text += "  ·  noch %d" % (s._noch_offen() + s.gegner.size())
@@ -423,6 +432,7 @@ func aktualisiere(_delta: float) -> void:
 	# Überfahren mit der Maus und Größenwechsel zeichnen die Flächen selbst neu. In jedem Bild bleiben: die Konsole
 	# (Monitor flimmert, Radar läuft), das Start-Emblem, solange es pulsiert, und die Zeichnungen im Spielfeld (Kamera).
 	_bei_aenderung(_status, [_leben, _budget_text, _zins, _angreifer, _bauphase])
+	_bei_aenderung(_gegenueber, [_gegenueber_info])
 	_bei_aenderung(_welle, [_runde_text, _welle_zeile, _gruppen, _welle_zusatz])
 	_bei_aenderung(_tipp, [_tipp_titel, _tipp_text, _tipp_warnung, s._meldung_art, s._meldung_zeit > 0.0, s._meldung])
 	_bei_aenderung(_tipp_oben, [_tipp_oben_text, _tipp_oben_x])
@@ -469,23 +479,25 @@ func _aktualisiere_kacheln() -> void:
 			k.preis_farbe = Stil.TEXT_BLASS
 			aus = true
 		elif typ == Karte.KOMMANDANT and s.kommandant != null:
-			k.preis = "im Feld"
+			k.preis = "im Feld" if s.kommandant.klon_anzeige() == "" else tr("R in %d") % s.kommandant.klon_rest   # 25.11. (N2): Klonmaschine lädt
 			k.preis_farbe = Stil.TEXT_BLASS
 			aus = true
 		if typ != Karte.FABRIK and not ab_welle_2:
 			k.preis_farbe = Stil.TEXT_BLASS   # noch nicht freigeschaltet
+		if s.tutorial != null and s.tutorial.sperrt_bau(typ) != "":
+			aus = true   # 25.11. (N4): das Tutorial braucht gerade ein anderes Werkzeug
 		k.disabled = aus
-		k.gewaehlt = s.werkzeug == typ and (typ != Karte.TURM or str(s.turm_wunsch) == "")
+		k.gewaehlt = s.werkzeug == typ and (typ != Karte.TURM or not str(s.turm_wunsch) in ["pliplop", "truppen"])   # 25.11. (N1): Formtürme haben keine eigene Kachel
 		_bei_aenderung(k, [k.preis, k.preis_farbe, k.disabled, k.gewaehlt])   # 18.11.: nur bei Änderung
 	for k: Kachel in wunsch_kacheln:   # 21.11. (Paul): PliPlop / Truppenturm
 		var preis: int = Werte.KOSTEN_PLIPLOP if k.art == "pliplop" else Werte.KOSTEN_TURM
 		k.visible = not _angreifer
 		k.preis = str(preis)
 		k.preis_farbe = (Stil.GOLD if s.budget >= preis else Stil.WARN) if ab_welle_2 else Stil.TEXT_BLASS
-		k.disabled = (phase != BAU and not (phase == KAMPF and s.darf_in_welle(Karte.TURM))) or not ab_welle_2 or _angreifer or s.herausforderung_sperrt(Karte.TURM) != ""
+		k.disabled = (phase != BAU and not (phase == KAMPF and s.darf_in_welle(Karte.TURM))) or not ab_welle_2 or _angreifer or s.herausforderung_sperrt(Karte.TURM) != "" or (s.tutorial != null and s.tutorial.sperrt_bau(Karte.TURM) != "")
 		k.gewaehlt = s.werkzeug == Karte.TURM and str(s.turm_wunsch) == k.art
 		_bei_aenderung(k, [k.preis, k.preis_farbe, k.disabled, k.gewaehlt])
-	start.disabled = phase != BAU
+	start.disabled = phase != BAU or (s.tutorial != null and s.tutorial.sperrt_start())   # 25.11. (N4): Start nur im Schritt „Welle starten“
 	start.leuchtet = phase == BAU
 	start.visible = true
 	tempo.visible = not bool(s.get("brakk_modus"))   # 19.11. (Paul): der Brakk-Mode läuft fest auf ×2 – der Knopf bringt dort nichts
@@ -609,7 +621,7 @@ func _ordne_an() -> void:
 	# oben Mitte: Runde, darunter die Gegner
 	var zeile2 := 0.0
 	if _welle_zeile != "":
-		zeile2 = Stil.breite(_welle_zeile, Stil.NORMAL)
+		zeile2 = Stil.breite(_welle_zeile, Stil.NORMAL) + (Stil.breite(_welle_zusatz, Stil.KLEIN) + 8.0 if _welle_zusatz != "" else 0.0)
 	else:
 		for g: Array in _gruppen:
 			zeile2 += 16.0 + Stil.breite("×%d" % g[1], Stil.NORMAL) + 6.0
@@ -619,6 +631,13 @@ func _ordne_an() -> void:
 	_welle.size = Vector2(ww, 34.0 if (_welle_zeile != "" or not _gruppen.is_empty()) else 18.0)
 	_welle.position = Vector2(roundf((BREITE - ww) / 2.0), RAND)
 	_neu.position = Vector2(_welle.position.x + ww + 3.0, RAND + 2.0)
+	# 25.11.: Phantom-Gegner rechts neben Leben/Budget; wird es dort eng, unter die Zeile „Gegnerweg“
+	if _gegenueber.visible:
+		var gb := ceilf(maxf(38.0, Stil.breite(str(_gegenueber_info["name"]), Stil.KLEIN) + 8.0))
+		_gegenueber.size = Vector2(gb, 48.0)
+		_gegenueber.position = Vector2(_status.position.x + _status.size.x + 4.0, RAND)
+		if _gegenueber.position.x + gb > _welle.position.x - 3.0:
+			_gegenueber.position = Vector2(RAND, _status.position.y + _status.size.y + 18.0)
 
 	# Tafel oben (unter dem Knopf bzw. unter der Welle)
 	if _tipp_oben_text != "":
@@ -694,6 +713,9 @@ func _male_formvorlage() -> void:
 	var z: Vector2i = k.zelle_bei(spiel.maus_welt())
 	if not k.in_karte(z):
 		return
+	var wunsch_hier: bool = str(spiel.turm_wunsch) == formvorlage and k.inhalt(z) == Karte.WALL   # 25.11. (N1)
+	if wunsch_hier and k.ausbau_hindernis(z, Karte.TURM) == "":
+		return   # die gewählte Turmart passt hier: die Stützen-Vorschau zeigt die belegten Erdwälle
 	var info := _form_info(formvorlage)
 	var farbe: Color = info[2]
 	var mitte: Vector2 = spiel.welt_zu_bild(k.mitte(z))
@@ -730,6 +752,8 @@ func _male_formvorlage() -> void:
 	_warnung.draw_rect(rt, Color.WHITE, false, 2.0)
 	var name: String = info[3]
 	var text := "%s: Form passt" % name if fehlt == 0 else "%s: noch %d Erdwall%s" % [name, fehlt, "" if fehlt == 1 else "e"]
+	if wunsch_hier and fehlt == 0:
+		text = spiel.wunsch_hindernis(z)   # alle Wälle stehen, aber der Turm geht trotzdem nicht (z. B. Stützen vergeben)
 	Stil.schreibe_mittig(_warnung, mitte + Vector2(0, -halb - 14.0), text, Stil.NORMAL, Color.WHITE)
 
 
@@ -754,9 +778,10 @@ func _male_turm_stuetzen() -> void:
 		_warnung.draw_rect(r, Color(farbe, 0.16))
 		_schraffur(r, Color(farbe, 0.55))
 		_warnung.draw_rect(r, Color(farbe, 0.9), false, 2.0)
-	if formvorlage != "":
-		return
 	var z: Vector2i = k.zelle_bei(spiel.maus_welt())
+	# Mit Vorlage nur dort, wo die gewählte Turmart passt (25.11., N1) – sonst spricht die Vorlage (_male_formvorlage)
+	if formvorlage != "" and not (str(spiel.turm_wunsch) == formvorlage and k.in_karte(z) and k.ausbau_hindernis(z, Karte.TURM) == ""):
+		return
 	if not k.in_karte(z) or k.inhalt(z) != Karte.WALL or k.ausbau.get(z, Karte.FREI) == Karte.TURM:
 		return
 	var oben: Vector2 = spiel.welt_zu_bild(k.mitte(z)) + Vector2(0, -halb - 14.0)
@@ -765,6 +790,9 @@ func _male_turm_stuetzen() -> void:
 		return
 	var art := k.turm_form(z)
 	if art == "":
+		if str(spiel.turm_wunsch) != "":   # 25.11. (N1): sagen, was der gewählten Turmart fehlt
+			Stil.schreibe_mittig(_warnung, oben, spiel.wunsch_hindernis(z), Stil.NORMAL, Stil.WARN)
+			return
 		Stil.schreibe_mittig(_warnung, oben, "Keine Turmform – [4]-Leiste zeigt die Formen", Stil.NORMAL, Stil.TEXT_BLASS)
 		return
 	var farbe := Color(str(Werte.TURMARTEN[art]["farbe"]))
@@ -814,6 +842,7 @@ func _formen_klick(event: InputEvent) -> void:
 				formvorlage = str(folge.get(formvorlage, "schild")) if formvorlage == "" or formvorlage.begins_with("schild") else "schild"
 			else:
 				formvorlage = "" if formvorlage == art else art
+				spiel.turm_wunsch = formvorlage   # 25.11. (Paul, N1): die angeklickte Turmart wird auch gebaut
 		_formen.accept_event()
 
 
@@ -900,6 +929,17 @@ func _male_formen(ci: Control) -> void:
 		Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.end.y - 7.0), info[1], Stil.KLEIN, Stil.TEXT_BLASS)
 
 
+## 25.11.: Portrait 32×32 mit Spielername darunter.
+func _male_gegenueber(ci: Control) -> void:
+	if _gegenueber_info.is_empty():
+		return
+	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
+	var x := roundf((ci.size.x - 32.0) / 2.0)
+	ci.draw_texture_rect(Profil.portrait_bild(int(_gegenueber_info["portrait"])), Rect2(x, 3.0, 32.0, 32.0), false)
+	ci.draw_rect(Rect2(x - 1.0, 2.0, 34.0, 34.0), Stil.KUPFER, false, 1.0)
+	Stil.schreibe_mittig(ci, Vector2(ci.size.x / 2.0, 42.0), str(_gegenueber_info["name"]), Stil.KLEIN, Stil.TEXT)
+
+
 func _male_status(ci: Control) -> void:
 	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0)
 	var y := ci.size.y / 2.0
@@ -975,7 +1015,10 @@ func _male_welle(ci: Control) -> void:
 	Stil.schreibe_mittig(ci, Vector2(ci.size.x / 2.0, 9.0), _runde_text, Stil.NORMAL, Stil.TEXT)
 	var y := 24.0
 	if _welle_zeile != "":
-		Stil.schreibe_mittig(ci, Vector2(ci.size.x / 2.0, y), _welle_zeile, Stil.NORMAL, Stil.KUPFER)
+		var zb := Stil.breite(_welle_zusatz, Stil.KLEIN) + 8.0 if _welle_zusatz != "" else 0.0   # 25.11.: Patt-Countdown
+		Stil.schreibe_mittig(ci, Vector2((ci.size.x - zb) / 2.0, y), _welle_zeile, Stil.NORMAL, Stil.KUPFER)
+		if zb > 0.0:
+			Stil.schreibe(ci, Vector2((ci.size.x - zb) / 2.0 + Stil.breite(_welle_zeile, Stil.NORMAL) / 2.0 + 8.0, y + 1.0), _welle_zusatz, Stil.KLEIN, Stil.GOLD)
 		return
 	var gesamt := 0.0
 	for g: Array in _gruppen:

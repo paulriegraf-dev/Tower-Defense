@@ -123,6 +123,33 @@ static func setze_einstellung(schluessel: String, wert: Variant) -> void:
 	_speichere()
 
 
+## 25.11.: Das eigene Portrait (Index in Werte.PORTRAITS); es geht mit jedem Phantom mit.
+static func portrait() -> int:
+	return portrait_gueltig(einstellung("portrait", 0))
+
+
+static func setze_portrait(i: int) -> void:
+	setze_einstellung("portrait", posmod(i, Werte.PORTRAITS.size()))
+
+
+## Index aus einer Datei: fehlt er (alte Phantome) oder passt er nicht, ist es Portrait 0.
+static func portrait_gueltig(wert: Variant) -> int:
+	if not (wert is int or wert is float):
+		return 0
+	var i := int(wert)
+	return i if i >= 0 and i < Werte.PORTRAITS.size() else 0
+
+
+static var _portrait_bilder: Dictionary = {}   # gehalten, sonst gibt Godot die Textur vor dem Zeichnen wieder frei
+
+
+static func portrait_bild(i: int) -> Texture2D:
+	var k := portrait_gueltig(i)
+	if not _portrait_bilder.has(k):
+		_portrait_bilder[k] = load(Werte.PORTRAITS[k])
+	return _portrait_bilder[k]
+
+
 ## Eine Partie als Verteidiger ist zu Ende (normales Spiel, Tutorial oder gegen einen Angriff).
 ## `kills`: "einheit:<typ>" / "turm:<art>" / "batterie" / "brakk" -> Anzahl.
 static func partie_ende(sieg: bool, runde: int, kills: Dictionary, verteidigungswertung: int = -1) -> void:

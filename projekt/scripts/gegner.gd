@@ -49,6 +49,8 @@ var _auf_wall := false              # Myr-Drohne: läuft noch oben auf den Wäll
 var _wall_zelle := Karte.KEINE
 var _leerlauf := 0.0                # Myr-Drohne: Sekunden ohne Ziel auf dem Wall
 var _brut: Array = []               # Belagerungsturm: seine abgesetzten Myr-Drohnen
+var vorstoss := false               # 25.11. (N6): Belagerungsturm in Phase 2 – ausgebrannt, rückt im Nahkampf vor
+var _war_angedockt := false         # hat schon einmal angedockt (fällt dann sein Wall ohne neues Dock: Vorstoß)
 var geworfen := false               # von der Wurf-Schleuder hinter die vordere Front geworfen
 var markiert := 0.0                 # Sekunden: von einem Scharfschützen markiert, nimmt mehr Schaden
 var markier_faktor := Werte.MARKIERUNG_FAKTOR   # 19.11.: so viel mehr Schaden nimmt er markiert (Brakks Zielring: weniger)
@@ -444,6 +446,11 @@ func _physics_process(_takt: float) -> void:
 	if elite:
 		_sprite.modulate *= Color(1.25, 0.72, 0.45)   # Brakk-Mode: Elite – glühend rot-orange
 		queue_redraw()
+	if vorstoss:
+		# 25.11. (N6): Vorstoß – pulsierend rot getönt (Werte bis 1, damit es auch HD-2D zeigt), Lauflicht in _draw
+		var p := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 180.0)
+		_sprite.modulate *= Color(1.0, 0.5 + 0.2 * p, 0.45 + 0.2 * p)
+		queue_redraw()
 	if _sp_phase != 0 and _sprung_weiter(delta):
 		return   # 22.11.: Hunde-Sprung läuft (Ducken, Flug, Erholung)
 	var reichweite: float = daten["reichweite"] * Werte.ZELLE
@@ -465,7 +472,7 @@ func _physics_process(_takt: float) -> void:
 	# 0) Sonderregeln. Geben sie true zurück, ist dieser Schritt damit erledigt.
 	match rolle:
 		"sprenger", "belagerung":
-			if _zum_wall(delta):
+			if not vorstoss and _zum_wall(delta):
 				return
 		"enterer":
 			if _auf_wall:
@@ -554,7 +561,8 @@ func _physics_process(_takt: float) -> void:
 				_abkling = daten["abklingzeit"]
 				_sprite.angriff(daten["abklingzeit"])
 				spiel.schuss(position, karte.mitte(naechstes), Color("ff7ad9"))
-				karte.schade(naechstes, maxf(daten["schaden"], 6.0))
+				# 25.11. (N6): der vorrückende Belagerungsturm ist kein zweiter Sprenger – gegen Wälle so schwach wie vorher
+				karte.schade(naechstes, maxf(0.0 if vorstoss else float(daten["schaden"]), 6.0))
 		return
 
 	# 4) Sonst weiterlaufen.
@@ -607,20 +615,51 @@ func _laufe_zu(punkt: Vector2, delta: float) -> void:
 
 
 ## Sanitäter: alle paar Sekunden die Gegner im Umkreis heilen (sich selbst nicht).
+## 25.11. (Paul): Mehrere auf demselben Ziel stapeln abnehmend (Werte.SANITAETER_STAPEL), die nächsten zählen voll.
 func _heile(reichweite: float) -> void:
 	if _abkling > 0.0:
 		return
 	_abkling = float(daten["abklingzeit"])
 	var geheilt := false
+	var helfer: Array = spiel.gegner.filter(func(s) -> bool: return is_instance_valid(s) and s.rolle == "sani" and s.kann_heilen())
 	for g in spiel.gegner:
 		if g != self and is_instance_valid(g) and not g._tot and g.leben < g.max_leben and position.distance_to(g.position) <= reichweite and Time.get_ticks_msec() >= g.heilsperre_bis:
-			g.leben = minf(g.max_leben, g.leben + float(daten["heilung"]) * leben_faktor)
+			var anteil := _stapel_anteil(g, helfer)
+			if anteil <= 0.0:
+				continue
+			g.leben = minf(g.max_leben, g.leben + float(daten["heilung"]) * leben_faktor * anteil)
 			g.queue_redraw()
 			geheilt = true
 	if geheilt:
 		_sprite.angriff(float(daten["angriff_dauer"]))
 		# neue Grafik: nur ein leichter grüner Ring (der große Heil-Effekt schwebte in HD-2D in der Luft und war zu laut)
 		spiel.effekte.flaeche(position, reichweite, Color("5dfc8a", 0.35) if Werte.grafik_neu else Color("5dfc8a"))
+
+
+## Heilt dieser Sanitäter gerade mit? Nicht, wenn er noch wartet oder an einem Energieschild hängt.
+func kann_heilen() -> bool:
+	return not _tot and not wartet and warte_noch <= 0.0 and (_auf_wall or spiel.schild_bei(position) == Karte.KEINE)
+
+
+## Reichweite in Pixeln samt Anhöhe.
+func reichweite_px() -> float:
+	var r: float = daten["reichweite"] * Werte.ZELLE
+	if r > 0.0:
+		r += karte.anhoehe_bonus(karte.zelle_bei(position)) * Werte.ZELLE
+	return r
+
+
+## Anteil dieses Sanitäters an `g`: Rang nach Abstand unter allen, die `g` gerade erreichen.
+func _stapel_anteil(g, helfer: Array) -> float:
+	var meiner := position.distance_to(g.position)
+	var rang := 0
+	for s in helfer:
+		if s == self or s == g:
+			continue
+		var seiner: float = s.position.distance_to(g.position)
+		if seiner <= s.reichweite_px() and (seiner < meiner or (seiner == meiner and s.get_instance_id() < get_instance_id())):
+			rang += 1
+	return float(Werte.SANITAETER_STAPEL[mini(rang, Werte.SANITAETER_STAPEL.size() - 1)])
 
 
 # ------------------------------------------------- Sprenger und Belagerungsturm
@@ -653,6 +692,8 @@ func _zum_wall(delta: float) -> bool:
 			_sonderweg = fund["weg"]
 			_sonder_index = 1 if _sonderweg.size() > 0 and _sonderweg[0] == hier else 0
 	if _sonderziel == Karte.KEINE:
+		if rolle == "belagerung" and _war_angedockt and not spiel.brakk_modus:
+			_vorstoss_beginnen()   # 25.11. (N6): sein Wall ist gefallen und kein neues Dock erreichbar
 		return false   # nichts Lohnendes: wie ein normaler Gegner zur Basis
 	if _sonder_index < _sonderweg.size():
 		var punkt := karte.mitte(_sonderweg[_sonder_index]) + _versatz
@@ -676,6 +717,7 @@ func _zum_wall(delta: float) -> bool:
 			spiel.sprengung(self, _sonderziel)
 	else:
 		_angedockt = 0.0
+		_war_angedockt = true
 		spiel.belagerung_dockt(self)
 		if OS.get_environment("TD_WURF_LOG") != "":
 			print("DOCK R%d an %s %s" % [spiel.welle, karte.zelle_bei(position), _dock_wall_text()])
@@ -692,7 +734,10 @@ func _setze_truppen_ab(delta: float) -> void:
 		return
 	_angedockt += delta
 	if _angedockt >= Werte.BELAGERUNG_SEK:
-		# ausgebrannt: der Turm zerfällt
+		if not spiel.brakk_modus:
+			_vorstoss_beginnen()   # 25.11. (Paul, N6): ausgebrannt rückt er selbst vor
+			return
+		# ausgebrannt: der Turm zerfällt (Brakk-Mode wie bisher)
 		_tot = true
 		spiel.gegner_entfernt(self)
 		return
@@ -705,6 +750,28 @@ func _setze_truppen_ab(delta: float) -> void:
 	_sprite.angriff(1.0)
 	_brut.append(spiel.setze_enterer_ab(_sonderziel, leben_faktor, _ziel))
 	spiel.turmtruppe_abgesetzt(self)
+
+
+## 25.11. (Paul, N6): Phase 2 „Vorstoß“ – der Belagerungsturm dockt ab und läuft den normalen Gegnerweg: nimmt
+## Checkpoints ein, schlägt eigene Truppen im Nahkampf, setzt keine Drohnen mehr ab. Leben: Rest + BELAGERUNG_VORSTOSS_BONUS
+## seines Maximums, höchstens (1 + Bonus) × Maximum. Panzerung, Tempo und Prämie bleiben. Nicht im Brakk-Mode.
+func _vorstoss_beginnen() -> void:
+	if vorstoss:
+		return
+	vorstoss = true
+	_angedockt = -1.0
+	_sonderziel = Karte.KEINE
+	var bonus := max_leben * Werte.BELAGERUNG_VORSTOSS_BONUS
+	max_leben += bonus
+	leben = minf(leben + bonus, max_leben)
+	daten = daten.duplicate()   # gegner_daten() gibt ohne Mods das gemeinsame Wörterbuch zurück
+	daten["schaden"] = float(daten["vorstoss_schaden"])
+	daten["abklingzeit"] = float(daten["vorstoss_abklingzeit"])
+	daten["reichweite"] = float(daten["vorstoss_reichweite"])
+	_abkling = 0.0
+	spiel.effekte.fx("spreng", position + Vector2(0, 10), 1.0)   # Abdocken: Staub und Trümmer
+	plane_neu()
+	queue_redraw()
 
 
 # ------------------------------------------------------------- Myr-Drohne
@@ -841,6 +908,12 @@ func _draw() -> void:
 		draw_arc(Vector2(0, 8), 28.0, 0.0, TAU, 28, Color(1.0, 0.7, 0.2, 0.35 * p), 2.0)
 		var k := Vector2(0, -56)
 		draw_colored_polygon(PackedVector2Array([k + Vector2(-9, 4), k + Vector2(-9, -4), k + Vector2(-4, 0), k + Vector2(0, -7), k + Vector2(4, 0), k + Vector2(9, -4), k + Vector2(9, 4)]), Color("ffb347"))
+	if vorstoss:
+		# 25.11. (N6): Vorstoß – rotes Lauflicht am Fuß
+		var t := Time.get_ticks_msec() / 1000.0
+		for i in 8:
+			var a := t * 3.0 + i * TAU / 8.0
+			draw_arc(Vector2(0, 10), 30.0, a, a + 0.35, 6, Color(1.0, 0.25, 0.2, 0.9), 3.0)
 	if float(daten.get("panzerung", 0.0)) > 0.0:
 		# Panzerung: kleine Stahlplakette am Fuß, blitzt bei jedem Treffer auf
 		var pm := Vector2(15, 10) if Werte.grafik_neu else Vector2(15, 4)

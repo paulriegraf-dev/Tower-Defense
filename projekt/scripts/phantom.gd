@@ -24,6 +24,13 @@ static func ordner(art: String) -> Array:
 ## 18.11. Balance: Schild 45 → 70, Schwarm 70 → 110, Belagerung 150 → 180, Fahne 60 → 75 (in den Angriffs-Phantomen
 ## liefen Schildträger ab Runde 3, 8 Schwarmgeister oder 10–16 Fahnenträger je Runde – zu viel Wirkung je Budget).
 const PREISE := {"hund": 10, "sphaere": 35, "fahne": 75, "sprenger": 55, "rauch": 50, "belagerung": 180, "schild": 70, "sani": 50, "schwarm": 110}
+## 25.11. (Paul): Der Angriff beginnt in dieser Runde – davor passiert zu wenig, und kürzere Läufe bringen mehr Läufe.
+## Die Budgets der Runden davor verfallen. Verteidiger- und Normalmodus spielen weiter ab Runde 1.
+const ANGRIFF_AB_RUNDE := 8
+## 25.11. (Paul): Patt in Runde 20 – so viele Sekunden Echtzeit ohne Treffer am HQ und ohne genommenes Leben, dann
+## gilt die Verteidigung als gehalten. Ab PATT_WARNUNG_SEK vorher läuft sichtbar ein Countdown.
+const PATT_SEK := 60.0
+const PATT_WARNUNG_SEK := 15.0
 const WURF_AUFSCHLAG: int = 40
 const WURF_HOECHSTENS: int = 4          # so viele Einheiten fasst ein Wurf
 const NICHT_WERFBAR: Array[String] = ["belagerung"]
@@ -31,6 +38,20 @@ const TYPEN: Array[String] = ["hund", "sphaere", "fahne", "sprenger", "rauch", "
 
 static var _preise: Dictionary = {}
 static var _wurf: int = -1
+
+## 25.11. (Paul): Revanche gegen dasselbe Phantom – höchstens so oft je Phantom und Sitzung. Der Zähler lebt nur im
+## Speicher (statisch: übersteht den Szenenwechsel, ein Neustart des Spiels setzt ihn zurück).
+const REVANCHEN_JE_PHANTOM := 2
+static var revanchen: Dictionary = {}   # Phantom (Dateiname ohne Endung, bei Online-Phantomen die ID) -> verbraucht
+
+
+static func revanche_frei(pfad: String) -> bool:
+	return int(revanchen.get(pfad.get_file().get_basename(), 0)) < REVANCHEN_JE_PHANTOM
+
+
+static func revanche_zaehlen(pfad: String) -> void:
+	var k := pfad.get_file().get_basename()
+	revanchen[k] = int(revanchen.get(k, 0)) + 1
 
 
 static func _lade_preise() -> void:
@@ -136,7 +157,7 @@ static func wertung(runden: Array) -> Dictionary:
 			gefallen += 1
 			geknackt += roundi((PUNKTE_GEKNACKT + PUNKTE_FRUEH * maxi(0, Werte.LETZTE_RUNDE - int(r["runde"]))) * f)
 		if int(r["runde"]) >= Werte.LETZTE_RUNDE:
-			runde20 += roundi(float(r.get("sekunden", 0.0)) * PUNKTE_JE_SEKUNDE_20)
+			runde20 += roundi(float(r.get("hq_sekunden", r.get("sekunden", 0.0))) * PUNKTE_JE_SEKUNDE_20)   # 25.11.: ab dem Sturm
 	var zeilen: PackedStringArray = []
 	zeilen.append("%d Leben genommen: %d" % [genommen, leben])
 	if gefallen > 0:
@@ -157,13 +178,15 @@ const V_PUNKTE_SIEG: int = 1500         # das HQ des Angreifers zerstört
 
 
 ## Wertung des Verteidigers: {"gesamt", "zeilen"}. `runden` = überstandene Runden, `leben` = am Ende übrig.
-static func verteidigungs_wertung(runden: int, leben: int, sieg: bool) -> Dictionary:
+## 25.11.: `hq_zerstoert` false = durch Patt gehalten (Runden und Leben zählen, der Bonus fürs zerstörte HQ nicht).
+static func verteidigungs_wertung(runden: int, leben: int, sieg: bool, hq_zerstoert: bool = true) -> Dictionary:
 	var r := maxi(0, runden) * V_PUNKTE_JE_RUNDE
 	var l := maxi(0, leben) * V_PUNKTE_JE_LEBEN if sieg else 0
-	var s := V_PUNKTE_SIEG if sieg else 0
+	var s := V_PUNKTE_SIEG if sieg and hq_zerstoert else 0
 	var zeilen: PackedStringArray = ["%d Runden gehalten: %d" % [runden, r]]
 	if sieg:
 		zeilen.append("%d Leben übrig: %d" % [leben, l])
+	if s > 0:
 		zeilen.append("Sieg: %d" % s)
 	return {"gesamt": r + l + s, "zeilen": zeilen}
 
@@ -173,7 +196,8 @@ static func verteidigungs_wertung(runden: int, leben: int, sieg: bool) -> Dictio
 ##   geknackt vor Runde 20: 0,85–1,0 – je früher, desto mehr (die Runden, die die Verteidigung gehalten hat, zählen mild)
 ##   erst in Runde 20 gefallen (Jagd aufs HQ): DUELL_RUNDE20 – sie hat das reguläre Spiel gehalten
 ##   nicht geknackt: genommene Leben × DUELL_LEBEN (höchstens knapp unter Runde 20)
-## `runden` = so viele Runden lief dieses Duell (Ersatz-Phantom: nur der Rest). Weniger als alle und nicht geknackt:
+## `runden` = so viele Runden lief dieses Duell (Ersatz-Phantom: nur der Rest). Weniger als alle eines Angriffs
+## (25.11.: ab Runde ANGRIFF_AB_RUNDE, also 13) und nicht geknackt:
 ## Ergebnis zur Mitte hin gedämpft – ein Ersatz-Phantom, das nur die letzten Runden hält, ist kein voller Sieg.
 const DUELL_RUNDE20: float = 0.75
 const DUELL_LEBEN: float = 0.7
@@ -190,9 +214,20 @@ static func duell_ergebnis(leben_genommen: int, geknackt: bool, runde: int = 0, 
 			return 1.0
 		return clampf(DUELL_GEKNACKT_MIN + (1.0 - DUELL_GEKNACKT_MIN) * float(letzte - runde) / float(maxi(1, letzte - 1)), DUELL_GEKNACKT_MIN, 1.0)
 	var s := DUELL_LEBEN * clampf(float(leben_genommen) / float(Werte.START_LEBEN), 0.0, 1.0)
-	if runden > 0 and runden < letzte:
-		s = 0.5 + (s - 0.5) * float(runden) / float(letzte)
+	var voll := letzte - ANGRIFF_AB_RUNDE + 1
+	if runden > 0 and runden < voll:
+		s = 0.5 + (s - 0.5) * float(runden) / float(voll)
 	return s
+
+
+## 25.11.: Erste aufgezeichnete Runde eines Angriffs-Phantoms – neue beginnen in Runde 8, ältere in Runde 1.
+static func start_runde(daten: Dictionary) -> int:
+	var erste := 0
+	for r: Dictionary in daten.get("runden", []):
+		var n := int(r.get("runde", 0))
+		if n > 0 and (erste == 0 or n < erste):
+			erste = n
+	return maxi(erste, 1)
 
 
 ## 24.11. (Paul, Version 72): Ergebnis eines Angriffs gegen EINE Verteidigung für die Spieler-Angriffs-Elo – ohne weiche
@@ -290,6 +325,7 @@ static func aus_partie(partie: Dictionary, quelle: String = "") -> Dictionary:
 	var letzte: Dictionary = runden[runden.size() - 1]
 	return {
 		"format": 1, "phantom_version": PHANTOM_VERSION, "art": "verteidigung", "quelle": quelle, "begonnen": str(partie.get("begonnen", "")), "spieler": Profil.name(), "profil": Profil.id(),
+		"portrait": Profil.portrait(),   # 25.11.
 		"anfuehrer": str(partie.get("anfuehrer", "brakk")),   # 19.11.: das Phantom verteidigt mit den Regeln seines Anführers
 		"karte": {"spalten": Werte.SPALTEN, "zeilen": Werte.ZEILEN, "checkpoints": partie.get("checkpoints", []), "basis": partie.get("basis", [Werte.BASIS_ZELLE.x, Werte.BASIS_ZELLE.y])},
 		"ergebnis": {"ausgang": letzte["original"]["ausgang"], "runde": letzte["runde"], "leben": letzte["original"]["leben"]},
@@ -309,6 +345,8 @@ static func _wende_an(zellen: Dictionary, schilde: Dictionary, a: Dictionary) ->
 				if not zellen.has(z) or zellen[z]["typ"] != "wall":
 					zellen[z] = {"typ": "wall"}
 				zellen[z]["ausbau"] = typ
+				if typ == "turm":
+					zellen[z]["art"] = str(a.get("art", ""))   # 25.11. (N1): ältere Protokolle ohne Turmart: ""
 				if typ == "magnet":
 					zellen[z]["richtung"] = [int(a.get("rx", 1)), int(a.get("ry", 0))]
 			elif typ == "wall":
@@ -369,6 +407,8 @@ static func _stand(zellen: Dictionary, schilde: Dictionary) -> Dictionary:
 		match str(c["typ"]):
 			"wall":
 				waelle.append([z.x, z.y, str(c.get("ausbau", "")), bool(c.get("panzer", false)), c.get("richtung", []), int(c.get("stufe", 1)), str(c.get("faehigkeit", ""))])
+				if str(c.get("ausbau", "")) == "turm" and str(c.get("art", "")) != "":
+					(waelle[waelle.size() - 1] as Array).append(str(c["art"]))   # 25.11. (N1): Feld 8 = Turmart
 			"fabrik":
 				var f := {"x": z.x, "y": z.y, "einheit": c["einheit"], "stufe": c["stufe"]}
 				if c.has("faehigkeit"):

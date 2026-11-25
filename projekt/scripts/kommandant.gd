@@ -10,7 +10,8 @@ var luft := false                    # 20.11.: Brakk-Mode – Sonde 7 schwebt (s
 ## Schießt von selbst auf den vordersten Gegner.
 ##   [Q] Sammeln: Bodentruppen im Umkreis folgen ihm. Nochmal [Q]: Losschlagen auf das Feld unter der Maus (Werteschub).
 ##   [E] Klettern: auf einen angrenzenden Erdwall und wieder herunter. Oben schießt er weiter und sieht über sein Wallstück.
-##   [R] Klonmaschine: einmal pro Runde auf ein freies Feld setzen. Wer hindurchgeht, wird einmal geklont – auch Gegner.
+##   [R] Klonmaschine: auf ein freies Feld setzen, hält bis zum Rundenende. Wer hindurchgeht, wird einmal geklont – auch
+##       Gegner. Danach Pause über Werte.KLON_ABKLINGZEIT_RUNDEN (im Brakk-Mode: einmal pro Runde).
 ## Auf einem verlorenen Checkpoint holt er ihn viel schneller zurück. Fällt er, steht er zur nächsten Runde wieder da.
 
 var aufstellung := Karte.KEINE
@@ -19,7 +20,13 @@ var gefallen := false
 var gesammelt: Array = []
 var q_rest := 0.0
 var e_rest := 0.0
-var klon_genutzt := false
+var klon_rest := 0                  # 25.11. (Paul, N2): Runden, bis die Klonmaschine wieder bereit ist (0 = bereit)
+## Gesperrt? Setzen: true = gerade benutzt (volle Abklingzeit), false = sofort wieder bereit (Brakk-Tutorial).
+var klon_genutzt: bool:
+	get:
+		return klon_rest > 0
+	set(neu):
+		klon_rest = Werte.KLON_ABKLINGZEIT_RUNDEN if neu else 0
 var _angriff_t := -1.0             # läuft die Angriffsanimation: Sekunden seit Beginn (-1 = keine)
 var _angriff_ziel: Node2D = null
 var _schuesse := 0
@@ -305,7 +312,14 @@ func aufstehen(z: Vector2i) -> void:
 	leben = max_leben
 
 
-## Zwischen den Runden: wieder aufstehen, voll geheilt, Klonmaschine wieder verfügbar.
+## 25.11. (N2): "" = Klonmaschine bereit (oder Brakk-Mode: dort bleibt die Anzeige wie bisher), sonst der Rest.
+func klon_anzeige() -> String:
+	if spiel.brakk_modus or klon_rest <= 0:
+		return ""
+	return tr("R · in 1 Runde") if klon_rest == 1 else tr("R · in %d Runden") % klon_rest
+
+
+## Zwischen den Runden: wieder aufstehen, voll geheilt; die Abklingzeit der Klonmaschine läuft eine Runde weiter.
 func neue_runde() -> void:
 	if gefallen:
 		gefallen = false
@@ -320,7 +334,7 @@ func neue_runde() -> void:
 		spiel.freie_stellungen += BrakkFortschritt.FREIE_STELLUNGEN   # 19.11. (Paul): und eine Stellung
 	leben = max_leben
 	gesammelt.clear()
-	klon_genutzt = false
+	klon_rest = 0 if spiel.brakk_modus else maxi(0, klon_rest - 1)   # 25.11. (N2); Brakk-Mode wie bisher jede Runde frei
 	q_rest = 0.0
 	e_rest = 0.0
 

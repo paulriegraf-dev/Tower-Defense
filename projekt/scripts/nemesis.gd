@@ -1230,8 +1230,8 @@ func _ausschalten_ziel() -> Dictionary:
 	return {}
 
 
-func halte_zeit(p: Dictionary) -> float:
-	return Werte.NEMESIS_HALTEN_HOCH if int(p.get("rang", 1)) >= Werte.NEMESIS_HALTEN_RANG else Werte.NEMESIS_HALTEN
+func halte_zeit(_p: Dictionary) -> float:
+	return Werte.NEMESIS_HALTEN   # 25.11. (Paul): bei jedem Rang gleich
 
 
 ## Halten läuft: Brakk muss dranbleiben; der Beam wartet so lange. Voll → endgültig ausgeschaltet.
@@ -1251,18 +1251,37 @@ func _halten_weiter(dt: float) -> void:
 		ausschalten(k)
 
 
-## Anzeige für das HUD: {} oder {"text", "anteil"} (neben einem Kampfunfähigen bzw. beim Halten).
+## Anzeige für das HUD: {} oder {"text", "name", "farbe", "anteil"} (neben einem Kampfunfähigen bzw. beim Halten;
+## anteil -1 = noch nicht gedrückt).
 func ausschalten_hinweis() -> Dictionary:
-	if not _halten.is_empty():
-		var p: Dictionary = (_halten["eintrag"] as Dictionary)["person"]
-		return {"text": "%s endgültig ausschalten …" % voller_name(p), "anteil": float(_halten["t"]) / halte_zeit(p)}
-	var k := _ausschalten_ziel()
+	var k: Dictionary = _halten["eintrag"] if not _halten.is_empty() else _ausschalten_ziel()
 	if k.is_empty():
 		return {}
-	return {"text": "[E] halten: %s endgültig ausschalten" % voller_name(k["person"] as Dictionary), "anteil": -1.0}
+	var p: Dictionary = k["person"]
+	return {"text": "[E] halten – endgültig ausschalten (%d Gold, Sprengladung)" % Werte.NEMESIS_BEUTE_GOLD, "name": voller_name(p),
+		"farbe": umriss_farbe(p), "anteil": float(_halten["t"]) / halte_zeit(p) if not _halten.is_empty() else -1.0}
 
 
-## Endgültig weg: eigener Ton, Chronik, ein Ring als Beute; der Eintrag verschwindet aus der Liste.
+## 25.11. (Paul): Beute fürs endgültige Ausschalten – Gold, eine Sprengladung ins Gepäck (bis spreng_max; im
+## Überläufer-Verlauf gibt es keine) und Erfahrung. Kein Ring mehr.
+func _belohnung() -> String:
+	var teile: PackedStringArray = ["%d Gold" % Werte.NEMESIS_BEUTE_GOLD]
+	spiel.budget += Werte.NEMESIS_BEUTE_GOLD
+	o24.sabotage["geld"] = int(o24.sabotage["geld"]) + Werte.NEMESIS_BEUTE_GOLD
+	if not o24.geheim:
+		if o24.ladungen < int(o24.w("spreng_max")):
+			o24.ladungen += 1
+			teile.append("Sprengladung")
+		else:
+			teile.append("Sprengladungen schon voll")
+	var kd: Kommandant = spiel.kommandant
+	if kd != null and kd.fortschritt != null:
+		kd.fortschritt.gib(Werte.NEMESIS_BEUTE_XP, kd)
+		teile.append("+%d Erfahrung" % Werte.NEMESIS_BEUTE_XP)
+	return " · ".join(teile)
+
+
+## Endgültig weg: eigener Ton, Chronik, Beute (_belohnung); der Eintrag verschwindet aus der Liste.
 func ausschalten(k: Dictionary) -> void:
 	var p: Dictionary = k["person"]
 	var e: Variant = k["einheit"]
@@ -1281,11 +1300,11 @@ func ausschalten(k: Dictionary) -> void:
 	Ton.spiele(spiel, "hit-boom", -2.0)
 	if spiel.get("_einblendung") != null:
 		spiel._einblendung.banner("AUSGESCHALTET", voller_name(p), Color("ff5a6e"))
-	var beute := _beute(str(p["art"]))
-	spiel.melde("%s ist endgültig ausgeschaltet.%s" % [voller_name(p), (" Beute: " + beute) if beute != "" else ""], 4.0)
+	spiel.melde("%s ist endgültig ausgeschaltet. Beute: %s" % [voller_name(p), _belohnung()], 4.0)
 
 
 ## Ring als Beute – passend zu seiner Truppenart: neuer Ring (Finger frei) oder eine Stufe mehr; sonst Gold.
+## 25.11. (Paul): in Befehl 24 ungenutzt, bleibt für später.
 func _beute(art: String) -> String:
 	var kd: Kommandant = spiel.kommandant
 	if kd == null or kd.fortschritt == null:

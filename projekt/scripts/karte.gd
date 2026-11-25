@@ -66,6 +66,15 @@ var cp_tempo: Array[float] = []    # je Checkpoint: hält ihn gerade ein Gegner?
 
 var pfad: Array[Vector2i] = []     # Weg der nächsten Welle: Start -> Checkpoints -> Basis (ab Mitte der Zone)
 var neben_pfade: Array = []        # dasselbe vom oberen und unteren Rand der Zone
+## 25.11. (Paul, N5): angezeigte Gegnerwege. Je Startfeld der Welle ein Weg; der mit den meisten Gegnern ist der
+## Hauptweg (kräftig), die übrigen Nebenwege (dünner, halbtransparent). In der Welle bleibt ein Nebenweg nur, solange
+## Gegner darauf laufen oder noch welche kommen. Ändert sich der Weg in der Welle, wird der neue Hauptweg und der alte
+## bleibt gepunktet („alte_routen“), bis der letzte Gegner ihn verlassen hat. `pfad` bleibt der Weg für die Logik.
+var spiel: Node = null             # main.gd (setzt es); ohne Spiel (Editor, Befehl 24) wie bisher: pfad + neben_pfade
+var routen: Array = []             # [{"weg": Array[Vector2i], "haupt": bool, "sichtbar": bool}] – Hauptweg zuerst
+var alte_routen: Array = []        # [{"weg": Array[Vector2i]}]
+var _quellen_stand := 0
+var _quellen_in := 0.0
 var schild := true                 # Schutzschild über der Zone des Gegners (fällt in der letzten Runde)
 var zeige_schwachstelle := false   # (nicht mehr benutzt: Sprengziele werden in der Bauphase nicht mehr verraten)
 var _ersparnis: Dictionary = {}    # Wall-Zelle -> so viel kürzer wird der Gegnerweg ohne diesen Wall
@@ -164,7 +173,8 @@ func _process(delta: float) -> void:
 		_boden_stand = stand
 		_untergrund.queue_redraw()
 	# 18.11.: Weg nur bei Änderung neu – oder in jedem Bild, solange seine Pfeile laufen (kräftige Anzeige ohne Bauvorschau)
-	var weg_stand := [pfad, neben_pfade, angriffs_pfad, zeige_pfad_kraeftig, zeige_angriff, vorschau_pfad.is_empty(), Werte.grafik_neu].hash()
+	_routen_pflegen(delta)   # 25.11. (N5)
+	var weg_stand := [pfad, neben_pfade, routen, alte_routen, angriffs_pfad, zeige_pfad_kraeftig, zeige_angriff, vorschau_pfad.is_empty(), Werte.grafik_neu].hash()
 	if weg_stand != _weg_stand or (zeige_pfad_kraeftig and vorschau_pfad.is_empty()):
 		_weg_stand = weg_stand
 		_weg_ebene.queue_redraw()
@@ -528,11 +538,12 @@ func posten_bonus(z: Vector2i, daten: Dictionary) -> float:
 
 
 ## Welcher Turm entstünde auf `z`? Bestimmt durch die freien Nachbarwälle (siehe Werte.TURMARTEN). "" = keiner.
-var turm_wunsch := ""   # 21.11. (Paul): nur während main._baue_wunschturm – diese Turmart statt der Form ("truppen")
+## 25.11. (Paul, N1): in der Leiste gewählte Turmart ("" = keine, dann entscheidet die Rangfolge). Folgt main.turm_wunsch.
+var turm_wunsch := ""
 
 func turm_form(z: Vector2i) -> String:
-	if turm_wunsch == "truppen" and inhalt(z) == WALL and freie_stuetzen(z).size() >= 2:
-		return "truppen"   # eigene Kachel: Truppenturm auf jedem Erdwall mit zwei freien Nachbarwällen
+	if turm_wunsch != "":
+		return turm_wunsch if _wunsch_passt(z, turm_wunsch) else ""   # nur diese Form, kein Ausweichen auf eine andere
 	if Werte.pliplop() and inhalt(z) == WALL and wall_nachbarn(z) == 0:
 		return "pliplop"   # 20.11. (Paul): Irrtürmer – PliPlop 3cK auf einem einzelnen Erdwall
 	var form := _gerade_form(z)
@@ -542,6 +553,25 @@ func turm_form(z: Vector2i) -> String:
 	if form == "" and Werte.truppenturm() and freie_stuetzen(z).size() == 2:
 		return "truppen"   # 20.11. (Paul, Nachtrag): Irrtürmer – Truppenturm, wenn sonst nichts passt
 	return form
+
+
+## 25.11. (N1): Lässt sich die Form von `art` auf `z` mit einem Teil der freien Stützen erfüllen?
+func _wunsch_passt(z: Vector2i, art: String) -> bool:
+	match art:
+		"funk":
+			return freie_stuetzen(z).size() >= 4
+		"geschuetz":
+			return freie_stuetzen(z).size() >= 3
+		"lanze", "frost":
+			return not _form_waelle(z, art).is_empty()
+		"heil":
+			return _diagonal_paar(z).size() == 2
+		"truppen":
+			return inhalt(z) == WALL and freie_stuetzen(z).size() >= 2   # jeder Erdwall mit zwei freien Nachbarwällen
+		"pliplop":
+			# einzelner Erdwall; die eigene Kachel setzt ihn auch auf ein freies Feld (der Wall kommt mit)
+			return Werte.pliplop() and (inhalt(z) == WALL or ist_frei(z)) and wall_nachbarn(z) == 0
+	return false
 
 
 ## Form aus den geraden Nachbarwällen (Kreuzung, T-Stück, Klammer, lange Ecke) – "" = keine.
@@ -723,10 +753,11 @@ func schade_turm(z: Vector2i, menge: float) -> void:
 	turm_schaden[z] = float(turm_schaden.get(z, 0.0)) + menge
 
 
-func baue_aus(z: Vector2i, typ: int) -> void:
+## `art`: gespeicherte Turmart beim Wiederaufbau eines Stands ("" = die Form bestimmt sie, wie beim Bauen).
+func baue_aus(z: Vector2i, typ: int, art: String = "") -> void:
 	ausbau[z] = typ
 	if typ == TURM:
-		var form := turm_form(z)
+		var form := art if Werte.TURMARTEN.has(art) else turm_form(z)
 		turm_art[z] = form if form != "" else "geschuetz"
 		_stuetze_turm(z)
 	if typ == TOR:
@@ -891,6 +922,7 @@ func aktualisiere_pfad() -> void:
 	elif start_index() < 0:
 		neben_pfade.append(_route_ab("hund", Vector2i(0, 1)))
 		neben_pfade.append(_route_ab("hund", Vector2i(0, Werte.ZEILEN - 2)))
+	_baue_routen()   # 25.11. (N5)
 	# Fußweg der eigenen Truppen zum HQ: der kürzeste ab irgendeiner Fabrik
 	angriffs_pfad = []
 	if zeige_angriff:
@@ -903,6 +935,80 @@ func aktualisiere_pfad() -> void:
 	var z := vorschau_zelle
 	vorschau_zelle = KEINE
 	setze_vorschau(z, vorschau_typ, vorschau_ok)
+
+
+## 25.11. (N5): Weg ab einem Startfeld, wie ihn die Gegner der Welle von dort gehen.
+func _route_von(start: Vector2i) -> Array[Vector2i]:
+	if not pfad.is_empty() and start == pfad[0]:
+		return pfad
+	if Werte.ZONE2.size != Vector2i.ZERO and start_index() < 0:
+		return _route_ab("hund", start, 1)   # Zange: die linke Hälfte läuft nur über Checkpoint 1 (wie _route)
+	return _route_ab("hund", start)
+
+
+## 25.11. (N5): Die angezeigten Wege neu bilden – aus den Startfeldern der Welle (spiel.weg_quellen: Feld -> Anzahl).
+## In der Welle wandern Wege, die es so nicht mehr gibt, zu den alten (gepunktet).
+func _baue_routen(quellen: Variant = null) -> void:
+	var q: Dictionary = quellen if quellen is Dictionary else (spiel.weg_quellen() if spiel != null else {})
+	_quellen_stand = q.hash()
+	var neu: Array = []
+	if q.is_empty():
+		neu.append({"weg": pfad, "haupt": true, "sichtbar": true})
+		for n: Array in neben_pfade:
+			neu.append({"weg": n, "haupt": false, "sichtbar": true})
+	else:
+		var starts: Array = q.keys()
+		var vorn: Vector2i = pfad[0] if not pfad.is_empty() else KEINE
+		# die meisten Gegner zuerst; bei Gleichstand der Weg, den auch die Logik nimmt (pfad)
+		starts.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			return int(q[a]) > int(q[b]) or (int(q[a]) == int(q[b]) and a == vorn and b != vorn))
+		for s: Vector2i in starts:
+			var weg := _route_von(s)
+			if weg.size() >= 2 and neu.all(func(r: Dictionary) -> bool: return r["weg"] != weg):
+				neu.append({"weg": weg, "haupt": neu.is_empty(), "sichtbar": true})
+		if Werte.ZONE2.size != Vector2i.ZERO:
+			for n: Array in neben_pfade:   # Zange: der Weg aus der zweiten Zone
+				neu.append({"weg": n, "haupt": false, "sichtbar": true})
+	if not zeige_pfad_kraeftig:
+		for alt: Dictionary in routen:   # in der Welle: was es nicht mehr gibt, bleibt gepunktet
+			var weg: Array = alt["weg"]
+			if neu.all(func(r: Dictionary) -> bool: return r["weg"] != weg) and alte_routen.all(func(r: Dictionary) -> bool: return r["weg"] != weg):
+				alte_routen.append({"weg": weg})
+	routen = neu
+
+
+## 25.11. (N5): jedes Bild. Bauphase: Startfelder neu prüfen (Plan, Runde, Ausgänge im Taktikplaner können sich ändern).
+## Welle: Nebenwege und alte Wege nur zeigen, solange darauf Gegner laufen (bzw. bei Nebenwegen: noch welche kommen).
+func _routen_pflegen(delta: float) -> void:
+	if spiel == null or not spiel.has_method("weg_quellen"):
+		return
+	_quellen_in -= delta
+	if _quellen_in > 0.0:
+		return
+	_quellen_in = 0.3
+	if zeige_pfad_kraeftig:
+		alte_routen.clear()
+		var q: Dictionary = spiel.weg_quellen()
+		if q.hash() != _quellen_stand:
+			_baue_routen(q)
+		for r: Dictionary in routen:
+			r["sichtbar"] = true
+		return
+	var haupt := {}
+	if not routen.is_empty():
+		for z: Vector2i in routen[0]["weg"]:
+			haupt[z] = true
+	var belegt := {}   # Felder, auf denen gerade ein Gegner am Boden läuft (nicht auf dem Hauptweg)
+	for g in spiel.gegner:
+		if is_instance_valid(g) and not g._tot and not g._auf_wall:
+			var z := zelle_bei(g.position)
+			if not haupt.has(z):
+				belegt[z] = true
+	var kommen_noch: bool = not (spiel._schlange as Array).is_empty()
+	for r: Dictionary in routen:
+		if not bool(r["haupt"]):
+			r["sichtbar"] = kommen_noch or (r["weg"] as Array).any(func(z: Vector2i) -> bool: return belegt.has(z))
+	alte_routen = alte_routen.filter(func(r: Dictionary) -> bool: return (r["weg"] as Array).any(func(z: Vector2i) -> bool: return belegt.has(z)))
 
 
 ## Muss der Gegner auf diesem Weg etwas einreißen?
@@ -978,6 +1084,8 @@ func finde_posten(von: Vector2i, sucher: Einheit) -> Dictionary:
 		var res: Vector2i = sucher.spiel.reserviert_fuer(w)
 		if res != KEINE and res != sucher.fabrik_zelle:
 			continue   # per Pfeil einer anderen Fabrik vorbehalten
+		if sucher.spiel.order24 != null and sucher.spiel.order24.stellung_gesperrt(w):
+			continue   # 25.11. (Paul): Befehl 24 – die Stellungen eines sabotierten Lagers bleiben leer
 		var weg := _weg_auf_wall(von, w)
 		if weg.is_empty() or weg.size() >= beste_laenge:
 			continue
@@ -1564,13 +1672,18 @@ func _zeichne_wege(ci: CanvasItem) -> void:
 	_ci = ci
 	# Weglinie unter den Gebäuden beginnen, Durchbrüche später darüber markieren
 	var zeige_neu := not vorschau_pfad.is_empty()
-	if zeige_pfad_kraeftig:
-		for neben: Array[Vector2i] in neben_pfade:
-			_zeichne_weg(neben, Color(WEG, 0.3), false)
+	# 25.11. (N5): Nebenwege dünn und halbtransparent, alte Wege der Welle gepunktet, Hauptweg wie bisher
+	var staerke := 0.85 if zeige_pfad_kraeftig else 0.3
+	for r: Dictionary in routen:
+		if not bool(r["haupt"]) and bool(r["sichtbar"]):
+			_zeichne_weg(r["weg"], Color(WEG, maxf(staerke * Werte.WEG_NEBEN_ANTEIL, Werte.WEG_NEBEN_MIN)), false, true)
+	for r: Dictionary in alte_routen:
+		_zeichne_punkte(r["weg"], Color(WEG, Werte.WEG_ALT_DECKKRAFT))
+	var haupt: Array[Vector2i] = routen[0]["weg"] if not routen.is_empty() else pfad
 	if zeige_neu:
 		_zeichne_weg(pfad, Color(WEG, 0.25), false)
 	else:
-		_zeichne_weg(pfad, Color(WEG, 0.85 if zeige_pfad_kraeftig else 0.3), zeige_pfad_kraeftig)
+		_zeichne_weg(haupt, Color(WEG, staerke), zeige_pfad_kraeftig)
 	if zeige_angriff and zeige_pfad_kraeftig:
 		_zeichne_weg(angriffs_pfad, Color(TECH_LICHT, 0.9), false)
 	_ci = self
@@ -1686,6 +1799,8 @@ func _draw() -> void:
 			draw_arc(mk + Vector2(0, 14), 17.0, 0.0, TAU, 24, Color("ffd34d"), 3.0)
 			draw_arc(mk, float(Werte.KOMMANDANT["reichweite"]) * zg, 0.0, TAU, 64, Color(TECH_LICHT, 0.6), 2.0)
 			draw_string(ThemeDB.fallback_font, Vector2(vorschau_zelle) * zg + Vector2(-20, -6), "Brakk", HORIZONTAL_ALIGNMENT_CENTER, zg + 40, 14, Color("ffd34d"))
+		elif vorschau_typ == TURM and turm_form(vorschau_zelle) == "":
+			pass   # kurz nach einem Wechsel der Turmwahl: die Vorschau stimmt erst im nächsten Bild
 		elif vorschau_typ == STELLUNG or vorschau_typ == TURM:
 			if vorschau_typ == TURM:
 				# die Stützen, die dieser Turm belegen würde
@@ -2334,16 +2449,17 @@ func _flecken() -> ImageTexture:
 
 
 ## Neue Grafik: der Gegnerweg als ausgetretener Pfad (dunkles Band) mit orangen Pfeilen Richtung Basis wie in der Stilprobe.
-func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void:
+func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool, duenn: bool = false) -> void:
 	var staerke := farbe.a
 	var band := Color(0.1, 0.06, 0.02, 0.42 * staerke)
 	var pfeil := Color(Color("ffb340"), staerke)
 	var punkte: PackedVector2Array = []
 	for z in weg:
 		punkte.append((Vector2(z) + Vector2(0.5, 0.5)) * Werte.ZELLE)
-	_ci.draw_polyline(punkte, band, 27.0)
+	var breite := 14.0 if duenn else 27.0   # 25.11. (N5): Nebenweg halb so breit
+	_ci.draw_polyline(punkte, band, breite)
 	for p in punkte:
-		_ci.draw_circle(p, 13.5, band)
+		_ci.draw_circle(p, breite / 2.0, band)
 	var abstand := 32.0
 	var rest := fmod(_zeit * 20.0, abstand) if laufend else 0.0
 	var orte: PackedVector2Array = []   # 18.11.: Pfeile erst sammeln, dann in zwei Durchgängen zeichnen (siehe _chevrons)
@@ -2359,7 +2475,7 @@ func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void
 			winkel.append(richtung.angle())
 			d += abstand
 		rest = d - laenge
-	_chevrons(orte, winkel, pfeil)
+	_chevrons(orte, winkel, pfeil)   # Pfeile gleich groß: kleinere verschwinden in HD-2D
 
 
 ## 18.11.: Leistung – das Pfeilmuster (das 16er-Muster der Stilprobe, je Pixel 1,5 Bildpunkte) liegt als kleines Bild vor;
@@ -2369,7 +2485,7 @@ func _zeichne_weg_neu(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void
 ## Die Pfeile überlappen sich nicht (Abstand 32), die Reihenfolge ändert am Bild also nichts.
 var _chevron_bild: ImageTexture
 
-func _chevrons(orte: PackedVector2Array, winkel: PackedFloat32Array, farbe: Color) -> void:
+func _chevrons(orte: PackedVector2Array, winkel: PackedFloat32Array, farbe: Color, gr: float = 1.5) -> void:
 	if _chevron_bild == null:
 		var bild := Image.create(8, 10, false, Image.FORMAT_RGBA8)   # Ursprung des Musters bei (4, 5)
 		for i in 5:
@@ -2378,10 +2494,10 @@ func _chevrons(orte: PackedVector2Array, winkel: PackedFloat32Array, farbe: Colo
 		bild.fill_rect(Rect2i(5, 4, 3, 2), Color.WHITE)
 		_chevron_bild = ImageTexture.create_from_image(bild)
 	for i in orte.size():
-		_ci.draw_set_transform(orte[i].round(), winkel[i], Vector2(1.5, 1.5))
+		_ci.draw_set_transform(orte[i].round(), winkel[i], Vector2(gr, gr))
 		_ci.draw_texture(_chevron_bild, Vector2(-4, -5), farbe)
 	for i in orte.size():
-		_ci.draw_set_transform(orte[i].round(), winkel[i], Vector2(1.5, 1.5))
+		_ci.draw_set_transform(orte[i].round(), winkel[i], Vector2(gr, gr))
 		_ci.draw_rect(Rect2(1, -1, 2, 2), farbe)
 	_ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -2593,12 +2709,13 @@ func _zeichne_leben(z: Vector2i) -> void:
 
 
 ## Gepunktete Linie durch die Feldmitten; `laufend` lässt die Punkte Richtung Basis wandern.
-func _zeichne_weg(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void:
+func _zeichne_weg(weg: Array[Vector2i], farbe: Color, laufend: bool, duenn: bool = false) -> void:
 	if weg.size() < 2:
 		return
 	if Werte.grafik_neu:
-		_zeichne_weg_neu(weg, farbe, laufend)
+		_zeichne_weg_neu(weg, farbe, laufend, duenn)
 		return
+	var kante := 4.0 if duenn else 6.0   # 25.11. (N5): Nebenweg mit kleineren Punkten
 	var abstand := 16.0
 	var versatz := fmod(_zeit * 24.0, abstand) if laufend else 0.0
 	var rest := versatz
@@ -2610,7 +2727,27 @@ func _zeichne_weg(weg: Array[Vector2i], farbe: Color, laufend: bool) -> void:
 		var d := rest
 		while d < laenge:
 			var p := (a + richtung * d).round()
-			_ci.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), farbe)
+			_ci.draw_rect(Rect2(p - Vector2(kante, kante) / 2.0, Vector2(kante, kante)), farbe)
+			d += abstand
+		rest = d - laenge
+
+
+## 25.11. (N5): alter Weg in der Welle – nur Punkte, mit dunklem Rand (auf Gras und Erde lesbar), in beiden Grafiken.
+func _zeichne_punkte(weg: Array[Vector2i], farbe: Color) -> void:
+	if weg.size() < 2:
+		return
+	var abstand := 14.0
+	var rest := 0.0
+	for i in weg.size() - 1:
+		var a := (Vector2(weg[i]) + Vector2(0.5, 0.5)) * Werte.ZELLE
+		var b := (Vector2(weg[i + 1]) + Vector2(0.5, 0.5)) * Werte.ZELLE
+		var laenge := a.distance_to(b)
+		var richtung := (b - a) / laenge
+		var d := rest
+		while d < laenge:
+			var p := (a + richtung * d).round()
+			_ci.draw_circle(p, 4.0, Color(0.1, 0.06, 0.02, farbe.a * 0.7))
+			_ci.draw_circle(p, 2.5, farbe)
 			d += abstand
 		rest = d - laenge
 

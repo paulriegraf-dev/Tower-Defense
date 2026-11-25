@@ -2,9 +2,52 @@ class_name Tutorial
 extends CanvasLayer
 ## Tutorial (15.11.) im Stil von Terrain-Conquester: Sonde 7 meldet sich im Hologramm-Funkfenster und erklärt
 ## in einer echten Partie je Schritt EINEN Handgriff mit kurzem Warum. Ring und Pfeil zeigen auf die Kachel oder
-## den Knopf, dann wartet das Tutorial, bis der Spieler es getan hat. Jeder Schritt hat „Weiter“ (22.11.: auch die
-## Handgriffe – Sicherheitsnetz). „Tutorial beenden“ geht jederzeit; danach läuft die Partie normal weiter.
+## den Knopf, dann wartet das Tutorial, bis der Spieler es getan hat. „Tutorial beenden“ geht jederzeit; danach läuft
+## die Partie normal weiter, mit dem Rest-Budget, aber mindestens dem Startbudget.
 ## Beim Start des normalen Spiels fragt Sonde 7 zuerst, ob man das Tutorial möchte.
+##
+## 25.11. (Paul, N4) – drei Arten von Schritten (statt „Weiter“ überall wie am 22.11.):
+##   Aktion     („fertig“): kein „Weiter“; geht von selbst weiter, sobald die Bedingung erfüllt ist.
+##   Warten     („fertig“, ohne eigenen Handgriff): kein „Weiter“; wartet, bis die Welle vorbei ist (Bauphase).
+##   Erklärung  (ohne „fertig“): „Weiter“.
+## Bauen geht nur mit den Werkzeugen des Schritts („werkzeuge“), Aufwerten nur bei „aufwerten“; alles andere ist
+## ausgegraut („Später im Tutorial.“). Die Welle startet nur in Schritten mit „welle“.
+## „budget“: Beim Betreten setzt der Schritt das Budget genau auf den Preis der Übung, Überschuss verfällt.
+## „haelt“: Wird diese Bedingung in einer späteren Bauphase wieder ungültig (Fabrik abgerissen …), springt das
+## Tutorial auf diesen Schritt zurück, sagt kurz warum („rueck“) und macht danach dort weiter, wo es war.
+##
+##  Nr  id               Art        Bedingung („fertig“)                      Werkzeuge         Budget
+##   1  prinzip          Erklärung  –                                          –                 –
+##   2  weg              Erklärung  –                                          –                 –
+##   3  runden           Erklärung  –                                          –                 –
+##   4  fabrik_waehlen   Aktion     Werkzeug Fabrik gewählt (oder Fabrik steht) Fabrik           Fabrikpreis
+##   5  fabrik_setzen    Aktion     mindestens 1 Fabrik            (hält)     Fabrik            Fabrikpreis
+##   6  fabrik_menue     Aktion     Fabrikmenü offen                           –                 –
+##   7  truppen          Erklärung  –                                          –                 –
+##   8  fabrik2          Aktion     mindestens 2 Fabriken          (hält)     Fabrik            Fabrikpreis
+##   9  scharf           Aktion     eine Fabrik baut kein Technogunner (hält) –                 –
+##  10  welle1           Aktion     Welle läuft                                Start             –
+##  11  tempo            Warten     Bauphase von Runde 2                       –                 –
+##  12  waelle           Aktion     3 Erdwälle mehr als zu Beginn  (hält)     Erdwall           3 Erdwälle (meist gratis)
+##  13  linie            Erklärung  –                                          –                 –
+##  14  stellung         Aktion     eine Stellung steht            (hält)     Stellung          Stellungspreis
+##  15  welle2           Aktion     Welle läuft                                Start             –
+##  16  sicht            Warten     Bauphase von Runde 3                       –                 –
+##  17  turm_waehlen     Aktion     Werkzeug Turm gewählt                      Turm              –
+##  18  formen           Aktion     Werkzeug abgelegt                          Turm              –
+##  19  h_auf            Aktion     Formationen [H] offen                      –                 –
+##  20  h_zu             Aktion     Formationen zu                             –                 –
+##  21  turm             Aktion     ein Turm steht                 (hält)     Erdwall, Turm     Turm + bis zu 4 Erdwälle
+##  22  turm_menue       Aktion     Turmmenü offen                             –                 –
+##  23  stufe1           Aktion     eine Fabrik auf Stufe 1        (hält)     Aufwerten         Preis Stufe 1
+##  24  zielwahl         Erklärung  –                                          –                 –
+##  25  tor              Erklärung  –                                          –                 –
+##  26  batterie         Erklärung  –                                          –                 –
+##  27  brakk            Erklärung  –                                          –                 –
+##  28  checkpoints      Erklärung  –                                          –                 –
+##  29  uebersicht       Aktion     Übersicht [I] auf und wieder zu            –                 –
+##  30  schadensliste    Erklärung  –                                          –                 –
+##  31  abschluss        Erklärung  –                                          –                 –
 
 const BAU := 0                    # main.gd Phase.BAU
 const KAMPF := 1                  # main.gd Phase.KAMPF
@@ -28,6 +71,10 @@ var _zeit := 0.0
 var _merk: Dictionary = {}
 var _frage := true                # zuerst: Tutorial ja oder nein?
 var _aus := false
+var _zurueck := -1                # 25.11. (N4): nach einem Rücksprung geht es bei diesem Schritt weiter
+var _w0 := -1                     # Erdwälle vor dem Erdwall-Schritt (für dessen Bedingung)
+var _gefuehrt := false            # Sperren gelten nur hier (BrakkTutorial erbt von dieser Klasse, hat aber eigene Regeln)
+const GESPERRT := "Später im Tutorial."
 
 var _wurzel: Control
 var _zeichner: Control
@@ -202,19 +249,34 @@ func _weiter() -> void:
 
 
 func _naechster() -> void:
+	if _zurueck >= 0:
+		# 25.11. (N4): Rücksprung erledigt – zurück zu dem Schritt, bei dem er ausgelöst wurde
+		var ziel := _zurueck
+		_zurueck = -1
+		_zeige(ziel)
+		return
 	if _index >= _schritte.size() - 1:
 		Profil.setze_einstellung("tutorial_fertig", true)   # 19.11.: bis zum Ende durchgespielt (Erfolg „Ausbilder“)
 		beenden()
 		return
-	_index += 1
+	_zeige(_index + 1)
+
+
+## Schritt `i` zeigen. `vorweg`: kurzer Satz davor (Rücksprung).
+func _zeige(i: int, vorweg: String = "") -> void:
+	_index = i
 	_merk = {}
 	var s: Dictionary = _schritte[_index]
 	if s.has("start"):
 		(s["start"] as Callable).call()
-	_setze_text(str(s["text"]))
-	# 22.11. (Paul): Sicherheitsnetz – auch Schritte, die auf einen Handgriff warten, haben „Weiter“, damit das
-	# Tutorial nie festhängt (vorher nur reine Hinweise; Handgriffe nur „Überspringen“, wenn sie gerade nicht gingen).
-	_btn_weiter.visible = true
+	if s.has("budget"):
+		spiel.budget = int((s["budget"] as Callable).call())   # 25.11. (N4): genau der Preis der Übung, Rest verfällt
+	if spiel.werkzeug != Karte.FREI and sperrt_bau(spiel.werkzeug) != "":
+		spiel.werkzeug = Karte.FREI   # das Werkzeug des vorigen Schritts ablegen
+	_setze_text((vorweg + " " if vorweg != "" else "") + str(s["text"]))
+	# 25.11. (Paul, N4): „Weiter“ nur bei Erklärungen. Aktionen und Warten gehen von selbst weiter (das „Weiter“
+	# vom 22.11. ließ den Wellenstart überspringen – danach hing das Tutorial).
+	_btn_weiter.visible = not s.has("fertig")
 	_btn_skip.visible = false
 	# Statt „Schritt 3 / 33“ nur das Thema: Orientierung, ohne mit der Gesamtlänge abzuschrecken (21.11.)
 	for k in range(_index, -1, -1):
@@ -228,6 +290,7 @@ func beenden() -> void:
 		return
 	_aus = true
 	if spiel != null and not _frage:
+		spiel.budget = maxi(spiel.budget, Werte.START_BUDGET)   # 25.11. (N4): mindestens das Startbudget für die Partie danach
 		spiel.melde("Tutorial beendet – die Partie läuft normal weiter. [I] Übersicht und [H] Formationen helfen jederzeit.", 6.0)
 	if spiel != null:
 		spiel.tutorial = null
@@ -265,6 +328,42 @@ func sperrt_welle() -> bool:
 	return not (_index >= 0 and _index < _schritte.size() and bool((_schritte[_index] as Dictionary).get("welle", false)))
 
 
+## 25.11. (N4): Start-Knopf grau? Nur im Normal-Tutorial, und nur wenn die Welle gerade nicht starten darf.
+func sperrt_start() -> bool:
+	return _gefuehrt and sperrt_welle()
+
+
+## 25.11. (N4): Grund, warum das Werkzeug `typ` gerade gesperrt ist ("" = der Schritt erlaubt es).
+func sperrt_bau(typ: int) -> String:
+	if _aus or not _gefuehrt:
+		return ""
+	if _frage or _index < 0 or _index >= _schritte.size():
+		return tr(GESPERRT)
+	return "" if typ in ((_schritte[_index] as Dictionary).get("werkzeuge", []) as Array) else tr(GESPERRT)
+
+
+## 25.11. (N4): Grund, warum Aufwerten (Fabrik, Turm, Batterie) gerade gesperrt ist ("" = erlaubt).
+func sperrt_aufwerten() -> String:
+	if _aus or not _gefuehrt:
+		return ""
+	if not _frage and _index >= 0 and _index < _schritte.size() and bool((_schritte[_index] as Dictionary).get("aufwerten", false)):
+		return ""
+	return tr(GESPERRT)
+
+
+## 25.11. (N4): Ist in der Bauphase etwas weg, das ein schon erledigter Schritt hergestellt hat? Dann dorthin zurück.
+func _pruefe_rueck() -> bool:
+	if spiel.phase != BAU:
+		return false
+	for k in mini(_index, _schritte.size()):
+		var s: Dictionary = _schritte[k]
+		if s.has("haelt") and not (s["haelt"] as Callable).call():
+			_zurueck = maxi(_zurueck, _index)
+			_zeige(k, tr(str(s.get("rueck", ""))))
+			return true
+	return false
+
+
 func _setze_text(t: String) -> void:
 	_text.text = t
 	_text.visible_characters = 0
@@ -285,6 +384,8 @@ func _process(delta: float) -> void:
 		_gezeigt += TIPP_TEMPO * echt
 	_text.visible_characters = -1 if _gezeigt >= _text.text.length() else int(_gezeigt)
 	if not _frage and _index >= 0:
+		if _pruefe_rueck():
+			return
 		var s: Dictionary = _schritte[_index]
 		if s.has("fertig") and (s["fertig"] as Callable).call():
 			_naechster()
@@ -420,6 +521,22 @@ func _zweite_fabrik() -> Vector2i:
 	return Karte.KEINE
 
 
+## 25.11. (N4): Baut eine Fabrik etwas anderes als Technogunner?
+func _gemischt() -> bool:
+	for z: Vector2i in spiel.fabriken:
+		if not str(spiel.fabriken[z].get("typ", "")) in ["technogunner", "pilot"]:
+			return true
+	return false
+
+
+## 25.11. (N4): Steht eine Fabrik auf Stufe 1 oder höher?
+func _ausgebaut() -> bool:
+	for z: Vector2i in spiel.fabriken:
+		if int(spiel.fabriken[z].get("stufe", 0)) >= 1:
+			return true
+	return false
+
+
 func _blanker_wall() -> Vector2i:
 	for z: Vector2i in spiel.karte.feld:
 		if spiel.karte.feld[z] == Karte.WALL and not spiel.karte.ausbau.has(z):
@@ -480,127 +597,135 @@ func _fabrikplatz() -> Vector2i:
 
 func _baue_schritte() -> Array:
 	var p: Node = spiel
+	_gefuehrt = true   # 25.11. (N4): nur das Normal-Tutorial (BrakkTutorial hat seine eigenen Schritte)
 	return [
 		# --- Spielprinzip
-		{"thema": "Spielprinzip", "text": "So läuft es: Links liegt die Zone der Myriaden, geschützt von ihrem Schild. Von dort ziehen ihre Trupps zu deiner Basis rechts. Jeder Gegner, der sie erreicht, kostet dich ein Leben – du hast 15.",
+		{"id": "prinzip", "thema": "Spielprinzip", "text": "So läuft es: Links liegt die Zone der Myriaden, geschützt von ihrem Schild. Von dort ziehen ihre Trupps zu deiner Basis rechts. Jeder Gegner, der sie erreicht, kostet dich ein Leben – du hast 15.",
 			"ziel": func(): return _feld(p.karte.basis, 0.6)},
-		{"text": "Die gepunktete Linie zeigt den Weg der nächsten Welle: immer der kürzeste, und immer erst über Checkpoint 1, dann über Checkpoint 2. Wie dieser Weg verläuft, bestimmst gleich du.",
+		{"id": "weg", "text": "Die gepunktete Linie zeigt den Weg der nächsten Welle: immer der kürzeste, und immer erst über Checkpoint 1, dann über Checkpoint 2. Wie dieser Weg verläuft, bestimmst gleich du.",
 			"ziel": func(): return _feld(p.karte.checkpoints[0], 0.6)},
-		{"text": "20 Runden musst du halten. In Runde 20 drehst du den Spieß um: Dann greifen deine Truppen das HQ der Myriaden an, während deren Wellen ohne Ende weiterlaufen.",
+		{"id": "runden", "text": "20 Runden musst du halten. In Runde 20 drehst du den Spieß um: Dann greifen deine Truppen das HQ der Myriaden an, während deren Wellen ohne Ende weiterlaufen.",
 			},
 		# --- Fabrik und Truppen
-		{"thema": "Fabriken und Truppen", "text": "Deine Truppen kommen aus Fabriken – Türme allein reichen hier nicht. Wähle unten die Fabrik.",
+		{"id": "fabrik_waehlen", "thema": "Fabriken und Truppen", "text": "Deine Truppen kommen aus Fabriken – Türme allein reichen hier nicht. Ich stelle dir für jede Übung Budget hin. Wähle unten die Fabrik.",
 			"hinweis": "Taste 1 · oder Klick unten auf „Fabrik“",
 			"ziel": func(): return _knopf_von(Karte.FABRIK),
+			"werkzeuge": [Karte.FABRIK], "budget": func(): return p.kosten(Karte.FABRIK),
 			"fertig": func(): return p.werkzeug == Karte.FABRIK or not p.fabriken.is_empty()},
-		{"text": "Setz sie auf das markierte Feld, nah am Weg der Gegner. Fabriken versperren auch den Weg – die Gegner gehen außen herum.",
+		{"id": "fabrik_setzen", "text": "Setz sie auf das markierte Feld, nah am Weg der Gegner. Fabriken versperren auch den Weg – die Gegner gehen außen herum.",
 			"hinweis": "Linksklick aufs Feld · Rechtsklick bricht ab",
 			"ziel": func(): return _feld(_fabrikplatz()) if p.werkzeug == Karte.FABRIK else _knopf_von(Karte.FABRIK),
-			"fertig": func(): return not p.fabriken.is_empty()},
-		{"text": "Eine Fabrik hält 2 Truppen und ersetzt Gefallene laufend. Klick sie an – dort wählst du, was sie baut.",
+			"werkzeuge": [Karte.FABRIK], "budget": func(): return p.kosten(Karte.FABRIK),
+			"haelt": func(): return _anzahl_fabriken() >= 1, "rueck": "Ohne Fabrik geht es nicht – bau wieder eine.",
+			"fertig": func(): return _anzahl_fabriken() >= 1},
+		{"id": "fabrik_menue", "text": "Eine Fabrik hält 2 Truppen und ersetzt Gefallene laufend. Klick sie an – dort wählst du, was sie baut.",
 			"hinweis": "Linksklick auf deine Fabrik",
 			"ziel": func(): return _feld(_erste_fabrik()) if _erste_fabrik() != Karte.KEINE else Rect2(),
 			"fertig": func(): return _menue_offen()},
-		{"text": "Drei Truppen: Technogunner (robust, schnell), Scharfschütze (große Reichweite, langsamer Schuss) und Plasmawerfer (Flächenschaden auf kurze Distanz). Solange die Fabrik nicht ausgebaut ist, kannst du jederzeit umstellen.",
+		{"id": "truppen", "text": "Drei Truppen: Technogunner (robust, schnell), Scharfschütze (große Reichweite, langsamer Schuss) und Plasmawerfer (Flächenschaden auf kurze Distanz). Solange die Fabrik nicht ausgebaut ist, kannst du jederzeit umstellen.",
 			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else Rect2()},
-		{"text": "Eine Fabrik allein hält nicht lange. Bau eine zweite – jede weitere kostet 25 % mehr als die vorige, der Preis steht unten am Knopf.",
+		{"id": "fabrik2", "text": "Eine Fabrik allein hält nicht lange. Bau eine zweite – jede weitere kostet 25 % mehr als die vorige, der Preis steht unten am Knopf.",
 			"hinweis": "Taste 1 · Fabrik, dann aufs markierte Feld",
 			"ziel": func(): return _feld(_fabrikplatz()) if p.werkzeug == Karte.FABRIK else _knopf_von(Karte.FABRIK),
-			"kann": func(): return p.budget >= p.kosten(Karte.FABRIK),
+			"werkzeuge": [Karte.FABRIK], "budget": func(): return p.kosten(Karte.FABRIK),
+			"haelt": func(): return _anzahl_fabriken() >= 2, "rueck": "Du brauchst wieder zwei Fabriken.",
 			"fertig": func(): return _anzahl_fabriken() >= 2},
-		{"text": "Mischen lohnt sich: Klick die neue Fabrik an und stell sie auf Scharfschütze. Er trifft von weit hinten – am besten später aus einer Stellung.",
+		{"id": "scharf", "text": "Mischen lohnt sich: Klick die neue Fabrik an und stell sie auf Scharfschütze. Er trifft von weit hinten – am besten später aus einer Stellung.",
 			"hinweis": "Linksklick auf die neue Fabrik · „Scharfschütze“",
 			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else (_feld(_zweite_fabrik()) if _zweite_fabrik() != Karte.KEINE else Rect2()),
-			"kann": func(): return _zweite_fabrik() != Karte.KEINE,
-			"fertig": func():
-				for z: Vector2i in p.fabriken:
-					if str(p.fabriken[z].get("typ", "")) != "technogunner" and str(p.fabriken[z].get("typ", "")) != "pilot":
-						return true
-				return false},
+			"haelt": func(): return _gemischt(), "rueck": "Keine Fabrik baut mehr Scharfschützen.",
+			"fertig": func(): return _gemischt()},
 		# --- Erste Welle
-		{"thema": "Die erste Welle", "text": "Bereit. Starte jetzt die erste Welle. Deine Truppen laufen den Gegnern selbst entgegen und kämpfen, sobald sie sie sehen.",
+		{"id": "welle1", "thema": "Die erste Welle", "text": "Bereit. Starte jetzt die erste Welle. Deine Truppen laufen den Gegnern selbst entgegen und kämpfen, sobald sie sie sehen.",
 			"hinweis": "Leertaste · oder Klick auf „Start“",
 			"ziel": func(): return (p._btn_start as Control).get_global_rect(),
 			"fertig": func(): return p.phase == KAMPF, "welle": true},
-		{"text": "Mit [F] schaltest du das Tempo auf ×2 oder ×3. Oben siehst du Budget und Leben. Nach jeder Welle gibt es Geld – dazu Zinsen: je 100 Budget, das du übrig lässt, 10 mehr (bis 50). Sparen lohnt sich also.",
+		{"id": "tempo", "text": "Mit [F] schaltest du das Tempo auf ×2 oder ×3. Oben siehst du Budget und Leben. Nach jeder Welle gibt es Geld – dazu Zinsen: je 100 Budget, das du übrig lässt, 10 mehr (bis 50). Sparen lohnt sich also.",
 			"hinweis": "Taste F · Tempo",
 			"fertig": func(): return p.phase == BAU and p.welle >= 2},
 		# --- Erdwälle und Stellungen
-		{"thema": "Erdwälle und Stellungen", "text": "Ab Runde 2 formst du das Gelände: Erdwälle lenken den Weg. Je länger der Weg, desto länger stehen die Gegner unter Beschuss. Die ersten 8 Erdwälle sind gratis – setz 3 auf oder neben die Linie.",
-			"hinweis": func(): return "Taste 2 · Erdwall – Erdwälle: %d / 3" % mini(_anzahl_waelle(), 3),
+		{"id": "waelle", "thema": "Erdwälle und Stellungen", "text": "Ab Runde 2 formst du das Gelände: Erdwälle lenken den Weg. Je länger der Weg, desto länger stehen die Gegner unter Beschuss. Die ersten 8 Erdwälle sind gratis – setz 3 auf oder neben die Linie.",
+			"hinweis": func(): return "Taste 2 · Erdwall – Erdwälle: %d / 3" % clampi(_anzahl_waelle() - _w0, 0, 3),
 			"ziel": func(): return _feld(_wegfeld(), 1.5) if p.werkzeug == Karte.WALL else _knopf_von(Karte.WALL),
-			"start": func(): _merk["w0"] = _anzahl_waelle(),
-			"fertig": func(): return _anzahl_waelle() >= int(_merk.get("w0", 0)) + 3},
-		{"text": "Sieh auf die Linie: Der Weg hat sich geändert. Sperrst du ihn ganz zu, reißen die Gegner den Wall ein, der ihnen im Weg steht – also lieber lange Umwege bauen als Mauern.",
+			"start": func():
+				if _w0 < 0:
+					_w0 = _anzahl_waelle(),   # nur beim ersten Mal: ein Rücksprung zählt vom selben Stand
+			"werkzeuge": [Karte.WALL],
+			"budget": func(): return maxi(0, _w0 + 3 - _anzahl_waelle() - p.freie_waelle) * Werte.kosten_wall(),
+			"haelt": func(): return _anzahl_waelle() >= _w0 + 3, "rueck": "Es fehlen Erdwälle.",
+			"fertig": func(): return _anzahl_waelle() >= _w0 + 3},
+		{"id": "linie", "text": "Sieh auf die Linie: Der Weg hat sich geändert. Sperrst du ihn ganz zu, reißen die Gegner den Wall ein, der ihnen im Weg steht – also lieber lange Umwege bauen als Mauern.",
 			},
-		{"text": "Auf einem Erdwall baust du eine Stellung. Eine Truppe steigt hinauf, sieht über Wälle hinweg und hat mehr Reichweite. Bau eine Stellung auf einen deiner Erdwälle.",
+		{"id": "stellung", "text": "Auf einem Erdwall baust du eine Stellung. Eine Truppe steigt hinauf, sieht über Wälle hinweg und hat mehr Reichweite. Bau eine Stellung auf einen deiner Erdwälle.",
 			"hinweis": "Taste 3 · Stellung, dann Klick auf einen Erdwall",
 			"ziel": func(): return (_feld(_blanker_wall()) if _blanker_wall() != Karte.KEINE else Rect2()) if p.werkzeug == Karte.STELLUNG else _knopf_von(Karte.STELLUNG),
+			"werkzeuge": [Karte.STELLUNG], "budget": func(): return p.kosten(Karte.STELLUNG),
+			"haelt": func(): return _hat_ausbau(Karte.STELLUNG), "rueck": "Die Stellung ist weg.",
 			"fertig": func(): return _hat_ausbau(Karte.STELLUNG)},
-		{"text": "Stellungen werden automatisch besetzt und aufgefüllt, wenn dort jemand fällt – aber nur, wenn der Weg dorthin frei ist. Du kannst sie sogar während einer Welle bauen. Starte Welle 2.",
+		{"id": "welle2", "text": "Stellungen werden automatisch besetzt und aufgefüllt, wenn dort jemand fällt – aber nur, wenn der Weg dorthin frei ist. Du kannst sie sogar während einer Welle bauen. Starte Welle 2.",
 			"hinweis": "Leertaste · Start",
 			"ziel": func(): return (p._btn_start as Control).get_global_rect(),
 			"fertig": func(): return p.phase == KAMPF, "welle": true},
-		{"text": "Klick während der Welle auf eine Truppe: Dann siehst du ihre Reichweite – und dunkel, wohin sie nicht schießen kann, weil Wälle die Sicht versperren.",
+		{"id": "sicht", "text": "Klick während der Welle auf eine Truppe: Dann siehst du ihre Reichweite – und dunkel, wohin sie nicht schießen kann, weil Wälle die Sicht versperren.",
 			"hinweis": "Linksklick auf eine Truppe",
 			"fertig": func(): return p.phase == BAU and p.welle >= 3},
 		# --- Formtürme
 		# 18.11. (Paul): Die Turmformen zeigt das Turm-Werkzeug [4], nicht die Formationen [H].
-		{"thema": "Türme", "text": "Türme entstehen aus der Form deiner Erdwälle. Welche Form welchen Turm trägt, siehst du, sobald du das Turm-Werkzeug wählst. Drück 4.",
+		{"id": "turm_waehlen", "thema": "Türme", "text": "Türme entstehen aus der Form deiner Erdwälle. Welche Form welchen Turm trägt, siehst du, sobald du das Turm-Werkzeug wählst. Drück 4.",
 			"hinweis": "Taste 4 · Turm",
 			"ziel": func(): return _knopf_von(Karte.TURM),
+			"werkzeuge": [Karte.TURM],
 			"fertig": func(): return p.werkzeug == Karte.TURM},
-		{"text": "T-Stück = Geschütz, Kreuzung = Funkturm, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilturm. Klickst du eine Form an, hängt sie als Vorlage an der Maus. Alle Erdwälle der Form sind Stützen: Fällt einer, schweigt der Turm. Leg das Werkzeug mit Rechtsklick wieder ab.",
+		{"id": "formen", "werkzeuge": [Karte.TURM], "text": "T-Stück = Geschütz, Kreuzung = Funkturm, lange Ecke = Frost, Klammer = Lanze, Treppe = Heilturm. Klickst du eine Form an, hängt sie als Vorlage an der Maus. Alle Erdwälle der Form sind Stützen: Fällt einer, schweigt der Turm. Leg das Werkzeug mit Rechtsklick wieder ab.",
 			"hinweis": "Rechtsklick · Werkzeug ablegen",
 			"ziel": func(): return _formen_rect(),
 			"fertig": func(): return p.werkzeug == Karte.FREI},
-		{"text": "Ganze Aufstellungen für die Karte – lange Schläuche, Kämme, Zitadellen – zeigt dir die Formationen-Karte oben rechts. Öffne sie.",
+		{"id": "h_auf", "text": "Ganze Aufstellungen für die Karte – lange Schläuche, Kämme, Zitadellen – zeigt dir die Formationen-Karte oben rechts. Öffne sie.",
 			"hinweis": "Taste H · Formationen",
 			"ziel": func(): return _oben(1),
 			"fertig": func(): return p._nachschlag.visible},
-		{"text": "Links wählst du eine Formation, rechts siehst du sie auf deiner Karte – mit Stärken und Schwächen. Schließ sie wieder mit H.",
+		{"id": "h_zu", "text": "Links wählst du eine Formation, rechts siehst du sie auf deiner Karte – mit Stärken und Schwächen. Schließ sie wieder mit H.",
 			"hinweis": "Taste H · schließen",
 			"fertig": func(): return not p._nachschlag.visible},
-		{"text": "Bau einen Turm: Setz Erdwälle zu einem T – ein Wall mit drei Nachbarn – und dann den Turm auf den mittleren. Komische Wallformen sind hier ausdrücklich erwünscht.",
+		{"id": "turm", "text": "Bau einen Turm: Setz Erdwälle zu einem T – ein Wall mit drei Nachbarn – und dann den Turm auf den mittleren. Komische Wallformen sind hier ausdrücklich erwünscht.",
 			"hinweis": "Taste 2 · Erdwälle, dann Taste 4 · Turm auf den Wall in der Mitte",
 			"ziel": func(): return _feld(_wegfeld(), 1.5),
-			"kann": func(): return p.budget >= Werte.KOSTEN_TURM,
+			"werkzeuge": [Karte.WALL, Karte.TURM],
+			"budget": func(): return Werte.KOSTEN_TURM + maxi(0, 4 - p.freie_waelle) * Werte.kosten_wall(),   # T aus bis zu 4 neuen Erdwällen
+			"haelt": func(): return _hat_ausbau(Karte.TURM), "rueck": "Der Turm ist weg.",
 			"fertig": func(): return _hat_ausbau(Karte.TURM)},
-		{"text": "Klick deinen Turm an. Dort siehst du seine Werte über die ganze Partie und baust ihn aus: Stufe 2 fest, auf Stufe 3 wählst du eine von zwei Fähigkeiten.",
+		{"id": "turm_menue", "text": "Klick deinen Turm an. Dort siehst du seine Werte über die ganze Partie und baust ihn aus: Stufe 2 fest, auf Stufe 3 wählst du eine von zwei Fähigkeiten.",
 			"hinweis": "Linksklick auf den Turm",
 			"ziel": func(): return _feld(_erster_ausbau(Karte.TURM)) if _hat_ausbau(Karte.TURM) else Rect2(),
 			"fertig": func(): return _menue_offen(true)},
 		# --- Upgrades
-		{"thema": "Upgrades", "text": "Auch Fabriken wachsen: Stufe 1 legt sie auf eine Truppe fest und gibt eine dritte. Stufe 2 bringt ein Wertepaket, Stufe 3 eine Fähigkeit zur Wahl, die verändert, wie die Truppe kämpft. Bau deine Fabrik auf Stufe 1 aus.",
+		{"id": "stufe1", "thema": "Upgrades", "text": "Auch Fabriken wachsen: Stufe 1 legt sie auf eine Truppe fest und gibt eine dritte. Stufe 2 bringt ein Wertepaket, Stufe 3 eine Fähigkeit zur Wahl, die verändert, wie die Truppe kämpft. Bau deine Fabrik auf Stufe 1 aus.",
 			"hinweis": "Fabrik anklicken · Knopf „Stufe 1“",
 			"ziel": func(): return (p._fabrikmenue as Control).get_global_rect() if _menue_offen() else (_feld(_erste_fabrik()) if _erste_fabrik() != Karte.KEINE else Rect2()),
-			"kann": func(): return p.budget >= Werte.KOSTEN_STUFE[0],
-			"fertig": func():
-				for z: Vector2i in p.fabriken:
-					if int(p.fabriken[z].get("stufe", 0)) >= 1:
-						return true
-				return false},
-		{"text": "Im Fabrikmenü stellst du auch die Zielwahl ein: Erste, Letzte oder Stärkste. Und zieh mit der Maus von der Fabrik auf eine Stellung, um sie fest für diese Fabrik zu reservieren."},
+			"aufwerten": true, "budget": func(): return Werte.kosten_stufen()[0],
+			"haelt": func(): return _ausgebaut(), "rueck": "Die ausgebaute Fabrik ist weg.",
+			"fertig": func(): return _ausgebaut()},
+		{"id": "zielwahl", "text": "Im Fabrikmenü stellst du auch die Zielwahl ein: Erste, Letzte oder Stärkste. Und zieh mit der Maus von der Fabrik auf eine Stellung, um sie fest für diese Fabrik zu reservieren."},
 		# --- Weitere Bauwerke
-		{"thema": "Weitere Bauwerke", "text": "Weitere Bauwerke: Das Tor [6] lässt nur deine Truppen durch die Mauer. Die Panzerung [7] schützt einen Erdwall vor der ersten Sprengung – die Myriaden haben Sprenger.",
+		{"id": "tor", "thema": "Weitere Bauwerke", "text": "Weitere Bauwerke: Das Tor [6] lässt nur deine Truppen durch die Mauer. Die Panzerung [7] schützt einen Erdwall vor der ersten Sprengung – die Myriaden haben Sprenger.",
 			"ziel": func(): return _knopf_von(Karte.TOR)},
-		{"text": "Die Batterie [5] feuert weit und über Wälle auf Gruppen – aber nur, wenn ihre drei Piloten an Bord sind. Die kommen aus der angebauten Pilotenfabrik. Ihr Menü hat eigene Stufen, bis hin zu einem Energieschild auf dem Weg.",
+		{"id": "batterie", "text": "Die Batterie [5] feuert weit und über Wälle auf Gruppen – aber nur, wenn ihre drei Piloten an Bord sind. Die kommen aus der angebauten Pilotenfabrik. Ihr Menü hat eigene Stufen, bis hin zu einem Energieschild auf dem Weg.",
 			"ziel": func(): return _knopf_von(Karte.BATTERIE)},
-		{"text": "Und dann ist da Kommandant Brakk [8]: einmal pro Partie, du steuerst ihn mit W A S D. Q sammelt Truppen und schlägt los, E klettert auf einen Wall, R stellt die Klonmaschine auf.",
+		{"id": "brakk", "text": "Und dann ist da Kommandant Brakk [8]: einmal pro Partie, du steuerst ihn mit W A S D. Q sammelt Truppen und schlägt los, E klettert auf einen Wall, R stellt die Klonmaschine auf.",
 			"ziel": func(): return _knopf_von(Karte.KOMMANDANT)},
 		# --- Checkpoints und Gegner
-		{"thema": "Checkpoints und Gegner", "text": "Ab Runde 5 nehmen die Gegner die Checkpoints ein, wenn sie dort stehen bleiben. Ein verlorener Checkpoint ist gefährlich: Die nächste Welle startet dort! Eine deiner Truppen geht ihn zurückholen, sobald es ruhig ist.",
+		{"id": "checkpoints", "thema": "Checkpoints und Gegner", "text": "Ab Runde 5 nehmen die Gegner die Checkpoints ein, wenn sie dort stehen bleiben. Ein verlorener Checkpoint ist gefährlich: Die nächste Welle startet dort! Eine deiner Truppen geht ihn zurückholen, sobald es ruhig ist.",
 			"ziel": func(): return _feld(p.karte.checkpoints[1], 0.6)},
 		# 22.11. (Paul): Die Übersicht hält das Spiel an, solange sie offen ist (19.11.) – dann läuft auch die Abfrage hier
 		# nicht und sah die offene Übersicht nie: Der Schritt hing. Jetzt meldet das Signal visibility_changed (kommt auch
 		# in der Pause) das Öffnen und Schließen; erledigt ist der Schritt nach einmal auf und wieder zu.
-		{"text": "Oben steht immer, was als Nächstes kommt. Bevor eine neue Gegnerart auftaucht, kündige ich sie an. Alles über Gegner, Truppen und Bauten steht in der Übersicht: Öffne sie, schau dich um und schließ sie wieder.",
+		{"id": "uebersicht", "text": "Oben steht immer, was als Nächstes kommt. Bevor eine neue Gegnerart auftaucht, kündige ich sie an. Alles über Gegner, Truppen und Bauten steht in der Übersicht: Öffne sie, schau dich um und schließ sie wieder.",
 			"hinweis": func(): return "Übersicht schließen: Esc, I oder Rechtsklick" if bool(_merk.get("lexikon_auf", false)) else "Taste I · Übersicht öffnen",
 			"ziel": func(): return _oben(2),
 			"start": func(): _lexikon_beobachten(),
 			"fertig": func(): return bool(_merk.get("lexikon_auf", false)) and bool(_merk.get("lexikon_zu", false)) and not p._lexikon.visible},
-		{"text": "Drück [Tab] oder den Knopf oben rechts: Die Schadensliste zeigt, welche Fabrik, welcher Turm und welche Batterie wie viel geleistet hat. Nochmal [Tab] schließt sie. Ein Klick auf einen Turm oder eine Batterie zeigt ihre Werte über die ganze Partie.",
+		{"id": "schadensliste", "text": "Drück [Tab] oder den Knopf oben rechts: Die Schadensliste zeigt, welche Fabrik, welcher Turm und welche Batterie wie viel geleistet hat. Nochmal [Tab] schließt sie. Ein Klick auf einen Turm oder eine Batterie zeigt ihre Werte über die ganze Partie.",
 			"ziel": func(): return _oben(0)},
 		# --- Abschluss
-		{"thema": "Abschluss", "text": "Das war's. Abreißen geht mit Rechtsklick – was du in derselben Bauphase gebaut hast, gibt es voll zurück. Den Rest lernst du im Gefecht. Viel Erfolg, Kommandant. Sonde 7 Ende."},
+		{"id": "abschluss", "thema": "Abschluss", "text": "Das war's. Abreißen geht mit Rechtsklick – was du in derselben Bauphase gebaut hast, gibt es voll zurück. Den Rest lernst du im Gefecht. Viel Erfolg, Kommandant. Sonde 7 Ende."},
 	]

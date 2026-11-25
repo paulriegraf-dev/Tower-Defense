@@ -104,6 +104,7 @@ func _init() -> void:
 	_eingabe.context_menu_enabled = false
 	add_child(_eingabe)
 	Online.lade_listen()   # Phantom-Liste und Rangliste schon vorab holen
+	Online.erneut()   # 25.11.: nicht angekommene Läufe noch einmal melden
 	if Profil.phantom_frei():
 		Online.lade_bericht(str(Profil.einstellung("phantom_bericht_seit", "")))   # 23.11.: Phantom-Bericht (was seit dem letzten Besuch geschah)
 	if not _titel:
@@ -771,6 +772,14 @@ func _phantom(art: String) -> void:
 	if _laedt:
 		return
 	var wie := str(Profil.einstellung("phantom_wahl", "zufall"))
+	# 25.11.: Lädt die Liste noch, kurz warten – sonst käme ein eingebautes Phantom, obwohl der Pool gleich da ist
+	if Online.zustand == "laedt":
+		_laedt = true
+		_meldung = "Phantom wird geladen …"
+		while Online.zustand == "laedt":
+			await _welt.get_tree().process_frame
+		_laedt = false
+		_meldung = ""
 	# 18.11.: zuerst online (der aktuelle Pool aller Spieler), sonst die eingebauten Phantome
 	if Online.bereit() and not (Online.listen[art] as Array).is_empty():
 		_laedt = true
@@ -830,7 +839,8 @@ func _phantom_erklaeren() -> void:
 	_funk = Funkfenster.zeige(self, [
 		{"text": "Ein Phantom ist die Aufzeichnung eines echten Spielers: Dein Bau bleibt zurück, andere greifen ihn an – und du greifst ihre an."},
 		{"text": "Angreifen: Du planst Wellen gegen einen fremden Bau. Verteidigen: Du hältst gegen einen fremden Angriff."},
-		{"text": "Jeder Lauf zählt für deine Elo: gegen Stärkere zu gewinnen bringt mehr. Ab 5 Läufen stehst du in der Rangliste."},
+		{"text": tr("Dein Angriff beginnt in Runde %d – die Verteidigung steht dann schon.") % Phantom.ANGRIFF_AB_RUNDE},
+		{"text": tr("Jeder Lauf zählt für deine Elo: gegen Stärkere zu gewinnen bringt mehr. Die ersten 5 Läufe sind deine Einstufung – so lange ist dein Rang vorläufig.")},
 	])
 	_funk.unten = 716.0
 	_funk.layer = 101   # das Startmenü selbst liegt auf Ebene 100
@@ -1064,12 +1074,33 @@ func _male_profil_tafel(ci: Control) -> void:
 	_abschnitt(ci, x, rechts, y, "PHANTOM-MODUS", KUPFER_HELL, [
 		["Angriffe", ("%d · %d geknackt" % [za["spiele"], za["siege"]]) if za["da"] else "%d · %d geknackt" % [Profil.stat("angriffe"), Profil.stat("geknackt")]],
 		["Verteidigungen", ("%d · %d gehalten" % [zv["spiele"], zv["siege"]]) if zv["da"] else "–"],
-		["Angriffs-Elo", ("%d (beste %d)" % [za["elo"], za["elo_max"]]) if za["da"] else "–"],
-		["Verteidigungs-Elo", ("%d (beste %d)" % [zv["elo"], zv["elo_max"]]) if zv["da"] else "–"],
+		["Angriffs-Elo", _elo_zeile(za)],
+		["Verteidigungs-Elo", _elo_zeile(zv)],
 		["Beste Angriffswertung", str(ba) if ba > 0 else "–"],
 		["Eigene Phantome", str(Profil.stat("phantome"))]])
 	Stil.schreibe(ci, Vector2(x, TAFEL.end.y - 10.0), "gespeichert in diesem Browser", Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.6))
 	_male_erfolge(ci)
+
+
+## 25.11.: Portrait-Auswahl rechts neben den Einträgen der Profilseite – ein Klick blättert weiter.
+const PORTRAIT_FELD := Rect2(306, 126, 48, 54)
+
+
+func _male_portrait_wahl(ci: Control) -> void:
+	var r := PORTRAIT_FELD
+	var drueber := r.has_point(_maus)
+	Stil.platte(ci, r, 3.0, Color(0.05, 0.06, 0.09, 0.96), LICHT if drueber else Stil.RAHMEN)
+	ci.draw_texture_rect(Profil.portrait_bild(Profil.portrait()), Rect2(r.position + Vector2(8.0, 5.0), Vector2(32.0, 32.0)), false)
+	Stil.schreibe_mittig(ci, Vector2(r.get_center().x, r.position.y + 45.0), tr("Bild %d/%d") % [Profil.portrait() + 1, Werte.PORTRAITS.size()], Stil.KLEIN, Color.WHITE if drueber else Stil.TEXT_BLASS)
+
+
+## 25.11.: Elo auf der Profilseite – vorläufige mit „?“ und Zähler statt der besten.
+func _elo_zeile(z: Dictionary) -> String:
+	if not z["da"]:
+		return "–"
+	if Online.vorlaeufig(int(z["spiele"])):
+		return "%d? · %s" % [z["elo"], Online.vorlaeufig_text(int(z["spiele"]))]
+	return "%d (beste %d)" % [z["elo"], z["elo_max"]]
 
 
 func _balken(ci: Control, p: Vector2, breite: float, anteil: float, farbe: Color, name: String, wert: String) -> void:
@@ -1257,7 +1288,11 @@ func _male_rangliste(ci: Control) -> void:
 		Stil.schreibe(ci, Vector2(x + 8.0, y + 7.0), "noch niemand – sei der Erste", Stil.KLEIN, Stil.TEXT_BLASS)
 	for i in mini(alle.size(), RANG_ZAHL):
 		_rang_zeile(ci, y + i * RANG_ZEILE, sp, i, alle[i], i == mein_platz, farbe_art)
-		_rang_klickbar(ci, Rect2(x, y + i * RANG_ZEILE, rechts - x, RANG_ZEILE - 2.0), str(alle[i][3]))
+		var zr := Rect2(x, y + i * RANG_ZEILE, rechts - x, RANG_ZEILE - 2.0)
+		_rang_klickbar(ci, zr, str(alle[i][3]))
+		if _vorlaeufig_n(alle[i]) >= 0 and zr.has_point(_maus) and _karte_profil == "":
+			kopf_hinweis = tr("vorläufig – %d von %d Läufen") % [_vorlaeufig_n(alle[i]), Online.LISTE_AB]   # 25.11.
+			kopf_rect = zr
 	# eigener Platz, fest unten
 	var unten := TAFEL.end.y - 12.0 - (RANG_ZEILE - 2.0)
 	ci.draw_rect(Rect2(x, unten - 4.0, rechts - x, 1.0), Color(farbe_art, 0.3))
@@ -1290,7 +1325,7 @@ func _rang_klickbar(ci: Control, r: Rect2, profil: String) -> void:
 const _KOPF_HINWEISE := {
 	"#": "Platz nach Elo",
 	"NAME": "Wer dahintersteckt (bei Phantomen mit Anführer)",
-	"LÄUFE": "Gespielte Phantom-Läufe – ab 5 stehst du in der Liste",
+	"LÄUFE": "Gespielte Phantom-Läufe – bis 5 ist der Platz vorläufig",
 	"BESTER": "Beste Wertung dieses Angriffs",
 	"GEHALTEN": "So oft hat die Verteidigung gehalten",
 	"DUELLE": "Duelle gegen echte Spieler – ab 5 in der Liste",
@@ -1300,7 +1335,7 @@ const _KOPF_HINWEISE := {
 
 ## Spalten: Name -> Vector2(x, breite).
 func _rang_spalten(x: float, rechts: float) -> Dictionary:
-	var elo_b := 30.0
+	var elo_b := 34.0 if _rang_ansicht == "spieler" else 30.0   # 25.11.: Platz für das „?“ vorläufiger Elo
 	var wert_b := 42.0
 	var rang_b := 16.0
 	var elo_x := rechts - elo_b
@@ -1321,31 +1356,36 @@ func _rang_spalten(x: float, rechts: float) -> Dictionary:
 func _rang_zeile(ci: Control, y: float, sp: Dictionary, i: int, z: Array, eigen: bool, farbe: Color) -> void:
 	var h := RANG_ZEILE - 2.0
 	var m := y + h * 0.5
-	var medaille: Color = [Stil.GOLD, SILBER, Stil.KUPFER][i] if i < 3 else Stil.TEXT_BLASS
+	var vorl := _vorlaeufig_n(z)   # 25.11.: vorläufige Zeilen gedämpft, ohne Medaille
+	var medaille: Color = [Stil.GOLD, SILBER, Stil.KUPFER][i] if i < 3 and vorl < 0 else Stil.TEXT_BLASS
 	# Platz: große Ziffer ohne Kasten, die ersten drei in Medaillenfarbe
 	var rs: Vector2 = sp["rang"]
 	Stil.schreibe_mittig(ci, Vector2(rs.x + rs.y * 0.5, m), "%d" % (i + 1), Stil.GROSS if i < 9 else Stil.NORMAL, medaille)
 	# Namensfeld
 	var ns: Vector2 = sp["name"]
 	var nr := Rect2(ns.x, y, ns.y, h)
-	Stil.platte(ci, nr, 2.0, Color(LICHT, 0.12) if eigen else Color(0.03, 0.035, 0.05), LICHT if eigen else (Color(Stil.GOLD, 0.55) if i == 0 else Stil.RAHMEN))
+	Stil.platte(ci, nr, 2.0, Color(LICHT, 0.12) if eigen else Color(0.03, 0.035, 0.05), LICHT if eigen else (Color(Stil.GOLD, 0.55) if i == 0 and vorl < 0 else Stil.RAHMEN))
 	var name := str(z[0])
-	var name_farbe: Color = Color.WHITE if eigen else LICHT
+	var name_farbe: Color = Color.WHITE if eigen else (Stil.TEXT_BLASS if vorl >= 0 else LICHT)
 	var nw := Stil.schreibe(ci, Vector2(nr.position.x + 5.0, m), name, Stil.NORMAL, name_farbe)
 	var zusatz := ""
 	if eigen:
 		zusatz = "du"
 	if str(z[4]) != "":
 		zusatz = (zusatz + " · " if zusatz != "" else "") + str(z[4])
-	if zusatz != "":
-		var platz := nr.end.x - (nr.position.x + 5.0 + nw + 4.0) - 4.0
-		if Stil.breite(zusatz, Stil.KLEIN) <= platz:
-			Stil.schreibe(ci, Vector2(nr.position.x + 5.0 + nw + 4.0, m), zusatz, Stil.KLEIN, LICHT if eigen else Stil.TEXT_BLASS)
+	var versuche: Array = [zusatz]
+	if eigen and vorl >= 0:   # 25.11.: die eigene Zeile nennt den Stand – so ausführlich, wie Platz ist
+		versuche = [zusatz + " · " + Online.vorlaeufig_text(vorl), Online.vorlaeufig_text(vorl), "%d/%d" % [vorl, Online.LISTE_AB]]
+	var platz := nr.end.x - (nr.position.x + 5.0 + nw + 4.0) - 4.0
+	for t: String in versuche:
+		if t != "" and Stil.breite(t, Stil.KLEIN) <= platz:
+			Stil.schreibe(ci, Vector2(nr.position.x + 5.0 + nw + 4.0, m), t, Stil.KLEIN, LICHT if eigen else Stil.TEXT_BLASS)
+			break
 	# Wertfeld (Gold) – führende Nullen gedimmt wie auf einer Anzeigetafel
 	var ws: Vector2 = sp["wert"]
 	var wr := Rect2(ws.x, y, ws.y, h)
 	Stil.platte(ci, wr, 2.0, Color(0.03, 0.035, 0.05), Stil.RAHMEN)
-	_rang_ziffern(ci, wr, str(z[1]), Stil.GOLD, 5)
+	_rang_ziffern(ci, wr, str(z[1]), Color(Stil.GOLD, 0.5) if vorl >= 0 else Stil.GOLD, 5)
 	# 23.11.: Duelle (Silber)
 	if sp.has("duelle") and z.size() > 5:
 		var ds: Vector2 = sp["duelle"]
@@ -1356,7 +1396,12 @@ func _rang_zeile(ci: Control, y: float, sp: Dictionary, i: int, z: Array, eigen:
 	var es: Vector2 = sp["elo"]
 	var er := Rect2(es.x, y, es.y, h)
 	Stil.platte(ci, er, 2.0, Color(0.03, 0.035, 0.05), Stil.RAHMEN)
-	_rang_ziffern(ci, er, str(z[2]), KUPFER_HELL, 4)
+	_rang_ziffern(ci, er, str(z[2]), Color(KUPFER_HELL, 0.55) if vorl >= 0 else KUPFER_HELL, 4)
+
+
+## 25.11.: Läufe einer vorläufigen Spielerzeile (z[5]), -1 = fester Rang oder Phantom-Zeile.
+func _vorlaeufig_n(z: Array) -> int:
+	return int(z[5]) if _rang_ansicht == "spieler" and z.size() > 5 else -1
 
 
 ## Ziffern rechtsbündig ins Feld; reine Zahlen bekommen gedimmte führende Nullen bis `stellen`.
@@ -1377,11 +1422,13 @@ func _rang_ziffern(ci: Control, r: Rect2, text: String, farbe: Color, stellen: i
 func _ranglisten_zeilen(art: String) -> Array:
 	var aus: Array = []
 	if Online.bereit() and _rang_ansicht == "spieler":
-		# 23.11.: Spieler-Elo – ab Online.LISTE_AB Läufen
+		# 25.11. (Paul): Spieler-Elo ab dem ersten Lauf; bis Online.LISTE_AB Läufe vorläufig („?“, z[5] = Läufe)
 		for e: Dictionary in (Online.spieler_listen[art] as Array):
-			if int(e.get("spiele", 0)) < Online.LISTE_AB:
+			var n := int(e.get("spiele", 0))
+			if n < 1:
 				continue
-			aus.append([str(e.get("spieler", "?")).left(12), "%d" % int(e.get("spiele", 0)), "%d" % roundi(float(e.get("elo", 1000))), str(e.get("profil", "")), ""])
+			var vorl := Online.vorlaeufig(n)
+			aus.append([str(e.get("spieler", "?")).left(12), "%d" % n, "%d%s" % [roundi(float(e.get("elo", 1000))), "?" if vorl else ""], str(e.get("profil", "")), "", n if vorl else -1])
 		return aus
 	if Online.bereit():
 		for e: Dictionary in (Online.listen[art] as Array):
@@ -1414,10 +1461,8 @@ func _rang_du_text() -> String:
 		for e: Dictionary in ((Online.spieler_listen if spieler else Online.listen)[_rang_reiter] as Array):
 			if str(e.get("profil", "")) == mein:
 				beste = maxi(beste, int(e.get("spiele", 0)))
-		if beste >= 0 and beste < Online.LISTE_AB:
+		if not spieler and beste >= 0 and beste < Online.LISTE_AB:   # 25.11.: Spieler stehen sofort in der Liste
 			var rest := Online.LISTE_AB - beste
-			if spieler:
-				return "neu – noch %d %s bis zur Liste" % [rest, "Lauf" if rest == 1 else "Läufe"]
 			return "dein Phantom ist neu – noch %d %s bis zur Liste" % [rest, "Duell" if rest == 1 else "Duelle"]
 	if spieler:
 		return "noch kein Lauf als Angreifer" if _rang_reiter == "angriff" else "noch kein Lauf als Verteidiger"
@@ -1626,6 +1671,10 @@ func _maus_eingabe(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT and _rang_klick((event as InputEventMouseButton).position):
 			return   # 22.11.: Reiter der Rangliste
+		if event.button_index == MOUSE_BUTTON_LEFT and _seite == "profil" and not _erststart and PORTRAIT_FELD.has_point((event as InputEventMouseButton).position):
+			Profil.setze_portrait(Profil.portrait() + 1)   # 25.11.
+			Ton.spiele(_welt, "ui-klick", -6.0)
+			return
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_klick()
 		if event.button_index == MOUSE_BUTTON_LEFT and _seite != "profil" and _seite != "anfuehrer" and _profil_rect().has_point((event as InputEventMouseButton).position):
@@ -1728,6 +1777,7 @@ func _male(ci: Control) -> void:
 				_male_profil_brakk(ci)   # 19.11.
 			else:
 				_male_profil_tafel(ci)
+			_male_portrait_wahl(ci)   # 25.11.
 	_male_profil_schild(ci)
 	_male_tc_emblem(ci)
 	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
@@ -1765,9 +1815,10 @@ func _male_bilanz(ci: Control) -> void:
 		var x := r.position.x + 8.0 + i * (BREITE / 2.0)
 		Stil.schreibe(ci, Vector2(x, r.position.y + 19.0), "ANGRIFFS-ELO" if i == 0 else "VERTEIDIGUNGS-ELO", Stil.KLEIN, Stil.TEXT_BLASS)
 		if z["da"]:
-			var elo_text := str(z["elo"])
+			var vorl := Online.vorlaeufig(int(z["spiele"]))   # 25.11.
+			var elo_text := str(z["elo"]) + ("?" if vorl else "")
 			Stil.schreibe(ci, Vector2(x, r.position.y + 31.0), elo_text, Stil.GROSS, farbe)
-			Stil.schreibe(ci, Vector2(x + Stil.breite(elo_text, Stil.GROSS) + 6.0, r.position.y + 31.0), "beste %d" % z["elo_max"], Stil.KLEIN, Stil.TEXT_BLASS)
+			Stil.schreibe(ci, Vector2(x + Stil.breite(elo_text, Stil.GROSS) + 6.0, r.position.y + 31.0), Online.vorlaeufig_text(int(z["spiele"])) if vorl else "beste %d" % z["elo_max"], Stil.KLEIN, Stil.TEXT_BLASS)
 			Stil.schreibe(ci, Vector2(x, r.position.y + 43.0), "%d %s · %d %s" % [z["spiele"], "Angriffe" if i == 0 else "Verteidigungen", z["siege"], "geknackt" if i == 0 else "gehalten"], Stil.KLEIN, Stil.TEXT)
 		else:
 			Stil.schreibe(ci, Vector2(x, r.position.y + 31.0), "–", Stil.GROSS, Color(farbe, 0.6))
@@ -1811,11 +1862,15 @@ func _male_spielerkarte(ci: Control) -> void:
 		if not z["da"]:
 			Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y + 8.0), "noch kein Lauf", Stil.NORMAL, Stil.TEXT_BLASS)
 			continue
-		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y), str(z["elo"]), 28, Color.WHITE)
-		Stil.schreibe(ci, Vector2(sr.position.x + 10.0 + Stil.breite(str(z["elo"]), 28) + 6.0, y + 3.0), "SPIELER-ELO", Stil.KLEIN, Stil.TEXT_BLASS)
+		var vorl := Online.vorlaeufig(int(z["spiele"]))   # 25.11.
+		var elo_text := str(z["elo"]) + ("?" if vorl else "")
+		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y), elo_text, 28, Color.WHITE)
+		Stil.schreibe(ci, Vector2(sr.position.x + 10.0 + Stil.breite(elo_text, 28) + 6.0, y + 3.0), "SPIELER-ELO", Stil.KLEIN, Stil.TEXT_BLASS)
 		var platz := Online.spieler_platz(art, _karte_profil)
-		var liste_text := "Platz %d in der Rangliste" % platz if platz > 0 else "noch %d %s bis zur Liste" % [maxi(Online.LISTE_AB - int(z["spiele"]), 0), "Lauf" if Online.LISTE_AB - int(z["spiele"]) == 1 else "Läufe"]
-		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y + 22.0), liste_text, Stil.KLEIN, Stil.GOLD if platz > 0 else Stil.TEXT_BLASS)
+		var liste_text := "Platz %d in der Rangliste" % platz if platz > 0 else "noch kein Platz in der Liste"
+		if vorl:
+			liste_text = ("Platz %d · " % platz if platz > 0 else "") + Online.vorlaeufig_text(int(z["spiele"]))
+		Stil.schreibe(ci, Vector2(sr.position.x + 10.0, y + 22.0), liste_text, Stil.KLEIN, Stil.GOLD if platz > 0 and not vorl else Stil.TEXT_BLASS)
 		y += 42.0
 		var quote := roundi(100.0 * float(z["siege"]) / float(maxi(int(z["duelle"]), 1)))   # 24.11. (72): geknackte Verteidigungen je angetroffene
 		var zeilen: Array = [

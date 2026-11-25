@@ -354,7 +354,8 @@ func _bildschirme() -> void:
 	pruefe(not Nemesis.meistgesuchte().is_empty(), "Meistgesuchte: nach dem Laufende in der Datei (%d)" % Nemesis.meistgesuchte().size())
 
 
-## 22.11. (Teil 6): Wiedersehen beim ersten Treffer im Lauf; endgültig ausschalten mit [E] (nur Benannte), Ring als Beute.
+## 22.11. (Teil 6): Wiedersehen beim ersten Treffer im Lauf; endgültig ausschalten mit [E] (nur Benannte), Beute (25.11.:
+## Gold und Sprengladung statt Ring).
 func _ausschalten_und_wiedersehen() -> void:
 	var k: Kommandant = spiel.kommandant
 	# Wiedersehen: Benannter mit Bergung in der Bilanz → Zeile „hinten“
@@ -390,7 +391,7 @@ func _ausschalten_und_wiedersehen() -> void:
 		for r: String in k.fortschritt.ringe:
 			stufen2 += k.fortschritt.ring_stufe(r)
 	pruefe(not n.personen.has(p) and n.ausgeschaltet.has(p), "Ausschalten: Ziv ist endgültig weg (Liste, Chronik: „%s“)" % str(((p["chronik"] as Array).back() as Dictionary).get("text", "")))
-	pruefe(stufen2 > stufen or int(spiel.budget) > budget, "Ausschalten: Ring als Beute (Ringe %d → %d, Stufen %d → %d)" % [ringe, k.fortschritt.ringe.size() if k.fortschritt != null else 0, stufen, stufen2])
+	pruefe(stufen2 == stufen and int(spiel.budget) == budget + Werte.NEMESIS_BEUTE_GOLD, "Ausschalten: Beute %d Gold, kein Ring (Budget %d → %d, Ringe %d → %d, Stufen %d → %d)" % [Werte.NEMESIS_BEUTE_GOLD, budget, int(spiel.budget), ringe, k.fortschritt.ringe.size() if k.fortschritt != null else 0, stufen, stufen2])
 	# Namenlose kann man so nicht ausschalten
 	var q := n.neue_person("plasmawerfer")
 	var e2 := truppe("plasmawerfer", 4, 0.5)
@@ -399,7 +400,7 @@ func _ausschalten_und_wiedersehen() -> void:
 	e2.nimm_schaden(999999.0)
 	pruefe(e2.kampfunfaehig and not n.ausschalten_taste(true), "Ausschalten: Namenlose nicht (nur Bergung)")
 	var hoch := n.neue_person("scharfschuetze", 3, "Hoch", "Test")
-	pruefe(absf(n.halte_zeit(hoch) - Werte.NEMESIS_HALTEN_HOCH) < 0.01, "Ausschalten: ab Rang 3 %.1f s halten" % n.halte_zeit(hoch))
+	pruefe(absf(n.halte_zeit(hoch) - Werte.NEMESIS_HALTEN) < 0.01, "Ausschalten: auch ab Rang 3 nur %.1f s halten" % n.halte_zeit(hoch))
 	n.personen.erase(hoch)
 	pruefe(n.lauf_liste().any(func(z: Array) -> bool: return str(z[1]) == "ausgeschaltet"), "Siegbild-Liste: Ausgeschaltete stehen drin")
 

@@ -1,0 +1,2 @@
+# Interne Arbeitsregeln nicht in die öffentliche Projektkopie (git archive -> td-web/projekt)
+CLAUDE.md export-ignore

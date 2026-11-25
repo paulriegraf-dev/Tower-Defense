@@ -26,6 +26,9 @@ static var LETZTE_RUNDE: int = 20      # ab dieser Runde: Gegenangriff. Gegner k
 const STANDARD_RUNDEN: int = 20
 const ENDKAMPF_TRUPP_PAUSE: float = 2.0    # 18.11.: vorher 1,0 – weniger gebündelt; Sekunden zwischen zwei Trupps in der letzten Runde (sonst TRUPP_PAUSE)
 const ENDKAMPF_PAUSE: float = 6.0     # 15.11.: vorher 3 – Sekunden, bis in der letzten Runde die nächste Reihe Trupps beginnt
+## 25.11. (Paul, N7): jede Schleife des Gegenangriffs braucht länger – ENDKAMPF_PAUSE und ENDKAMPF_TRUPP_PAUSE wachsen je
+## Durchgang um diesen Anteil (Durchgang 1: ×1,0 · 2: ×1,25 · 3: ×1,5 · 4: ×1,75 …). Nicht im Brakk-Mode.
+const ENDKAMPF_PAUSE_ZUWACHS: float = 0.25
 const ENDKAMPF_LEBEN: float = 2.2      # 18.11.: vorher 2,6 (15.11.: 3,4) – Leben-Faktor der Gegner in der letzten Runde (sie kommen in Schleife)
 const LEBEN_JE_RUNDE: float = 0.20     # so viel zäher werden die Gegner je Runde (Runde 19: ×4,6); Patch 16.11.: vorher 0,23 (×5,1)
 const GEGNER_GRUND_LEBEN: float = 10.0  # ab GRUND_LEBEN_AB_RUNDE bekommt jeder Gegner so viel Leben dazu, vor dem Rundenfaktor (gegen zu starken Flächenschaden; hilft vor allem den kleinen). 15.11.: 20 ab R1 war zu hart
@@ -85,7 +88,9 @@ const ANDOCK_SEK: float = 3.0          # so lange braucht ein Belagerungsturm am
 const ANDOCK_NAH: int = 3            # Belagerungsturm dockt am liebsten dort an, wo eine Stellung/ein Turm höchstens so viele Wallschritte entfernt ist (außerhalb der Zone, am schnellsten erreichbar)
 const ENTERER_ABSTAND: float = 4.0     # Sekunden zwischen zwei Myr-Drohnen – sie kommen nach, solange der Turm steht
 const ENTERER_GLEICHZEITIG: int = 4    # mehr Myr-Drohnen eines Turms sind nie zugleich unterwegs
-const BELAGERUNG_SEK: float = 40.0     # so lange hält ein angedockter Belagerungsturm höchstens durch, dann zerfällt er
+const BELAGERUNG_SEK: float = 40.0     # so lange hält ein angedockter Belagerungsturm höchstens durch, dann rückt er vor (Brakk-Mode: zerfällt)
+## 25.11. (Paul, N6): beim Vorstoß bekommt er so viel seines Maximums dazu (höchstens bis 1 + Bonus mal sein Maximum)
+const BELAGERUNG_VORSTOSS_BONUS: float = 0.25
 const ENTERER_LEERLAUF_SEK: float = 3.0 # findet eine Myr-Drohne so lange kein Ziel auf dem Wall, springt sie ab
 const ENDKAMPF_ABSTAND: float = 1.5      # letzte Runde: erst wenn ein Gegner näher ist (Felder), bleiben vorrückende Truppen stehen
 const WURF_SPRENGER_AB_WELLE: int = 12 # ab hier wird ein Sprenger der Welle von der Wurf-Schleuder geworfen
@@ -162,7 +167,7 @@ static var sim_mal: int = 1
 
 static func sim_schritt() -> float:
 	return SIM_SCHRITT * float(sim_mal)
-const VERSION: int = 72          # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 73         # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -206,6 +211,13 @@ const BONUS_EXTRA := {3: 2}       # 18.11.: Feinschliff je Runde – nach Runde 
 const LEBEN_WALL: float = 120.0
 const LEBEN_FABRIK: float = 300.0
 const PRODUKTION_SEK: float = 5.0  # Sekunden je Einheit
+## 25.11. (Paul, N3): Kleine Gegner (Myr-Drohnen) töteten frische Truppen, bevor sie einen Schuss abgaben. Frisch
+## produzierte und im Feldlazarett aufgestandene Truppen sind darum so lange unverwundbar – längstens, bis ihr erster
+## eigener Treffer sitzt. Nicht im Brakk-Mode, nicht für Klone und Brakk. Dabei schimmern sie in diesen zwei Blautönen.
+const SPAWNSCHUTZ_SEK: float = 1.5
+## Nur Werte bis 1: HD-2D schneidet höhere ab, das Schimmern wäre dort unsichtbar.
+const SPAWNSCHUTZ_FARBEN: Array[Color] = [Color(0.4, 0.75, 1.0), Color(0.65, 0.95, 1.0)]
+const SPAWNSCHUTZ_FLACKERN: float = 6.0   # so oft je Sekunde wechselt der Blauton
 const MAX_JE_FABRIK: int = 2       # so viele Einheiten hält eine Fabrik am Leben (Stufe 1 gibt die dritte)
 const MAX_JE_FABRIK_ENDKAMPF: int = 5  # ... und so viele in der letzten Runde
 const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plasmawerfer"]  # zur Wahl im Fabrikmenü (Piloten kommen aus der Pilotenfabrik der Batterie)
@@ -218,6 +230,11 @@ const FABRIK_EINHEITEN: Array[String] = ["technogunner", "scharfschuetze", "plas
 const KOSTEN_STUFE: Array[int] = [125, 200, 450]   # 19.11. (Paul, gegen Fabrik-Spam): vorher 75/175/450 (14.11.: 50/150/400)      # Preis für Stufe 1, 2 und 3
 const KOSTEN_BATTERIE_STUFE: Array[int] = [125, 175, 450]   # vorher 100/150/400 (14.11. erhöht)   # dasselbe für die Batterie
 const HAUPTLINIE_BIS: int = 2        # bis zu dieser Runde kommen alle Gegner über die Hauptlinie, nicht verteilt aus der ganzen Zone
+## 25.11. (Paul, N5): Anzeige der Gegnerwege (karte.gd). Nebenwege mit diesem Anteil der Deckkraft des Hauptwegs (in der
+## Welle mindestens WEG_NEBEN_MIN, sonst kaum zu sehen); alte Wege der laufenden Welle als Punkte mit dieser Deckkraft.
+const WEG_NEBEN_ANTEIL: float = 0.45
+const WEG_NEBEN_MIN: float = 0.22
+const WEG_ALT_DECKKRAFT: float = 0.55
 const REPARATUR_SEK: float = 5.0     # so lange braucht ein Reservepilot, um ein ausgefallenes Gebäude oder einen lahmen Turm zu reparieren
 const HQ_WEGKOSTEN: float = 60.0              # 17.11.: so teuer ist ein HQ-Feld im Weg – niemand läuft mehr hindurch
 const STELLUNG_DECKUNG: float = 0.4          # Patch 16.11.: Truppen oben in einer Stellung nehmen so viel weniger Schaden
@@ -1722,6 +1739,8 @@ const GEGNER := {
 		"blatt": "res://assets/sprites/belagerungsturm.webp", "zelle": 64, "bilder": [9, 13, 17], "angriff_dauer": 2.6, "massstab": 1.4,
 		"panzerung": 4.0, "leben": 450.0, "tempo": 0.6, "reichweite": 0.0, "schaden": 0.0, "abklingzeit": 1.0,
 		"wall_kosten": 1000.0, "fabrik_kosten": 2000.0, "praemie": 15,
+		# 25.11. (Paul, N6): Phase 2 „Vorstoß“ – ausgebrannt rückt er im Nahkampf vor (Werte stimmt Paul nach)
+		"vorstoss_schaden": 18.0, "vorstoss_abklingzeit": 1.4, "vorstoss_reichweite": 1.1,
 	},
 	"enterer": {
 		"name": "Myr-Drohne", "kurz": "Drohne", "art": "Nahkampf, auf Wällen und am Boden", "rolle": "enterer", "fernkampf": false,
@@ -1762,6 +1781,9 @@ const KOMMANDANT := {
 	"kletter_abklingzeit": 3.0,
 	"cp_faktor": 4.0,             # holt verlorene Checkpoints so viel schneller zurück
 }
+## 25.11. (Paul): Klone jede Runde waren zu stark. Nach dem Einsatz der Klonmaschine ist sie erst in der dritten Runde
+## danach wieder frei (in Runde 5 benutzt → ab Runde 8). Nur außerhalb des Brakk-Modes; dort wie bisher jede Runde.
+const KLON_ABKLINGZEIT_RUNDEN: int = 3
 ## Brakk-Mode nach dem Playtest (19.11., Paul): Gegner kommen gegen Bodentruppen besser durch.
 const BRAKK_BODEN_SCHADEN := 1.5       # Gegner machen gegen Truppen am Boden so viel mehr Schaden (Stellungen, Bauten, Brakk: normal)
 const BRAKK_DURCHBRUCH_SEK := 3.0      # so lange von Bodentruppen aufgehalten, dann bricht ein Nahkämpfer durch:
@@ -1834,10 +1856,10 @@ const NEMESIS_FAEHIGKEITEN := {
 ## 22.11. (Paul, Nemesis Teil 6): über Läufe hinweg (user://nemesis.json)
 const NEMESIS_LISTE_MAX := 6             # so viele Benannte hält die Liste (ein Neuer verdrängt den mit der schlechtesten Bilanz)
 const NEMESIS_LAUF_TRUPP := 3            # zu Beginn eines Laufs so viele aus der Liste als Elitetrupp
-const NEMESIS_HALTEN := 1.5              # endgültig ausschalten: so lange [E] am Kampfunfähigen halten …
-const NEMESIS_HALTEN_HOCH := 2.5         # … ab Rang NEMESIS_HALTEN_RANG so lange
-const NEMESIS_HALTEN_RANG := 3
+const NEMESIS_HALTEN := 1.0              # endgültig ausschalten: so lange [E] am Kampfunfähigen halten, bei jedem Rang – 25.11. (Paul): vorher 1,5 bzw. ab Rang 3 2,5
 const NEMESIS_HALTEN_NAH := 1.3          # Felder: so nah muss Brakk an ihm stehen
+const NEMESIS_BEUTE_GOLD := 50           # 25.11. (Paul): Beute fürs Ausschalten – Gold, dazu eine Sprengladung (kein Ring mehr) …
+const NEMESIS_BEUTE_XP := 10             # … und diese Erfahrung (ein normaler Kill bringt unter 1)
 const NEMESIS_WIEDERSEHEN_SEK := 3.5     # Einblendung beim ersten Treffer auf einen Benannten im Lauf
 ## 22.11. (Paul, Nemesis Teil 4): abgeschaute Angewohnheiten
 const NEMESIS_GEWOHNHEIT_ZWEI_AB := 4    # ab diesem Rang zwei Angewohnheiten
@@ -1894,6 +1916,13 @@ const EINSCHUSS_MAX := 0.5
 const EINSCHUSS_SEK := 2.0             # so lange ohne Sphärentreffer, dann ist das Feld wieder kalt
 ## Schildträger im Trupp mit Battlesphären (19.11.): bleibt so weit vor der nächsten Sphäre und läuft nicht davon.
 const SCHILD_VORSPRUNG := 0.8          # Felder
+# 25.11. (Paul): Spieler-Portraits für den Phantom-Modus (32×32). Der Index steht im Profil und in jedem Phantom –
+# für neue Bilder nur die Dateien tauschen (oder hinten anhängen), die Reihenfolge bleibt.
+const PORTRAITS: Array[String] = ["res://portraits/portrait_0.png", "res://portraits/portrait_1.png",
+	"res://portraits/portrait_2.png", "res://portraits/portrait_3.png"]
+# 25.11. (Paul): Mehrere Sanitäter auf demselben Ziel – Anteil des Heilwerts für den 1., 2., 3. … nach Abstand zum Ziel
+# (die nächsten zuerst). Der letzte Eintrag gilt für alle weiteren. Gilt in allen Modi.
+const SANITAETER_STAPEL: Array[float] = [1.0, 1.0, 1.0, 1.0, 0.5, 0.25, 0.0]
 const FERNKAMPF_GEFECHT_TEMPO := 0.35   # Battlesphäre: solange sie schießt, läuft sie nur mit diesem Anteil ihres Tempos
 # Platz auf dem Feld (15.11.): Felder sind nur das Wegraster. Einheiten stehen frei darin und halten Abstand nach ihrem Radius
 # (Anteil einer Feldbreite). 16.11.: enger gepackt, damit in den schmalen Gängen viele Einheiten in ein Feld passen und sich
@@ -2073,16 +2102,22 @@ const WELLEN := {
 		{"weg": "l", "typen": ["belagerung"]},
 		{"weg": "l", "typen": ["schild", "schild", "sani", "schwarm", "schwarm"]},
 	]},
+	# 25.11. (Paul, N7): Runde 20 war deutlich leichter als die Generalprobe (Preis 1295 statt 2025). Aufgestockt um einen
+	# Belagerungsturm, 6 Sphären und 3 Schwarmgeister auf 2015 – in jedem Durchgang, die Pausen wachsen dafür je Schleife
+	# (ENDKAMPF_PAUSE_ZUWACHS). „nicht_brakk“: das Brakk-Finale bleibt beim alten Stand (main.naechste_welle).
 	20: {"name": "Gegenangriff", "stufe": "Finale", "trupps": [
 		{"weg": "l", "typen": ["hund", "hund", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["rauch", "sprenger", "sprenger"], "pause": -2.0},
 		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["belagerung"], "nicht_brakk": true},
 		{"weg": "w", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["fahne", "hund", "hund", "hund"]},
 		{"weg": "l", "typen": ["rauch", "rauch", "sphaere", "sphaere", "sphaere"]},
+		{"weg": "l", "typen": ["sphaere", "sphaere", "sphaere", "sphaere", "sphaere", "sphaere"], "locker": true, "nicht_brakk": true},
 		{"weg": "w", "typen": ["sprenger", "sprenger", "hund", "hund"]},
 		{"weg": "l", "typen": ["schild", "sani", "schwarm"]},
+		{"weg": "l", "typen": ["schwarm", "schwarm", "schwarm"], "nicht_brakk": true},
 		{"weg": "l", "typen": ["belagerung", "belagerung"], "jeder": 3},
 	]},
 }
@@ -2127,6 +2162,13 @@ static func wellen_plan(nr: int) -> Dictionary:
 	if nr >= LETZTE_RUNDE:
 		return WELLEN[STANDARD_RUNDEN]
 	return WELLEN[clampi(nr, 1, STANDARD_RUNDEN)]
+
+
+## 25.11. (N7): Plan ohne die Trupps, die `schluessel` tragen (z. B. „nicht_brakk“).
+static func plan_ohne(plan: Dictionary, schluessel: String) -> Dictionary:
+	var p := plan.duplicate()
+	p["trupps"] = (plan["trupps"] as Array).filter(func(t: Dictionary) -> bool: return not bool(t.get(schluessel, false)))
+	return p
 
 
 ## Dasselbe für einen beliebigen Plan im Format von WELLEN (Phantom-Modus: der Plan eines Spielers).

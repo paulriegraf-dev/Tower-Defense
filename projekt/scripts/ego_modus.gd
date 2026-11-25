@@ -963,7 +963,8 @@ func _verstecke() -> void:
 # ------------------------------------------------------------------ Zielen
 
 ## Strahl durch das Fadenkreuz: Abstand bis zur ersten Mauer, Fabrik oder zum Boden (Felder), höchstens `weite`.
-func _strahl_bis(von: Vector3, r: Vector3, weite: float) -> float:
+## `ohne`: dieses Feld hält nicht auf (die Fabrik, auf die gerade geprüft wird).
+func _strahl_bis(von: Vector3, r: Vector3, weite: float, ohne: Vector2i = Karte.KEINE) -> float:
 	var eigene := karte.zelle_bei(_fuss2d()) if brakk.oben else Karte.KEINE
 	var t := 0.0
 	while t < weite:
@@ -973,7 +974,7 @@ func _strahl_bis(von: Vector3, r: Vector3, weite: float) -> float:
 		if not spiel.endkampf and spiel.order24 == null and p.x < float(Werte.ZONE_SPALTEN):   # 20.11. (Paul): in Befehl 24 kein Schild am Myriaden-HQ
 			return t   # 18.11. (Paul): der Schild vor der Gegnerzone fängt den Schuss ab
 		var z := Vector2i(floori(p.x), floori(p.z))
-		if z != eigene:
+		if z != eigene and z != ohne:
 			if hd.ist_hoch(z) and p.y <= hd.H:
 				return t
 			if karte.inhalt(z) == Karte.FABRIK and p.y <= 1.1:
@@ -1052,6 +1053,13 @@ func _auto_zielen() -> void:
 	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot:
 			continue
+		if _ist_fabrik_ziel(g):
+			var tf := _fabrik_weite((g as Order24.TechnoZiel).zelle, von, blick, SCHUSS_WEITE)   # 25.11.: ganze Fläche
+			if tf > 0.0 and tf < bester:
+				bester = tf
+				_auto_ziel = g
+				_auto_r = blick
+			continue
 		var c := _ziel_mitte(g)   # 20.11.: Befehl 24 – Ziele können Höhe und Größe vorgeben
 		var d := c - von
 		var weite := d.length()
@@ -1076,6 +1084,58 @@ func _ziel_mitte(g: Gegner) -> Vector3:
 
 func _ziel_radius(g: Gegner, standard: float) -> float:
 	return maxf(standard, float(g.get_meta("treffer_radius", 0.0)))
+
+
+## 25.11. (Paul): Wo trifft der Strahl dieses Ziel? Abstand entlang des Strahls, -1 = vorbei. Figuren: Kugel um die
+## Zielmitte, vor `bis` (erste Mauer). Befehl-24-Fabriken: ihre ganze sichtbare Fläche (vorher hielt ihr eigenes Feld
+## den Strahl vor dem Trefferpunkt auf, man traf sie fast nie).
+func _treffer_weite(g: Gegner, von: Vector3, r: Vector3, bis: float, weite: float, radius: float) -> float:
+	if _ist_fabrik_ziel(g):
+		return _fabrik_weite((g as Order24.TechnoZiel).zelle, von, r, weite)
+	var c := _ziel_mitte(g)
+	var t := (c - von).dot(r)
+	if t <= 0.0 or t >= bis or (von + r * t).distance_to(c) > _ziel_radius(g, radius):
+		return -1.0
+	return t
+
+
+func _ist_fabrik_ziel(g: Gegner) -> bool:
+	return g is Order24.TechnoZiel and (g as Order24.TechnoZiel).art == "fabrik"
+
+
+## Das Fabrikbild steht aufrecht und dreht sich mit der Kamera (BILLBOARD_FIXED_Y): Der Strahl muss diese Fläche treffen,
+## davor darf keine andere Mauer oder Fabrik liegen.
+func _fabrik_weite(z: Vector2i, von: Vector3, r: Vector3, weite: float) -> float:
+	var vorn := -hd.kamera.global_transform.basis.z
+	vorn.y = 0.0
+	vorn = vorn.normalized()
+	var nenner := r.dot(vorn)
+	if nenner <= 0.01:
+		return -1.0
+	var fuss := _zu3d(karte.mitte(z) + Vector2(0, 4), 0.0)   # wie in hd_ansicht._bauten_bilder
+	var t := (fuss - von).dot(vorn) / nenner
+	if t <= 0.0 or t >= weite:
+		return -1.0
+	var q := von + r * t - fuss
+	if not fabrik_flaeche(z).has_point(Vector2(q.dot(vorn.cross(Vector3.UP)), q.y)):
+		return -1.0
+	return t if _strahl_bis(von, r, t, z) >= t else -1.0
+
+
+var _flaeche_je_bild := {}   # Bildpfad der Fabrik -> sichtbare Fläche in Feldern
+
+## Sichtbare Fläche des Fabrikbilds in Feldern: x seitlich von der Mitte, y vom Boden (Sockel) bis zur Oberkante.
+func fabrik_flaeche(z: Vector2i) -> Rect2:
+	var pfad: String = karte.fabrik_bild(z)
+	if not _flaeche_je_bild.has(pfad):
+		var bild: Image = karte.neu_bild(pfad).get_image()
+		if bild.is_compressed():
+			bild.decompress()
+		var u := bild.get_region(Rect2i(0, 0, 64, 64)).get_used_rect()
+		var je := HdAnsicht.FABRIK_MASSSTAB / float(Werte.ZELLE)   # Felder je Bildpunkt; Anker: x = 32, Zeile 57 auf dem Sockel
+		var oben := HdAnsicht.FABRIK_SOCKEL + 0.01 + float(57 - u.position.y) * je
+		_flaeche_je_bild[pfad] = Rect2(float(u.position.x - 32) * je, 0.0, float(u.size.x) * je, oben)
+	return _flaeche_je_bild[pfad]
 
 
 ## Richtung der Schüsse: am Handy auf das selbst gewählte Ziel, sonst durchs Fadenkreuz.
@@ -1111,11 +1171,8 @@ func _schiess() -> void:
 	for g: Gegner in spiel.ego_gegner():
 		if not is_instance_valid(g) or g._tot:
 			continue
-		var c := _ziel_mitte(g)
-		var t := (c - von).dot(r)
-		if t <= 0.0 or t >= bis:
-			continue
-		if (von + r * t).distance_to(c) <= _ziel_radius(g, 0.34):
+		var t := _treffer_weite(g, von, r, bis, SCHUSS_WEITE, 0.34)
+		if t > 0.0:
 			linie.append([t, g])
 	linie.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 	var f := brakk.fortschritt
@@ -1146,6 +1203,8 @@ func _schiess() -> void:
 		nr += 1
 		if not is_instance_valid(g) or g._tot:
 			continue
+		if _ist_fabrik_ziel(g):
+			_funke(von + r * (float(e[0]) - 0.08), 0.18)   # 25.11.: Trefferfunken knapp vor der Wand
 		spiel.brakk_quelle = "pistole" if nr == 1 else "ring"   # 19.11.: Schaden nach Quelle
 		var schaden := SCHUSS_SCHADEN * _schaden_faktor() * _gel_bonus(g) * durch_anteil
 		var tumble_ziel := tumble and nr == 1
@@ -2223,10 +2282,11 @@ func _lanze_feuer() -> void:
 	for g: Gegner in spiel.ego_gegner().duplicate():
 		if not is_instance_valid(g) or g._tot:
 			continue
-		var c := _ziel_mitte(g)
-		var t := (c - von).dot(r)
-		if t <= 0.0 or t >= weite or (von + r * t).distance_to(c) > _ziel_radius(g, 0.45):
+		var t := _treffer_weite(g, von, r, weite, LANZE_WEITE, 0.45)
+		if t <= 0.0:
 			continue
+		if _ist_fabrik_ziel(g):
+			_funke(von + r * (t - 0.08), 0.35)
 		# 19.11. (Paul): dazu ein Anteil des maximalen Lebens (große Gegner weniger) – trägt die Lanze ins späte Spiel
 		var anteil := float(BrakkFortschritt.LANZE_ANTEIL["gross" if BrakkFortschritt.gross(g) else "normal"])
 		g.nimm_schaden(LANZE_SCHADEN * _faehigkeit_faktor() * lanze_hitze * _gel_bonus(g, true) + g.max_leben * anteil)

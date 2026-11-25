@@ -46,6 +46,7 @@ var folge: Node2D = null            # Kommandant hat gesammelt: ihm folgen
 var sturm_bis := 0.0                # Losschlagen: so lange schneller und rascher feuern
 var sturm_ziel := Karte.KEINE       # ... und dorthin stürmen
 var klon := false                   # aus der Klonmaschine (wird nicht noch einmal geklont)
+var _schutz_rest := 0.0             # 25.11. (N3): Spawnschutz – so lange (Spielsekunden) prallt jeder Schaden ab
 var ring_schild := 0.0             # 19.11.: Brakk-Mode, Zeitlupe mit Wallring – Schild (Lebenspunkte) …
 var ring_schild_bis := 0           # … bis zu diesem Zeitpunkt (ms, Echtzeit)
 var _gefolgt := false
@@ -90,7 +91,15 @@ func start(p_spiel: Node, p_karte: Karte, typ: String, p_fabrik: Vector2i, stufe
 		_bruestung.visible = false
 		add_child(_bruestung)
 
+	schutz_geben()
 	_suche_posten()
+
+
+## 25.11. (Paul, N3): Spawnschutz für frisch produzierte und wiederaufgestandene Truppen (nicht im Brakk-Mode).
+## Er endet nach Werte.SPAWNSCHUTZ_SEK oder sobald der erste eigene Treffer sitzt. Gegner behalten ihr Ziel.
+func schutz_geben() -> void:
+	_schutz_rest = 0.0 if spiel.brakk_modus else Werte.SPAWNSCHUTZ_SEK
+	_ausstehend.clear()   # nach dem Aufstehen: kein Treffer mehr aus dem Angriff von davor (er nähme den Schutz sofort)
 
 
 ## Nächste Stellung wählen und sich auf den Weg machen – oder am Boden kämpfen, wenn keine frei ist.
@@ -237,6 +246,10 @@ func _physics_process(_takt: float) -> void:
 	if not _ausstehend.is_empty():
 		_ausstehende_treffer(delta)
 	_sprite.modulate = (Color(1, 0.86, 0.84) if Werte.grafik_neu else Color(1, 0.55, 0.55)) if _treffer > 0.0 else (Color(0.85, 0.75, 1.0) if sturm_bis > 0.0 else (Werte.ELITE["farbe"] as Color if bool(daten.get("elite", false)) else Color.WHITE))   # 20.11.: Elite golden
+	if _schutz_rest > 0.0:
+		_schutz_rest -= delta
+		if _schutz_rest > 0.0:
+			_sprite.modulate = Werte.SPAWNSCHUTZ_FARBEN[int(_schutz_rest * Werte.SPAWNSCHUTZ_FLACKERN) % 2]   # 25.11. (N3): blaues Schimmern (HD-2D spiegelt es)
 	if ausgewaehlt:
 		queue_redraw()
 	if sturm_bis > 0.0:
@@ -534,6 +547,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 			return
 		var p: float = spiel.mg_feuer(self, ziel, posten_zelle)
 		if p > 0.0:
+			_schutz_rest = 0.0
 			_abkling = p
 			letztes_ziel = ziel
 			letzter_schuss = spiel.spielzeit()
@@ -569,6 +583,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 		var faktor := minf(Werte.LASER_HOECHST, 1.0 + Werte.LASER_ANSTIEG * _laser_zeit)
 		spiel.strahl(muendung, ziel.position + Vector2(0, 2), Color(1.0, 0.35, 0.3), 2.0 + faktor)
 		_sprite.angriff(0.3)
+		_schutz_rest = 0.0
 		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) / float(daten["abklingzeit"]) * faktor * dt, true)
 		return
 
@@ -608,6 +623,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 		(ziel as Gegner).markiert = Werte.MARKIERUNG_SEK
 		(ziel as Gegner).markier_faktor = Werte.MARKIERUNG_FAKTOR   # 19.11.: die Markierung der Scharfschützen geht vor
 		(ziel as Gegner).markiert_brakk = false
+		_schutz_rest = 0.0
 		(ziel as Gegner).nimm_schaden(float(daten["schaden"]) * Werte.MARKIERUNG_EIGENER_SCHADEN)
 		return
 	if faehigkeit == "durchschuss" and ziel is Gegner:
@@ -616,6 +632,7 @@ func _feuere_auf(ziel: Node2D) -> void:
 		var richtung := (ziel.position - start).normalized()
 		var ende := start + richtung * reichweite_jetzt() * Werte.ZELLE
 		spiel.strahl(muendung, ende, farbe, 3.0)
+		_schutz_rest = 0.0
 		spiel.linienschaden(self, start, ende, float(daten["schaden"]), posten_zelle if oben else Karte.KEINE)
 		return
 	# 15.11.: Treffer im Takt der Animation – je Mündungsblitz (Werte: schuss_bilder) einer.
@@ -662,6 +679,7 @@ func _treffe(e: Dictionary) -> void:
 		_auf_brakk(e, schaden)   # 20.11.: Schritt 6c – echtes Geschoss bzw. Zielstrahl
 		return
 	if e["flaeche"]:
+		_schutz_rest = 0.0   # 25.11. (N3): der erste Treffer sitzt – der Spawnschutz ist vorbei
 		# Flächenschaden: trifft alle Gegner rund um das Ziel (ist es schon weg, dort, wo es zuletzt war)
 		var ort: Vector2 = (ziel as Node2D).position if lebt else e["pos"]
 		var radius: float = float(daten["flaeche"]) * Werte.ZELLE
@@ -685,6 +703,7 @@ func _treffe(e: Dictionary) -> void:
 		_sprite.flip_h = ziel.position.x < position.x
 		e["muendung"] = position + Vector2(absf(m.x - position.x) * (-1 if _sprite.flip_h else 1), m.y - position.y)
 	spiel.schuss(e["muendung"], (ziel as Node2D).position + Vector2(0, 4), farbe)
+	_schutz_rest = 0.0   # 25.11. (N3): der erste Treffer sitzt
 	ziel.call("nimm_schaden", schaden)
 
 
@@ -818,6 +837,8 @@ func nimm_fernschaden(menge: float) -> void:
 
 
 func nimm_schaden(menge: float) -> void:
+	if _schutz_rest > 0.0:
+		return   # 25.11. (N3): Spawnschutz – der Schaden verfällt
 	_anlauf *= 1.0 - Werte.MINIGUN_TREFFER_VERLUST   # Minigun: ein Treffer kostet einen Teil des Anlaufs
 	if ring_schild > 0.0 and Time.get_ticks_msec() < ring_schild_bis:
 		var ab := minf(ring_schild, menge)   # 19.11.: Zeitlupe mit Wallring – Schild fängt zuerst ab

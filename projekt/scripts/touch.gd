@@ -290,10 +290,12 @@ func _male_brakk() -> void:
 	c.draw_string(schrift, STICK + Vector2(-STICK_R, -STICK_R - 14), "Brakk", HORIZONTAL_ALIGNMENT_CENTER, STICK_R * 2.0, 22, Color("ffe9a8"))
 	for k: Array in KNOEPFE:
 		var m: Vector2 = k[2]
+		# 25.11. (N2): Klonmaschine lädt noch – Knopf grau, darunter der Rest
+		var rest: String = spiel.kommandant.klon_anzeige() if k[0] == "R" and spiel.kommandant != null else ""
 		c.draw_circle(m, KNOPF_R, Color(0.03, 0.05, 0.08, 0.6))
-		c.draw_arc(m, KNOPF_R, 0.0, TAU, 40, Color("ffd34d"), 3.0)
-		c.draw_string(schrift, m + Vector2(-KNOPF_R, 10), k[0], HORIZONTAL_ALIGNMENT_CENTER, KNOPF_R * 2.0, 34, Color.WHITE)
-		c.draw_string(schrift, m + Vector2(-KNOPF_R - 30, KNOPF_R + 18), k[1], HORIZONTAL_ALIGNMENT_CENTER, KNOPF_R * 2.0 + 60, 16, Color("d8cfe6"))
+		c.draw_arc(m, KNOPF_R, 0.0, TAU, 40, Color("ffd34d") if rest == "" else Color("6b6b75"), 3.0)
+		c.draw_string(schrift, m + Vector2(-KNOPF_R, 10), k[0], HORIZONTAL_ALIGNMENT_CENTER, KNOPF_R * 2.0, 34, Color.WHITE if rest == "" else Color("8a8a94"))
+		c.draw_string(schrift, m + Vector2(-KNOPF_R - 30, KNOPF_R + 18), k[1] if rest == "" else rest, HORIZONTAL_ALIGNMENT_CENTER, KNOPF_R * 2.0 + 60, 16, Color("d8cfe6"))
 
 
 ## Nachgemachte Klicks gehen über Input.parse_input_event und damit durchs Fenster: Ihre Position muss in

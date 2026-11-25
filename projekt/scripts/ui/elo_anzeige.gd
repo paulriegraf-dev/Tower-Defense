@@ -4,7 +4,8 @@ extends RefCounted
 ## (grün + Pfeil hoch / rot + Pfeil runter), bei Gewinn steigen Funken auf. Wartet die Antwort der Datenbank noch,
 ## pulsieren drei Punkte. ALLES GEZEICHNET AN EINER STELLE: Am 30.11. werden hier Sprites, Rahmen und Funken
 ## ausgetauscht – die Werte (Dictionary unten) bleiben gleich.
-## d: {label, vorher (int), nachher (int, -1 = wartet), hinweis (Text darunter), t0 (Sekunde, ab der gezählt wird)}
+## d: {label, vorher (int), nachher (int, -1 = wartet), hinweis (Text darunter), t0 (Sekunde, ab der gezählt wird),
+##     vorlaeufig (bool: „?“ hinter der Zahl)}
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
 const HOEHE := 44.0
@@ -36,7 +37,8 @@ static func male(ci: CanvasItem, mitte_x: float, y: float, d: Dictionary, t: flo
 	# Zahl: im Zählen leuchtet sie in der Farbe der Änderung, danach ruht sie
 	var glut := 1.0 - lauf
 	var zahl_farbe := Stil.TEXT.lerp(farbe, 0.4 + 0.6 * glut)
-	Stil.schreibe_mittig(ci, Vector2(mitte_x - 22.0, cy), str(wert), Stil.GROSS, Color(zahl_farbe, a))
+	var zahl := str(wert) + ("?" if d.get("vorlaeufig", false) else "")   # 25.11.: vorläufige Elo
+	Stil.schreibe_mittig(ci, Vector2(mitte_x - 22.0, cy), zahl, Stil.GROSS, Color(zahl_farbe, a))
 	# Änderung: federt auf, sobald die Zahl zu zählen beginnt
 	var pop := clampf((t - float(d.get("t0", 0.0))) / 0.35, 0.0, 1.0)
 	var feder := 1.0 + 0.35 * sin(pop * PI) * (1.0 - pop)

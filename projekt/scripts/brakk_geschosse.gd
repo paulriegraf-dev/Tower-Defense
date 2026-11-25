@@ -125,12 +125,14 @@ func wurf(von: Vector2, punkt: Vector2, flug: float, radius: float, brand_sek: f
 	wuerfe.append(w)
 
 
-## 22.11. (Nemesis Teil 4): Sprengfalle des Fallenstellers – liegt still, blinkt und piept `zuender` Sekunden, dann Knall.
+## 22.11. (Nemesis Teil 4): Sprengfalle des Fallenstellers – liegt still, blinkt `zuender` Sekunden, dann Knall.
+## 25.11. (Paul): beim Legen ein einziger Ton. Vorher piepte sie mit dem Menü-Klick (in 3 s 19-mal) – klang nach Menü.
 func falle(punkt: Vector2, zuender: float, radius: float, schaden: float, quelle: String) -> void:
 	abgefeuert += 1
 	var w := {"von": punkt, "nach": punkt, "t": 0.0, "flug": zuender, "r": radius, "brand": 0.0, "dps": 0.0, "schaden": schaden,
-		"quelle": quelle, "hoch": false, "falle": true, "bild": null, "schatten": null, "piep": 0.0}
+		"quelle": quelle, "hoch": false, "falle": true, "bild": null, "schatten": null}
 	if spiel != null:
+		Ton.am_ort(spiel, "tc-arc", punkt)   # Platzhalter, bis es eigene Klänge gibt
 		spiel.effekte.warnung(punkt, zuender * Werte.BRAKK_TEMPO)
 		_ring(_zu3d(punkt, 0.04), radius / Werte.ZELLE, Color("ff9a3d"), zuender)
 		var hd := _hd()
@@ -281,15 +283,10 @@ func _wurf_landet(w: Dictionary, z: Dictionary) -> void:
 		Ton.am_ort(spiel, "hit-boom", wo)
 
 
-## Ball auf der Wurfbahn (Bogen: hoch beim Ausräuchern) und sein Schatten am Boden. Falle: blinkt und piept, schneller zum Ende.
+## Ball auf der Wurfbahn (Bogen: hoch beim Ausräuchern) und sein Schatten am Boden. Falle: blinkt, schneller zum Ende.
 func _wurf_bild(w: Dictionary) -> void:
 	if bool(w.get("falle", false)):
 		var rest := float(w["flug"]) - float(w["t"])
-		w["piep"] = float(w["piep"]) - 1.0 / 60.0
-		if float(w["piep"]) <= 0.0:
-			w["piep"] = clampf(rest / 6.0, 0.12, 0.5)
-			if spiel != null:
-				Ton.am_ort(spiel, "ui-klick", w["nach"] as Vector2)
 		if w.get("schatten") != null and is_instance_valid(w["schatten"]):
 			(w["schatten"] as Node3D).visible = fmod(float(w["t"]), clampf(rest / 3.0, 0.15, 0.6)) < 0.08 + clampf(rest / 6.0, 0.0, 0.25)
 		return

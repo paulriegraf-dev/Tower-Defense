@@ -51,7 +51,7 @@ const STANDARD := {
 	"eskalation_sek": 600,      # … über so viele Sekunden ab Jagdbeginn
 	"welle_wachsen_sek": 120,   # alle so viele Sekunden ein Mann mehr je Welle
 	"stufe2_ab": 300,           # ab hier kommen Wellen auf Fabrik-Stufe 2 …
-	"faehigkeit_ab": 540,       # … ab hier auf Stufe 3 mit Fähigkeit (Minigun, Brandfeld …)
+	"faehigkeit_ab": 750,       # … ab hier auf Stufe 3 mit Fähigkeit (Minigun, Brandfeld …) – 25.11. (Paul): ab 12:30 (vorher 9:00)
 	"staerke_je_min": 4,        # Prozent mehr Schaden je Minute für neue Truppen
 	"tempo_je_min": 2,          # Prozent schneller je Minute (höchstens +40 %)
 	"leben_je_min": 10,         # Prozent mehr Leben je Minute – 20.11. (Paul): vorher 3 (Brakks Schaden wuchs viel schneller)
@@ -87,7 +87,7 @@ const STANDARD := {
 	"xp_fabrik": 25,            # Erfahrung für Brakk: zerstörte Fabrik …
 	"xp_sabotage": 12,          # … sabotierte Fabrik
 	"xp_kill": 0,               # 20.11. (Paul): zusätzliche Erfahrung je Kill (Elite ×3) – 0: Stufe 8 nach 3:32 war viel zu schnell
-	"kill_xp_prozent": 80,      # 20.11. (Paul): Prozent der normalen Kill-Erfahrung (Stufe 8 soll eher gegen Minute 12–15 kommen)
+	"kill_xp_prozent": 88,      # Prozent der normalen Kill-Erfahrung – 25.11. (Paul): +10 % (vorher 80)
 	"truppen_leben": 90,        # Prozent: Leben der Technoclan-Truppen – 20.11. (Paul): 90 statt 70, Brakk wird mit mehr Ringen stärker
 	"turm_wall_bonus": 2,       # Felder mehr Reichweite der Türme, solange Brakk auf den Erdwällen läuft
 	"karte": "",                # "" = Zufall unter den Formationen aus [H], sonst eine Formation oder "phantom" (Verteidigungs-Phantom)
@@ -98,7 +98,7 @@ const STANDARD := {
 	"tuerme": 6,                # Formtürme auf der Formation
 	"lager_tuerme": 1,          # dazu je Lager ein Geschützturm
 	"heiltuerme": 1,            # dazu Heiltürme mit Instandsetzung
-	"fabrik_leben": 1500,       # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon)
+	"fabrik_leben": 920,        # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon) – 25.11. (Paul): rund 15 s Dauerfeuer auf der Startstufe (vorher 1500)
 	"sabotage_halten": 5,       # Sekunden [F] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
 	"sabotage_lahm": 0,         # so lange liefert eine sabotierte Fabrik nichts – 0 = bis der Pilot sie repariert (20.11., Paul)
 	"praemie_sabotage": 100,
@@ -128,8 +128,17 @@ const WEG_STRAFE := 6.0          # Wegkosten auf Feldern, die schon ein anderer 
 const FAECHER_RADIUS := 1.6      # Felder: so weit vor Brakk verteilen sich die Mitglieder im Halbkreis
 const SCHUSSFELD_SEK := 2.0      # so lange ohne Sicht am Ziel, dann sucht ein Jäger ein Feld mit Sicht
 const SCHUSSFELD_WEITE := 5      # Felder: so weit sucht er
+const OHNE_FAEHIGKEIT := "laser"          # 25.11. (Paul): kein Laserstrahl-Scharfschütze in Befehl 24 – nicht ausweichbar
+const FAEHIGKEIT_ERSATZ := "durchschuss"  # … geladene Laser-Fabriken und -Truppen bekommen stattdessen diese
 const BAU_SCHADEN := 0.6         # Brakks Schüsse auf Gebäude wirken mit diesem Anteil
 const LANZE_FABRIK := 0.10       # 20.11.: der Ladestrahl nimmt einer Fabrik mindestens 10 % ihres Lebens
+const ELITE_TON := "tc-grenade"  # 25.11. (Paul): Platzhalter, bis es eigene Elite-Klänge gibt
+const ELITE_TON_DB := 2.0
+const LAGER_RADIUS := 3         # 25.11.: Felder – so weit liegen die Stellungen eines Lagers höchstens von seiner Fabrik
+const FABRIK_BALKEN_SEK := 4.0  # 25.11. (Paul): Lebensbalken über einer angeschossenen Fabrik – so lange nach dem letzten Treffer
+const BEUTE_NAH := 0.7           # 25.11.: Felder – so nah muss Brakk an der Beute einer Fabrik sein
+const BEUTE_GOLD_ANTEIL := 0.5   # 25.11. (Paul): trägt Brakk alle Ringarten, liegt Gold: dieser Anteil von praemie_fabrik
+const BEUTE_GOLD_FARBE := Color("ffd66b")
 const LADUNG_REICHWEITE := 1.8   # 20.11.: Felder – so weit vor Brakk darf der Erdwall für die Sprengladung liegen
 const LADUNG_SCHADEN := 120.0    # 20.11.: Truppen dicht an der Sprengung
 const ALARM_SEK := 20.0          # 20.11.: so lange bleiben alarmierte Truppen an der Fabrik
@@ -189,6 +198,7 @@ var deckung_sek := 0.0           # Zeit in Deckung (Spielstil)
 var ladungen := 0                # Sprengladungen im Gepäck
 var ladungen_boden: Array = []   # je {"pos": Vector2, "knoten": Node3D}
 var zuender: Array = []          # je {"zelle": Vector2i, "rest": float, "knoten": Node3D}
+var beute_boden: Array = []      # 25.11.: aus zerstörten Fabriken, je {"pos": Vector2, "ring": String ("" = Gold), "knoten": Node3D, "hinweis": float}
 var gesprengt := {}              # Wallfeld -> {"ausbau": int, "stufe": int, "faehigkeit": String, "rest": float}
 var kern := {}                   # Turmfeld -> Leben des Kerns
 var kern_aus := {}               # Turmfeld -> Sekunden bis er wieder läuft
@@ -197,6 +207,8 @@ var rueckseite := {}             # Fabrik außerhalb -> Feld an ihrer Rückseite
 var routen := {}                 # Fabrik außerhalb -> Streifenweg (Felder)
 var _streife := {}               # Einheit-ID -> Index im Streifenweg
 var lahm := {}                   # sabotierte Fabrik -> Sekunden, bis sie von selbst wieder läuft
+var _lager_namen := {}           # 25.11.: Fabrik draußen -> „Lager A“ …
+var _rauch3d := {}               # 25.11.: sabotierte Fabrik -> Rauchsäule und dunkle Leuchtleiste
 var truemmer: Array[Vector2i] = []
 var alarm := {}                  # Einheit-ID -> {"ziel": Vector2i, "bis": float}
 var _alarm_zuletzt := {}         # Fabrik -> Zeitpunkt des letzten Alarms
@@ -273,6 +285,8 @@ func einrichten(p_spiel: Node) -> void:
 	var sperren: Variant = Werte.KARTE_REGELN.get("bauten", {})
 	Werte.KARTE_REGELN["bauten"] = {}   # der Aufbau darf alles; Brakk selbst baut danach nichts (Sperren der Karte)
 	_karte_aufbauen()
+	_ohne_laser()
+	_lager_benennen()
 	Werte.KARTE_REGELN["bauten"] = sperren
 	karte.sicht_eigenes_feld = true   # 20.11.: Stellungen sehen nur über ihr eigenes Feld hinaus
 	karte.ziel_wall_sichtbar = true   # 20.11. (Paul): Bodentruppen sehen (und treffen) Brakk auch oben auf einem Erdwall
@@ -382,6 +396,25 @@ func _karte_aufbauen() -> void:
 		rueckseite[z] = _rueck_feld(z)
 		routen[z] = _streifenweg(z)
 	print("ORDER24 Fabriken %d (im Schild %d) · Stellungen %d · Türme %d (Heiltürme %d) · Batterie %s" % [spiel.fabriken.size(), innen, _zaehle_ausbau(Karte.STELLUNG), _zaehle_ausbau(Karte.TURM), karte.turm_art.values().count("heil"), str(b_feld)])
+
+
+## 25.11. (Paul): Welche Stufe-3-Fähigkeiten eine Truppenart in Befehl 24 haben darf (ohne OHNE_FAEHIGKEIT).
+static func faehigkeiten_stufe3(typ: String) -> Array:
+	return (Werte.STUFE_3.get(typ, {}) as Dictionary).keys().filter(func(f: String) -> bool: return f != OHNE_FAEHIGKEIT)
+
+
+## 25.11. (Paul): Geladene Karten (Verteidigungs-Phantom, Weiterspielen nach Classic) bringen eigene Fähigkeiten mit –
+## Fabriken und schon stehende Truppen mit OHNE_FAEHIGKEIT bekommen FAEHIGKEIT_ERSATZ.
+func _ohne_laser() -> void:
+	for z: Vector2i in spiel.fabriken:
+		if str(spiel.fabriken[z].get("faehigkeit", "")) == OHNE_FAEHIGKEIT:
+			spiel.fabriken[z]["faehigkeit"] = FAEHIGKEIT_ERSATZ
+	for x: Variant in spiel.einheiten:
+		if is_instance_valid(x) and x != spiel.kommandant and str((x as Einheit).faehigkeit) == OHNE_FAEHIGKEIT:
+			var e := x as Einheit
+			e.daten = e.daten.duplicate()
+			e.daten["faehigkeit"] = FAEHIGKEIT_ERSATZ
+			e.faehigkeit = FAEHIGKEIT_ERSATZ
 
 
 ## 20.11. (Paul): Weiterspielen nach dem Classic-Sieg – nichts neu bauen: die Verteidigung des Spielers ist die Karte.
@@ -1035,6 +1068,7 @@ func _process(delta: float) -> void:
 	if in_deckung:
 		deckung_sek += echt
 	_ladungen_pflegen(k, echt)
+	_beute_pflegen(k)
 	_tuerme_pflegen(echt)
 	_fabriken_pflegen(k, echt)
 	_takt -= echt
@@ -1304,6 +1338,7 @@ func fabrik_treffer(z: Vector2i, schaden: float) -> void:
 	if not fabrik_hp.has(z) or karte.inhalt(z) != Karte.FABRIK:
 		return
 	_alarm(z)
+	_fabrik_getroffen[z] = zeit
 	fabrik_hp[z] = float(fabrik_hp[z]) - schaden
 	if float(fabrik_hp[z]) > 0.0:
 		return
@@ -1321,7 +1356,145 @@ func fabrik_treffer(z: Vector2i, schaden: float) -> void:
 	if Werte.grafik_neu:
 		spiel.effekte.fx("g_tod", karte.mitte(z) + Vector2(0, 16), 1.0)
 	_praemie("fabriken", int(w("praemie_fabrik")), "Fabrik zerstört", int(w("xp_fabrik")))
+	beute_legen(z)
 	print("ORDER24 Fabrik %s zerstört bei %.0f s" % [str(z), zeit])
+
+
+# ------------------------------------------------------------------ Beute aus zerstörten Fabriken (25.11., Paul)
+
+## Ringarten, die als Beute infrage kommen: Brakk trägt sie nicht, und sie liegt noch nirgends.
+func beute_arten() -> Array:
+	var k: Kommandant = spiel.kommandant
+	if k == null or k.fortschritt == null:
+		return []
+	var liegt: Array = beute_boden.map(func(b: Dictionary) -> String: return str(b["ring"]))
+	return BrakkFortschritt.RINGE.keys().filter(func(r: String) -> bool: return k.fortschritt.ring_stufe(r) == 0 and not liegt.has(r))
+
+
+## Auf dem Trümmerfeld liegt ein Ring einer neuen Art – nie eine Stufe auf einen vorhandenen. Hat Brakk alle Arten,
+## liegt stattdessen Gold (BEUTE_GOLD_ANTEIL der Fabrik-Prämie). Sie bleibt liegen, bis Brakk sie aufhebt.
+func beute_legen(z: Vector2i) -> void:
+	var arten := beute_arten()
+	beute_boden.append({"pos": karte.mitte(z), "ring": str(arten.pick_random()) if not arten.is_empty() else "", "knoten": null, "hinweis": -99.0})
+	Ton.spiele(spiel, "alert", -4.0)
+
+
+## Aufheben durch Drüberlaufen. Ohne freien Finger bleibt der Ring liegen.
+func _beute_pflegen(k: Kommandant) -> void:
+	var f := k.fortschritt
+	for b: Dictionary in beute_boden.duplicate():
+		var ring := str(b["ring"])
+		if ring != "" and f != null and f.ring_stufe(ring) > 0:
+			# inzwischen am Terminal gekauft: eine andere neue Art (sonst gäbe das Aufheben eine Stufe)
+			b["ring"] = ""
+			var arten := beute_arten()
+			ring = str(arten.pick_random()) if not arten.is_empty() else ""
+			b["ring"] = ring
+			_beute_bild_weg(b)
+		if k.gefallen or k.position.distance_to(b["pos"] as Vector2) > BEUTE_NAH * Werte.ZELLE:
+			continue
+		if ring == "":
+			var gold := int(wf("praemie_fabrik") * BEUTE_GOLD_ANTEIL)
+			spiel.budget += gold
+			sabotage["geld"] = int(sabotage["geld"]) + gold
+			spiel.melde("Gold geborgen: +%d" % gold, 3.0)
+		else:
+			if f == null:
+				continue
+			if f.ringe.size() >= f.finger():
+				if zeit - float(b["hinweis"]) > 4.0:
+					b["hinweis"] = zeit
+					spiel.melde("Kein Finger frei – der Ring bleibt liegen.", 2.5)
+				continue
+			if f.schenke(ring, spiel) != "":
+				continue
+			spiel.melde("Ring geborgen: %s" % str((BrakkFortschritt.RINGE[ring] as Dictionary).get("name", ring)), 4.0)
+		Ton.spiele(spiel, "tc-arc", -2.0)
+		_beute_bild_weg(b)
+		beute_boden.erase(b)
+
+
+func _beute_bild_weg(b: Dictionary) -> void:
+	if b["knoten"] != null and is_instance_valid(b["knoten"]):
+		(b["knoten"] as Node).queue_free()
+	b["knoten"] = null
+
+
+## 25.11. (Paul): Eine sabotierte Fabrik sieht man an: Rauchsäule aus dem Dach, die Leuchtleiste am Sockel ist aus
+## (abgedunkelt ist ihr Bild schon durch HdAnsicht, ein laufendes Förderband hat es nicht) – bis zur Reparatur.
+func _sabotage_3d(hd: HdAnsicht) -> void:
+	var t := float(Time.get_ticks_msec()) / 1000.0
+	for z: Vector2i in _rauch3d.keys():
+		if not lahm.has(z) or not fabrik_hp.has(z):
+			(_rauch3d[z] as Node).queue_free()
+			_rauch3d.erase(z)
+	for z: Vector2i in lahm:
+		if not fabrik_hp.has(z):
+			continue
+		if not _rauch3d.has(z):
+			var kn := Node3D.new()
+			hd.add_child(kn)
+			kn.position = Vector3(float(z.x) + 0.5, 0.0, float(z.y) + 0.5)
+			_kasten3d(kn, Vector3(0.6, 0.036, 0.018), Color("14161b"), Vector3(0, 0.065, 0.468))   # über der Leuchtleiste (_fabrik_block)
+			for i in 9:
+				var m := MeshInstance3D.new()
+				var kugel := SphereMesh.new()
+				kugel.radius = 0.24
+				kugel.height = 0.48
+				kugel.radial_segments = 10
+				kugel.rings = 5
+				m.mesh = kugel
+				m.material_override = _leucht(Color("7a7a86"), 0.9)
+				m.name = "Qualm%d" % i
+				kn.add_child(m)
+			_rauch3d[z] = kn
+		for i in 9:
+			var q := (_rauch3d[z] as Node3D).get_node("Qualm%d" % i) as MeshInstance3D
+			var a := fmod(t * 0.3 + float(i) / 9.0, 1.0)
+			q.position = Vector3(0.12 + 0.35 * a + 0.07 * sin(t * 1.7 + float(i) * 2.1), 1.15 + 2.1 * a, 0.0)
+			q.scale = Vector3.ONE * (0.45 + 0.9 * a)
+			(q.material_override as StandardMaterial3D).albedo_color.a = 0.9 * (1.0 - 0.8 * a)
+
+
+## Darstellung: Lichtsäule und Bodenscheibe in der Ringfarbe, darüber schwebt der Ring (Gold: ein goldener Würfel).
+func _beute_3d(hd: HdAnsicht) -> void:
+	var t := float(Time.get_ticks_msec()) / 1000.0
+	for b: Dictionary in beute_boden:
+		var ring := str(b["ring"])
+		var farbe: Color = BEUTE_GOLD_FARBE if ring == "" else Einheit.ABZEICHEN.get(ring, BEUTE_GOLD_FARBE)
+		if b["knoten"] == null:
+			var kn := Node3D.new()
+			hd.add_child(kn)
+			var p: Vector2 = b["pos"]
+			kn.position = Vector3(p.x / Werte.ZELLE, 0.0, (p.y - Werte.KARTE_OBEN) / Werte.ZELLE)
+			for teil: Array in [[0.12, 3.0, 0.4, 1.5], [0.28, 3.0, 0.16, 1.5], [0.45, 0.03, 0.55, 0.3]]:
+				var m := MeshInstance3D.new()
+				var zyl := CylinderMesh.new()
+				zyl.top_radius = float(teil[0])
+				zyl.bottom_radius = float(teil[0])
+				zyl.height = float(teil[1])
+				m.mesh = zyl
+				m.material_override = _leucht(farbe, float(teil[2]))
+				m.position = Vector3(0, float(teil[3]), 0)
+				kn.add_child(m)
+			var oben: Node3D
+			if ring == "":
+				oben = _kasten3d(kn, Vector3(0.28, 0.28, 0.28), farbe, Vector3(0, 0.75, 0))
+			else:
+				var s := Sprite3D.new()
+				s.texture = RingBilder.bild(ring, farbe)
+				s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+				s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+				s.shaded = false
+				s.pixel_size = 0.55 / 16.0
+				kn.add_child(s)
+				oben = s
+			oben.name = "Oben"
+			b["knoten"] = kn
+		var schwebt := (b["knoten"] as Node3D).get_node("Oben") as Node3D
+		schwebt.position.y = 0.75 + 0.09 * sin(t * 3.0)
+		if ring == "":
+			schwebt.rotation.y = t * 1.8
 
 
 var _kopfgeld_merk := {}   # Ort ("s:<Stellung>" / "f:<Fabrik>") -> [Kills in Folge, Zeit des letzten Kills]
@@ -1563,9 +1736,46 @@ func sabotieren(z: Vector2i) -> void:
 	lahm[z] = wf("sabotage_lahm")
 	pilot_auftraege.append({"z": z, "ab": zeit + wf("pilot_verzug")})
 	_praemie("sabotiert", int(w("praemie_sabotage")), ("Fabrik sabotiert (%d s lahm)" % int(w("sabotage_lahm")) if wf("sabotage_lahm") > 0.0 else "Fabrik sabotiert – lahm, bis ein Pilot sie repariert"), int(w("xp_sabotage")))
+	if spiel.get("_einblendung") != null:
+		spiel._einblendung.banner("FABRIK LAHMGELEGT", "%s: kein Nachschub" % lager_name(z), Color("ffb03a"))   # 25.11. (Paul)
 	Ton.spiele(spiel, "tc-arc", -4.0)
 	karte.queue_redraw()
 	print("ORDER24 Fabrik %s sabotiert bei %.0f s" % [str(z), zeit])
+
+
+## 25.11. (Paul): Name eines Lagers (Fabrik außerhalb): „Lager A“, „Lager B“ … in der Reihenfolge der Vergabe.
+func lager_name(z: Vector2i) -> String:
+	if not _lager_namen.has(z):
+		_lager_namen[z] = "Lager %s" % char(65 + _lager_namen.size() % 26)
+	return _lager_namen[z]
+
+
+## Die Namen zum Start von West (nahe am Myriaden-HQ) nach Ost vergeben; neue Lager bekommen den nächsten Buchstaben.
+func _lager_benennen() -> void:
+	var liste: Array = fabrik_hp.keys()
+	liste.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+	for z: Vector2i in liste:
+		lager_name(z)
+
+
+## Zu welchem Lager gehört die Stellung `s`? Die nächste Fabrik draußen im Umkreis von LAGER_RADIUS Feldern, sonst KEINE.
+func lager_von(s: Vector2i) -> Vector2i:
+	var beste := Karte.KEINE
+	var d := INF
+	for z: Vector2i in fabrik_hp:
+		if maxi(absi(s.x - z.x), absi(s.y - z.y)) <= LAGER_RADIUS and Vector2(s - z).length() < d:
+			d = Vector2(s - z).length()
+			beste = z
+	return beste
+
+
+## karte.finde_posten: In die Stellungen eines sabotierten Lagers rückt niemand nach, bis der Pilot repariert hat.
+## Wer schon oben steht, bleibt.
+func stellung_gesperrt(s: Vector2i) -> bool:
+	if lahm.is_empty():
+		return false
+	var z := lager_von(s)
+	return z != Karte.KEINE and lahm.has(z)
 
 
 ## Angriff auf eine Fabrik: Truppen am Boden im Umkreis laufen hin (Stellungen bleiben besetzt).
@@ -1912,12 +2122,13 @@ func _jagdwelle() -> void:
 	if elite:
 		neu = nemesis.elitetrupp(quellen)   # 22.11. (Paul): der Elitetrupp sind Personen (Benannte zuerst, bis zu fünf)
 		n = 0
+		_elite_ton()
 	for i in n:
 		var z: Vector2i = quellen[i % quellen.size()]
 		var typ := str(spiel.fabriken[z]["typ"])
 		var faehig := ""
 		if stufe == 3:
-			var liste: Array = (Werte.STUFE_3.get(typ, {}) as Dictionary).keys()
+			var liste: Array = faehigkeiten_stufe3(typ)
 			if not liste.is_empty():
 				faehig = str(liste.pick_random())
 		neu.append(_neue_truppe(typ, z, stufe, faehig))
@@ -1934,6 +2145,14 @@ func _jagdwelle() -> void:
 	if spiel.has_method("befehl24_protokoll"):
 		spiel.befehl24_protokoll("welle", {"welle": wellen, "n": n, "elite": elite, "trupps": anzahl, "stufe": stufe})   # 23.11.
 	print("ORDER24 Welle %d bei %.0f s: %d%s · Stufe %d · Takt %.0f s" % [wellen, zeit, n, " Elite" if elite else "", stufe, welle_takt_jetzt()])
+
+
+## 25.11. (Paul): Der Elitetrupp meldet sich beim Erscheinen mit genau einem eigenen Ton. Er soll nicht in der
+## Stimmengrenze (Ton.STIMMEN) des Gefechts untergehen – dafür macht er sich einen Platz frei.
+func _elite_ton() -> void:
+	while Ton._stimmen.size() >= Ton.STIMMEN:
+		Ton._stimmen.pop_front()
+	Ton.spiele(spiel, ELITE_TON, ELITE_TON_DB)
 
 
 ## Ein Trupp: sieht er Brakk, jagt er; verliert er ihn sicht_verlust Sekunden, sucht er such_sek um den letzten Punkt,
@@ -3016,17 +3235,22 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	# 22.11. (Nemesis Teil 6): [E] halten am Kampfunfähigen – Hinweis bzw. Fortschritt
 	var aus: Dictionary = nemesis.ausschalten_hinweis() if nemesis != null else {}
 	if not aus.is_empty():
-		var anteil := float(aus["anteil"])
-		if anteil >= 0.0:
-			var r := Rect2(m.x - 150.0, y - 8.0, 300.0, 16.0)
-			bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.8))
-			bild.draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(anteil, 0.0, 1.0), r.size.y)), Color("ff5a6e", 0.85))
-			bild.draw_rect(r, Color("ff5a6e"), false, 1.5)
-			Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), str(aus["text"]), 14, Color.WHITE)
-			y += 24.0
-		else:
-			Stil.schreibe_mittig(bild, Vector2(m.x, y), str(aus["text"]), 16, Color("ff5a6e"))
-			y += 20.0
+		# 25.11. (Paul): groß unter dem Fadenkreuz, Fortschrittsring darum, in der Farbe der Benannten
+		var farbe: Color = (aus["farbe"] as Color).lightened(0.2)
+		var mitte := g / 2.0
+		var anteil := clampf(float(aus["anteil"]), 0.0, 1.0)
+		bild.draw_arc(mitte, 44.0, 0.0, TAU, 48, Color(0.02, 0.02, 0.05, 0.65), 9.0, true)
+		bild.draw_arc(mitte, 44.0, 0.0, TAU, 48, Color(farbe, 0.35), 3.0, true)
+		if anteil > 0.0:
+			bild.draw_arc(mitte, 44.0, -PI / 2.0, -PI / 2.0 + TAU * anteil, 48, farbe, 7.0, true)
+		var tafel_breit := Stil.breite(str(aus["text"]), 24) + 32.0
+		var tafel := Rect2(mitte.x - tafel_breit / 2.0, mitte.y + 64.0, tafel_breit, 68.0)
+		bild.draw_rect(tafel, Color(0.03, 0.03, 0.07, 0.9))   # dunkler Grund: der Umriss des Benannten liegt oft genau dahinter
+		bild.draw_rect(tafel, farbe, false, 2.0)
+		for zeile: Array in [[str(aus["text"]), 84.0, 24], [str(aus["name"]), 114.0, 18]]:
+			var ort := mitte + Vector2(0, float(zeile[1]))
+			Stil.schreibe_mittig(bild, ort + Vector2(2, 2), str(zeile[0]), int(zeile[2]), Color(0, 0, 0, 0.85))
+			Stil.schreibe_mittig(bild, ort, str(zeile[0]), int(zeile[2]), farbe)
 	# 22.11. (Nemesis Teil 6): Wiedersehen – Hologramm mit Namensschild und seiner Zeile (das Spiel läuft weiter)
 	if nemesis != null and not nemesis.wiedersehen.is_empty() and zeit < float(nemesis.wiedersehen["bis"]):
 		var ws: Dictionary = nemesis.wiedersehen
@@ -3212,6 +3436,9 @@ func _3d_pflegen() -> void:
 	while _truemmer3d.size() < truemmer.size():
 		var z: Vector2i = truemmer[_truemmer3d.size()]
 		_truemmer3d.append(_kasten3d(hd, Vector3(0.9, 0.25, 0.8), Color("3a3440"), Vector3(float(z.x) + 0.5, 0.12, float(z.y) + 0.5)))
+	_fabrik_balken_pflegen(hd)
+	_beute_3d(hd)
+	_sabotage_3d(hd)
 	for z: Vector2i in kern_aus:
 		if not _qualm3d.has(z):
 			_qualm3d[z] = _kasten3d(hd, Vector3(0.5, 0.5, 0.5), Color("50505a"), Vector3(float(z.x) + 0.5, hoch + 1.0, float(z.y) + 0.5))
@@ -3225,6 +3452,57 @@ func _3d_pflegen() -> void:
 
 
 var _truemmer3d: Array = []
+var _fabrik_getroffen := {}      # 25.11.: Fabrik -> Zeit des letzten Treffers
+var _fabrik_balken := {}         # 25.11.: Fabrik -> [Grund, Füllung]
+var _balken_bild: ImageTexture = null
+
+
+## 25.11. (Paul): Lebensbalken über einer beschädigten Fabrik, im Stil der Truppenbalken (HdAnsicht._lebensbalken);
+## FABRIK_BALKEN_SEK nach dem letzten Treffer blendet er aus.
+func _fabrik_balken_pflegen(hd: HdAnsicht) -> void:
+	for z: Vector2i in _fabrik_getroffen.keys():
+		var zeigen := fabrik_hp.has(z) and zeit - float(_fabrik_getroffen[z]) < FABRIK_BALKEN_SEK
+		if not _fabrik_balken.has(z):
+			if not zeigen:
+				continue
+			if _balken_bild == null:
+				var img := Image.create(48, 4, false, Image.FORMAT_RGBA8)
+				img.fill(Color.WHITE)
+				_balken_bild = ImageTexture.create_from_image(img)
+			var neu: Array = []
+			for i in 2:
+				var s := Sprite3D.new()
+				s.texture = _balken_bild
+				s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+				s.shaded = false
+				s.no_depth_test = true
+				s.centered = false
+				s.region_enabled = true
+				s.pixel_size = 1.0 / 40.0
+				s.render_priority = 20 + i
+				s.modulate = Color(0, 0, 0, 0.7) if i == 0 else Color("7fe0ff")
+				hd.add_child(s)
+				neu.append(s)
+			_fabrik_balken[z] = neu
+		var paar: Array = _fabrik_balken[z]
+		if not zeigen:
+			for s: Node in paar:
+				s.queue_free()
+			_fabrik_balken.erase(z)
+			_fabrik_getroffen.erase(z)
+			continue
+		var anteil := clampf(float(fabrik_hp[z]) / maxf(1.0, wf("fabrik_leben")), 0.0, 1.0)
+		var oben: float = spiel.ego.fabrik_flaeche(z).end.y if spiel.ego != null else 1.45
+		var ort := Vector3(float(z.x) + 0.5, oben + 0.08, float(z.y) + 0.5)
+		var grund: Sprite3D = paar[0]
+		var fuell: Sprite3D = paar[1]
+		grund.position = ort
+		fuell.position = ort
+		grund.region_rect = Rect2(0, 0, 40, 4)
+		grund.offset = Vector2(-20, 0)
+		fuell.region_rect = Rect2(0, 0, maxf(1.0, 38.0 * anteil), 2)
+		fuell.offset = Vector2(-19, 1)
+
 var _rueck3d := {}               # 20.11. (Paul): Fabrik -> roter Streifen an ihrer Rückseite (hier [F] halten)
 var _qualm3d := {}
 

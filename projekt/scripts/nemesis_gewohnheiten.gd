@@ -20,7 +20,7 @@ const BRAKK := {
 ## was er dann tut
 const WIRKUNG := {
 	"klettern": "steigt selbst auf einen Erdwall (Stellung) und schießt von dort mit +1,5 Reichweite",
-	"sprengen": "legt eine piepende Sprengfalle (3 s Zünder) an die Deckung, hinter der du am häufigsten standest",
+	"sprengen": "legt eine blinkende Sprengfalle (3 s Zünder) an die Deckung, hinter der du am häufigsten standest",
 	"tumble": "täuscht an (zweimaliges Aufblitzen) und schießt 0,35 s später – nach deinem Tumble-Fenster",
 	"klon": "kommt mit einem schwachen Doppelgänger (halbes Leben, halber Schaden, flackert, kein Name)",
 	"sabotage": "lauert an der Rückseite der gefährdetsten unzerstörten Fabrik",

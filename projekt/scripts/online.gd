@@ -12,7 +12,7 @@ const CACHE := "user://Phantom Online"
 const FELDER := "id,art,datei,spieler,profil,version,spalten,wertung,elo,spiele,siege,erstellt,anfuehrer:daten-%3E%3Eanfuehrer"   # 22.11.: Anführer aus den Daten (Rangliste)
 
 ## 23.11. (Paul): höchstens so viele Phantome je Spieler und Art im Pool (ein neues verdrängt eins – der Spieler wählt);
-## in der Rangliste stehen Phantome erst ab LISTE_AB Duellen, Spieler erst ab LISTE_AB Läufen.
+## in der Rangliste stehen Phantome erst ab LISTE_AB Duellen; Spieler sofort, bis LISTE_AB Läufe „vorläufig“ (25.11.).
 const PLAETZE := 3
 const LISTE_AB := 5
 
@@ -37,6 +37,8 @@ static var gesperrt := false
 static func aktiv() -> bool:
 	if gesperrt:
 		return false
+	if attrappe.is_valid():
+		return true
 	return OS.get_environment("TD_OFFLINE") == "" and DisplayServer.get_name() != "headless" or OS.get_environment("TD_ONLINE") != ""
 
 
@@ -60,29 +62,58 @@ static func _ganzzahlig(v: Variant) -> Variant:
 	return v
 
 
+## 25.11.: nur für Tests – ersetzt das Netz: func(methode, pfad, koerper) -> [Ergebnis (HTTPRequest.RESULT_*), Antwortcode, Text]
+static var attrappe := Callable()
+## 25.11.: Ausgang der zuletzt beendeten Anfrage – direkt nach dem await lesen (0 = keine Antwort vom Server).
+static var _letzter_code := 0
+static var _letzte_ok := false
+
+
 ## Eine Anfrage an Supabase. Gibt die gelesene Antwort zurück, bei Fehlern null.
 static func _anfrage(methode: HTTPClient.Method, pfad: String, koerper: Variant = null) -> Variant:
 	var baum := _baum()
 	if baum == null or not aktiv():
+		_letzter_code = 0
+		_letzte_ok = false
 		return null
-	var h := HTTPRequest.new()
-	h.timeout = ZEITLIMIT
-	await baum.process_frame
-	baum.root.add_child(h)
-	var kopf := PackedStringArray(["apikey: " + SCHLUESSEL, "Content-Type: application/json", "Accept: application/json"])
-	var text := "" if koerper == null else JSON.stringify(_ganzzahlig(koerper))
-	var fehler := h.request(URL + pfad, kopf, methode, text)
-	if fehler != OK:
+	var beginn := Time.get_ticks_msec()
+	var ergebnis: int = HTTPRequest.RESULT_CANT_CONNECT
+	var code := 0
+	var roh := ""
+	if attrappe.is_valid():
+		await baum.process_frame
+		var falsch: Array = attrappe.call(methode, pfad, koerper)
+		ergebnis = int(falsch[0])
+		code = int(falsch[1])
+		roh = str(falsch[2])
+	else:
+		var h := HTTPRequest.new()
+		h.timeout = ZEITLIMIT
+		# 25.11.: Im Web entpackt schon der Browser. Godot würde ein zweites Mal entpacken und jede gepackte Antwort
+		# verwerfen (Ergebnis 8) – das trifft die großen Phantom-Listen.
+		h.accept_gzip = not OS.has_feature("web")
+		await baum.process_frame
+		baum.root.add_child(h)
+		var kopf := PackedStringArray(["apikey: " + SCHLUESSEL, "Content-Type: application/json", "Accept: application/json"])
+		var text := "" if koerper == null else JSON.stringify(_ganzzahlig(koerper))
+		if h.request(URL + pfad, kopf, methode, text) == OK:
+			var antwort: Array = await h.request_completed
+			ergebnis = int(antwort[0])
+			code = int(antwort[1])
+			roh = (antwort[3] as PackedByteArray).get_string_from_utf8()
 		h.queue_free()
+	var ok := ergebnis == HTTPRequest.RESULT_SUCCESS and code >= 200 and code < 300
+	# 25.11.: je Meldung eine Zeile im Log (auch im Web-Export), dazu jede gescheiterte Abfrage
+	if pfad.begins_with("/rest/v1/rpc/"):
+		print("Online-Meldung %s: Antwort %d (Ergebnis %d) nach %d ms" % [pfad.get_file(), code, ergebnis, Time.get_ticks_msec() - beginn])
+	elif not ok:
+		print("Online-Abfrage gescheitert: %s -> Antwort %d (Ergebnis %d) nach %d ms" % [pfad.get_slice("?", 0), code, ergebnis, Time.get_ticks_msec() - beginn])
+	if not ok and OS.is_debug_build():
+		print("Online: %s %s -> %d %s" % [methode, pfad.left(80), code, roh.left(200)])
+	_letzter_code = code if ergebnis == HTTPRequest.RESULT_SUCCESS else 0
+	_letzte_ok = ok
+	if not ok:
 		return null
-	var antwort: Array = await h.request_completed
-	h.queue_free()
-	var code := int(antwort[1])
-	if int(antwort[0]) != HTTPRequest.RESULT_SUCCESS or code < 200 or code >= 300:
-		if OS.is_debug_build():
-			print("Online: %s %s -> %d %s" % [methode, pfad.left(80), code, (antwort[3] as PackedByteArray).get_string_from_utf8().left(200)])
-		return null
-	var roh := (antwort[3] as PackedByteArray).get_string_from_utf8()
 	if roh.strip_edges() == "":
 		return {}
 	return JSON.parse_string(roh)
@@ -172,11 +203,11 @@ static func duell(angriff_id: String, verteidigung_id: String, ergebnis: float, 
 		"p_ergebnis": clampf(ergebnis, 0.0, 1.0), "p_wertung": wertung, "p_spieler": Profil.name(), "p_profil": Profil.id()}
 	if mensch != "":
 		koerper["p_mensch"] = mensch
-	var antwort: Variant = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
-	if antwort == null and mensch != "":
+	await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
+	if not _letzte_ok and _letzter_code == 404 and mensch != "":   # 25.11.: nur dann – nicht bei Netzfehlern
 		koerper.erase("p_mensch")   # Datenbank noch ohne Spieler-Elo
-		antwort = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
-	return antwort != null
+		await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/duell_melden", koerper)
+	return _letzte_ok
 
 
 ## 24.11. (Paul, Version 72): Aus den Runden eines vollständigen Angriffs die Duelle je Verteidigung bilden:
@@ -210,25 +241,227 @@ static func lauf_duelle(daten: Dictionary) -> Array:
 
 ## 24.11. (Paul, Version 72): Ein ganzer Angriffslauf = EIN Elo-Update der Spieler-Angriffs-Elo (Erwartung und Ergebnis je
 ## Verteidigung, nach Budget gewichtet gemittelt, K 64; Datenbank `angriff_lauf_melden`). `duelle` = Einträge von lauf_duelle().
-## Die Lauf-Nummer macht die Meldung doppelt-sicher. false = Datenbank kennt es nicht (dann zählt der Lauf nicht für die Spieler-Elo).
-static func lauf(duelle: Array) -> bool:
+## Die Lauf-Nummer macht die Meldung doppelt-sicher. false = nicht angekommen (dann zählt der Lauf noch nicht für die Spieler-Elo).
+static func lauf(duelle: Array, nummer: String = "") -> bool:
 	if duelle.is_empty() or Profil.id() == "" or Profil.id() == "pool":
 		return false
 	var liste: Array = []
 	for d: Dictionary in duelle:
 		liste.append({"id": d["id"], "s": clampf(float(d["s"]), 0.0, 1.0), "w": float(d["w"])})
 	var koerper := {"p_profil": Profil.id(), "p_spieler": Profil.name(),
-		"p_lauf": "%s-%d-%d" % [Profil.id(), int(Time.get_unix_time_from_system() * 1000.0), randi()], "p_duelle": liste}
-	var antwort: Variant = await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/angriff_lauf_melden", koerper)
-	return antwort != null
+		"p_lauf": nummer if nummer != "" else lauf_nummer(), "p_duelle": liste}
+	await _anfrage(HTTPClient.METHOD_POST, "/rest/v1/rpc/angriff_lauf_melden", koerper)
+	return _letzte_ok   # 25.11.: auch „kam schon an“ (Antwort null) ist angekommen
+
+
+static func lauf_nummer() -> String:
+	return "%s-%d-%d" % [Profil.id(), int(Time.get_unix_time_from_system() * 1000.0), randi()]
 
 
 ## 24.11.: Angriff aufgegeben: die stehende Verteidigung bekommt den Sieg, der Lauf zählt als Niederlage (ein Update).
 static func angriff_abgebrochen(verteidigung_id: String) -> void:
-	if verteidigung_id == "":
+	if verteidigung_id == "" or not aktiv():
 		return
-	await duell("", verteidigung_id, 0.0, 0, "angriff")
-	await lauf([{"id": verteidigung_id, "s": 0.0, "w": 1.0}])
+	var m := _neue_meldung("angriff", 0)
+	m["schritte"] = [_duell_schritt("", verteidigung_id, 0.0, 0, "angriff"),
+		{"typ": "lauf", "fertig": false, "duelle": [{"id": verteidigung_id, "s": 0.0, "w": 1.0}]}]
+	meldungen.append(m)
+	sende()
+
+
+## 23.11./25.11.: Phantom-Verteidigung mittendrin verlassen: Niederlage in dieser Runde.
+static func verteidigung_abgebrochen(angriff_id: String, ergebnis: float) -> void:
+	if angriff_id == "" or not aktiv():
+		return
+	var m := _neue_meldung("verteidigung", 0)
+	m["schritte"] = [_duell_schritt(angriff_id, "", ergebnis, 0, "verteidigung")]
+	meldungen.append(m)
+	sende()
+
+
+# ------------------------------------------------------------ Meldungen (25.11.)
+# Ein Lauf wird als Meldung abgearbeitet: Upload, dann die Duelle, beim Angriff zuletzt das eine Lauf-Update – immer
+# nacheinander und statisch, also unabhängig von der Spielszene („Nochmal angreifen“ und „Startmenü“ brechen nichts ab).
+# Was nicht ankommt, bleibt im Speicher. Beim erneuten Senden geht nur Offenes hinaus: die Lauf-Nummer bleibt gleich,
+# und `duell_melden` würde beim zweiten Mal doppelt zählen.
+
+static var meldungen: Array = []   # noch nicht vollständig gemeldet (nur im Speicher)
+static var _sendet := false
+
+
+static func _neue_meldung(art: String, wertung: int) -> Dictionary:
+	# hochladen: "offen" (Spieler entscheidet noch über einen Platz) | "ja" | "nein" | "auto" (nur in einen freien Platz)
+	# status: "offen" | "laeuft" | "fertig" | "fehler"
+	return {"art": art, "wertung": wertung, "pfad": "", "daten": {}, "gegner_pfad": "", "gegner_ergebnis": 0.0,
+		"hochladen": "nein", "hochgeladen": false, "id": "", "schritte": null, "lauf_nr": lauf_nummer(),
+		"elo_art": "", "elo_vor": {}, "status": "offen"}
+
+
+## Vollständiger Angriff (Daten wie in der gespeicherten Datei). Gesendet wird erst nach entscheide() oder freigeben().
+static func neue_angriffs_meldung(pfad: String, daten: Dictionary, wertung: int) -> Dictionary:
+	var m := _neue_meldung("angriff", wertung)
+	m["pfad"] = pfad
+	m["daten"] = daten.duplicate(true)
+	m["hochladen"] = "offen"
+	m["elo_art"] = "angriff"
+	meldungen.append(m)
+	return m
+
+
+## Ende einer Verteidigung: eigenen Bau hochladen (pfad "" = keiner), Duell gegen das Angriffs-Phantom (gegner_pfad "" = keins).
+## `elo` = die Endtafel zeigt eine Elo-Änderung.
+static func neue_verteidigungs_meldung(pfad: String, daten: Dictionary, gegner_pfad: String, ergebnis: float, elo: bool) -> Dictionary:
+	var m := _neue_meldung("verteidigung", 0)
+	m["pfad"] = pfad
+	m["daten"] = daten.duplicate(true)
+	m["gegner_pfad"] = gegner_pfad
+	m["gegner_ergebnis"] = ergebnis
+	m["hochladen"] = "offen"
+	m["elo_art"] = "verteidigung" if elo else ""
+	meldungen.append(m)
+	return m
+
+
+static func entscheide(m: Dictionary, hoch: bool) -> void:
+	if str(m["hochladen"]) == "offen":
+		m["hochladen"] = "ja" if hoch else "nein"
+	sende()
+
+
+## Die Spielszene geht, bevor über den Upload entschieden ist: trotzdem melden, hochladen nur in einen freien Platz.
+static func freigeben(m: Dictionary) -> void:
+	if str(m.get("hochladen", "")) == "offen":
+		m["hochladen"] = "auto"
+		sende()
+
+
+static func erneut() -> void:
+	for m: Dictionary in meldungen:
+		if str(m["status"]) == "fehler":
+			m["status"] = "offen"
+	sende()
+
+
+static func sende() -> void:
+	if _sendet or not aktiv():
+		return
+	_sendet = true
+	while true:
+		var naechste := {}
+		for m: Dictionary in meldungen:
+			if str(m["status"]) == "offen" and str(m["hochladen"]) != "offen":
+				naechste = m
+				break
+		if naechste.is_empty():
+			break
+		naechste["status"] = "laeuft"
+		var ok: bool = await _sende_meldung(naechste)
+		naechste["status"] = "fertig" if ok else "fehler"
+		if ok:
+			meldungen.erase(naechste)
+		geaendert += 1
+	_sendet = false
+
+
+## Diese Antworten ändern sich auch beim nächsten Versuch nicht (abgelehnt oder unbekannt): Schritt auslassen.
+static func _aussichtslos(code: int) -> bool:
+	return code in [400, 404, 409, 422]
+
+
+## true = vollständig gemeldet, false = später noch einmal.
+static func _sende_meldung(m: Dictionary) -> bool:
+	if str(m["elo_art"]) != "" and (m["elo_vor"] as Dictionary).is_empty() and not _schon_gemeldet(m):
+		m["elo_vor"] = await meine_elo(str(m["elo_art"]))   # Spieler-Elo vor dem Lauf (für die Anzeige)
+	if not m["hochgeladen"]:
+		var wahl := str(m["hochladen"])
+		if wahl == "auto":
+			var da: Variant = await eigene(str(m["art"]))
+			wahl = "ja" if not (da is Array) or (da as Array).size() < PLAETZE else "nein"
+		if wahl == "ja" and str(m["pfad"]) != "":
+			var neu: String = await hochladen(str(m["art"]), str(m["pfad"]).get_file(), m["daten"])
+			if neu != "":
+				m["id"] = neu
+				pfad_id[str(m["pfad"])] = neu
+			elif not _letzte_ok and not _aussichtslos(_letzter_code):
+				return false
+		m["hochgeladen"] = true
+	if m["schritte"] == null:
+		var schritte: Variant = await _schritte_fuer(m)
+		if schritte == null:
+			return false
+		m["schritte"] = schritte
+	for s: Dictionary in (m["schritte"] as Array):
+		if s["fertig"]:
+			continue
+		var ok := false
+		if str(s["typ"]) == "duell":
+			var a := str(m["id"]) if str(s["angriff"]) == "$eigen" else str(s["angriff"])
+			var v := str(m["id"]) if str(s["verteidigung"]) == "$eigen" else str(s["verteidigung"])
+			ok = await duell(a, v, float(s["ergebnis"]), int(s["wertung"]), str(s["mensch"]))
+		else:
+			ok = await lauf(s["duelle"], str(m["lauf_nr"]))
+		if not ok and not _aussichtslos(_letzter_code):
+			return false
+		s["fertig"] = true
+	return true
+
+
+static func _schon_gemeldet(m: Dictionary) -> bool:
+	if m["schritte"] == null:
+		return false
+	return (m["schritte"] as Array).any(func(s: Dictionary) -> bool: return s["fertig"])
+
+
+static func _duell_schritt(angriff: String, verteidigung: String, ergebnis: float, wertung: int, mensch: String) -> Dictionary:
+	return {"typ": "duell", "fertig": false, "angriff": angriff, "verteidigung": verteidigung, "ergebnis": ergebnis, "wertung": wertung, "mensch": mensch}
+
+
+## Die Duelle eines Laufs. null = eine Online-ID ließ sich gerade nicht nachschlagen (später noch einmal).
+static func _schritte_fuer(m: Dictionary) -> Variant:
+	var schritte: Array = []
+	if str(m["art"]) == "verteidigung":
+		if str(m["gegner_pfad"]) != "":
+			var aid: Variant = await _id_nachschlagen("angriff", str(m["gegner_pfad"]))
+			if aid == null:
+				return null
+			if str(aid) != "":
+				schritte.append(_duell_schritt(str(aid), "$eigen", float(m["gegner_ergebnis"]), 0, "verteidigung"))
+		return schritte
+	var gesehen := {}
+	for r: Dictionary in (m["daten"] as Dictionary).get("runden", []):
+		var g := str(r.get("gegen_pfad", ""))
+		if gesehen.has(g):
+			continue
+		gesehen[g] = true
+		var vid: Variant = await _id_nachschlagen("verteidigung", g)
+		if vid == null:
+			return null
+	# 24.11. (Paul, Version 72): Phantom-Elo je Verteidigung einzeln (Duell mit Runde und Anteil), die Spieler-Angriffs-Elo
+	# aber nur EINMAL für den ganzen Lauf (Budget-gewichtet, Datenbank `angriff_lauf_melden`).
+	var duelle := lauf_duelle(m["daten"])
+	for d: Dictionary in duelle:
+		schritte.append(_duell_schritt("$eigen", str(d["id"]), float(d["phantom_s"]), int(m["wertung"]), "angriff"))
+	if not duelle.is_empty():
+		schritte.append({"typ": "lauf", "fertig": false, "duelle": duelle})
+	return schritte
+
+
+## Online-ID eines Phantoms, notfalls über den Dateinamen aus der Datenbank. "" = dort unbekannt, null = keine Antwort.
+static func _id_nachschlagen(art: String, pfad: String) -> Variant:
+	var id := id_von(pfad)
+	if id != "":
+		return id
+	var l: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=id,profil&art=eq.%s&datei=eq.%s&limit=5" % [art, pfad.get_file().uri_encode()])
+	if not (l is Array):
+		return "" if _aussichtslos(_letzter_code) else null
+	var treffer: Array = (l as Array).filter(func(e: Dictionary) -> bool: return str(e.get("profil", "")) == "pool")
+	if treffer.is_empty() and (l as Array).size() == 1:
+		treffer = l
+	if treffer.is_empty():
+		print("Online: kein Duell für %s – dieses Phantom kennt die Datenbank nicht." % pfad.get_file())
+		return ""
+	pfad_id[pfad] = str(treffer[0]["id"])
+	return pfad_id[pfad]
 
 
 ## 23.11.: Eigene Phantome einer Art im Pool (nicht archiviert), schwächstes zuerst. null = unbekannt (offline oder
@@ -273,6 +506,8 @@ static func hole(eintrag: Dictionary) -> String:
 static func id_von(pfad: String) -> String:
 	if pfad_id.has(pfad):
 		return str(pfad_id[pfad])
+	if pfad.begins_with(CACHE + "/"):
+		return pfad.get_file().get_basename()   # 25.11.: Der Zwischenspeicher heißt wie die ID – gilt auch nach einem Neuladen
 	# eingebautes Pool-Phantom: über den Dateinamen
 	var datei := pfad.get_file()
 	for art: String in listen:
@@ -427,11 +662,20 @@ static func spieler_daten(profil: String) -> Dictionary:
 	return d
 
 
-## Platz in der Spieler-Rangliste einer Seite (0 = nicht in der Liste, weil noch zu wenige Läufe).
+## 25.11. (Paul): Spieler stehen ab dem ersten Lauf in der Liste; bis LISTE_AB Läufe je Art ist die Elo „vorläufig“.
+static func vorlaeufig(spiele: int) -> bool:
+	return spiele < LISTE_AB
+
+
+static func vorlaeufig_text(spiele: int) -> String:
+	return str(TranslationServer.translate("vorläufig (%d von %d)")) % [spiele, LISTE_AB]
+
+
+## Platz in der Spieler-Rangliste einer Seite (0 = nicht in der Liste, weil noch kein Lauf).
 static func spieler_platz(art: String, profil: String) -> int:
 	var n := 0
 	for e: Dictionary in (spieler_listen[art] as Array):
-		if int(e.get("spiele", 0)) < LISTE_AB:
+		if int(e.get("spiele", 0)) < 1:
 			continue
 		n += 1
 		if str(e.get("profil", "")) == profil:

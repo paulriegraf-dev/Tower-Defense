@@ -785,7 +785,8 @@ func _baue_daten() -> void:
 			_panzer_text("belagerung"),
 			"Dockt am ersten erreichbaren Erdwall nach der Zone an, an dem Stellungen oder Türme in der Nähe sind (höchstens %d Wallschritte)." % W.ANDOCK_NAH,
 			"Dann springt alle %s Sekunden eine Myr-Drohne auf den Wall – bis zu %d zugleich, höchstens %s Sekunden lang." % [_z(W.ENTERER_ABSTAND), W.ENTERER_GLEICHZEITIG, _z(W.BELAGERUNG_SEK)],
-			"Dockt er an, wirft die Wurf-Schleuder sofort auf die andere Seite."], [
+			"Dockt er an, wirft die Wurf-Schleuder sofort auf die andere Seite.",
+			tr("Ausgebrannt rückt er selbst vor: %d %% mehr Leben, Nahkampf gegen deine Truppen (%s Schaden), keine Drohnen mehr.") % [roundi(W.BELAGERUNG_VORSTOSS_BONUS * 100.0), _z(W.GEGNER["belagerung"]["vorstoss_schaden"])]], [   # 25.11. (N6)
 			"Unterwegs zerstören: langsam, aber sehr zäh.",
 			"Laserstrahl und Zielmarkierung gegen zähe Einzelziele."]),
 		_gegner("schild", "ab Runde 9", [
@@ -799,7 +800,8 @@ func _baue_daten() -> void:
 			"Lanze in einer Klammer am Ende eines Gangs trifft ihn, sobald er abbiegt."]),
 		_gegner("sani", "ab Runde 14", [
 			"Kämpft nicht. Alle %s Sekunden heilt er die Gegner im Umkreis von %s Feldern um %s Leben." % [_z(W.GEGNER["sani"]["abklingzeit"]), _z(W.GEGNER["sani"]["reichweite"]), _z(W.GEGNER["sani"]["heilung"])],
-			"Gebündelte Trupps werden mit ihm deutlich zäher."], [
+			"Gebündelte Trupps werden mit ihm deutlich zäher.",
+			tr("Sich selbst heilt er nicht. Auf demselben Ziel stapeln Sanitäter nur begrenzt: Die %d nächsten zählen voll, weitere immer weniger, ab dem %d. gar nicht.") % [W.SANITAETER_STAPEL.count(1.0), W.SANITAETER_STAPEL.find(0.0) + 1]], [
 			"Zielwahl „Stärkste“ hilft nicht – er hat wenig Leben. Lieber gezielt: Scharfschützen mit Zielmarkierung, Schwere Munition.",
 			"Flächenschaden auf den ganzen Trupp."]),
 		_gegner("schwarm", "ab Runde 12", [

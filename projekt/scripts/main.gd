@@ -4,7 +4,11 @@ extends Node2D
 enum Phase { BAU, KAMPF, ENDE }
 
 var phase := Phase.BAU
-var werkzeug: int = Karte.FREI      # Karte.FREI = nichts gewählt, sonst WALL / FABRIK / STELLUNG / TURM
+var werkzeug: int = Karte.FREI:     # Karte.FREI = nichts gewählt, sonst WALL / FABRIK / STELLUNG / TURM
+	set(neu):
+		werkzeug = neu
+		if neu != Karte.TURM:
+			turm_wunsch = ""   # 25.11. (N1): die Turmwahl gilt nur, solange das Turm-Werkzeug gewählt ist
 var budget: int = Werte.START_BUDGET
 var leben: int = Werte.START_LEBEN
 var welle: int = 1
@@ -166,6 +170,7 @@ func _ready() -> void:
 		Werte.setze_vollbild(Werte.vollbild)
 	_start_zelle = Werte.START_ZELLE   # Kartengröße steht erst jetzt fest
 	karte = Karte.new()
+	karte.spiel = self   # 25.11. (N5): die Karte fragt nach den Startfeldern der Welle (weg_quellen)
 	add_child(karte)
 	var schatten := Schatten.new()
 	schatten.spiel = self
@@ -515,11 +520,41 @@ func starte_phantom_verteidigung(pfad: String) -> bool:
 		return false
 	phantom_modus = "verteidigung"
 	_angriff_pfad = pfad
+	_gegner_name = str(_angriff_phantom.get("spieler", ""))   # 25.11.: für „Revanche gegen …“
 	Werte.setze_anfuehrer("brakk")   # 19.11.: gegen Angriffs-Phantome vorerst immer mit Brakk
 	_normales_spiel()
 	_protokoll["gegen_angriff"] = pfad.get_file()
-	melde("Du verteidigst gegen den Angriff von %s. Seine Welle steht jede Runde oben in der Ansage." % str(_angriff_phantom.get("spieler", "einem Phantom")), 8.0)
+	var wer := str(_angriff_phantom.get("spieler", "einem Phantom"))
+	var ab := Phantom.start_runde(_angriff_phantom)   # 25.11.: neue Angriffe beginnen in Runde 8
+	if ab > 1:
+		melde(tr("Du verteidigst gegen den Angriff von %s. Runden 1–%d sind Standardwellen, ab Runde %d greift das Phantom an – seine Welle steht dann oben in der Ansage.") % [wer, ab - 1, ab], 9.0)
+	else:
+		melde("Du verteidigst gegen den Angriff von %s. Seine Welle steht jede Runde oben in der Ansage." % wer, 8.0)
 	return true
+
+
+## Verteidigung: Überschrift des Bands zu Beginn von Runde `nr` ("" = keins). 25.11. (Paul): nur noch in der ersten
+## Phantom-Runde, danach zeigt das HUD das Portrait. (Ersatz-Phantome beim Angriff haben ihr eigenes Band.)
+func _phantom_banner(nr: int) -> String:
+	var ab := Phantom.start_runde(_angriff_phantom)
+	if phantom_modus != "verteidigung" or nr != ab or _phantom_trupps(nr).is_empty():
+		return ""
+	var wer := str(_angriff_phantom.get("spieler", "EIN SPIELER")).to_upper()
+	if ab > 1:
+		return tr("AB JETZT: ANGRIFF VON %s") % wer   # nach den Standardwellen
+	return "DIESE WELLE HAT %s GEPLANT" % wer
+
+
+## 25.11.: Für das HUD – wer steht gegenüber? {"name", "portrait"}, {} = niemand (kein Phantom-Lauf, oder noch Standardwellen).
+func gegner_portrait() -> Dictionary:
+	var wer: Dictionary = {}
+	if phantom_modus == "angriff":
+		wer = _phantom
+	elif phantom_modus == "verteidigung" and welle >= Phantom.start_runde(_angriff_phantom):
+		wer = _angriff_phantom
+	if wer.is_empty():
+		return {}
+	return {"name": str(wer.get("spieler", "Phantom")), "portrait": Profil.portrait_gueltig(wer.get("portrait", 0))}
 
 
 ## Verteidigung: die Trupps, die das Angriffs-Phantom in Runde `nr` schickt (leer = es hat dafür keinen Plan).
@@ -554,13 +589,16 @@ func starte_phantom_angriff(pfad: String) -> bool:
 		for f: Dictionary in pool:
 			if str(f["pfad"]).get_file() != pfad.get_file() and _ersatz.size() < 2:
 				_ersatz.append(f["pfad"])
+	_gegner_name = str(_phantom.get("spieler", ""))   # 25.11.: für „Revanche gegen …“
 	Werte.setze_anfuehrer(str(_phantom.get("anfuehrer", "brakk")))   # 19.11.: das Phantom verteidigt mit den Regeln seines Anführers
 	leben = Werte.start_leben()
 	setze_checkpoints(_phantom["karte"]["checkpoints"])
+	_setze_runde(mini(Phantom.ANGRIFF_AB_RUNDE, maxi(phantom_runden(), 1)))   # 25.11. (Paul): ab Runde 8, mit dem Bau von dann
+	nebel.frei_runde = welle   # 25.11.: „die Verteidigung steht dann schon“ – die erste Runde ohne Nebel, wie beim Ersatz-Phantom
 	_lade_phantom_stand()
 	_zeige_laufband()
 	_taktik_fuehrung.call_deferred()   # 23.11.: erster Angriff – Sonde 7 führt durch die erste Runde
-	melde("Angriff auf %s: Plane jede Runde eine Welle im Taktikplaner. Ziel: die %d Leben der Verteidigung." % [str(_phantom.get("spieler", "ein Phantom")), leben], 8.0)
+	melde("Angriff auf %s ab Runde %d: Plane jede Runde eine Welle im Taktikplaner. Ziel: die %d Leben der Verteidigung." % [str(_phantom.get("spieler", "ein Phantom")), welle, leben], 8.0)
 	return true
 
 
@@ -619,7 +657,8 @@ func _setze_stand(stand: Dictionary) -> void:
 		for w: Array in stand["waelle"]:
 			var art := str(w[2])
 			if art != "" and (art == "turm") == (durchgang == 1):
-				karte.baue_aus(Vector2i(int(w[0]), int(w[1])), ausbauten[art])
+				# 25.11. (N1): gespeicherte Turmart (Feld 8); ältere Stände ohne sie: die Form entscheidet
+				karte.baue_aus(Vector2i(int(w[0]), int(w[1])), ausbauten[art], str(w[7]) if art == "turm" and w.size() > 7 else "")
 				if art == "turm" and w.size() > 5 and int(w[5]) > 1:
 					karte.turm_stufe[Vector2i(int(w[0]), int(w[1]))] = int(w[5])
 					if w.size() > 6 and str(w[6]) != "":
@@ -705,8 +744,14 @@ func _angriff_runde_fertig(geknackt: bool = false) -> void:
 		"checkpoints_genommen": _cp_verloren,
 		"durchgaenge": _durchgang,
 		"sekunden": snappedf(_kampf_sek, 0.1),
+		"hq_sekunden": snappedf(_hq_sekunden(), 0.1),
 	})
 	melde("Runde %d: %d Leben genommen, die Verteidigung hat noch %d." % [welle, genommen, leben], 5.0)
+
+
+## 25.11.: So lange hält dein HQ in der letzten Runde schon dem Sturm stand (die Abwehrwelle davor zählt nicht).
+func _hq_sekunden() -> float:
+	return _kampf_sek - _push_ab if endkampf and _push_ab >= 0.0 else 0.0
 
 
 ## Angriff: Die Verteidigung hat ihr letztes Leben verloren. Steht ein Ersatz-Phantom bereit, übernimmt es ab der
@@ -860,6 +905,8 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 	var daten := {
 		"format": 1, "art": "angriff", "spieler": Profil.name(), "profil": Profil.id(), "begonnen": Time.get_datetime_string_from_system(),
 		"gegen": str(_phantom.get("quelle", "")),
+		"portrait": Profil.portrait(),   # 25.11.
+		"start_runde": int(_angriff_log[0]["runde"]) if not _angriff_log.is_empty() else welle,   # 25.11.: erste Runde dieses Angriffs
 		"ergebnis": {"ausgang": grund, "runde": welle, "leben_genommen": genommen, "punkte": punkte, "geknackt": _geknackt + (1 if grund == "durchbruch" else 0),
 			"durchgaenge_runde_20": _durchgang if endkampf else 0, "wertung": wertung["gesamt"]},
 		"runden": _angriff_log,
@@ -881,13 +928,19 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 		titel = "HQ GEFALLEN"
 		farbe = _F_ROT
 		unter = "Das Phantom hat den Gegenangriff gewonnen – aber jede Sekunde zählt."
+	elif grund == "patt":
+		titel = tr("RUNDE 20 GEHALTEN")
+		farbe = _F_GOLD
+		unter = tr("%d Sekunden lang hat sich nichts mehr bewegt.") % int(Phantom.PATT_SEK)
 	elif grund != "durchbruch":
 		titel = "ANGRIFF BEENDET"
 		farbe = _F_GOLD
 		unter = "Das Phantom hat keine weiteren Runden."
 	var zeilen: Array = ["  ·  ".join(wertung["zeilen"])]
 	if endkampf:
-		zeilen.append("Runde 20: %d Durchgänge, %d Sekunden" % [_durchgang, int(_kampf_sek)])
+		zeilen.append("Runde 20: %d Durchgänge, %d Sekunden" % [_durchgang, int(_hq_sekunden())])
+	if grund == "patt":
+		zeilen.push_front(tr("Patt – Verteidigung hat gehalten"))
 	if not vollstaendig:
 		zeilen.append("Kein Ersatz-Phantom mehr da – der Angriff endet vor Runde %d und zählt nicht für die Rangliste." % Werte.LETZTE_RUNDE)
 	elif pfad == "":
@@ -902,7 +955,7 @@ func _angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 			{"name": "BUDGET", "zahl": punkte, "farbe": _F_TEXT, "symbol": "muenze"}],
 		"kaesten": [_protokoll_kasten("DEIN ANGRIFF IST JETZT EIN PHANTOM", "Andere Spieler verteidigen ab jetzt gegen deine Wellen.")] if pfad != "" else [],
 		"zeilen": zeilen,
-		"knoepfe": [["Nochmal angreifen", _neustart, _F_KUPFER_HELL], ["Startmenü", _zum_menue, _F_TEXT]],
+		"knoepfe": _revanche_knoepfe(_F_KUPFER_HELL),
 	}
 	if pfad != "":
 		var elo := _elo_platz("angriff")   # 23.11. (Einführung F): Elo-Änderung zählt auf der Tafel
@@ -1143,7 +1196,7 @@ func _partie_ins_profil(sieg: bool) -> String:
 	var vw := -1
 	var text := ""
 	if phantom_modus == "verteidigung":
-		var w := Phantom.verteidigungs_wertung(gehalten, leben, sieg)
+		var w := Phantom.verteidigungs_wertung(gehalten, leben, sieg, sieg and not patt)
 		vw = int(w["gesamt"])
 		text = "Verteidigungswertung: %d Punkte  ·  %s" % [vw, "  ·  ".join(w["zeilen"])]
 	Profil.partie_ende(sieg, welle, _profil_kills, vw)
@@ -1157,51 +1210,75 @@ func _online_hinweis(ok: bool, was: String) -> void:
 	_export_hinweis.text = ("Online hochgeladen: %s – andere Spieler treffen jetzt darauf." % was) if ok else "Keine Verbindung – dein Lauf liegt als Datei bereit (herunterladen und an Paul schicken)."
 
 
+## 25.11.: Die laufende Meldung dieses Spielendes (Online-Warteschlange, übersteht den Szenenwechsel).
+var _meld_job: Dictionary = {}
+
+
 ## Angriff hochladen und für jede Verteidigung, gegen die er lief, ein Duell melden (Elo).
 func _angriff_online(pfad: String, daten: Dictionary, wertung: int) -> void:
 	if not Online.aktiv():
 		return
-	var elo_vor: Dictionary = await Online.meine_elo("angriff")   # 23.11.: Spieler-Elo vor dem Lauf (für die Anzeige)
-	var id := ""
-	if await _platz_frei("angriff"):   # 23.11.: höchstens 3 eigene Angriffe im Pool – sonst wählt der Spieler, welcher weicht
-		id = await Online.hochladen("angriff", pfad.get_file(), daten)
-		_online_hinweis(id != "", "dein Angriff")
-		if id != "":
-			Online.pfad_id[pfad] = id
-	else:
+	var job := Online.neue_angriffs_meldung(pfad, daten, wertung)
+	_meld_job = job
+	var frei: bool = await _platz_frei("angriff")   # 23.11.: höchstens 3 eigene Angriffe im Pool – sonst wählt der Spieler, welcher weicht
+	if not frei and str(job["hochladen"]) == "offen":
 		_online_hinweis_text("Nicht hochgeladen – deine bisherigen Angriffe bleiben im Pool. Dein Lauf zählt trotzdem für deine Spieler-Elo.")
-	# 24.11. (Paul, Version 72): Phantom-Elo je Verteidigung einzeln (Duell mit Runde und Anteil), die Spieler-Angriffs-Elo
-	# aber nur EINMAL für den ganzen Lauf (Budget-gewichtet, Datenbank `angriff_lauf_melden`).
-	var duelle: Array = Online.lauf_duelle(daten)
-	for d: Dictionary in duelle:
-		await Online.duell(id, str(d["id"]), float(d["phantom_s"]), wertung, "angriff")
-	await Online.lauf(duelle)
-	await _elo_anzeigen("angriff", elo_vor)
+	Online.entscheide(job, frei)
+	await _meldung_abwarten(job, "dein Angriff")
 
 
 ## Verteidigung gegen ein Angriffs-Phantom (oder ein Sieg im normalen Spiel) zu Ende: Bau hochladen, Duell melden.
 func _verteidigung_online(pfad: String, daten: Dictionary) -> void:
 	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer) or _protokoll.has("code"):   # 19.11.: Paul meldet nichts an die Rangliste; 20.11.: per Code freigeschaltet auch nicht
 		return
-	var vid := ""
-	var elo_vor: Dictionary = {}
-	if phantom_modus == "verteidigung":
-		elo_vor = await Online.meine_elo("verteidigung")   # 23.11.: Spieler-Elo vor dem Duell (für die Anzeige)
-	if pfad != "":
-		if await _platz_frei("verteidigung"):   # 23.11.: höchstens 3 eigene Verteidigungen im Pool
-			vid = await Online.hochladen("verteidigung", pfad.get_file(), daten)
-			_online_hinweis(vid != "", "dein Bau")
-			if vid != "":
-				Online.pfad_id[pfad] = vid
-		else:
-			_online_hinweis_text("Nicht hochgeladen – deine bisherigen Verteidigungen bleiben im Pool.")
+	var gegner_pfad := ""
 	if phantom_modus == "verteidigung" and _angriff_pfad != "" and not _duell_gemeldet:
 		_duell_gemeldet = true
-		var aid := Online.id_von(_angriff_pfad)
-		var genommen := Werte.START_LEBEN - leben
-		if aid != "":
-			await Online.duell(aid, vid, Phantom.duell_ergebnis(genommen, leben <= 0, welle), 0, "verteidigung")   # 23.11.: Runde des Falls zählt mit; Spieler-Elo
-	await _elo_anzeigen("verteidigung", elo_vor)
+		gegner_pfad = _angriff_pfad
+	var ergebnis := Phantom.duell_ergebnis(Werte.START_LEBEN - leben, leben <= 0, welle)   # 23.11.: Runde des Falls zählt mit
+	var job := Online.neue_verteidigungs_meldung(pfad, daten, gegner_pfad, ergebnis, phantom_modus == "verteidigung")
+	_meld_job = job
+	var frei := false
+	if pfad != "":
+		frei = await _platz_frei("verteidigung")   # 23.11.: höchstens 3 eigene Verteidigungen im Pool
+		if not frei and str(job["hochladen"]) == "offen":
+			_online_hinweis_text("Nicht hochgeladen – deine bisherigen Verteidigungen bleiben im Pool.")
+	Online.entscheide(job, frei)
+	await _meldung_abwarten(job, "dein Bau")
+
+
+## 25.11.: Wartet auf die Warteschlange und zeigt das Ergebnis auf der Endtafel (die Meldung läuft auch ohne diese Szene).
+func _meldung_abwarten(job: Dictionary, was: String) -> void:
+	while str(job["status"]) in ["offen", "laeuft"]:
+		if not is_inside_tree():
+			return
+		await get_tree().process_frame
+	if str(job["hochladen"]) == "ja" and str(job["pfad"]) != "":
+		_online_hinweis(str(job["id"]) != "", was)
+	if str(job["status"]) == "fehler":
+		_zeige_meldefehler(job, was)
+	elif str(job["elo_art"]) != "":
+		await _elo_anzeigen(str(job["elo_art"]), job["elo_vor"])
+
+
+## 25.11.: „Lauf nicht gemeldet – erneut versuchen“ steht dann an der Stelle der Elo-Anzeige.
+func _zeige_meldefehler(job: Dictionary, was: String) -> void:
+	if _tafel == null or not _tafel.visible:
+		return
+	var conf: Dictionary = _tafel.conf
+	var elo: Variant = conf.get("elo")
+	conf.erase("elo")
+	var kaesten: Array = (conf.get("kaesten", []) as Array).duplicate()
+	var nochmal := func() -> void:
+		conf["kaesten"] = (conf.get("kaesten", []) as Array).filter(func(k: Dictionary) -> bool: return not k.has("meldefehler"))
+		if elo is Dictionary:
+			conf["elo"] = elo
+		Online.erneut()
+		_meldung_abwarten(job, was)
+	kaesten.append({"meldefehler": true, "farbe": _F_ROT, "titel": tr("LAUF NICHT GEMELDET"),
+		"text": tr("Erneut versuchen – der Lauf bleibt gespeichert, solange das Spiel offen ist."),
+		"knopf": [tr("Nochmal"), nochmal]})
+	conf["kaesten"] = kaesten
 
 
 ## 23.11. (Phantom-Einführung F): Platzhalter „Elo wird berechnet“ für die Endtafel – leer, wenn gar nichts gemeldet wird.
@@ -1227,20 +1304,15 @@ func _elo_anzeigen(art: String, vor: Dictionary) -> void:
 		return
 	var hinweis := ""
 	var spiele := int(nach.get("spiele", 0))
-	if spiele < Online.LISTE_AB:
-		hinweis = "noch %d %s bis zur Rangliste" % [Online.LISTE_AB - spiele, "Lauf" if Online.LISTE_AB - spiele == 1 else "Läufe"]
+	if Online.vorlaeufig(spiele):
+		hinweis = Online.vorlaeufig_text(spiele)   # 25.11.: steht schon in der Liste, aber vorläufig
 	else:
 		await Online.lade_listen()
-		var platz := 0
-		var n := 0
-		for e: Dictionary in Online.spieler_listen[art]:
-			if int(e.get("spiele", 0)) >= Online.LISTE_AB:
-				n += 1
-				if platz == 0 and str(e.get("profil", "")) == Profil.id():
-					platz = n
+		var platz := Online.spieler_platz(art, Profil.id())
 		if platz > 0:
 			hinweis = "Platz %d in der Rangliste" % platz
 	if _tafel != null and _tafel.conf.has("elo"):
+		_tafel.conf["elo"]["vorlaeufig"] = Online.vorlaeufig(spiele)
 		_tafel.elo_setze(roundi(float(vor.get("elo", 1000))), roundi(float(nach.get("elo", 1000))), hinweis)
 
 
@@ -1254,9 +1326,8 @@ func _verteidigung_aufgeben() -> void:
 	_duell_gemeldet = true
 	if not Online.aktiv() or not Anfuehrer.ranglistenfaehig(Werte.anfuehrer) or _protokoll.has("code"):
 		return
-	var aid := Online.id_von(_angriff_pfad)
-	if aid != "":
-		Online.duell(aid, "", Phantom.duell_ergebnis(Werte.START_LEBEN - leben, true, welle), 0, "verteidigung")   # statisch: läuft weiter, auch wenn die Szene wechselt
+	# statisch (Warteschlange): läuft weiter, auch wenn die Szene wechselt
+	Online.verteidigung_abgebrochen(Online.id_von(_angriff_pfad), Phantom.duell_ergebnis(Werte.START_LEBEN - leben, true, welle))
 
 
 # ------------------------------------------------------------ Plätze im Pool (23.11.)
@@ -1270,6 +1341,8 @@ var _platz_wahl := "?"
 
 func _platz_frei(art: String) -> bool:
 	var eigene: Variant = await Online.eigene(art)
+	if not _meld_job.is_empty() and str(_meld_job["hochladen"]) != "offen":
+		return false   # 25.11.: die Szene wird schon verlassen – die Warteschlange hat entschieden, keine Rückfrage mehr
 	if not (eigene is Array) or (eigene as Array).size() < Online.PLAETZE:
 		return true   # Platz frei, offline oder Datenbank noch ohne Plätze
 	var liste: Array = (eigene as Array).duplicate()   # schwächstes zuerst (Elo aufsteigend)
@@ -1395,8 +1468,11 @@ func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
 	var k: Array = []
 	if mit_angriff:
 		k.append(["In die Offensive", _frage_angriff, _F_KUPFER_HELL])
-	k.append(["Neustart", _neustart, _F_LEUCHT])
-	k.append(["Startmenü", _zum_menue, _F_TEXT])
+	if phantom_modus == "verteidigung":
+		k.append_array(_revanche_knoepfe(_F_LEUCHT))   # 25.11.: „Neustart“ hieße hier dasselbe Phantom
+	else:
+		k.append(["Neustart", _neustart, _F_LEUCHT])
+		k.append(["Startmenü", _zum_menue, _F_TEXT])
 	var conf := {
 		"kicker": ("RUNDE %d  ·  GEGENANGRIFF" % int(info["welle"])) if Werte.ziel() == "gegenangriff" else ("RUNDE %d  ·  %s" % [int(info["welle"]), Werte.ziel_name(Werte.ziel()).to_upper()]), "titel": "SIEG", "titel_farbe": _F_GOLD, "rahmen": _F_GOLD,
 		"untertitel": "Das HQ der Myriaden ist zerstört." if Werte.ziel() == "gegenangriff" else "Alle Runden überstanden – die Basis steht.", "effekt": "funken",   # 18.11.: Spielziel
@@ -1411,6 +1487,10 @@ func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
 	}
 	if _phantom_neu:
 		(conf["zeilen"] as Array).append("Phantom-Modus freigeschaltet")   # 21.11. (Paul)
+	if patt:   # 25.11.
+		conf["titel"] = tr("RUNDE 20 GEHALTEN")
+		conf["untertitel"] = tr("%d Sekunden lang hat sich nichts mehr bewegt.") % int(Phantom.PATT_SEK)
+		(conf["zeilen"] as Array).push_front(tr("Patt – Verteidigung hat gehalten"))
 	if phantom_modus == "verteidigung":
 		var elo := _elo_platz("verteidigung")
 		if not elo.is_empty():
@@ -1487,7 +1567,7 @@ func _zeige_niederlage(vw: String, rekord_vorher: int, besiegt: int) -> void:
 			{"titel": "ABGEFANGENER FUNKSPRUCH DER MYRIADEN", "farbe": _F_KUPFER, "text": "„%s“" % spruch, "tippen": true},
 			{"titel": "SONDE 7 RÄT", "farbe": _F_LEUCHT, "text": str(_TIPPS.get(meiste, _TIPP_SONST))}],
 		"zeilen": zeilen,
-		"knoepfe": [["Revanche!", _neustart, _F_LEUCHT], ["Startmenü", _zum_menue, _F_TEXT]],
+		"knoepfe": _revanche_knoepfe(_F_LEUCHT) if phantom_modus == "verteidigung" else [["Revanche!", _neustart, _F_LEUCHT], ["Startmenü", _zum_menue, _F_TEXT]],
 	}
 	if phantom_modus == "verteidigung":
 		var elo := _elo_platz("verteidigung")
@@ -1532,11 +1612,52 @@ func _neustart() -> void:
 	if phase != Phase.ENDE:
 		_angriff_aufgeben()   # 19.11.: Angriff abgebrochen – zählt für die Verteidigung
 		_verteidigung_aufgeben()   # 23.11.
+	Online.freigeben(_meld_job)   # 25.11.: noch nicht gemeldet? Geht trotzdem hinaus
 	loesche_sitzung()   # 19.11.
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
-	naechster_start = "angriff:" + _phantom_pfad if phantom_modus == "angriff" else ("brakk" if brakk_modus and Werte.modus() != "rogue" else "normal")   # 18.11.: Neustart bleibt im Brakk-Mode; 20.11. (Paul): Rogue bleibt Rogue (über das Regelpaket der Karte)
+	if phantom_modus != "":
+		naechster_start = _revanche_start()   # 25.11.: dasselbe Phantom noch einmal ("" = verbraucht, dann ins Menü)
+	else:
+		naechster_start = "brakk" if brakk_modus and Werte.modus() != "rogue" else "normal"   # 18.11.: Neustart bleibt im Brakk-Mode; 20.11. (Paul): Rogue bleibt Rogue (über das Regelpaket der Karte)
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
+
+
+# ------------------------------------------------------------ Revanche (25.11.)
+
+var _gegner_name := ""   # Phantom-Modus: Besitzer des Phantoms, mit dem dieser Lauf begann
+
+
+func _revanche_pfad() -> String:
+	return _phantom_pfad if phantom_modus == "angriff" else _angriff_pfad
+
+
+## Knöpfe der Endtafel: Revanche gegen dasselbe Phantom und Startmenü; verbraucht steht die Revanche grau dahinter.
+func _revanche_knoepfe(farbe: Color) -> Array:
+	var menue := ["Startmenü", _zum_menue, _F_TEXT]
+	if not Phantom.revanche_frei(_revanche_pfad()):
+		return [menue, [tr("Revanche verbraucht"), func(): pass, Color("6b7380")]]
+	var name := _gegner_name if _gegner_name != "" and _gegner_name != "?" else "Phantom"
+	return [[tr("Revanche gegen %s") % name, _neustart, farbe], menue]
+
+
+## Merkt die Revanche vor: dasselbe Phantom, beim Angriff mit derselben Ersatz-Reihenfolge, soweit sie bekannt ist.
+func _revanche_start() -> String:
+	var pfad := _revanche_pfad()
+	if pfad == "" or not Phantom.revanche_frei(pfad):
+		return ""
+	Phantom.revanche_zaehlen(pfad)
+	if phantom_modus != "angriff":
+		return "verteidigt:" + pfad
+	# erst die Verteidigungen, die schon dran waren (in ihrer Reihenfolge), dann die noch wartenden
+	var folge: Array = []
+	var bekannt: Array = _angriff_log.map(func(r: Dictionary) -> String: return str(r.get("gegen_pfad", "")))
+	bekannt.append(_aktiv_pfad)
+	for p: String in bekannt + _ersatz:
+		if p != "" and p != pfad and not folge.has(p):
+			folge.append(p)
+	Online.ersatz_pfade = folge
+	return "angriff:" + pfad
 
 
 ## Knopf oben rechts: Partie abbrechen. Der erste Klick fragt nach, der zweite (innerhalb weniger Sekunden) geht ins Hauptmenü.
@@ -1554,6 +1675,7 @@ func _zum_menue() -> void:
 	if phase != Phase.ENDE or (_tafel != null and _tafel.visible and not _angriff_fertig):
 		_angriff_aufgeben()   # 19.11.: Angriff abgebrochen – zählt für die Verteidigung
 	_verteidigung_aufgeben()   # 23.11.: Verteidigung abgebrochen – zählt für den Angriff
+	Online.freigeben(_meld_job)   # 25.11.
 	loesche_sitzung()   # 19.11.
 	if _menue == null and not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.: bewusst verlassen – kein „Fortsetzen“ mehr
@@ -1572,6 +1694,7 @@ func _frage_angriff() -> void:
 		"untertitel": "Du wechselst die Seite.",
 		"punkte": [
 			["wall", "Ein Phantom verteidigt: der Bau eines anderen Spielers, Runde für Runde so, wie er damals stand."],
+			["panzer", tr("Dein Angriff beginnt in Runde %d – die Verteidigung steht dann schon.") % Phantom.ANGRIFF_AB_RUNDE],
 			["muenze", "Jede Runde ein festes Budget. Im Taktikplaner wählst du Einheiten, Reihenfolge, Pausen und Würfe."],
 			["herz", "Nimm dem Phantom alle %d Leben – oder halte Runde 20 so lange wie möglich. Am Ende gibt es Punkte." % Werte.START_LEBEN]],
 		"zeilen": ["Deine Partie ist gespeichert und steht ab jetzt selbst als Phantom im Pool."],
@@ -1728,6 +1851,7 @@ func _speichere_zwischenstand() -> void:
 		"basis": [karte.basis.x, karte.basis.y], "checkpoints": cps, "cp_feind": Array(karte.cp_feind),
 		"stand": Phantom._stand(_zellen_jetzt(), _schilde_jetzt()),
 		"kommandant": [kommandant.aufstellung.x, kommandant.aufstellung.y] if kommandant != null else [],
+		"klon_rest": kommandant.klon_rest if kommandant != null else 0,   # 25.11. (N2): sonst setzt Neuladen die Sperre zurück
 		"phantom_modus": phantom_modus, "angriff_pfad": _angriff_pfad, "herausforderung": herausforderung, "anfuehrer": Werte.anfuehrer,   # 19.11.
 		"auftrag": auftrag, "auftrag_letzter": auftrag_letzter, "gratis_fabriken": gratis_fabriken,   # 20.11.
 		"protokoll": _protokoll, "protokoll_datei": _protokoll_datei, "kills": _profil_kills,
@@ -1814,6 +1938,8 @@ func _zellen_jetzt() -> Dictionary:
 		if typ == Karte.WALL:
 			var w := {"typ": "wall", "ausbau": str(namen.get(karte.ausbau.get(z, -1), "")), "panzer": karte.panzer.has(z),
 				"stufe": int(karte.turm_stufe.get(z, 1)), "faehigkeit": str(karte.turm_faehigkeit.get(z, ""))}
+			if karte.turm_art.has(z):
+				w["art"] = str(karte.turm_art[z])   # 25.11. (N1): sonst gälte nach dem Laden wieder die Rangfolge
 			if karte.mg_stufe.has(z):   # 20.11. (Paul): MG-Stellung – Stufe + 1 und Wahlen im selben Feld wie beim Turm
 				w["stufe"] = int(karte.mg_stufe[z]) + 1
 				w["faehigkeit"] = "|".join(PackedStringArray(karte.mg_wahl.get(z, [])))
@@ -1894,6 +2020,8 @@ func _lade_zwischenstand() -> void:
 	# wie nach einer geschafften Runde: welle eins davor, dann die Bauphase regulär herrichten
 	welle = int(d["welle"]) - 1
 	_naechste_bauphase()
+	if kommandant != null and not brakk_modus:
+		kommandant.klon_rest = int(d.get("klon_rest", 0))   # 25.11. (N2): nach der Bauphase, die hat schon weitergezählt
 	leben = int(d["leben"])
 	budget = int(d["budget"])
 	var gesichert: Variant = d.get("auftrag", {})   # 20.11.: Pauls Auftrag der Bauphase (nicht neu ziehen)
@@ -2063,6 +2191,35 @@ func _spawn_zelle() -> Vector2i:
 	if Werte.plan_runde(welle) <= Werte.HAUPTLINIE_BIS:
 		return Werte.START_ZELLE   # die ersten Runden: alle über die Hauptlinie, nichts verteilt sich
 	return Vector2i(Zufall.ganz(Werte.ZONE_SPALTEN), Zufall.ganz(Werte.ZEILEN))
+
+
+## 25.11. (Paul, N5): Wo kommen die Gegner der kommenden (in der Welle: der laufenden) Welle heraus? Startfeld -> Anzahl,
+## nach den Regeln von _spawn_zelle, aber mit dem Start, den die Karte jetzt hat (nach einer Einnahme: der Checkpoint).
+## Verteilte Runden (aus der ganzen Zone): Mitte als Hauptweg, oberer und unterer Rand mit 0 als Nebenwege.
+## Leer = keine Myriaden-Wellen (Befehl 24) – dann zeigt die Karte den Weg wie bisher.
+func weg_quellen() -> Dictionary:
+	if order24 != null or karte == null:
+		return {}
+	var w: Dictionary = _welle if phase == Phase.KAMPF and not _welle.is_empty() else naechste_welle()
+	var start: Vector2i = karte.start_zelle() if karte.start_index() >= 0 else Werte.START_ZELLE
+	var geplant := phantom_modus != "" or Werte.KARTE_WELLEN.has(welle)
+	var trupps: Array = w.get("trupps", [])
+	var ausgaenge: Array = w.get("ausgaenge", [])
+	var q := {}
+	for i in trupps.size():
+		var a := str(ausgaenge[i]) if i < ausgaenge.size() else ""
+		var z := start
+		if start == Werte.START_ZELLE and not Werte.EINGAENGE.is_empty() and (a == "" or not geplant):
+			z = Werte.EINGAENGE[(i + 1) % Werte.EINGAENGE.size()]   # reihum wie _naechster_eingang
+		elif geplant and (a != "" or start == Werte.START_ZELLE):
+			z = Werte.AUSGAENGE.get(a, Werte.START_ZELLE)
+		q[z] = int(q.get(z, 0)) + (trupps[i] as Array).size()
+	if q.is_empty():
+		q[start] = 0
+	if not geplant and start == Werte.START_ZELLE and Werte.EINGAENGE.is_empty() and Werte.plan_runde(welle) > Werte.HAUPTLINIE_BIS:
+		for z: Vector2i in [Vector2i(0, 1), Vector2i(0, Werte.ZEILEN - 2)]:
+			q[z] = int(q.get(z, 0))
+	return q
 
 
 ## 20.11. (Schritt 5b, Zange): Jeder Trupp mit mindestens zwei Mitgliedern wird nach Köpfen halbiert; die zweite Hälfte
@@ -2316,6 +2473,8 @@ func _process(delta: float) -> void:
 	_aktualisiere_vorschau()
 	_aktualisiere_sichtanzeige()
 	_bauzeit_tick(delta)
+	if _hud == null or not _hud.pausiert():
+		_patt_tick(minf(delta / maxf(Engine.time_scale, 0.01), 0.5))   # 25.11.: Echtzeit; ein Hänger zählt höchstens 0,5 s
 	_aktualisiere_hud(delta)
 	_pflege_schilde()
 	# 22.11.: Brakk-Mode – doppelt so lange Schritte, und ein langsames Bild holt höchstens BRAKK_MAX_SCHRITTE nach
@@ -2341,7 +2500,7 @@ func _physics_process(_takt: float) -> void:
 	if endkampf and _schlange.is_empty():
 		# letzte Runde: nach kurzer Pause beginnt dieselbe Reihe Trupps von vorn
 		_lade_durchgang()
-		_spawn_in = Werte.ENDKAMPF_PAUSE
+		_spawn_in = Werte.ENDKAMPF_PAUSE * endkampf_dehnung()   # 25.11. (N7): jede Schleife braucht länger
 	if not _schlange.is_empty():
 		_spawn_in -= delta
 		if _spawn_in <= 0.0:
@@ -2389,7 +2548,7 @@ func _physics_process(_takt: float) -> void:
 					_locker.pop_front()
 				_trupp = []
 				_trupp_nr += 1
-				_spawn_in += Werte.ENDKAMPF_TRUPP_PAUSE if endkampf else Werte.TRUPP_PAUSE
+				_spawn_in += Werte.ENDKAMPF_TRUPP_PAUSE * endkampf_dehnung() if endkampf else Werte.TRUPP_PAUSE
 				if not _pausen.is_empty():
 					_spawn_in = maxf(_spawn_in + float(_pausen[0]), 0.6)
 				if brakk_modus:
@@ -2571,7 +2730,7 @@ func aufraeumen() -> bool:
 	if gegner.size() > Werte.AUFRAEUM_HOECHSTENS_GEGNER:
 		return false   # noch ein ganzer Trupp unterwegs: die Stellungen bleiben besetzt
 	for g in gegner:
-		if g.rolle == "belagerung":
+		if g.rolle == "belagerung" and not g.vorstoss:   # 25.11. (N6): ein vorrückender Turm ist ein gewöhnlicher Gegner
 			return false
 	return true
 
@@ -2794,6 +2953,7 @@ func _truppenturm(z: Vector2i, delta: float) -> void:
 			e.wach_ziel = cp
 			figuren.add_child(e)
 			e.start(self, karte, "technogunner", z, stufe, "")
+			e._schutz_rest = 0.0   # 25.11. (N3): rückt nur aus dem Turm aus, ist nicht frisch produziert
 			e.daten["name"] = "Werkschutz"
 			e.max_leben *= float(karte.turm_wert(z, "leben_mal", 1.0))
 			e.leben = e.max_leben
@@ -3164,6 +3324,7 @@ func lazarett_rettet(e: Einheit) -> bool:
 			erfolg("feldlazarett")   # 18.11.
 			objekt_zaehle(z, "gerettet", 1.0)
 			e.leben = e.max_leben * 0.5
+			e.schutz_geben()   # 25.11. (N3): wiederaufgestanden
 			effekte.flaeche(e.position, Werte.ZELLE * 0.6, Color(Werte.TURMARTEN["heil"]["farbe"]))
 			melde("Feldlazarett: %s steht wieder auf." % e.daten["name"], 3.0)
 			return true
@@ -3414,7 +3575,9 @@ func starte_welle(erzwingen: bool = false) -> void:
 	_kampf_tick = 0
 	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
 		# 23.11. (Phantom-Einführung E): wessen Welle ist das?
-		_einblendung.banner("DIESE WELLE HAT %s GEPLANT" % str(_angriff_phantom.get("spieler", "EIN SPIELER")).to_upper(), "Phantom-Angriff · Runde %d" % welle, _F_KUPFER_HELL)
+		var banner := _phantom_banner(welle)
+		if banner != "":
+			_einblendung.banner(banner, "Phantom-Angriff · Runde %d" % welle, _F_KUPFER_HELL)
 		if not bool(Profil.einstellung("pe_verteidigung", false)):
 			Profil.setze_einstellung("pe_verteidigung", true)
 			melde("Das ist die echte Welle eines anderen Spielers – halte alle Runden, dann steigt deine Elo.", 8.0)
@@ -3533,6 +3696,14 @@ func _beende_wurfziel() -> void:
 	_laufband._neu()
 
 
+## 25.11. (Paul, N7): Faktor auf die Pausen im Gegenangriff – wächst je Durchgang um ENDKAMPF_PAUSE_ZUWACHS
+## (Durchgang 1 = die Abwehr ×1,0, die erste Schleife ×1,25 …). Im Brakk-Mode wie bisher ×1.
+func endkampf_dehnung() -> float:
+	if brakk_modus:
+		return 1.0
+	return 1.0 + Werte.ENDKAMPF_PAUSE_ZUWACHS * float(maxi(_durchgang - 1, 0))
+
+
 ## Füllt die Schlangen mit dem nächsten Durchgang der Welle (in normalen Runden gibt es nur einen).
 var _elite_nr := -1   # 19.11.: Brakk-Mode – dieser Trupp des Durchgangs kommt als Elite (-1 = keiner)
 
@@ -3584,6 +3755,11 @@ func naechste_welle() -> Dictionary:
 	if phantom_modus == "verteidigung" and not _phantom_trupps(welle).is_empty():
 		return Werte.welle_aus_plan({"name": "Angriff von %s" % str(_angriff_phantom.get("spieler", "?")), "trupps": _phantom_trupps(welle), "wurf_frei": true}, welle)
 	var w := Werte.welle(welle)
+	if brakk_modus and not Werte.KARTE_WELLEN.has(welle):
+		# 25.11. (N7): die Aufstockung des Finales gilt nicht im Brakk-Mode – dort die Welle wie bisher
+		var lf: float = w["leben_faktor"]
+		w = Werte.welle_aus_plan(Werte.plan_ohne(Werte.wellen_plan(welle), "nicht_brakk"), Werte.plan_runde(welle))
+		w["leben_faktor"] = lf
 	if Werte.KARTE_WELLEN.has(welle):
 		# 18.11.: Szenario mit eigener Welle für diese Runde (Taktikplaner im Szenario-Editor); sonst die entworfene
 		w = Werte.welle_aus_plan({"name": "Welle des Szenarios", "trupps": Werte.KARTE_WELLEN[welle], "wurf_frei": true}, welle)
@@ -3654,9 +3830,14 @@ func sandbox_springe(nr: int) -> void:
 	nr = clampi(nr, 1, Werte.LETZTE_RUNDE)
 	if not sandbox or phase != Phase.BAU or nr == welle:
 		return
+	_protokoll["sandbox_sprung"] = true
+	_setze_runde(nr)
+
+
+## Stellt alles auf Runde `nr`, was sonst Runde für Runde dazukommt (Sandbox-Sprung; 25.11.: Start des Phantom-Angriffs).
+func _setze_runde(nr: int) -> void:
 	welle = nr
 	waehle_variante()
-	_protokoll["sandbox_sprung"] = true
 	karte.cp_aktiv = Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE
 	_aktualisiere_zone()
 	if Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE:
@@ -3664,7 +3845,7 @@ func sandbox_springe(nr: int) -> void:
 			if b.art == "schleuder":
 				schleuder_umzug(b, true)
 	karte.zeige_schwachstelle = Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE
-	endkampf = welle == Werte.LETZTE_RUNDE and phantom_modus == "angriff"   # 18.11.: sonst erst nach der Abwehr (siehe _starte_gegenangriff)
+	endkampf = false   # 25.11.: der Sturm kommt immer erst nach der Abwehr (siehe _starte_gegenangriff)
 	karte.schild = not endkampf
 	karte.zeige_angriff = endkampf
 	karte.aktualisiere_pfad()
@@ -3672,6 +3853,9 @@ func sandbox_springe(nr: int) -> void:
 
 func _welle_geschafft() -> void:
 	if phantom_modus == "angriff":
+		if welle == Werte.LETZTE_RUNDE and not endkampf:
+			_starte_gegenangriff()   # 25.11. (Paul): wie im Normalmodus – erst die Welle, dann der Sturm aufs HQ
+			return
 		_angriff_runde_fertig()
 		if welle >= phantom_runden():
 			_angriff_ende("ende", true)
@@ -3757,10 +3941,13 @@ func erz_ertrag() -> int:
 ## Runde 20, zweiter Teil (18.11.): Die erste Welle ist abgewehrt – Rundenbonus wie sonst, dann fällt der Schild,
 ## die Truppen (bis auf eine je Fabrik) verlassen die Stellungen, und die Gegner kommen in Schleife (Leben wie früher im Endkampf).
 func _starte_gegenangriff() -> void:
-	var bonus := einkommen(Werte.wellen_bonus(welle))   # 18.11.: „Doppeltes Geld“, Werte-Mod
-	var zins := Werte.zinsen(budget)
+	var angreifer := phantom_modus == "angriff"   # 25.11.: der Angreifer bekommt kein Geld, sein Budget steht je Runde fest
+	var bonus := 0 if angreifer else einkommen(Werte.wellen_bonus(welle))   # 18.11.: „Doppeltes Geld“, Werte-Mod
+	var zins := 0 if angreifer else Werte.zinsen(budget)
 	budget += bonus + zins
 	endkampf = true
+	_push_ab = _kampf_sek
+	_patt_neu()
 	_welle["leben_faktor"] = Werte.endkampf_leben()
 	karte.schild = false
 	karte.zeige_angriff = true
@@ -3780,9 +3967,57 @@ func _starte_gegenangriff() -> void:
 		if karte.posten.get(e.posten_zelle) == e:
 			karte.posten.erase(e.posten_zelle)
 		e.posten_verloren()
-	_einblendung.banner("GEGENANGRIFF!", "Der Schild ist gefallen – zerstört das HQ der Myriaden.", _F_ROT)   # 18.11.
-	melde("Welle abgewehrt: +%d Budget. Der Schild ist gefallen – GEGENANGRIFF! Zerstört das HQ. Gebt euren Truppen einen Fußweg (blaue Linie)." % (bonus + zins), 12.0)
+	if angreifer:
+		_einblendung.banner("GEGENANGRIFF!", tr("Dein Schild ist gefallen – die Verteidiger stürmen dein HQ."), _F_ROT)
+		melde(tr("Dein Schild ist gefallen. Dein Plan läuft jetzt in Schleife – halte dein HQ so lange wie möglich oder brich durch."), 12.0)
+	else:
+		_einblendung.banner("GEGENANGRIFF!", "Der Schild ist gefallen – zerstört das HQ der Myriaden.", _F_ROT)   # 18.11.
+		melde("Welle abgewehrt: +%d Budget. Der Schild ist gefallen – GEGENANGRIFF! Zerstört das HQ. Gebt euren Truppen einen Fußweg (blaue Linie)." % (bonus + zins), 12.0)
 	Ton.spiele(self, "alert")
+
+
+# ------------------------------------------------------------ Patt in Runde 20 (25.11.)
+
+var _push_ab := -1.0      # _kampf_sek beim Beginn des Gegenangriffs (-1 = noch keiner in dieser Runde)
+var _patt_uhr := 0.0      # Echtzeit-Sekunden ohne Schaden am HQ und ohne genommenes Leben
+var _patt_leben := 0
+var _patt_hq := 0.0
+var patt := false         # diese Partie endete durch Patt
+
+
+func _patt_neu() -> void:
+	_patt_uhr = 0.0
+	_patt_leben = leben
+	_patt_hq = hq.leben if is_instance_valid(hq) else 0.0
+
+
+## Nur im Phantom-Modus und nur im Gegenangriff der letzten Runde (vorher kann niemand das HQ treffen).
+func patt_aktiv() -> bool:
+	return phantom_modus != "" and endkampf and phase == Phase.KAMPF and welle >= Werte.LETZTE_RUNDE
+
+
+## Sekunden bis zum Patt (-1 = gerade keine Regel).
+func patt_rest() -> float:
+	return maxf(Phantom.PATT_SEK - _patt_uhr, 0.0) if patt_aktiv() else -1.0
+
+
+## `echt` = vergangene Sekunden in Echtzeit (unabhängig vom Spieltempo). Ein Treffer am HQ oder ein genommenes Leben
+## stellt die Uhr zurück.
+func _patt_tick(echt: float) -> void:
+	if not patt_aktiv() or not is_instance_valid(hq):
+		return
+	if leben < _patt_leben or hq.leben < _patt_hq:
+		_patt_uhr = 0.0
+	else:
+		_patt_uhr += echt
+	_patt_leben = leben
+	_patt_hq = hq.leben
+	if _patt_uhr >= Phantom.PATT_SEK:
+		patt = true
+		if phantom_modus == "angriff":
+			_angriff_ende("patt")   # zählt als „nicht geknackt“
+		else:
+			_gewonnen()
 
 
 ## Runde hochzählen und alles für die nächste Bauphase herrichten.
@@ -3805,11 +4040,7 @@ func _naechste_bauphase() -> void:
 	karte.zeige_schwachstelle = Werte.plan_runde(welle) >= Werte.SPRENGER_AB_WELLE
 	if welle == Werte.LETZTE_RUNDE:
 		if phantom_modus == "angriff":
-			endkampf = true
-			karte.schild = false
-			karte.zeige_angriff = true
-			karte.aktualisiere_pfad()
-			melde("Letzte Runde: Dein Schild ist gefallen, die Verteidiger greifen dein HQ an. Dein Plan läuft in Schleife – halte so lange wie möglich oder brich durch.", 12.0)
+			melde(tr("Letzte Runde: Erst läuft deine Welle wie gewohnt. Ist sie abgewehrt, fällt dein Schild und die Verteidiger stürmen dein HQ."), 12.0)
 		elif Werte.ziel() != "gegenangriff":
 			melde("Letzte Runde: Übersteht ihr diese Welle, ist die Partie gewonnen." if Werte.ziel() == "ueberleben" else "Letzte Runde: Übersteht sie und haltet mindestens einen Checkpoint.", 10.0)
 		else:
@@ -4235,7 +4466,7 @@ func _gewonnen() -> void:
 		loesche_zwischenstand()   # 18.11.
 	_schliesse_runde("sieg")
 	# 18.11.: Erfolge zum Sieg
-	if Werte.ziel() == "gegenangriff":
+	if Werte.ziel() == "gegenangriff" and not patt:   # 25.11.: beim Patt ist kein HQ zerstört
 		_phantom_neu = not Profil.phantom_frei()
 		erfolg("gegenangriff")
 		_phantom_neu = _phantom_neu and Profil.phantom_frei()   # 21.11. (Paul): Hinweis auf dem Siegbild
@@ -4255,6 +4486,8 @@ func _gewonnen() -> void:
 			Profil.phantom_erstellt()
 			erfolg("spiegelbild")   # 18.11.
 			_verteidigung_online.call_deferred(vpfad, daten)
+	if phantom_modus == "verteidigung" and not als_phantom:
+		_verteidigung_online.call_deferred("", {})   # 25.11.: das Duell zählt auch, wenn aus dem Sieg kein neues Phantom wird
 	var besiegt := 0
 	for n: int in _profil_kills.values():
 		besiegt += n
@@ -4807,12 +5040,22 @@ func _kommandant_meldung(text: String) -> void:
 		melde(text, 4.0)
 
 
-## [R]: Klonmaschine auf ein freies Feld setzen (einmal pro Runde, hält bis zum Rundenende).
+## 25.11. (N2): Zusatz für Brakks Hinweistexte, solange die Klonmaschine noch lädt (" (R · in 2 Runden)").
+func _klon_zusatz() -> String:
+	var rest: String = kommandant.klon_anzeige() if kommandant != null else ""
+	return "" if rest == "" else " (%s)" % rest
+
+
+## [R]: Klonmaschine auf ein freies Feld setzen (hält bis zum Rundenende; Abklingzeit siehe kommandant.klon_rest).
 func stelle_klonmaschine(z: Vector2i) -> String:
 	if kommandant == null or kommandant.gefallen:
 		return ""
 	if kommandant.klon_genutzt:
-		return "Die Klonmaschine gibt es nur einmal pro Runde."
+		if brakk_modus:
+			return "Die Klonmaschine gibt es nur einmal pro Runde."
+		if kommandant.klon_rest == 1:   # 25.11. (N2)
+			return tr("Die Klonmaschine lädt noch: bereit in 1 Runde.")
+		return tr("Die Klonmaschine lädt noch: bereit in %d Runden.") % kommandant.klon_rest
 	if not karte.ist_begehbar(z) or z.x < Werte.ZONE_SPALTEN or not karte.in_karte(z):
 		return "Die Klonmaschine braucht ein freies Feld."
 	kommandant.klon_genutzt = true
@@ -4850,7 +5093,12 @@ func klone_einheit(e: Einheit) -> void:
 	c.position = e.position + Vector2(Zufall.von_bis(-8, 8), Zufall.von_bis(-6, 6))
 	c.leben = minf(e.leben, c.max_leben)
 	c.klon = true
+	c._schutz_rest = 0.0   # 25.11. (N3): Klone bekommen keinen Spawnschutz
 	einheiten.append(c)
+	if not brakk_modus:
+		# 25.11. (Paul, N2): Der Klon zählt zum Truppenlimit seiner Fabrik – erst wenn darunter ein Platz frei wird,
+		# baut sie Ersatz. einheit_gefallen nimmt ihn wieder aus der Liste.
+		(f["einheiten"] as Array).append(c)
 	if is_instance_valid(e.folge):
 		c.folge_kommandant(e.folge)
 		(e.folge as Kommandant).gesammelt.append(c)
@@ -4919,7 +5167,7 @@ func _wurf_tick(delta: float) -> void:
 			if typen.has("belagerung"):
 				turm_kommt = true
 		for g in gegner:
-			if g.rolle == "belagerung":
+			if g.rolle == "belagerung" and not g.vorstoss:   # 25.11. (N6): wer vorrückt, dockt nicht mehr an
 				turm_kommt = true
 		# der nächste Wurf, der dran ist: sein Auslöser ist erfüllt und genug Lauf-Trupps sind unterwegs
 		var dran := -1
@@ -5358,6 +5606,8 @@ func bautyp(z: Vector2i, typ: int) -> int:
 
 ## Leerer Text = Bauen erlaubt, sonst der Grund, warum nicht.
 func bau_hindernis(z: Vector2i, typ: int) -> String:
+	if tutorial != null and tutorial.sperrt_bau(typ) != "":
+		return tutorial.sperrt_bau(typ)   # 25.11. (N4): das Tutorial erlaubt nur das Werkzeug des Schritts
 	if typ == Karte.TURM and turm_wunsch != "":
 		return wunsch_hindernis(z)   # 21.11. (Paul)
 	typ = bautyp(z, typ)
@@ -5494,6 +5744,8 @@ func baue(z: Vector2i, typ: int, still: bool = false) -> bool:
 		karte.magnet_richtung[z] = r
 	if _ist_ausbau(typ):
 		karte.baue_aus(z, typ)
+		if typ == Karte.TURM:
+			eintrag["art"] = str(karte.turm_art[z])   # 25.11. (N1): fürs Nachspielen und die Phantome
 		if typ == Karte.TURM and karte.turm_art.has(z) and not str(karte.turm_art[z]) in ["truppen", "pliplop"] and not sandbox and Profil.merke_form(str(karte.turm_art[z])) >= Werte.FORMTUERME_ZAHL:
 			erfolg("formenlehre")   # 18.11.
 		if typ == Karte.TURM and karte.turm_art.has(z):
@@ -5720,7 +5972,7 @@ func _waehle_aus(maus: Vector2, z: Vector2i) -> bool:
 		_auswahl.ausgewaehlt = true
 		var d: Dictionary = _auswahl.daten
 		if _auswahl == kommandant:
-			melde("Brakk gesteuert: [WASD] bewegen · [Q] Sammeln/Losschlagen · [E] Klettern · [R] Klonmaschine. [Esc] oder Klick ins Leere: er handelt wieder selbst.", 5.0)
+			melde("Brakk gesteuert: [WASD] bewegen · [Q] Sammeln/Losschlagen · [E] Klettern · [R] Klonmaschine%s. [Esc] oder Klick ins Leere: er handelt wieder selbst." % _klon_zusatz(), 5.0)
 		elif d.has("info"):
 			melde(d["info"], 4.0)
 		else:
@@ -5788,6 +6040,9 @@ func stelle_um(z: Vector2i, neu: String) -> void:
 ## Nächste Ausbaustufe einer Fabrik kaufen (nur in der Bauphase). Für Stufe 3 gehört die gewählte Fähigkeit dazu.
 ## Gibt true zurück, wenn es geklappt hat.
 func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
+	if tutorial != null and tutorial.sperrt_aufwerten() != "":
+		melde(tutorial.sperrt_aufwerten(), 3.0)   # 25.11. (N4)
+		return false
 	if ausbau_moeglich() and karte.ausbau.get(z, Karte.FREI) == Karte.TURM:
 		return werte_turm_auf(z, faehigkeit)
 	if karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG and Werte.mg_stellung():
@@ -6053,6 +6308,9 @@ func ausbau_moeglich() -> bool:
 func waehle(typ: int) -> void:
 	if phantom_modus == "angriff":
 		return
+	if werkzeug != typ and tutorial != null and tutorial.sperrt_bau(typ) != "":
+		melde(tutorial.sperrt_bau(typ), 3.0)   # 25.11. (N4)
+		return
 	if phase == Phase.ENDE or (phase == Phase.KAMPF and not darf_in_welle(typ)):
 		return
 	if herausforderung_sperrt(typ) != "":   # 18.11.
@@ -6062,15 +6320,35 @@ func waehle(typ: int) -> void:
 		melde("Erdwälle gibt es ab Welle %d." % Werte.WAELLE_AB_WELLE)
 		return
 	werkzeug = Karte.FREI if werkzeug == typ and turm_wunsch == "" else typ
+	if turm_wunsch != "" and _hud:
+		_hud.formvorlage = ""   # 25.11. (N1): mit der Turmwahl geht auch ihre Vorlage
 	turm_wunsch = ""
 
 
-## 21.11. (Paul): eigene Kacheln des Irrtürmers – Turm-Werkzeug mit festem Ziel: "pliplop" (Klick auf ein freies Feld
-## baut Einzelwall und PliPlop in einem) oder "truppen" (Erdwall mit zwei freien Nachbarwällen).
-var turm_wunsch := ""
+## Turm-Werkzeug mit festem Ziel (Werte.TURMARTEN, "" = die Form entscheidet). 21.11. (Paul): eigene Kacheln des
+## Irrtürmers – "pliplop" (Klick auf ein freies Feld baut Einzelwall und PliPlop in einem) oder "truppen" (Erdwall mit
+## zwei freien Nachbarwällen). 25.11. (Paul, N1): auch die fünf Formtürme, gewählt in der Turmformen-Leiste.
+var turm_wunsch := "":
+	set(neu):
+		turm_wunsch = neu
+		if karte != null:
+			karte.turm_wunsch = neu   # Vorschau und turm_form folgen der Wahl
+
+## 25.11. (N1): was der gewünschten Form fehlen kann – zweiter Teil des Hinweises
+const TURMWUNSCH_BEDINGUNG := {
+	"geschuetz": "mindestens drei freie Erdwälle direkt daneben",
+	"funk": "vier freie Erdwälle direkt daneben",
+	"frost": "beide Arme zwei Erdwälle lang",
+	"lanze": "an beiden Enden biegt die Mauer zur selben Seite ab",
+	"heil": "zwei freie Erdwälle schräg gegenüber",
+}
+
 
 func waehle_turm(art: String) -> void:
 	if phantom_modus == "angriff" or phase == Phase.ENDE or (phase == Phase.KAMPF and not darf_in_welle(Karte.TURM)):
+		return
+	if tutorial != null and tutorial.sperrt_bau(Karte.TURM) != "":
+		melde(tutorial.sperrt_bau(Karte.TURM), 3.0)   # 25.11. (N4)
 		return
 	if herausforderung_sperrt(Karte.TURM) != "":
 		melde(herausforderung_sperrt(Karte.TURM), 4.0)
@@ -6084,6 +6362,8 @@ func waehle_turm(art: String) -> void:
 	else:
 		werkzeug = Karte.TURM
 		turm_wunsch = art
+	if _hud:
+		_hud.formvorlage = ""
 
 
 ## Warum der Wunschturm hier nicht geht ("" = geht). `mit_wall`: beim PliPlop auf freiem Feld wird der Erdwall mitgebaut.
@@ -6109,6 +6389,17 @@ func wunsch_hindernis(z: Vector2i) -> String:
 		if karte.wall_nachbarn(z) > 0:
 			return "PliPlop steht allein: Dieser Erdwall hat Nachbarwälle."
 		return "" if budget >= Werte.KOSTEN_PLIPLOP else "Nicht genug Budget (%d)." % Werte.KOSTEN_PLIPLOP
+	if TURMWUNSCH_BEDINGUNG.has(turm_wunsch):   # 25.11. (N1): Formturm aus der Leiste
+		var d: Dictionary = Werte.TURMARTEN[turm_wunsch]
+		if karte.inhalt(z) != Karte.WALL:
+			return tr("%s: auf einen Erdwall setzen.") % d["name"]
+		if karte.ausbau.has(z):
+			return tr("Dieser Erdwall ist schon ausgebaut.")
+		if karte.stuetze_von.has(z):
+			return tr("Dieser Erdwall stützt schon einen anderen Turm.")
+		if karte.turm_form(z) != turm_wunsch:
+			return tr("%s: Form „%s“ – %s.") % [d["name"], d["form"], tr(str(TURMWUNSCH_BEDINGUNG[turm_wunsch]))]
+		return "" if budget >= kosten(Karte.TURM) else tr("Nicht genug Budget (%d).") % kosten(Karte.TURM)
 	# Truppenturm
 	if karte.inhalt(z) != Karte.WALL:
 		return "Truppenturm: auf einen Erdwall mit zwei freien Nachbarwällen setzen."
@@ -6130,10 +6421,13 @@ func _baue_wunschturm(z: Vector2i) -> bool:
 	turm_wunsch = ""   # ab hier der gewöhnliche Bauweg
 	if wunsch == "pliplop" and karte.inhalt(z) == Karte.FREI:
 		baue(z, Karte.WALL, true)
-	karte.turm_wunsch = wunsch if wunsch == "truppen" else ""
+	karte.turm_wunsch = wunsch
 	var ok := karte.inhalt(z) == Karte.WALL and baue(z, Karte.TURM)
 	karte.turm_wunsch = ""
-	turm_wunsch = wunsch
+	# 25.11. (N1): Die Wahl aus der Turmformen-Leiste endet wie ihre Vorlage mit dem Bau; die eigenen Kacheln
+	# des Irrtürmers bleiben gewählt (mehrere hintereinander).
+	if not (ok and TURMWUNSCH_BEDINGUNG.has(wunsch)):
+		turm_wunsch = wunsch
 	return ok
 
 
@@ -6467,6 +6761,8 @@ func hinweis_text(unter_maus: int = Karte.FREI) -> Array:
 
 
 func _werkzeug_tipp(typ: int) -> String:
+	if typ != Karte.FREI and tutorial != null and tutorial.sperrt_bau(typ) != "":
+		return tutorial.sperrt_bau(typ)   # 25.11. (N4): ausgegraute Kachel
 	match typ:
 		Karte.FABRIK:
 			return "Baut Truppen, die die nächste freie Stellung besetzen. Anklicken: Truppe wählen, ausbauen, Ziel wählen."
@@ -6483,6 +6779,8 @@ func _werkzeug_tipp(typ: int) -> String:
 				return "PliPlop 3cK (%d + Erdwall): Klick auf ein freies Feld – der einzelne Erdwall kommt mit. Mehrere erlaubt, aber keiner neben einem anderen Wall." % Werte.KOSTEN_PLIPLOP
 			if turm_wunsch == "truppen":
 				return "Truppenturm (%d): auf einen Erdwall mit zwei freien Nachbarwällen setzen (in einer Mauer oder an einer Ecke)." % Werte.KOSTEN_TURM
+			if TURMWUNSCH_BEDINGUNG.has(turm_wunsch):   # 25.11. (N1)
+				return tr("Gewählt: nur %s. Ein Klick baut keinen anderen Turm. [4] hebt die Wahl auf.") % Werte.TURMARTEN[turm_wunsch]["name"]
 			return "Auf einen Erdwall setzen – die Form der Nachbarwälle bestimmt den Turm. Klick auf eine Form oben legt sie als Vorlage an die Maus (grün = Erdwall steht schon)."
 		Karte.BATTERIE:
 			return "Mit Pilotenfabrik (zwei Felder, [T] dreht): feuert weit und flächig, sobald %d Piloten darin sitzen." % int(Werte.BATTERIE["plaetze"])
@@ -6493,7 +6791,7 @@ func _werkzeug_tipp(typ: int) -> String:
 		Karte.KOMMANDANT:
 			if anfuehrer_sperrt(typ) != "":
 				return anfuehrer_sperrt(typ)   # 19.11.: „Figur folgt“
-			return "Einmal pro Partie: Klick auf ein freies Feld. Er handelt selbst; anklicken = mit [WASD] steuern, [Q] Sammeln/Losschlagen, [E] Klettern, [R] Klonmaschine."
+			return "Einmal pro Partie: Klick auf ein freies Feld. Er handelt selbst; anklicken = mit [WASD] steuern, [Q] Sammeln/Losschlagen, [E] Klettern, [R] Klonmaschine%s." % _klon_zusatz()
 		Karte.SPIEGEL:
 			return "Nur an Wallenden. Bodentruppen schießen über ihn um die Ecke (helle Felder)."
 		Karte.MAGNET:

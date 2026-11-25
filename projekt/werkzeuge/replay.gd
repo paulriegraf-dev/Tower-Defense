@@ -127,8 +127,10 @@ func _aktion(a: Dictionary) -> void:
 			if a.has("px"):
 				# Batterie: die aufgezeichnete Lage der Pilotenfabrik einstellen
 				spiel._paar_richtung = maxi(0, spiel.PAAR_RICHTUNGEN.find(Vector2i(int(a["px"]), int(a["py"])) - z))
+			spiel.karte.turm_wunsch = str(a.get("art", ""))   # 25.11.: aufgezeichnete Turmart (ältere Partien: die Form entscheidet)
 			if not spiel.baue(z, TYPEN[a["typ"]], true):
 				gescheitert += 1
+			spiel.karte.turm_wunsch = ""
 		"abriss":
 			spiel.reisse_ab(z)
 		"einheit":

@@ -312,6 +312,21 @@ func kaufe(ring: String, spiel: Node) -> String:
 	return ""
 
 
+## 25.11. (Paul): Geschenkter neuer Ring (Befehl 24: Beute aus einer Fabrik). Er kostet nichts und bringt beim Verkaufen
+## kein Gold; wer ihn aufwertet, bekommt nur die selbst bezahlten Stufen zurück. "" = geklappt, sonst der Grund.
+func schenke(ring: String, spiel: Node) -> String:
+	if ring_stufe(ring) > 0:
+		return "Den Ring trägt Brakk schon."
+	if ringe.size() >= finger():
+		return "Kein Finger frei."
+	ringe.append(ring)
+	ring_stufen[ring] = 1
+	_gekauft_in[ring] = int(spiel.welle)
+	_bezahlt[ring] = 0
+	protokoll.ring("beute", ring, {"stufe": 1, "preis": 0})
+	return ""
+
+
 func erstattung(ring: String, welle: int) -> int:
 	var summe := int(_bezahlt.get(ring, 0))
 	return summe if int(_gekauft_in.get(ring, -1)) == welle else int(summe * RING_ZURUECK)

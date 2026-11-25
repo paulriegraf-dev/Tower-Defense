@@ -558,13 +558,34 @@ func _setze_ausgang(wahl: String) -> void:
 	_neu()
 
 
+## 25.11. (Paul): Rundenleiste beim Phantom-Angriff – er beginnt sichtbar in Runde 8; die Runden davor stehen grau da,
+## gespielte kupfern, die laufende hell. Gibt das rechte Ende zurück.
+func _male_rundenleiste(ci: Control, x: float) -> float:
+	for nr in range(1, Werte.LETZTE_RUNDE + 1):
+		var r := Rect2(x, 4.0, 4.0, 8.0)
+		if nr < Phantom.ANGRIFF_AB_RUNDE:
+			ci.draw_rect(Rect2(x, 7.0, 4.0, 2.0), Color(Stil.TEXT_BLASS, 0.35))
+		elif nr < spiel.welle:
+			ci.draw_rect(r, Stil.KUPFER)
+		elif nr == spiel.welle:
+			ci.draw_rect(r.grow(1.0), LICHT)
+		else:
+			ci.draw_rect(r, Stil.METALL_TIEF)
+			ci.draw_rect(r, Stil.RAHMEN_HELL, false, 1.0)
+		x += 5.0 + (3.0 if nr == Phantom.ANGRIFF_AB_RUNDE - 1 else 0.0)
+	return x
+
+
 func _male_band(ci: Control) -> void:
 	var o := RAHMEN_R.position
 	Stil.platte(ci, Rect2(Vector2.ZERO, ci.size), 4.0, Stil.METALL_DUNKEL, Stil.RAHMEN)
 	ci.draw_rect(Rect2(Vector2(6, 1), Vector2(ci.size.x - 12, 1)), LICHT.darkened(0.2))
 	# Kopf: Titel, Budget, Knöpfe
 	var x := 8.0
-	x += Stil.schreibe(ci, Vector2(x, 8), "Taktikplaner · Runde %d" % spiel.welle, Stil.NORMAL, LICHT) + 10.0
+	var angriff: bool = not ohne_budget and spiel.phantom_modus == "angriff"
+	x += Stil.schreibe(ci, Vector2(x, 8), (tr("Taktikplaner · Runde %d von %d") % [spiel.welle, Werte.LETZTE_RUNDE]) if angriff else "Taktikplaner · Runde %d" % spiel.welle, Stil.NORMAL, LICHT) + 10.0
+	if angriff:
+		x = _male_rundenleiste(ci, x) + 10.0   # 25.11.
 	var rest := budget() - verbraucht()
 	Stil.symbol(ci, "muenze", Vector2(x + 4.0, 8), 1.0, Stil.GOLD)
 	x += 10.0
@@ -576,6 +597,8 @@ func _male_band(ci: Control) -> void:
 	var hilfe := "Einheit aufs Band ziehen · Kärtchen verschieben · zwischen den Spuren = Wurf / zu Fuß"
 	var hx := balken.end.x + 10.0
 	var platz: float = _knoepfe[2][0].position.x - o.x - 8.0 - hx if _knoepfe.size() >= 3 else 0.0
+	if Stil.breite(hilfe, Stil.KLEIN) > platz:
+		hilfe = tr("Einheiten ziehen · Kärtchen verschieben")   # 25.11.: neben der Rundenleiste ist weniger Platz
 	if Stil.breite(hilfe, Stil.KLEIN) <= platz:
 		Stil.schreibe(ci, Vector2(hx, 8), hilfe, Stil.KLEIN, Stil.TEXT_BLASS)
 	for i in mini(3, _knoepfe.size()):
