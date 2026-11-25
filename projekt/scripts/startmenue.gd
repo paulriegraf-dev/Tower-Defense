@@ -166,15 +166,7 @@ func _baue() -> void:
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 			if Profil.rogue_frei():
-				_eintraege.insert(2, ["Meistgesuchte", _zeige.bind("meistgesucht"), "die Benannten des Technoclans, die dich jagen", Stil.TEXT])   # 22.11. (Paul): Nemesis
-		"meistgesucht":
-			# 22.11. (Paul, Nemesis Teil 7): bis zu 6 Benannte; rechts der Steckbrief der gewählten Person
-			_gesucht = Nemesis.meistgesuchte()
-			for p: Dictionary in _gesucht:
-				_eintraege.append([Nemesis.voller_name(p), _nichts, "%s · %s" % [str(Nemesis.ART_TEXT.get(str(p.get("art", "")), "")), Nemesis.bilanz_text(p)], KUPFER_HELL])
-			if _gesucht.is_empty():
-				_eintraege.append(["Noch niemand", _nichts, "wer dich in Befehl 24 ärgert, verdient sich hier einen Namen", Stil.TEXT_BLASS])
-			_eintraege.append(["Zurück", _zeige.bind("brakk"), "", Stil.TEXT_BLASS])
+				_eintraege.insert(2, ["Hangar", _hangar_oeffnen, "die Benannten des Technoclans, die dich jagen", Stil.TEXT])   # 25.11. (Paul): statt der Liste „Meistgesuchte“
 		"rogue":
 			# 20.11. (Schritt 5b): Order 24 mit Standardwerten oder eine eigene Rogue-Karte aus dem Editor
 			_eintraege = [["Befehl 24 · Standardwerte", _rogue_los.bind("szenario_order24"), _karten_text("szenario_order24"), LICHT]]
@@ -1532,8 +1524,8 @@ func _process(delta: float) -> void:
 		for e: Array in _eintraege:
 			if str(e[0]).begins_with("Code: "):
 				e[0] = "Code: " + _code_text()
-	# Übersicht offen: das Menü wartet unsichtbar
-	_welt.visible = not (spiel != null and spiel.get("_lexikon") != null and spiel._lexikon.visible)
+	# Übersicht oder Hangar offen: das Menü wartet unsichtbar
+	_welt.visible = not is_instance_valid(_hangar) and not (spiel != null and spiel.get("_lexikon") != null and spiel._lexikon.visible)
 	SichererRand.einpassen(_welt, Stil.UI_SKALA)   # 19.11.: iPhone – sichere Ränder (am PC unverändert)
 	_grund.visible = _welt.visible and SichererRand.faktor() < 1.0
 	_welt.queue_redraw()
@@ -1735,7 +1727,7 @@ func _male(ci: Control) -> void:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
 	else:
 		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "anfuehrer": "Anführer", "szenarien": "Szenarien", "brakk": "Brakk-Mode", "rogue": "Rogue", "meistgesucht": "Brakk-Mode · Meistgesuchte"}[_seite]
+	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "anfuehrer": "Anführer", "szenarien": "Szenarien", "brakk": "Brakk-Mode", "rogue": "Rogue"}[_seite]
 	if unter != "":
 		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
 	# Liste
@@ -1765,8 +1757,6 @@ func _male(ci: Control) -> void:
 		_male_kartenbild(ci, _wahl_karte)
 	elif _seite == "szenarien" and _wahl < Werte.SZENARIEN.size():
 		_male_kartenbild(ci, Werte.SZENARIEN[_wahl])   # 20.11.
-	elif _seite == "meistgesucht" and _wahl < _gesucht.size():
-		_male_steckbrief(ci, _gesucht[_wahl] as Dictionary)   # 22.11. (Nemesis)
 	elif _seite == "grafik":
 		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
 	elif _seite == "profil":
@@ -1901,12 +1891,18 @@ const GELAENDE_NAMEN := {"fels": "Fels", "wasser": "Wasser", "anhoehe": "Anhöhe
 	"wald": "Wald", "erz": "Erzader", "eis": "Eis", "minen": "Minen", "mauern": "Mauern"}
 
 var _kartenbild_daten := {}   # Kartenname -> Daten (nicht jedes Bild die Datei lesen)
-var _gesucht: Array = []       # 22.11. (Nemesis): die Meistgesuchten (beim Öffnen der Seite gelesen)
-const STECKBRIEF := Rect2(372, 118, 252, 216)
 
 
-func _nichts() -> void:
-	pass
+var _hangar: Hangar = null
+
+
+## 25.11. (Paul): Hangar des Technoclan über dem Menü (hangar.gd). Solange er offen ist, ruht das Menü darunter – es liest
+## Tasten nur, solange es sichtbar ist.
+func _hangar_oeffnen() -> void:
+	_hangar = Hangar.new()
+	_hangar.geschlossen.connect(func() -> void: _klick())
+	_welt.visible = false
+	add_child(_hangar)
 
 
 var _weg_frage := false   # 22.11.: „Meistgesuchte zurücksetzen“ – erster Klick fragt, der zweite löscht
@@ -1922,50 +1918,6 @@ func _meistgesuchte_weg() -> void:
 	_baue()
 	_wahl = clampi(w, 0, _eintraege.size() - 1)
 
-
-## 22.11. (Paul, Nemesis Teil 7): Steckbrief eines Meistgesuchten – Rang, Bilanz, Fähigkeit, „Gelernt von dir“, Stärke
-## und Schwäche (unbekannt: „???“, bis Brakk sie einmal gesehen hat) und die letzten drei Ereignisse der Chronik.
-func _male_steckbrief(ci: Control, p: Dictionary) -> void:
-	var r := STECKBRIEF
-	Stil.platte(ci, r, 4.0, Color(0.06, 0.05, 0.06, 0.94), KUPFER_HELL)
-	var x := r.position.x + 12.0
-	var weite := r.size.x - 24.0
-	var y := r.position.y + 12.0
-	Stil.schreibe(ci, Vector2(x, y), "GESUCHT", Stil.KLEIN, Stil.ROT)
-	if str(p.get("titel", "")) != "":
-		var t := "„%s“" % str(p["titel"])
-		Stil.schreibe(ci, Vector2(r.end.x - 12.0 - Stil.breite(t, Stil.KLEIN), y), t, Stil.KLEIN, Stil.GOLD)
-	y += 6.0
-	var nm := Nemesis.voller_name(p)
-	Stil.absatz(ci, Vector2(x, y), nm, weite, Stil.GROSS, Stil.GOLD)
-	y += Stil.absatz_groesse(nm, weite, Stil.GROSS).y + 4.0
-	var zeilen: Array = [
-		["Truppe", "%s · Rang %d" % [str(Nemesis.ART_TEXT.get(str(p.get("art", "")), "?")), int(p.get("rang", 1))]],
-		["Bilanz", Nemesis.bilanz_text(p)],
-		["Fähigkeit", " · ".join(PackedStringArray(NemesisFaehigkeiten.von_person(p).map(func(f: Variant) -> String: return NemesisFaehigkeiten.name_von(str(f))))) if not NemesisFaehigkeiten.von_person(p).is_empty() else "—"],
-		["Gelernt von dir", " · ".join(PackedStringArray(NemesisGewohnheiten.von_person(p).map(func(a: Variant) -> String: return NemesisGewohnheiten.name_von(str(a))))) if not NemesisGewohnheiten.von_person(p).is_empty() else "—"],
-		["Taktik", ("bevorzugt " + NemesisLernen.name_von(NemesisLernen.beste(p))) if NemesisLernen.beste(p) != "" else "—"],   # 22.11. (Nemesis Teil 5)
-		["Stärke", str(Nemesis.STAERKEN.get(str(p.get("staerke", "")), "?")) if bool(p.get("staerke_bekannt", false)) else "???"],
-		["Schwäche", str(Nemesis.SCHWAECHEN.get(str(p.get("schwaeche", "")), "?")) if bool(p.get("schwaeche_bekannt", false)) else "???"],
-	]
-	for z: Array in zeilen:
-		Stil.schreibe(ci, Vector2(x, y + 4.0), str(z[0]), Stil.KLEIN, Stil.TEXT_BLASS)
-		var wert := str(z[1])
-		Stil.absatz(ci, Vector2(x + 62.0, y), wert, weite - 62.0, Stil.KLEIN, Stil.TEXT_BLASS if wert in ["???", "—"] else Stil.TEXT)
-		y += Stil.absatz_groesse(wert, weite - 62.0, Stil.KLEIN).y + 2.0
-	y += 4.0
-	Stil.schreibe(ci, Vector2(x, y + 4.0), "Chronik", Stil.KLEIN, LICHT)
-	y += 10.0
-	var chronik: Array = p.get("chronik", [])
-	for i in range(chronik.size() - 1, maxi(-1, chronik.size() - 4), -1):
-		var c: Variant = chronik[i]
-		var text := str((c as Dictionary).get("text", "")) if c is Dictionary else str(c)
-		var datum := str((c as Dictionary).get("datum", "")) if c is Dictionary else ""
-		var zeile := ("%s · %s" % [datum, text]) if datum != "" else text
-		if y + Stil.absatz_groesse(zeile, weite, Stil.KLEIN).y > r.end.y - 6.0:
-			break
-		Stil.absatz(ci, Vector2(x, y), zeile, weite, Stil.KLEIN, Stil.TEXT)
-		y += Stil.absatz_groesse(zeile, weite, Stil.KLEIN).y + 2.0
 
 func _male_kartenbild(ci: Control, kname: String) -> void:
 	if not _kartenbild_daten.has(kname):

@@ -383,6 +383,8 @@ func _spiegle(s: Sprite2D, gesehen: Dictionary) -> void:
 			if traeger is Gegner:
 				# 22.11.: der Hunde-Sprung hebt das Billboard ab (die Sprite-Position y zählt hier nicht, nur die Trägerposition)
 				ort.y += (traeger as Gegner).sprung_hoch * Werte.BRAKK_SPRUNG_HOEHE_FELD
+			elif traeger.has_meta("hebt_ab"):
+				ort.y += float(traeger.get_meta("hebt_ab"))   # 25.11. (Paul): Befehl 24 – beim Bergungs-Beam hebt die Figur ab
 		versatz.y -= _leer_unten(s.texture, s.region_rect if s.region_enabled else Rect2(Vector2.ZERO, s.texture.get_size()))
 	if b.offset != versatz:
 		b.offset = versatz

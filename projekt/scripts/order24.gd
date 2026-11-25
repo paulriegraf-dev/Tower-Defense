@@ -161,6 +161,8 @@ var bekannt := Karte.KEINE       # Brakks letzter bekannter Ort …
 var bekannt_zeit := -99.0        # … und wann
 var wellen := 0
 var _naechste_welle := 0.0
+var tafeln := NemesisTafeln.new()   # 25.11.: Hologramm-Tafeln (Elite-Auftritt, Beförderung, Vertreibung, Wiedersehen)
+var _elite_zeile_bis := -1.0     # so lange steht „Elitetrupp“ in der Phasenzeile
 var _vorstoss_wahl := 0.0
 var _suchziel := {}              # Einheit-ID -> {"z", "bis"} beim Suchen
 var _flucht_gemeldet := false
@@ -1069,6 +1071,7 @@ func _process(delta: float) -> void:
 		deckung_sek += echt
 	_ladungen_pflegen(k, echt)
 	_beute_pflegen(k)
+	tafeln.weiter(echt)
 	_tuerme_pflegen(echt)
 	_fabriken_pflegen(k, echt)
 	_takt -= echt
@@ -1957,7 +1960,12 @@ func phase() -> String:
 
 
 ## 22.11. (Paul): unter der Uhr nur noch die Phase – wann es weitergeht, zeigt der Balken (balken_anteil).
+## 25.11. (Paul): kommt ein Elitetrupp, steht kurz „Elitetrupp“ dabei.
 func phase_text() -> String:
+	return _phase_name() + (" · " + tr("Elitetrupp") if zeit < _elite_zeile_bis else "")
+
+
+func _phase_name() -> String:
 	match phase():
 		"flucht":
 			return "Flucht · zum Myriaden-HQ im Westen"
@@ -2123,6 +2131,7 @@ func _jagdwelle() -> void:
 		neu = nemesis.elitetrupp(quellen)   # 22.11. (Paul): der Elitetrupp sind Personen (Benannte zuerst, bis zu fünf)
 		n = 0
 		_elite_ton()
+		_elite_zeile_bis = zeit + Werte.NEMESIS_ELITE_ZEILE_SEK
 	for i in n:
 		var z: Vector2i = quellen[i % quellen.size()]
 		var typ := str(spiel.fabriken[z]["typ"])
@@ -3180,6 +3189,31 @@ func _male_lichtmenue(bild: Control, g: Vector2, Stil: GDScript) -> void:
 
 
 ## Anzeige unter der Uhr: Sprengladungen, „In Deckung“, Sabotage-Fortschritt und Hinweise.
+## 25.11. (Paul): Wird ein Benannter geborgen und steht Brakk noch nicht bei ihm, steht der Ausschalten-Hinweis groß
+## neben der Figur – mit der Zeit, die noch bleibt. (Steht er bei ihm, gilt der Hinweis mit Ring in der Bildmitte.)
+func _male_bergungen(bild: Control, g: Vector2, ego: EgoModus, Stil: GDScript) -> void:
+	if nemesis == null or spiel.hd == null or spiel.hd.kamera == null or spiel.kommandant == null:
+		return
+	for h: Dictionary in nemesis.bergung_hinweise():
+		var e := h["einheit"] as Einheit
+		if e.position.distance_to(spiel.kommandant.position) > Werte.NEMESIS_HINWEIS_WEIT * Werte.ZELLE or not ego.im_blick(e):
+			continue
+		var s: Vector2 = spiel.hd.kamera.unproject_position(ego._zu3d(e.position, 0.9 + float(e.get_meta("hebt_ab", 0.0))))
+		var farbe: Color = (h["farbe"] as Color).lightened(0.2)
+		var oben := tr("[E] halten – endgültig ausschalten")
+		var unten := tr("%s · Bergung in %s s – heran!") % [str(h["name"]), ("%.1f" % float(h["rest"])).replace(".", ",")]
+		var breit := maxf(Stil.breite(oben, 20), Stil.breite(unten, 14)) + 24.0
+		var links := s.x + 46.0
+		if links + breit > g.x * 0.8:
+			links = s.x - 46.0 - breit   # rechts läge es auf der Ring-Anzeige: links neben die Figur
+		var r := Rect2(clampf(links, 12.0, maxf(12.0, g.x - breit - 12.0)), clampf(s.y - 28.0, 12.0, g.y - 68.0), breit, 56.0)
+		bild.draw_line(s, Vector2(r.position.x if r.position.x > s.x else r.end.x, r.get_center().y), Color(farbe, 0.8), 2.0)
+		bild.draw_rect(r, Color(0.03, 0.03, 0.07, 0.88))
+		bild.draw_rect(r, farbe, false, 2.0)
+		Stil.schreibe(bild, r.position + Vector2(12.0, 19.0), oben, 20, farbe)
+		Stil.schreibe(bild, r.position + Vector2(12.0, 42.0), unten, 14, Color(0.86, 0.93, 1.0))
+
+
 func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	var Stil := preload("res://scripts/ui/ui_stil.gd")
 	if geheim:
@@ -3251,21 +3285,9 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 			var ort := mitte + Vector2(0, float(zeile[1]))
 			Stil.schreibe_mittig(bild, ort + Vector2(2, 2), str(zeile[0]), int(zeile[2]), Color(0, 0, 0, 0.85))
 			Stil.schreibe_mittig(bild, ort, str(zeile[0]), int(zeile[2]), farbe)
-	# 22.11. (Nemesis Teil 6): Wiedersehen – Hologramm mit Namensschild und seiner Zeile (das Spiel läuft weiter)
-	if nemesis != null and not nemesis.wiedersehen.is_empty() and zeit < float(nemesis.wiedersehen["bis"]):
-		var ws: Dictionary = nemesis.wiedersehen
-		var rest := float(ws["bis"]) - zeit
-		var a := clampf(minf(rest, Werte.NEMESIS_WIEDERSEHEN_SEK - rest) * 4.0, 0.0, 1.0) * (0.9 + 0.1 * sin(zeit * 23.0))
-		var hr := Rect2(m.x - 240.0, y + 4.0, 480.0, 58.0)
-		bild.draw_rect(hr, Color(0.3, 0.85, 1.0, 0.08 * a))
-		bild.draw_rect(hr, Color(0.5, 0.9, 1.0, 0.6 * a), false, 1.5)
-		var zy := hr.position.y + 2.0
-		while zy < hr.end.y:
-			bild.draw_line(Vector2(hr.position.x, zy), Vector2(hr.end.x, zy), Color(0.5, 0.9, 1.0, 0.06 * a), 1.0)
-			zy += 3.0
-		Stil.schreibe_mittig(bild, Vector2(m.x, hr.position.y + 16.0), "%s · %s" % [str(ws["name"]), str(ws["stand"])], 16, Color(ws["farbe"] as Color, a))
-		Stil.schreibe_mittig(bild, Vector2(m.x, hr.position.y + 40.0), "„%s“" % str(ws["zeile"]), 16, Color(Color("7fe0ff"), a))
-		y += 68.0
+	# 25.11. (Paul): Hologramm-Tafeln – Elite-Auftritt, Feldbeförderung, Vertreibung, Wiedersehen (das Spiel läuft weiter)
+	y += tafeln.male(bild, m.x, y)
+	_male_bergungen(bild, g, ego, Stil)
 	# Zünder
 	for zu: Dictionary in zuender:
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Sprengladung: %d s" % ceili(float(zu["rest"])), 16, Color("ff9a3d"))

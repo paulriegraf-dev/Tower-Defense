@@ -233,7 +233,7 @@ func _bedingungen() -> void:
 	var g := truppe("technogunner", 1)
 	n.brakk_erledigt(g.get_instance_id())
 	var pg := n.person_von(g)
-	pruefe(int(pg.get("rang", 0)) == 2 and beiname(g) == "Brakkbrecher" and str(pg.get("titel", "")) == "Brakks Bezwinger", "Letzter Treffer → %s (Rang %d, „%s“)" % [Nemesis.voller_name(pg), int(pg.get("rang", 0)), str(pg.get("titel", ""))])
+	pruefe(int(pg.get("rang", 0)) == 2 and beiname(g) == "Brakkbrecher" and Nemesis.hat_titel(pg, Nemesis.TITEL_BEZWINGER), "Letzter Treffer → %s (Rang %d, „%s“)" % [Nemesis.voller_name(pg), int(pg.get("rang", 0)), Nemesis.titel_text(pg)])
 	n.erledigt_von = {}
 	# Lage-Beinamen: aus dem Hinterhalt und von einem Wall herab
 	var h := truppe("technogunner", 1, -4.0)

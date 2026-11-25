@@ -167,7 +167,7 @@ static var sim_mal: int = 1
 
 static func sim_schritt() -> float:
 	return SIM_SCHRITT * float(sim_mal)
-const VERSION: int = 74        # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 75       # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1825,6 +1825,7 @@ const NEMESIS_GARANTIE_WELLE := 2        # bis zu dieser Elitewelle keine Feldbe
 const NEMESIS_ELITE_GRUNDZAHL := 3       # Elitetrupp: so viele Personen …
 const NEMESIS_ELITE_MAX := 5             # … mit weiteren Benannten höchstens so viele
 const NEMESIS_BERGUNG_SEK := 2.0         # kampfunfähig: so lange bis zum Beam in den Schild
+const NEMESIS_UNBELEHRBAR_AB := 3        # 25.11. (Paul): ab so vielen Bergungen der Zusatztitel „Unbelehrbar“ (ersetzt den Beinamen nicht)
 const NEMESIS_VERTRIEBEN_LEBEN := 0.85   # wer geborgen wurde, kommt mit so viel Leben zurück (−15 %)
 const NEMESIS_RANG_BONUS := 0.08         # je Rang so viel mehr Leben und Schaden
 const NEMESIS_RANG_MAX := 4
@@ -1841,6 +1842,13 @@ const NEMESIS_FERN := 9.0                # Beiname „Weitblick“: Treffer aus 
 const NEMESIS_NAH := 1.5                 # … „Tuchfühlung“: aus weniger als so vielen
 const NEMESIS_KNAPP := 0.15              # „Haaresbreite“: bei der Beförderung weniger Leben als dieser Anteil
 const NEMESIS_UMRISS := Color("ffb84d")  # Umriss der Benannten (mit Narben dunkler)
+## 25.11. (Paul): Look-Platzhalter der Benannten (nemesis_look.gd) – Akzentfarbe an Visier und Schulter, von Technoclan-Lila
+## bis Kupfer, und je Look ein Detail aus Code. „look“ 0–9 gehört zur Person und bleibt über die Läufe.
+const NEMESIS_LOOK_FARBEN: Array[Color] = [
+	Color("b46bff"), Color("ff6bd0"), Color("ff4d6d"), Color("ff8a3d"), Color("ffd23f"),
+	Color("9be34a"), Color("38d9c0"), Color("4da8ff"), Color("e8ecf5"), Color("c8743a"),
+]
+const NEMESIS_LOOK_DETAILS: Array[String] = ["", "narbe", "antenne", "platte", "narbe", "antenne", "platte", "", "narbe", "antenne"]
 const NEMESIS_SCHILD_NAH := 8.0          # 22.11. (Paul): Namensschild voll (Dienstgrad, Name, Beiname) bis so viele Felder …
 const NEMESIS_SCHILD_FERN := 14.0        # … nur der Eigenname bis so viele, dahinter keins (Fähigkeits-Ansagen immer)
 ## 22.11. (Paul, Nemesis Teil 3): Fähigkeiten der Benannten – Startwerte (Sekunden echt, Felder; Schaden als Anteil des
@@ -1888,6 +1896,22 @@ const NEMESIS_EROEFFNUNG := 6.0          # Zusammenspiel: so lange nach Markieru
 const NEMESIS_CD_JE_RANG := 0.1
 const NEMESIS_BEIDE_AB := 3
 const NEMESIS_FAEHIGKEIT_ABSTAND := 1.0  # so viele Sekunden zwischen zwei Fähigkeiten desselben Elitetrupps (nicht alles auf einmal)
+## 25.11. (Paul): Hologramm-Tafeln (nemesis_tafeln.gd)
+const NEMESIS_TAFEL_SEK := 2.5           # Elite-Auftritt: so lange steht die Tafel je Benanntem …
+const NEMESIS_TAFEL_PAUSE := NEMESIS_FAEHIGKEIT_ABSTAND   # … und so lange ist Pause bis zur nächsten
+const NEMESIS_ELITE_ZEILE_SEK := 6.0     # so lange steht „Elitetrupp“ in der Phasenzeile
+const NEMESIS_BEFOERDERUNG_SEK := 3.2    # Feldbeförderung: Tafel mit der Tat; erst danach meldet sich Sonde 7
+const NEMESIS_LUPE_SEK := 0.6            # … dazu so lange Zeitlupe (echte Sekunden) …
+const NEMESIS_LUPE_TEMPO := 0.35         # … mit so viel vom Spieltempo …
+const NEMESIS_LUPE_ZOOM := 9.0           # … und, wenn er im Blick ist, ein Zoom-Ruck (Grad; die Zielrichtung bleibt)
+const NEMESIS_WINKEL_LEUCHTEN := 4       # so oft leuchtet der Rangwinkel über dem Kopf auf
+## 25.11. (Paul): Vertreibung und Bergung sichtbar – in den NEMESIS_BERGUNG_SEK wächst eine Lichtsäule von unten, die Figur
+## hebt ab und schrumpft; danach bleibt kurz Rauch.
+const NEMESIS_VERTRIEBEN_TAFEL_SEK := 2.0
+const NEMESIS_BEAM_HUB := 1.4            # so viele Felder hebt die Figur ab …
+const NEMESIS_BEAM_KLEIN := 0.45         # … und so klein wird sie dabei
+const NEMESIS_RAUCH_SEK := 3.0           # Rauchrest nach dem Beam
+const NEMESIS_HINWEIS_WEIT := 14.0       # bis so viele Felder steht der Ausschalten-Hinweis neben der Figur
 ## 20.11.: Schritt 6c – Ausweichen (Classic und Rogue). Schüsse auf Brakk sind echte Geschosse (brakk_geschosse.gd); die
 ## 2D-Logik für alle anderen Figuren bleibt. Tempo in Feldern je Sekunde Echtzeit (Brakk läuft 3), Radien in Feldern.
 const BRAKK_AUSWEICH_SCHADEN := {   # Schaden je Treffer auf Brakk – die Trefferquote sinkt, darum mehr (Paul 20.11.)

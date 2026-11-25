@@ -454,6 +454,18 @@ Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme
 - **Töne (Platzhalter bis zu eigenen Klängen):** Die Sprengfalle des Fallenstellers gibt beim Legen einen Ton (`tc-arc`) statt einer Reihe Menü-Klicks; Blinken und Warnkreis bleiben. Ein Elitetrupp meldet sich beim Erscheinen einmal mit `tc-grenade` (`Order24.ELITE_TON`).
 - Prüfen: `godot --headless --path . --fixed-fps 60 -s werkzeuge/balance24test.gd` (läuft gut 15 s echte Zeit je Dauerfeuer; vorher user:// sichern).
 
+**Nachtrag 5 (25.11., Paul): Nemesis lesbar** – die Benannten sichtbar machen; nur Befehl 24
+- **Tafeln** (`nemesis_tafeln.gd`): Hologramm-Tafeln oben in der Bildmitte, eine Warteschlange, das Spiel läuft weiter. Vorrang: Beförderung vor Vertreibung vor Elite-Auftritt und Wiedersehen.
+- **Elite-Auftritt:** je Benanntem eine Tafel (Dienstgrad, Name, Beiname, Truppenart, Fähigkeit, rechts der Stand), 2,5 s, dann 1 s Pause. „Elitetrupp“ steht 6 s in der Phasenzeile. Namenlose bekommen keine Tafel. Ton wie in Nachtrag 4.
+- **Feldbeförderung:** 0,6 s Zeitlupe (nicht Brakks Fähigkeit), Zoom-Ruck, wenn die Einheit im Blick ist – die Zielrichtung bleibt. Tafel mit der Tat als Satz, der Rangwinkel leuchtet auf, Sonde 7 meldet sich erst danach. Beim letzten Treffer zeigt es nur der Deathscreen. Lexikon (Brakk): Karte mit den sieben Auslösern, erzeugt aus `TAT_TEXT`/`BEINAME_TAT`.
+- **Vertreibung:** Tafel „… vertrieben (3.)“. In den 2 s Bergung wächst eine Lichtsäule, die Figur hebt ab und schrumpft (`hd_ansicht.gd`: Meta `hebt_ab`), danach bleibt Rauch. Solange [E] gehalten wird, wartet alles. Steht Brakk noch nicht bei ihm, steht der Ausschalten-Hinweis mit Restzeit neben der Figur. Durchsichtigkeit läuft über die Materialfarbe: Der Kompatibilitäts-Renderer kennt `GeometryInstance3D.transparency` nicht.
+- **Versetzung:** Bericht und Chronik sagen, wer nachrückt.
+- **Zusatztitel:** `titel` ist eine Liste („Brakks Bezwinger“, „Unbelehrbar“ ab `NEMESIS_UNBELEHRBAR_AB` Bergungen); der Beiname bleibt. `tat` wird gespeichert. Alte `nemesis.json`: „der Unbelehrbare“ wird Titel, der Beiname kommt zurück (Appell, Tat bzw. Chronik, sonst „der Zähe“).
+- **Look (Platzhalter, bis die Sprite-Varianten da sind):** Feld `look` 0–9 je benannter Person: Akzentfarbe an Visier und Schulter, je Look Narbe, Antenne oder Schulterplatte (`nemesis_look.gd`, Palette `NEMESIS_LOOK_*`). Bleibt über Läufe. Namenlose haben keinen.
+- **Hangar** (`hangar.gd`, nur lesend): ersetzt im Startmenü die Liste „Meistgesuchte“ (Zurücksetzen in den Einstellungen bleibt) und ist aus dem Bericht erreichbar. Reihen nach Rang, Rang 4 und die beste Bilanz auf dem Podest; Versetzte grau am Rand, Ausgeschaltete als leerer Platz mit Namensschild (die Chronik speichert dafür ab jetzt ein Bild der Person; ältere Einträge haben nur den Namen). Klick oder Pfeiltasten: Die Figur tritt vor, rechts die Karte. Stärke und Schwäche erst, wenn Brakk sie gesehen hat; eine Taktik erst, wenn der Benannte damit gegen ihn gekämpft hat; sonst „?“.
+- **Bericht:** Zeile bei „Eliten dieses Laufs“ antippen oder überfahren zeigt, was sie bedeutet; Knopf „Zum Hangar“.
+- Prüfen: `werkzeuge/nemesisauftritttest.gd` (`--fixed-fps 60`), `werkzeuge/nemesisanzeigetest.gd`, `werkzeuge/hangartest.gd` (mit Fenster und `TD_OFFLINE=1`, Ordner als Argument: Bilder).
+
 ### Menü und Editor (20.11., Schritt 5b)
 - **Brakk-Mode** im Startmenü hat jetzt zwei Unterpunkte: **Classic** (der bisherige Brakk-Mode) und **Rogue · Order 24**. Die Szenarien
   stehen weiter unter Herausforderungen (Paul, 20.11.).

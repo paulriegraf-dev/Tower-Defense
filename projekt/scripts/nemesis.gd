@@ -52,8 +52,13 @@ const BEINAME_LAGE := {
 const BEINAME_ZUSTAND := {
 	"knapp": "Haaresbreite",                  # bei der Beförderung fast tot (unter NEMESIS_KNAPP Leben)
 	"frueh": "Frühaufsteher",                 # schon vor der Jagd befördert (Flucht- oder Sabotagephase)
-	"unbelehrbar": "der Unbelehrbare",        # nach drei Bergungen (ersetzt den alten Beinamen)
 }
+## 25.11. (Paul): Zusatztitel stehen neben dem Beinamen und ersetzen ihn nicht (eine Person kann mehrere tragen).
+const TITEL_BEZWINGER := "Brakks Bezwinger"   # hat Brakk den letzten Treffer gegeben
+const TITEL_UNBELEHRBAR := "Unbelehrbar"      # nach NEMESIS_UNBELEHRBAR_AB Bergungen
+## Bis zum 25.11. ersetzte dieser Beiname den alten – beim Laden wird daraus der Zusatztitel.
+const ALT_UNBELEHRBAR := "der Unbelehrbare"
+const BEINAME_ERSATZ := "der Zähe"            # alte Datei, Tat nicht mehr bekannt
 
 ## Die Drei vom Appell: Eigenname, Beiname, Truppenart nach dem Umrüsten (in der Sequenz alle drei Technogunner)
 const APPELL := [
@@ -125,6 +130,8 @@ var _ladung_zeit := -99.0
 var _sichtungen := {}               # Trupp-Nr -> {"wer": Einheit, "bis": float}
 var _rueckzug := {}                 # Einheit-ID -> bis (Zeit)
 var _schilder := {}                 # Einheit-ID -> Label3D (Namensschild in der Ego-Sicht)
+var _beam_bilder := {}              # 25.11.: Einheit-ID -> Lichtsäule während der Bergung
+var rauchreste := 0                 # Prüfung
 var _appell_gemeldet := false
 # 22.11. (Teil 6): über Läufe hinweg
 var erster_lauf := true             # noch keine nemesis.json mit den Drei vom Appell
@@ -168,13 +175,33 @@ func zeit() -> float:
 # ------------------------------------------------------------------ Personen
 
 func neue_person(art: String, rang: int = 0, eigenname: String = "", beiname: String = "") -> Dictionary:
-	var p := {"id": _naechste_id, "art": art, "rang": rang, "name": eigenname, "beiname": beiname, "titel": "",
+	var p := {"id": _naechste_id, "art": art, "rang": rang, "name": eigenname, "beiname": beiname, "titel": [], "tat": "",
 		"faehigkeit": "", "angewohnheit": "", "staerke": "", "schwaeche": "", "staerke_bekannt": false, "schwaeche_bekannt": false,
 		"bilanz": {"er": 0, "brakk": 0}, "begegnungen": 0, "bergungen": 0, "narbe": 0, "geborgen": false,
-		"taktik": {}, "chronik": [], "lauf": _neuer_lauf()}
+		"taktik": {}, "chronik": [], "look": -1, "lauf": _neuer_lauf()}
 	_naechste_id += 1
 	personen.append(p)
+	if rang > 0:
+		look_geben(p, personen)
 	return p
+
+
+## 25.11.: Look 0–9 für eine Person, die noch keinen hat – möglichst einen, den in `liste` noch keiner trägt. Ohne Zufall:
+## dieselbe Liste ergibt dieselben Looks.
+static func look_geben(p: Dictionary, liste: Array) -> void:
+	var n := Werte.NEMESIS_LOOK_FARBEN.size()
+	if int(p.get("look", -1)) >= 0 and int(p["look"]) < n:
+		return
+	var belegt := {}
+	for q: Dictionary in liste:
+		if int(q.get("look", -1)) >= 0:
+			belegt[int(q["look"])] = true
+	var start := posmod(int(p.get("id", 0)) * 3, n)
+	p["look"] = start
+	for i in n:
+		if not belegt.has((start + i) % n):
+			p["look"] = (start + i) % n
+			return
 
 
 static func dienstgrad(p: Dictionary) -> String:
@@ -193,6 +220,31 @@ static func voller_name(p: Dictionary) -> String:
 
 static func benannt(p: Dictionary) -> bool:
 	return not p.is_empty() and int(p.get("rang", 0)) >= 1
+
+
+## „Brakks Bezwinger · Unbelehrbar“ (ohne Titel: leer)
+static func titel_text(p: Dictionary) -> String:
+	var t: Variant = p.get("titel", [])
+	return " · ".join(PackedStringArray(t as Array)) if t is Array else ""
+
+
+static func hat_titel(p: Dictionary, titel: String) -> bool:
+	var t: Variant = p.get("titel", [])
+	return t is Array and (t as Array).has(titel)
+
+
+static func titel_geben(p: Dictionary, titel: String) -> void:
+	if not (p.get("titel", null) is Array):
+		p["titel"] = []
+	if not (p["titel"] as Array).has(titel):
+		(p["titel"] as Array).append(titel)
+
+
+## Anzeige in Bericht, Banner und Karte: „Gefreiter Pell ‚der Entschärfer‘ · Unbelehrbar“
+static func name_mit_titel(p: Dictionary) -> String:
+	var s := voller_name(p)
+	var t := titel_text(p)
+	return s if s == "" or t == "" else "%s · %s" % [s, t]
 
 
 ## Lebt die Einheit noch (nicht gefallen, nicht kampfunfähig)? Auch im Bild, in dem sie fällt.
@@ -285,6 +337,7 @@ func appell(einheiten: Array) -> void:
 			_zuordnen(e, p)
 			(p["lauf"] as Dictionary)["dabei"] = false   # die Sequenz zählt nicht als Einsatz
 			_rang_bild(e, int(p["rang"]))
+			NemesisLook.anziehen(e, int(p.get("look", -1)))
 			e.set_meta("nemesis_umriss", umriss_farbe(p))
 
 
@@ -343,8 +396,18 @@ func elitetrupp(quellen: Array[Vector2i]) -> Array:
 	for p: Dictionary in dabei:
 		if benannt(p):
 			namen_txt.append(voller_name(p))
+			_elite_tafel(p)   # 25.11.: je Benanntem eine Tafel, nacheinander
 	print("NEMESIS Elitewelle %d: %d Personen (%s)" % [elitewellen, dabei.size(), ", ".join(namen_txt)])
 	return aus
+
+
+## 25.11. (Paul): Auftritt eines Benannten – Dienstgrad, Name und Beiname, darunter Truppenart und Fähigkeit, rechts
+## der Stand gegen Brakk.
+func _elite_tafel(p: Dictionary) -> void:
+	var faehig := PackedStringArray(NemesisFaehigkeiten.von_person(p).map(func(f: Variant) -> String: return NemesisFaehigkeiten.name_von(str(f))))
+	o24.tafeln.zeige({"art": "elite", "titel": name_mit_titel(p), "zeilen": [str(ART_TEXT.get(str(p["art"]), "")),
+		tr("Fähigkeit: %s") % (" · ".join(faehig) if not faehig.is_empty() else "—")], "rechts": bilanz_text(p).trim_prefix("Stand "),
+		"farbe": umriss_farbe(p), "sek": Werte.NEMESIS_TAFEL_SEK, "pause": Werte.NEMESIS_TAFEL_PAUSE})
 
 
 ## Steht diese Person schon in einem Elitetrupp im Feld?
@@ -393,6 +456,8 @@ func einkleiden(e: Einheit, p: Dictionary) -> void:
 	e.leben = e.max_leben
 	if benannt(p):
 		_rang_bild(e, rang)
+		look_geben(p, personen)
+		NemesisLook.anziehen(e, int(p["look"]))
 		e.set_meta("nemesis_umriss", umriss_farbe(p))
 	elif int(p.get("narbe", 0)) > 0:
 		e.set_meta("nemesis_umriss", umriss_farbe(p))
@@ -581,7 +646,7 @@ func brakk_erledigt(id: int) -> void:
 		p = person_von(e)
 	if p.is_empty():
 		return
-	p["titel"] = "Brakks Bezwinger"
+	titel_geben(p, TITEL_BEZWINGER)
 	var bil: Dictionary = p["bilanz"]
 	bil["er"] = int(bil["er"]) + 1
 	erledigt_von = p
@@ -663,6 +728,7 @@ func befoerdern(e: Einheit, grund: String, lage: String = "") -> bool:
 	(p["lauf"] as Dictionary)["wiedersehen"] = true   # wer gerade befördert wurde, braucht keine Wiedersehens-Zeile
 	p["name"] = _eigenname()
 	p["beiname"] = _beiname(grund, lage, e)
+	p["tat"] = grund   # 25.11.: die Tat wird gemerkt (für spätere Titel und die Anzeige)
 	_staerke_schwaeche(p, grund)
 	p["faehigkeit"] = NemesisFaehigkeiten.ziehen(str(p["art"]), lage if lage != "" else str(_lauf_von(e)["kontext"]), o24.in_deckung)   # 22.11. (Teil 3): passend zur Tat
 	if not letzter:
@@ -676,13 +742,57 @@ func befoerdern(e: Einheit, grund: String, lage: String = "") -> bool:
 	e.max_leben *= mal
 	e.leben = e.max_leben
 	_rang_bild(e, int(p["rang"]))
+	look_geben(p, personen)
+	NemesisLook.anziehen(e, int(p["look"]))
 	e.set_meta("nemesis_umriss", umriss_farbe(p))
 	var nm := voller_name(p)
-	if spiel.get("_einblendung") != null:
-		spiel._einblendung.banner("FELDBEFÖRDERUNG", nm, Werte.NEMESIS_UMRISS)
-	_sonde(SONDE_BEFOERDERUNG[randi() % SONDE_BEFOERDERUNG.size()] % nm)
+	var ruf := SONDE_BEFOERDERUNG[randi() % SONDE_BEFOERDERUNG.size()] % nm
+	if letzter:
+		_sonde(ruf)   # Brakk ist gefallen: die Beförderung zeigt der Deathscreen
+	else:
+		# 25.11. (Paul): sichtbar – Zeitlupe, Tafel mit der Tat, leuchtender Rangwinkel; Sonde 7 erst nach der Tafel
+		o24.tafeln.zeige({"art": "befoerderung", "titel": tr("Feldbeförderung: %s") % nm, "zeilen": [tat_satz(str(p["name"]), grund)],
+			"farbe": Werte.NEMESIS_UMRISS, "sek": Werte.NEMESIS_BEFOERDERUNG_SEK, "pause": 0.4, "danach": _sonde.bind(ruf)})
+		if spiel.ego != null:
+			spiel.ego.befoerderungs_lupe(e)
+		_winkel_leuchten(e)
 	Ton.spiele(spiel, "alert", -6.0)
 	return true
+
+
+## „Vex hat Brakks Sprengladung überlebt.“
+static func tat_satz(wer: String, grund: String) -> String:
+	return "%s %s." % [wer, str(TAT_TEXT.get(grund, grund))]
+
+
+## Der Rangwinkel über dem Kopf blitzt auf und pulst ein paar Mal.
+func _winkel_leuchten(e: Einheit) -> void:
+	var s := e.get_node_or_null("Rang") as Sprite2D
+	if s == null:
+		return
+	var tw := s.create_tween()
+	for i in Werte.NEMESIS_WINKEL_LEUCHTEN:
+		tw.tween_property(s, "modulate", Color(2.6, 2.4, 1.4), 0.08)
+		tw.parallel().tween_property(s, "scale", Vector2(1.7, 1.7), 0.08)
+		tw.tween_property(s, "modulate", Color.WHITE, 0.22)
+		tw.parallel().tween_property(s, "scale", Vector2.ONE, 0.22)
+
+
+## Lexikon (Reiter Brakk): die Auslöser einer Feldbeförderung – erzeugt aus TAT_TEXT und BEINAME_TAT.
+static func lexikon_karte() -> Dictionary:
+	var ausloeser := [["zwei_begegnungen"], ["anteil"], ["rest"], ["medkit", "sabotage", "ladung"], ["sprengung"], ["sichtung"], ["letzter_treffer"]]
+	var zeilen: Array = []
+	for i in ausloeser.size():
+		var teile := PackedStringArray()
+		for grund: String in ausloeser[i]:
+			teile.append("%s (‚%s‘)" % [str(TAT_TEXT[grund]), str(BEINAME_TAT[grund])])
+		zeilen.append("%d. %sDie Einheit %s." % [i + 1, "Brakk unterbrochen: " if teile.size() > 1 else "", " – oder ".join(teile)])
+	return {"name": "Befehl 24 · Feldbeförderung", "unter": "wie sich eine Truppe einen Namen verdient", "marke": "%d Auslöser" % ausloeser.size(),
+		"marke_farbe": Color("ffb84d"), "bild": {"symbol": "buch", "farbe": Color("ffb84d")},
+		"werte": [["je Lauf", "höchstens %d" % Werte.NEMESIS_FELD_MAX], ["Rang", "1 · letzter Treffer 2"]],
+		"abschnitte": [["Die Auslöser", Color("ffb84d"), zeilen],
+			["Garantie", Color("7fe0ff"), ["Bis zur %d. Elitewelle noch niemand befördert: Die Einheit %s (‚%s‘)." % [Werte.NEMESIS_GARANTIE_WELLE, str(TAT_TEXT["garantie"]), str(BEINAME_TAT["garantie"])]]],
+			["Gut zu wissen", Color("8b95a3"), ["Der letzte Treffer zählt nicht zur Grenze je Lauf.", "Manchmal kommt der Beiname nicht aus der Tat, sondern aus der Lage beim Treffer (zum Beispiel ‚Falkenauge‘)."]]]}
 
 
 ## Beiname: Tat – bei Volltreffer, Wiedergänger und Garantie gehen Zustand und Lage vor.
@@ -783,16 +893,87 @@ func rettet(e: Einheit) -> bool:
 	bil["brakk"] = int(bil["brakk"]) + 1
 	_beg(e)["erlitten"] = e.max_leben   # 22.11. (Teil 5): kampfunfähig = das ganze Leben verloren (für die Taktik)
 	_begegnung_ende(e, false)
-	if benannt(p) and int(p["bergungen"]) >= 3 and str(p["beiname"]) != BEINAME_ZUSTAND["unbelehrbar"]:
-		p["beiname"] = BEINAME_ZUSTAND["unbelehrbar"]
-		_chronik(p, "dritte Bergung – heißt jetzt „der Unbelehrbare“")
+	if benannt(p) and int(p["bergungen"]) >= Werte.NEMESIS_UNBELEHRBAR_AB and not hat_titel(p, TITEL_UNBELEHRBAR):
+		titel_geben(p, TITEL_UNBELEHRBAR)
+		_chronik(p, "%d. Bergung – Zusatztitel „%s“" % [int(p["bergungen"]), TITEL_UNBELEHRBAR])
 	_chronik(p, "von Brakk kampfunfähig geschossen (Bergung %d)" % int(p["bergungen"]))
 	if gewohnheiten != null:
 		gewohnheiten.abschauen(p, "kampfunfähig geschossen")   # 22.11. (Teil 4): kommt mit dem zurück, womit Brakk ihn besiegt hat
-	if benannt(p):
-		spiel.melde("%s ist kampfunfähig – Bergung in %d s." % [voller_name(p), roundi(Werte.NEMESIS_BERGUNG_SEK)], 2.5)
-	kampfunfaehig.append({"einheit": e, "person": p, "bis": zeit() + Werte.NEMESIS_BERGUNG_SEK})
+	if benannt(p):   # 25.11. (Paul): kurze Tafel statt der Meldungszeile
+		o24.tafeln.zeige({"art": "vertrieben", "titel": tr("%s vertrieben (%d.)") % [voller_name(p), int(p["bergungen"])], "zeilen": [],
+			"farbe": Color("7fe0ff"), "sek": Werte.NEMESIS_VERTRIEBEN_TAFEL_SEK, "pause": 0.2})
+	kampfunfaehig.append({"einheit": e, "person": p, "bis": zeit() + Werte.NEMESIS_BERGUNG_SEK, "groesse": e._sprite.scale})
 	return true
+
+
+## 25.11. (Paul): der Vorlauf der Bergung – Lichtsäule von unten, die Figur hebt ab und schrumpft. Solange Brakk [E]
+## hält, wartet der Beam: die Figur bleibt unten.
+func _beam_pflegen() -> void:
+	var hd: HdAnsicht = spiel.hd if spiel != null else null
+	var noch := {}
+	for k: Dictionary in kampfunfaehig:
+		var x: Variant = k["einheit"]
+		if not is_instance_valid(x):
+			continue
+		var e := x as Einheit
+		var id := e.get_instance_id()
+		noch[id] = true
+		var anteil := 0.0
+		if _halten.is_empty() or _halten["eintrag"] != k:
+			anteil = clampf(1.0 - (float(k["bis"]) - zeit()) / Werte.NEMESIS_BERGUNG_SEK, 0.0, 1.0)
+		k["anteil"] = anteil
+		var hoch := smoothstep(0.3, 1.0, anteil)
+		e.set_meta("hebt_ab", hoch * Werte.NEMESIS_BEAM_HUB)
+		e._sprite.scale = (k["groesse"] as Vector2) * lerpf(1.0, Werte.NEMESIS_BEAM_KLEIN, hoch)
+		if hd == null:
+			continue
+		var saeule: Variant = _beam_bilder.get(id)
+		if saeule == null or not is_instance_valid(saeule):
+			saeule = o24._kasten3d(hd, Vector3(0.42, 1.0, 0.42), Order24.TECHNO_FARBE, Vector3.ZERO)
+			_beam_bilder[id] = saeule
+		var s := saeule as MeshInstance3D
+		var h := 0.25 + 4.0 * anteil
+		var breite := 1.0 + 0.15 * sin(zeit() * 18.0)
+		s.scale = Vector3(breite, h, breite)
+		s.position = Vector3(e.position.x / Werte.ZELLE, h / 2.0, (e.position.y - Werte.KARTE_OBEN) / Werte.ZELLE)
+		(s.material_override as StandardMaterial3D).albedo_color.a = lerpf(0.14, 0.32, anteil)   # durchsichtig: man sieht die Figur abheben (der Kompatibilitäts-Renderer kennt „transparency“ nicht)
+	for id: int in _beam_bilder.keys():
+		if not noch.has(id):
+			if is_instance_valid(_beam_bilder[id]):
+				(_beam_bilder[id] as Node).queue_free()
+			_beam_bilder.erase(id)
+
+
+## Nach dem Beam: ein Rest aus Rauch steigt auf und verzieht sich.
+func _rauchrest(pos: Vector2) -> void:
+	var hd: HdAnsicht = spiel.hd
+	if hd == null:
+		return
+	var fuss := Vector3(pos.x / Werte.ZELLE, 0.15, (pos.y - Werte.KARTE_OBEN) / Werte.ZELLE)
+	for i in 6:
+		var wo := fuss + Vector3(randf_range(-0.25, 0.25), 0.12 * i, randf_range(-0.25, 0.25))
+		var g := 0.24 + 0.04 * i
+		var wolke := o24._kasten3d(hd, Vector3(g, g, g), Color("8d8d9c"), wo)
+		var stoff := wolke.material_override as StandardMaterial3D
+		stoff.albedo_color.a = 0.6
+		var tw := wolke.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(wolke, "position:y", wo.y + 0.9 + 0.1 * i, Werte.NEMESIS_RAUCH_SEK)
+		tw.tween_property(wolke, "scale", Vector3.ONE * 1.8, Werte.NEMESIS_RAUCH_SEK)
+		tw.tween_property(stoff, "albedo_color:a", 0.0, Werte.NEMESIS_RAUCH_SEK)
+		tw.chain().tween_callback(wolke.queue_free)
+	rauchreste += 1
+
+
+## 25.11.: kampfunfähige Benannte für den Hinweis neben der Figur (ohne den, neben dem Brakk gerade steht).
+func bergung_hinweise() -> Array:
+	var nah: Dictionary = _halten["eintrag"] if not _halten.is_empty() else _ausschalten_ziel()
+	var aus: Array = []
+	for k: Dictionary in kampfunfaehig:
+		if k != nah and is_instance_valid(k["einheit"]) and benannt(k["person"] as Dictionary):
+			aus.append({"einheit": k["einheit"], "name": voller_name(k["person"] as Dictionary), "farbe": umriss_farbe(k["person"] as Dictionary),
+				"rest": maxf(0.0, float(k["bis"]) - zeit())})
+	return aus
 
 
 ## Beam in den Schild: Lichtsäule, Ton, Einheit verschwindet (ohne Tod und ohne Drop).
@@ -803,11 +984,12 @@ func _wegbeamen(e: Einheit, beam: bool = true) -> void:
 		var mitte := Vector3(pos.x / Werte.ZELLE, 2.5, (pos.y - Werte.KARTE_OBEN) / Werte.ZELLE)
 		var saeule := o24._kasten3d(hd, Vector3(0.35, 5.0, 0.35), Order24.TECHNO_FARBE, mitte)
 		var tw := saeule.create_tween()
-		tw.tween_property(saeule, "transparency", 1.0, 0.6)
+		tw.tween_property(saeule.material_override, "albedo_color:a", 0.0, 0.6)
 		tw.tween_callback(saeule.queue_free)
 	if beam:
 		spiel.effekte.flaeche(pos, Werte.ZELLE * 0.6, Order24.TECHNO_FARBE)
 		Ton.am_ort(spiel, "tc-arc", pos)
+		_rauchrest(pos)   # 25.11. (Paul)
 	_aus_trupp(e)
 	var id := e.get_instance_id()
 	var p := person_von(e)
@@ -994,17 +1176,28 @@ func lauf_ende(abbruch: bool = false) -> void:
 ## Volle Liste: der Benannte mit der schlechtesten Bilanz (seine Siege minus Bergungen; dann niedrigerer Rang) wird
 ## „versetzt“ – Neue dieses Laufs sind davor geschützt, solange es Alte gibt.
 func _verdraengen() -> void:
+	var neue := personen.filter(func(p: Dictionary) -> bool: return bool((p.get("lauf", {}) as Dictionary).get("neu", false)))   # 25.11.: wer nachrückt
+	var nachgerueckt := 0
 	while personen.size() > Werte.NEMESIS_LISTE_MAX:
-		var alte := personen.filter(func(p: Dictionary) -> bool: return not bool((p.get("lauf", {}) as Dictionary).get("neu", false)))
+		var alte :=personen.filter(func(p: Dictionary) -> bool: return not bool((p.get("lauf", {}) as Dictionary).get("neu", false)))
 		var wahl: Array = alte if not alte.is_empty() else personen
 		var schlecht: Dictionary = wahl[0]
 		for p: Dictionary in wahl:
 			if _guete(p) < _guete(schlecht):
 				schlecht = p
 		personen.erase(schlecht)
+		neue.erase(schlecht)
 		versetzt.append(schlecht)
-		_chronik(schlecht, "versetzt – ein Neuer hat seinen Platz unter den Meistgesuchten")
-		chronik_global.append({"datum": Time.get_date_string_from_system(), "text": "%s versetzt" % voller_name(schlecht)})
+		var folgt: String = voller_name(neue[nachgerueckt % neue.size()] as Dictionary) if not neue.is_empty() else tr("ein Neuer")
+		nachgerueckt += 1
+		schlecht["nachfolger"] = folgt
+		_chronik(schlecht, versetzt_satz(voller_name(schlecht), folgt))
+		chronik_global.append({"datum": Time.get_date_string_from_system(), "text": "%s versetzt" % voller_name(schlecht), "person": abbild(schlecht)})
+
+
+## „<Alt> versetzt – <Neu> nimmt seinen Platz in der Liste“
+static func versetzt_satz(alt: String, neu: String) -> String:
+	return "%s versetzt – %s nimmt seinen Platz in der Liste" % [alt, neu]
 
 
 ## Bilanz für die Liste: Siege über Brakk zählen, Bergungen kosten; bei Gleichstand der höhere Rang.
@@ -1019,10 +1212,10 @@ const VERSION := 1
 static var datei := "user://nemesis.json"   # Tests setzen eine eigene Datei
 ## gespeicherte Felder je Person und ihr Standard (fehlt ein Feld in einer alten Datei, gilt der Standard)
 const FELDER := {
-	"id": 0, "art": "technogunner", "rang": 1, "name": "?", "beiname": "", "titel": "", "faehigkeit": "", "angewohnheit": "",
+	"id": 0, "art": "technogunner", "rang": 1, "name": "?", "beiname": "", "titel": [], "tat": "", "faehigkeit": "", "angewohnheit": "",
 	"staerke": "", "schwaeche": "", "staerke_bekannt": false, "schwaeche_bekannt": false, "bilanz": {"er": 0, "brakk": 0},
 	"begegnungen": 0, "bergungen": 0, "narbe": 0, "geborgen": false, "taktik": {}, "chronik": [], "appell": false,
-	"letzter_schaden": 0.0, "zuletzt_erledigt": false, "angewohnheit2": "",
+	"letzter_schaden": 0.0, "zuletzt_erledigt": false, "angewohnheit2": "", "look": -1,
 }
 const CHRONIK_MAX := 12
 
@@ -1050,7 +1243,43 @@ static func person_aus(x: Variant) -> Dictionary:
 	p["rang"] = clampi(int(p["rang"]), 1, Werte.NEMESIS_RANG_MAX)
 	if str(p["art"]) not in Werte.FABRIK_EINHEITEN:
 		p["art"] = "technogunner"
+	_alte_titel(p, d)
 	return p
+
+
+## Alte Dateien (bis 25.11.): der Titel war ein einzelner Text, und „der Unbelehrbare“ stand als Beiname da. Daraus wird
+## der Zusatztitel; der Beiname kommt zurück – bei den Dreien vom Appell ihr alter, sonst aus der gespeicherten Tat bzw.
+## der Chronik, sonst BEINAME_ERSATZ.
+static func _alte_titel(p: Dictionary, d: Dictionary) -> void:
+	var alt: Variant = d.get("titel", [])
+	if alt is String and str(alt) != "":
+		titel_geben(p, str(alt))
+	if str(p["beiname"]) != ALT_UNBELEHRBAR:
+		return
+	titel_geben(p, TITEL_UNBELEHRBAR)
+	var neu := ""
+	if bool(p["appell"]):
+		for a: Array in APPELL:
+			if str(a[0]) == str(p["name"]):
+				neu = str(a[1])
+	if neu == "":
+		var tat := str(p["tat"])
+		if tat == "":
+			tat = _tat_aus_chronik(p)
+		p["tat"] = tat
+		neu = str(BEINAME_TAT.get(tat, BEINAME_ERSATZ))
+	p["beiname"] = neu
+
+
+## „Feldbeförderung: <TAT_TEXT>“ in der Chronik → der Auslöser ("" = nicht mehr da, die Chronik ist gekürzt).
+static func _tat_aus_chronik(p: Dictionary) -> String:
+	for c: Variant in (p["chronik"] as Array):
+		var text := str((c as Dictionary).get("text", "")) if c is Dictionary else str(c)
+		if text.begins_with("Feldbeförderung: "):
+			for tat: String in TAT_TEXT:
+				if text == "Feldbeförderung: %s" % str(TAT_TEXT[tat]):
+					return tat
+	return ""
 
 
 static func _datei_lesen() -> Dictionary:
@@ -1072,6 +1301,8 @@ func laden() -> void:
 		var p := person_aus(x)
 		if not p.is_empty() and str(p["name"]) not in ["?", ""]:
 			personen.append(p)
+	for p: Dictionary in personen:
+		look_geben(p, personen)
 	chronik_global = (d.get("chronik", []) as Array).duplicate() if d.get("chronik", []) is Array else []
 	_datei_zaehler = {}
 	var dz: Variant = d.get("zaehler", {})
@@ -1120,6 +1351,44 @@ static func gesehen_gesamt() -> Dictionary:
 	if dg is Array:
 		for a: Variant in (dg as Array):
 			aus[str(a)] = true
+	return aus
+
+
+## 25.11.: das Bild einer Person für die Chronik – damit der Hangar Versetzte und Ausgeschaltete noch zeigen kann.
+static func abbild(p: Dictionary) -> Dictionary:
+	return {"name": str(p.get("name", "")), "beiname": str(p.get("beiname", "")), "rang": int(p.get("rang", 1)), "art": str(p.get("art", "")),
+		"look": int(p.get("look", -1)), "titel": (p.get("titel", []) as Array).duplicate() if p.get("titel", []) is Array else []}
+
+
+## Versetzte und Ausgeschaltete aller Läufe, die neuesten zuerst: je {"was", "datum", "person"}. Einträge von vor dem
+## 25.11. bestehen nur aus einem Satz – dann ist nur der Name bekannt (person["bekannt"] = false).
+static func ehemalige() -> Array:
+	var d := _datei_lesen()
+	var liste: Array = d.get("chronik", []) as Array if d.get("chronik", []) is Array else []
+	var aus: Array = []
+	var gesehen := {}
+	for i in range(liste.size() - 1, -1, -1):
+		if not (liste[i] is Dictionary):
+			continue
+		var e := liste[i] as Dictionary
+		var text := str(e.get("text", ""))
+		var was := "versetzt" if text.ends_with(" versetzt") else ("ausgeschaltet" if text.ends_with(" endgültig ausgeschaltet") else "")
+		if was == "":
+			continue
+		var p: Dictionary
+		if e.get("person", null) is Dictionary:
+			p = (e["person"] as Dictionary).duplicate(true)
+			p["rang"] = int(p.get("rang", 1))
+			p["look"] = int(p.get("look", -1))
+			p["bekannt"] = true
+		else:
+			var voll := text.trim_suffix(" versetzt").trim_suffix(" endgültig ausgeschaltet")
+			var teile := voll.get_slice(" ‚", 0).split(" ")   # „Gefreiter Vex ‚…‘“
+			p = {"name": teile[teile.size() - 1], "beiname": "", "rang": 1, "art": "technogunner", "look": -1, "titel": [], "bekannt": false}
+		if gesehen.has(str(p.get("name", ""))):
+			continue
+		gesehen[str(p.get("name", ""))] = true
+		aus.append({"was": was, "datum": str(e.get("datum", "")), "person": p})
 	return aus
 
 
@@ -1197,6 +1466,8 @@ func _wiedersehen(p: Dictionary) -> void:
 	var zeilen: Array = WIEDERSEHEN[lage]
 	var zeile := str(zeilen[randi() % zeilen.size()]).replace("{stand}", bilanz_text(p))
 	wiedersehen = {"name": voller_name(p), "zeile": zeile, "bis": zeit() + Werte.NEMESIS_WIEDERSEHEN_SEK, "farbe": umriss_farbe(p), "lage": lage, "stand": bilanz_text(p)}
+	o24.tafeln.zeige({"art": "wiedersehen", "titel": "%s · %s" % [voller_name(p), bilanz_text(p)], "zeilen": ["„%s“" % zeile],
+		"farbe": umriss_farbe(p), "sek": Werte.NEMESIS_WIEDERSEHEN_SEK, "pause": 0.2})
 	print("NEMESIS Wiedersehen: %s – „%s“" % [voller_name(p), zeile])
 
 
@@ -1287,7 +1558,7 @@ func ausschalten(k: Dictionary) -> void:
 	var e: Variant = k["einheit"]
 	kampfunfaehig.erase(k)
 	_chronik(p, "von Brakk endgültig ausgeschaltet")
-	chronik_global.append({"datum": Time.get_date_string_from_system(), "text": "%s endgültig ausgeschaltet" % voller_name(p)})
+	chronik_global.append({"datum": Time.get_date_string_from_system(), "text": "%s endgültig ausgeschaltet" % voller_name(p), "person": abbild(p)})
 	personen.erase(p)
 	ausgeschaltet.append(p)
 	if is_instance_valid(e):
@@ -1413,15 +1684,15 @@ func tod_bericht() -> Dictionary:
 func lauf_liste() -> Array:
 	var aus: Array = []
 	for b: Dictionary in befoerderungen:
-		aus.append([voller_name(b["person"] as Dictionary), "befoerdert", str(TAT_TEXT.get(str(b["grund"]), ""))])
+		aus.append([name_mit_titel(b["person"] as Dictionary), "befoerdert", str(TAT_TEXT.get(str(b["grund"]), ""))])
 	for p: Dictionary in personen + versetzt:   # auch wer am Laufende versetzt wurde
 		var n := int((p.get("lauf", {}) as Dictionary).get("bergungen", 0))
 		if benannt(p) and n > 0:
-			aus.append([voller_name(p), "vertrieben", "" if n == 1 else "%d×" % n])
+			aus.append([name_mit_titel(p), "vertrieben", "" if n == 1 else "%d×" % n])
 	for p: Dictionary in ausgeschaltet:
-		aus.append([voller_name(p), "ausgeschaltet", ""])
+		aus.append([name_mit_titel(p), "ausgeschaltet", ""])
 	for p: Dictionary in versetzt:
-		aus.append([voller_name(p), "versetzt", ""])   # 22.11. (Teil 6): von einem Neuen verdrängt
+		aus.append([name_mit_titel(p), "versetzt", str(p.get("nachfolger", ""))])   # 22.11. (Teil 6): von einem Neuen verdrängt
 	return aus
 
 
@@ -1433,6 +1704,8 @@ static func meistgesuchte() -> Array:
 		var p := person_aus(x)
 		if not p.is_empty() and str(p["name"]) not in ["?", ""]:
 			aus.append(p)
+	for p: Dictionary in aus:
+		look_geben(p, aus)   # in der Reihenfolge der Datei, wie beim Laden
 	aus.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["rang"]) > int(b["rang"]) or (int(a["rang"]) == int(b["rang"]) and _guete(a) > _guete(b)))
 	return aus
 
@@ -1448,6 +1721,8 @@ func _exit_tree() -> void:
 ## Name und darunter der Beiname (und Titel), weiter weg nur der Eigenname, ab NEMESIS_SCHILD_FERN nichts. Eine
 ## laufende Fähigkeit wird immer angesagt. Stehen Benannte dicht beieinander, rücken ihre Schilder in der Höhe auseinander.
 func _process(_delta: float) -> void:
+	if o24 != null:
+		_beam_pflegen()
 	var hd: HdAnsicht = spiel.hd if spiel != null else null
 	var noch := {}
 	var k: Kommandant = spiel.kommandant if spiel != null else null
@@ -1500,8 +1775,10 @@ func _process(_delta: float) -> void:
 				text = "%s %s" % [dienstgrad(p), str(p["name"])]
 				if str(p["beiname"]) != "":
 					text += "\n‚%s‘" % str(p["beiname"])
-				if str(p["titel"]) != "":
-					text += "\n„%s“" % str(p["titel"])
+					if titel_text(p) != "":
+						text += " · " + titel_text(p)   # 25.11.: Zusatztitel neben dem Beinamen
+				elif titel_text(p) != "":
+					text += "\n" + titel_text(p)
 			elif d <= Werte.NEMESIS_SCHILD_FERN:
 				text = str(p["name"])
 			if ansage != "":

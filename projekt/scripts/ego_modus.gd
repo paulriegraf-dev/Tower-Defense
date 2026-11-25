@@ -81,6 +81,8 @@ var _kreuz := 0.0               # Trefferkreuz: Restzeit
 var _kreuz_kill := false
 var _stop_id := 0
 var _stop_vorher := -1.0        # Spieltempo vor dem Einfrieren (-1 = gerade kein Einfrieren)
+var _lupe_bis_ms := 0           # 25.11.: so lange läuft die Beförderungs-Zeitlupe
+var _lupe_zoom_bis_ms := 0      # … und so lange steht ihr Zoom
 var _uhr_vorher := 0             # Zeitpunkt des letzten Bilds (µs) für die Echtzeit
 var _fang_soll := false          # 21.11.: Web – Mausfang ist angefordert (nur beim Übergang, nie jedes Bild neu)
 var _fang_warte := 0.0           # 21.11.: Web – so lange (Echtzeit) fehlt der angeforderte Mausfang schon
@@ -730,6 +732,8 @@ func _process(delta: float) -> void:
 	_wackel_t += echt * 30.0
 	_kick = lerpf(_kick, 0.0, 1.0 - exp(-12.0 * echt))
 	_fov_puls = move_toward(_fov_puls, 0.0, echt * 30.0)
+	if Time.get_ticks_msec() < _lupe_zoom_bis_ms:
+		_fov_puls = maxf(_fov_puls, Werte.NEMESIS_LUPE_ZOOM)   # 25.11.: Beförderung – der Zoom steht, solange die Zeitlupe läuft
 	_kreuz = maxf(0.0, _kreuz - echt)
 	_einflug_weiter(echt)   # 18.11.
 	if _briefing != null and _briefing.visible:
@@ -1264,13 +1268,40 @@ func _funke(wo: Vector3, radius: float) -> void:
 	_strahlen.append([f, 0.14])
 
 
+## 25.11. (Paul): Befehl 24 – Feldbeförderung: kurze Zeitlupe (nicht Brakks Fähigkeit, ohne Abklingzeit) und, wenn die
+## Einheit im Blick ist, ein Zoom-Ruck. Die Zielrichtung bleibt. Gibt zurück, ob sie im Blick war.
+func befoerderungs_lupe(e: Node2D) -> bool:
+	_einfrieren(Werte.NEMESIS_LUPE_SEK, Werte.NEMESIS_LUPE_TEMPO)
+	_lupe_bis_ms = Time.get_ticks_msec() + int(Werte.NEMESIS_LUPE_SEK * 1000.0)
+	if not im_blick(e):
+		return false
+	_lupe_zoom_bis_ms = _lupe_bis_ms
+	_fov_puls = maxf(_fov_puls, Werte.NEMESIS_LUPE_ZOOM)
+	return true
+
+
+## Steht die Figur im Bild und ist nichts davor?
+func im_blick(e: Node2D) -> bool:
+	var hd: HdAnsicht = spiel.hd
+	if hd == null or hd.kamera == null or e == null or not is_instance_valid(e) or brakk == null:
+		return false
+	var p := _zu3d(e.position, 0.8)
+	if hd.kamera.is_position_behind(p):
+		return false
+	var feld := hd.kamera.get_viewport().get_visible_rect()
+	return feld.has_point(hd.kamera.unproject_position(p)) and spiel.karte.sicht_frei(brakk.position, e.position)
+
+
 ## Kurzes Einfrieren (Hit-Stop) in Echtzeit; nur der jüngste Aufruf stellt das Spieltempo wieder her.
-func _einfrieren(dauer: float) -> void:
+## 25.11.: `faktor` – Anteil des Spieltempos. Während der Beförderungs-Zeitlupe schneidet ein Hit-Stop sie nicht ab.
+func _einfrieren(dauer: float, faktor: float = 0.05) -> void:
+	if faktor < Werte.NEMESIS_LUPE_TEMPO and Time.get_ticks_msec() < _lupe_bis_ms:
+		return
 	_stop_id += 1
 	var meins := _stop_id
 	if _stop_vorher < 0.0:
 		_stop_vorher = Engine.time_scale
-	Engine.time_scale = _stop_vorher * 0.05
+	Engine.time_scale = _stop_vorher * faktor
 	await get_tree().create_timer(dauer, true, false, true).timeout
 	if meins == _stop_id:
 		Engine.time_scale = _stop_vorher

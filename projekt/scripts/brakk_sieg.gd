@@ -10,11 +10,16 @@ const TAFEL := Rect2(120, 34, 400, 292)
 const KNOPF_NOCHMAL := Rect2(196, 298, 116, 20)
 const KNOPF_MENUE := Rect2(328, 298, 116, 20)
 const KNOPF_WEITER := Rect2(240, 332, 160, 20)   # 20.11. (Paul): nach dem Classic-Sieg – weiter in Befehl 24
+## 25.11. (Paul): Befehl 24 – drei Knöpfe mit „Zum Hangar“ in der Mitte
+const KNOPF_DREI: Array[Rect2] = [Rect2(132, 298, 116, 20), Rect2(262, 298, 116, 20), Rect2(392, 298, 116, 20)]
+const ERKLAER := Rect2(130, 214, 184, 78)   # Erklärung zur gewählten Zeile, unten in der linken Spalte
 
 var spiel: Node
 var bericht: Dictionary = {}
 var _t := 0.0
 var _maus := Vector2(-100, -100)
+var _marken: Array = []     # Zeilen „Eliten dieses Laufs“: je [Rect2, Überschrift, Erklärung]
+var _zeile := -1            # angeklickte bzw. angetippte Zeile
 var _tod_gesehen := false   # 22.11. (Nemesis, Teil 7): erst der Deathscreen „Erledigt von …“, dann der Bericht
 
 
@@ -47,12 +52,56 @@ func _gui_input(event: InputEvent) -> void:
 			elif KNOPF_MENUE.has_point(p):
 				spiel._neustart()
 			return
+		if zeile_bei(p) >= 0:
+			_zeile = -1 if _zeile == zeile_bei(p) else zeile_bei(p)
+			return
 		if bool(bericht.get("weiter", false)) and KNOPF_WEITER.has_point(p):
 			spiel.befehl24_weiterspielen()
-		elif KNOPF_NOCHMAL.has_point(p):
-			spiel._neustart()
-		elif KNOPF_MENUE.has_point(p):
-			spiel._zum_menue()
+			return
+		for k: Array in knoepfe():
+			if (k[0] as Rect2).has_point(p):
+				if str(k[2]) == "hangar":
+					hangar_oeffnen()
+				elif str(k[2]) == "nochmal":
+					spiel._neustart()
+				else:
+					spiel._zum_menue()
+				return
+
+
+## Die Knöpfe unter dem Bericht: [Rect2, Beschriftung, Aktion]. In Befehl 24 gibt es dazu „Zum Hangar“.
+func knoepfe() -> Array:
+	if bericht.has("nemesis"):
+		return [[KNOPF_DREI[0], "Nochmal", "nochmal"], [KNOPF_DREI[1], tr("Zum Hangar"), "hangar"], [KNOPF_DREI[2], "Hauptmenü", "menue"]]
+	return [[KNOPF_NOCHMAL, "Nochmal", "nochmal"], [KNOPF_MENUE, "Hauptmenü", "menue"]]
+
+
+func hangar_oeffnen() -> Hangar:
+	var h := Hangar.new()   # nur lesend; liegt über dem Bericht und schließt sich selbst
+	add_child(h)
+	return h
+
+
+func zeile_bei(p: Vector2) -> int:
+	for i in _marken.size():
+		if ((_marken[i] as Array)[0] as Rect2).has_point(p):
+			return i
+	return -1
+
+
+## 25.11. (Paul): Was eine Zeile bei „Eliten dieses Laufs“ bedeutet: [Überschrift, Erklärung].
+static func erklaerung(zeile: Array) -> Array:
+	var wer := str(zeile[0])
+	match str(zeile[1]):
+		"befoerdert":
+			return [wer, "Befördert: Die Einheit %s – und hat sich damit einen Namen verdient. Unter dem jagt sie dich weiter." % str(zeile[2])]
+		"vertrieben":
+			return [wer, "Vertrieben: kampfunfähig geschossen, in den Schild geborgen – er kommt wieder%s." % ("" if str(zeile[2]) == "" else " (%s in diesem Lauf)" % str(zeile[2]))]
+		"ausgeschaltet":
+			return [wer, "Ausgeschaltet: mit [E] erledigt, bevor die Bergung kam – er ist für immer von der Liste."]
+		"versetzt":
+			return [wer, "Versetzt: Die Liste fasst höchstens %d Namen. Wer die schlechteste Bilanz gegen dich hat, macht einem Neuen Platz." % Werte.NEMESIS_LISTE_MAX]
+	return [wer, ""]
 
 
 func _draw() -> void:
@@ -64,15 +113,37 @@ func _draw() -> void:
 	Stil.platte(self, TAFEL, 4.0, Color(0.05, 0.06, 0.09, 0.94), Stil.GOLD)
 	var af := str(bericht.get("anfuehrer", "brakk"))   # 20.11.: der Anführer steht mit drauf (Brakk wie bisher)
 	Stil.schreibe_mittig(self, Vector2(TAFEL.get_center().x, TAFEL.position.y + 16.0), str(bericht.get("kopf", "SIEG")) + ("" if af == "brakk" else " · " + Anfuehrer.name(af).to_upper()), Stil.GROSS, Stil.GOLD)   # 20.11.: Kopf aus dem Bericht (Befehl 24: Überstanden / Gefallen)
-	male_bericht(self, Rect2(TAFEL.position + Vector2(10, 28), TAFEL.size - Vector2(20, 64)), bericht)
-	var knoepfe: Array = [[KNOPF_NOCHMAL, "Nochmal"], [KNOPF_MENUE, "Hauptmenü"]]
+	_marken.clear()
+	male_bericht(self, Rect2(TAFEL.position + Vector2(10, 28), TAFEL.size - Vector2(20, 64)), bericht, false, _marken)
+	_male_erklaerung()
+	var alle := knoepfe()
 	if bool(bericht.get("weiter", false)):
-		knoepfe.append([KNOPF_WEITER, "Weiterspielen …?"])   # 20.11. (Paul)
-	for k: Array in knoepfe:
+		alle.append([KNOPF_WEITER, "Weiterspielen …?", "weiter"])   # 20.11. (Paul)
+	for k: Array in alle:
 		var r: Rect2 = k[0]
 		var an := r.has_point(_maus)
 		Stil.platte(self, r, 2.0, Stil.METALL if an else Stil.METALL_DUNKEL, Stil.LEUCHT if an else Stil.RAHMEN)
 		Stil.schreibe_mittig(self, r.get_center(), str(k[1]), Stil.NORMAL, Stil.LEUCHT if an else Stil.TEXT)
+
+
+## 25.11. (Paul): die Erklärung zur Zeile unter der Maus bzw. zur angetippten.
+func _male_erklaerung() -> void:
+	if _marken.is_empty():
+		return
+	var i := zeile_bei(_maus)
+	if i < 0:
+		i = _zeile
+	if i < 0 or i >= _marken.size():
+		Stil.schreibe(self, Vector2(ERKLAER.position.x + 4.0, ERKLAER.end.y - 6.0), tr("Eliten: Zeile antippen – was heißt das?"), Stil.KLEIN, Stil.TEXT_BLASS)
+		return
+	var m: Array = _marken[i]
+	draw_rect(m[0] as Rect2, Color(Stil.LEUCHT, 0.13))
+	Stil.platte(self, ERKLAER, 3.0, Color(0.04, 0.07, 0.11, 0.96), Stil.LEUCHT)
+	var x := ERKLAER.position.x + 6.0
+	var weite := ERKLAER.size.x - 12.0
+	Stil.absatz(self, Vector2(x, ERKLAER.position.y + 5.0), str(m[1]), weite, Stil.KLEIN, Stil.GOLD)
+	var y := ERKLAER.position.y + 7.0 + Stil.absatz_groesse(str(m[1]), weite, Stil.KLEIN).y
+	Stil.absatz(self, Vector2(x, y), str(m[2]), weite, Stil.KLEIN, Stil.TEXT)
 
 
 ## 22.11. (Paul, Nemesis Teil 7): Deathscreen – groß „Erledigt von <Dienstgrad Name ‚Beiname‘>“ mit Truppenart, Rang, die
@@ -147,7 +218,7 @@ static func _zeit(sek: float) -> String:
 
 
 ## Den Bericht in `r` zeichnen (UI-Raster). Zwei Spalten: links Kennzahlen, Titel, Ringe, Höhepunkte – rechts die Balken.
-static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool = false) -> void:
+static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool = false, marken: Array = []) -> void:
 	if b.is_empty():
 		Stil.schreibe(ci, r.position + Vector2(4, 8), "Noch kein Sieg im Brakk-Mode.", Stil.NORMAL, Stil.TEXT_BLASS)
 		return
@@ -244,9 +315,10 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 			if by > r.end.y - 4.0 or (kompakt and gezeigt_n >= 3):
 				Stil.schreibe(ci, Vector2(bx, by), "+ %d weitere" % (nem.size() - gezeigt_n), Stil.KLEIN, Stil.TEXT_BLASS)
 				break
+			var oben := by - 5.0
 			var m: Array = MARKE.get(str(zeile[1]), ["", Stil.TEXT])
 			Stil.schreibe(ci, Vector2(bx, by), str(m[0]), Stil.KLEIN, m[1] as Color)
-			var nm := str(zeile[0]) + ("" if str(zeile[2]) == "" or str(zeile[1]) == "befoerdert" else " · " + str(zeile[2]))
+			var nm := str(zeile[0]) + ("" if str(zeile[2]) == "" or str(zeile[1]) in ["befoerdert", "versetzt"] else " · " + str(zeile[2]))
 			if Stil.breite(nm, Stil.KLEIN) > bw - 50.0:
 				while nm.length() > 4 and Stil.breite(nm + "…", Stil.KLEIN) > bw - 50.0:
 					nm = nm.left(-1)
@@ -254,3 +326,12 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 			Stil.schreibe(ci, Vector2(bx + 48.0, by), nm, Stil.KLEIN, Stil.TEXT)
 			by += 10.0
 			gezeigt_n += 1
+			if str(zeile[1]) == "versetzt" and str(zeile[2]) != "" and not kompakt:   # 25.11. (Paul): wer nachrückt, als Satz
+				var satz := Nemesis.versetzt_satz(str(zeile[0]), str(zeile[2]))
+				var hoch := Stil.absatz_groesse(satz, bw - 6.0, Stil.KLEIN).y
+				if by + hoch <= r.end.y + 4.0:
+					Stil.absatz(ci, Vector2(bx + 6.0, by - 4.0), satz, bw - 6.0, Stil.KLEIN, Stil.TEXT_BLASS)
+					by += hoch + 1.0
+			if not kompakt:
+				var erkl := erklaerung(zeile)
+				marken.append([Rect2(bx - 2.0, oben, bw + 4.0, by - oben - 1.0), erkl[0], erkl[1]])
