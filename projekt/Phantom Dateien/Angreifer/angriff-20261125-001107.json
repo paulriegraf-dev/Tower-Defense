@@ -1,0 +1,1242 @@
+{
+	"art": "angriff",
+	"begonnen": "2026-11-25T00:11:07",
+	"ergebnis": {
+		"ausgang": "hq",
+		"durchgaenge_runde_20": 17,
+		"geknackt": 1,
+		"leben_genommen": 22,
+		"punkte": 15405,
+		"runde": 20,
+		"wertung": 7701
+	},
+	"format": 1,
+	"gegen": "partie-20261119-125307.json",
+	"phantom_version": 2,
+	"profil": "c11363a30947257b",
+	"runden": [
+		{
+			"budget": 65,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 60,
+			"runde": 1,
+			"sekunden": 22.4,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "unten",
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 90,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 90,
+			"runde": 2,
+			"sekunden": 27.6,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 0.7,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 135,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 8,
+			"punkte": 130,
+			"runde": 3,
+			"sekunden": 29.8,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": -2.4,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 180,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 180,
+			"runde": 4,
+			"sekunden": 27.8,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 230,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 225,
+			"runde": 5,
+			"sekunden": 26.8,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 0.5,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 305,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 305,
+			"runde": 6,
+			"sekunden": 35.7,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -1.5,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 4.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 395,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 390,
+			"runde": 7,
+			"sekunden": 29.9,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 8.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 0.4,
+					"typen": [
+						"sprenger",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 480,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 460,
+			"runde": 8,
+			"sekunden": 44.4,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"sani",
+						"sani",
+						"sani",
+						"sani",
+						"sani",
+						"sani",
+						"sani",
+						"sani",
+						"sani",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 595,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 595,
+			"runde": 9,
+			"sekunden": 52.5,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 10.5,
+					"typen": [
+						"rauch",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 13.0,
+					"ziel": [
+						6,
+						2
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 735,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 730,
+			"runde": 10,
+			"sekunden": 75.7,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 3.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 1.5,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 6.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 835,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 835,
+			"runde": 11,
+			"sekunden": 78.4,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung",
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.8,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.5,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 6.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 885,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 885,
+			"runde": 12,
+			"sekunden": 49.5,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 3.5,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 13.5,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.6,
+					"typen": [
+						"hund",
+						"hund",
+						"sprenger",
+						"rauch",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 955,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 930,
+			"runde": 13,
+			"sekunden": 58.2,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"schwarm"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 8.6,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 8.0,
+					"ziel": [
+						5,
+						2
+					]
+				}
+			]
+		},
+		{
+			"budget": 1075,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1075,
+			"runde": 14,
+			"sekunden": 71.7,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.0,
+					"typen": [
+						"schwarm"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild",
+						"fahne",
+						"fahne",
+						"sani",
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.9,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 1155,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1155,
+			"runde": 15,
+			"sekunden": 69.2,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 4.4,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.5,
+					"typen": [
+						"schwarm",
+						"schwarm"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.3,
+					"typen": [
+						"sani",
+						"sani",
+						"rauch",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.2,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 1195,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1195,
+			"runde": 16,
+			"sekunden": 63.1,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -0.2,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": -1.4,
+					"typen": [
+						"fahne",
+						"fahne",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"rauch",
+						"rauch",
+						"rauch"
+					],
+					"weg": "w",
+					"zeit": 11.5,
+					"ziel": [
+						9,
+						6
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 9.0,
+					"ziel": [
+						9,
+						2
+					]
+				}
+			]
+		},
+		{
+			"budget": 1305,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 1305,
+			"runde": 17,
+			"sekunden": 76.3,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 3.8,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"schwarm",
+						"schwarm",
+						"sani",
+						"sani",
+						"sani",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -1.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"rauch",
+						"rauch",
+						"rauch"
+					],
+					"weg": "w",
+					"zeit": 17.0,
+					"ziel": [
+						9,
+						5
+					]
+				}
+			]
+		},
+		{
+			"budget": 1575,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/6cc7e045-68d9-4f86-85fb-4c4b9e7eba9d.json",
+			"geknackt": true,
+			"leben_genommen": 6,
+			"punkte": 1570,
+			"runde": 18,
+			"sekunden": 72.6,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.5,
+					"typen": [
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 2.8,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.5,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.5,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -2.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.2,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 1895,
+			"checkpoints_genommen": 5,
+			"durchgaenge": 1,
+			"gegen_pfad": "user://Phantom Online/verteidigung/8a2bab9e-3d46-4e61-b129-ed53b79c2bc8.json",
+			"geknackt": false,
+			"leben_genommen": 7,
+			"punkte": 1890,
+			"runde": 19,
+			"sekunden": 136.2,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "unten",
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.5,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.8,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.6,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"sani",
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 17.0,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 6.0,
+					"ziel": [
+						10,
+						10
+					]
+				}
+			]
+		},
+		{
+			"budget": 1415,
+			"checkpoints_genommen": 14,
+			"durchgaenge": 17,
+			"gegen_pfad": "user://Phantom Online/verteidigung/8a2bab9e-3d46-4e61-b129-ed53b79c2bc8.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1400,
+			"runde": 20,
+			"sekunden": 446.7,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.0,
+					"typen": [
+						"schild",
+						"schild",
+						"schild",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 0.4,
+					"typen": [
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": -0.6,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.9,
+					"typen": [
+						"rauch",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -0.8,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 0.5,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 6.5,
+					"ziel": [
+						10,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "w",
+					"zeit": 13.0,
+					"ziel": [
+						6,
+						6
+					]
+				}
+			]
+		}
+	],
+	"spieler": "APAAtROXOP"
+}

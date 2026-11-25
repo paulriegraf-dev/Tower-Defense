@@ -15,6 +15,13 @@ const FELDER := "id,art,datei,spieler,profil,version,spalten,wertung,elo,spiele,
 ## in der Rangliste stehen Phantome erst ab LISTE_AB Duellen; Spieler sofort, bis LISTE_AB Läufe „vorläufig“ (25.11.).
 const PLAETZE := 3
 const LISTE_AB := 5
+## 25.11. (Paul): Sein Profil auf diesem PC darf mehr als PLAETZE Phantome je Art sammeln, damit sich die Tabelle füllt.
+## Gilt für die ID, nicht für den Namen (den kann jeder wählen).
+const OHNE_PLATZGRENZE := "c11363a30947257b"
+
+
+static func ohne_platzgrenze() -> bool:
+	return Profil.id() == OHNE_PLATZGRENZE
 
 ## "unbekannt", "laedt", "online", "offline"
 static var zustand := "unbekannt"
@@ -174,6 +181,12 @@ static func _pool_abgleich() -> bool:
 				continue
 			var d := Phantom.lade(o + "/" + datei)
 			if d.is_empty() or int(d.get("phantom_version", 1)) < Phantom.PHANTOM_VERSION:
+				continue
+			# 25.11.: Die Liste ist ohne Archiv und endet nach 300 – ob die Datenbank die Datei kennt (egal von wem), eigens fragen
+			var bekannt: Variant = await _anfrage(HTTPClient.METHOD_GET, "/rest/v1/phantome?select=id&art=eq.%s&datei=eq.%s&limit=1" % [art, datei.uri_encode()])
+			if not (bekannt is Array):
+				return neu   # keine Antwort: lieber nicht nachladen
+			if not (bekannt as Array).is_empty():
 				continue
 			if await hochladen(art, datei, d, "pool") != "":
 				neu = true
@@ -374,6 +387,8 @@ static func _sende_meldung(m: Dictionary) -> bool:
 		m["elo_vor"] = await meine_elo(str(m["elo_art"]))   # Spieler-Elo vor dem Lauf (für die Anzeige)
 	if not m["hochgeladen"]:
 		var wahl := str(m["hochladen"])
+		if wahl == "auto" and ohne_platzgrenze():
+			wahl = "ja"
 		if wahl == "auto":
 			var da: Variant = await eigene(str(m["art"]))
 			wahl = "ja" if not (da is Array) or (da as Array).size() < PLAETZE else "nein"

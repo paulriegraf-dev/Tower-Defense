@@ -1340,6 +1340,8 @@ func _verteidigung_aufgeben() -> void:
 var _platz_wahl := "?"
 
 func _platz_frei(art: String) -> bool:
+	if Online.ohne_platzgrenze():
+		return true   # 25.11. (Paul): keine Wahl, nichts kommt ins Archiv
 	var eigene: Variant = await Online.eigene(art)
 	if not _meld_job.is_empty() and str(_meld_job["hochladen"]) != "offen":
 		return false   # 25.11.: die Szene wird schon verlassen – die Warteschlange hat entschieden, keine Rückfrage mehr

@@ -1,0 +1,1202 @@
+{
+	"art": "angriff",
+	"begonnen": "2026-11-24T11:58:58",
+	"ergebnis": {
+		"ausgang": "hq",
+		"durchgaenge_runde_20": 4,
+		"geknackt": 3,
+		"leben_genommen": 45,
+		"punkte": 15425,
+		"runde": 20,
+		"wertung": 8242
+	},
+	"format": 1,
+	"gegen": "partie-20261117-154711.json",
+	"phantom_version": 2,
+	"profil": "132e4f4b9308f136",
+	"runden": [
+		{
+			"budget": 65,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 60,
+			"runde": 1,
+			"sekunden": 18.7,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 5.6,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 90,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 90,
+			"runde": 2,
+			"sekunden": 18.2,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 135,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 130,
+			"runde": 3,
+			"sekunden": 21.3,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 180,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 175,
+			"runde": 4,
+			"sekunden": 19.9,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 230,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 230,
+			"runde": 5,
+			"sekunden": 31.6,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"sani",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"sani",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 305,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 305,
+			"runde": 6,
+			"sekunden": 23.8,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.5,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 8.5,
+					"ziel": [
+						9,
+						10
+					]
+				}
+			]
+		},
+		{
+			"budget": 395,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 4,
+			"punkte": 395,
+			"runde": 7,
+			"sekunden": 44.3,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 0.5,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"rauch"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 480,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 480,
+			"runde": 8,
+			"sekunden": 35.9,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 1.7,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"sphaere"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 595,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 595,
+			"runde": 9,
+			"sekunden": 37.9,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.4,
+					"typen": [
+						"schwarm",
+						"rauch",
+						"schwarm",
+						"schwarm"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sani",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 14.0,
+					"ziel": [
+						9,
+						10
+					]
+				}
+			]
+		},
+		{
+			"budget": 735,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 735,
+			"runde": 10,
+			"sekunden": 63.0,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 0.5,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 3.5,
+					"typen": [
+						"schwarm",
+						"rauch",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 17.0,
+					"ziel": [
+						9,
+						13
+					]
+				}
+			]
+		},
+		{
+			"budget": 835,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 830,
+			"runde": 11,
+			"sekunden": 68.0,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 10.5,
+					"typen": [
+						"schwarm",
+						"sphaere",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 17.0,
+					"ziel": [
+						9,
+						13
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"hund",
+						"hund"
+					],
+					"weg": "w",
+					"zeit": 7.0,
+					"ziel": [
+						9,
+						7
+					]
+				}
+			]
+		},
+		{
+			"budget": 885,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 1,
+			"punkte": 880,
+			"runde": 12,
+			"sekunden": 85.3,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung",
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "oben",
+					"pause": 9.8,
+					"typen": [
+						"sprenger",
+						"hund",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 1.7,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 25.0,
+					"ziel": [
+						9,
+						13
+					]
+				}
+			]
+		},
+		{
+			"budget": 955,
+			"checkpoints_genommen": 0,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 950,
+			"runde": 13,
+			"sekunden": 37.6,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.0,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.5,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.5,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.3,
+					"typen": [
+						"sani"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 1075,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 8,
+			"punkte": 1075,
+			"runde": 14,
+			"sekunden": 60.4,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 4.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 3.6,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -1.0,
+					"typen": [
+						"schwarm",
+						"sphaere",
+						"sphaere",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"sani"
+					],
+					"weg": "w",
+					"zeit": 15.5,
+					"ziel": [
+						9,
+						4
+					]
+				}
+			]
+		},
+		{
+			"budget": 1155,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1150,
+			"runde": 15,
+			"sekunden": 38.7,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 5.5,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": -2.3,
+					"typen": [
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"ausgang": "unten",
+					"pause": 1.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 5.0,
+					"ziel": [
+						9,
+						7
+					]
+				}
+			]
+		},
+		{
+			"budget": 1195,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-173053.json",
+			"geknackt": true,
+			"leben_genommen": 1,
+			"punkte": 1170,
+			"runde": 16,
+			"sekunden": 41.1,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"belagerung",
+						"rauch"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 5.3,
+					"typen": [
+						"rauch",
+						"rauch",
+						"schild",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 5.2,
+					"typen": [
+						"schwarm",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 19.5,
+					"ziel": [
+						9,
+						12
+					]
+				}
+			]
+		},
+		{
+			"budget": 1305,
+			"checkpoints_genommen": 1,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261119-155503.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1305,
+			"runde": 17,
+			"sekunden": 76.5,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 13.5,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne",
+						"sani",
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.7,
+					"typen": [
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"schwarm",
+						"sphaere",
+						"sphaere",
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				}
+			]
+		},
+		{
+			"budget": 1575,
+			"checkpoints_genommen": 5,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261119-155503.json",
+			"geknackt": true,
+			"leben_genommen": 15,
+			"punkte": 1570,
+			"runde": 18,
+			"sekunden": 69.5,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.3,
+					"typen": [
+						"schwarm",
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.3,
+					"typen": [
+						"schwarm"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.5,
+					"typen": [
+						"schild"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.5,
+					"typen": [
+						"rauch",
+						"rauch",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.2,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sani",
+						"sani"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.9,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.5,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 9.0,
+					"ziel": [
+						9,
+						10
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 14.0,
+					"ziel": [
+						9,
+						1
+					]
+				}
+			]
+		},
+		{
+			"budget": 1895,
+			"checkpoints_genommen": 2,
+			"durchgaenge": 1,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261122-005306.json",
+			"geknackt": true,
+			"leben_genommen": 15,
+			"punkte": 1890,
+			"runde": 19,
+			"sekunden": 45.6,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"ausgang": "oben",
+					"pause": 0.0,
+					"typen": [
+						"belagerung",
+						"belagerung"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 2.3,
+					"typen": [
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.5,
+					"typen": [
+						"sprenger",
+						"sprenger",
+						"sprenger",
+						"sprenger"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -2.4,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -0.6,
+					"typen": [
+						"schild",
+						"fahne"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 25.0,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 22.0,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 18.0,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"wenn": "",
+					"zeit": 29.0
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 12.5,
+					"ziel": [
+						9,
+						13
+					]
+				}
+			]
+		},
+		{
+			"budget": 1415,
+			"checkpoints_genommen": 3,
+			"durchgaenge": 4,
+			"gegen_pfad": "res://Phantom Dateien/Verteidiger/verteidigung-20261117-160413.json",
+			"geknackt": false,
+			"leben_genommen": 0,
+			"punkte": 1410,
+			"runde": 20,
+			"sekunden": 73.0,
+			"staerke": 1.0,
+			"trupps": [
+				{
+					"pause": 0.0,
+					"typen": [
+						"schild",
+						"schild",
+						"schild",
+						"schwarm",
+						"schwarm"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 3.7,
+					"typen": [
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": -1.5,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 1.4,
+					"typen": [
+						"hund",
+						"hund",
+						"hund"
+					],
+					"weg": "l"
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 15.5,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"sphaere",
+						"sphaere",
+						"sphaere",
+						"sphaere"
+					],
+					"weg": "w",
+					"zeit": 20.0,
+					"ziel": [
+						10,
+						3
+					]
+				},
+				{
+					"pause": 0.0,
+					"typen": [
+						"fahne",
+						"fahne",
+						"fahne"
+					],
+					"weg": "w",
+					"zeit": 10.5,
+					"ziel": [
+						9,
+						7
+					]
+				}
+			]
+		}
+	],
+	"spieler": "DravenMain"
+}
