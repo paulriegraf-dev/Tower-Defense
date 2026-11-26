@@ -4,7 +4,8 @@ extends SceneTree
 ##   godot --headless --path . --fixed-fps 60 -s werkzeuge/herausforderertest.gd
 ##
 ## Ohne Zusatz setzt der Test die Zeitpunkte selbst. Mit `-- zeiten` gelten die echten (540 s und 840 s): Der Test stellt
-## die Überlebens-Uhr kurz davor. Schreibt nur user://nemesis_herausforderer_test.json.
+## die Überlebens-Uhr kurz davor. Mit `-- sonde` tritt beim zweiten Mal sicher Sonde 7 an und erledigt Brakk (sonst nie –
+## die Ziehung ist im Test aus). Schreibt nur user://nemesis_herausforderer_test.json.
 ## Am Ende „TEST HERAUSFORDERER OK“ oder die Fehler.
 
 var spiel: Node
@@ -15,6 +16,7 @@ var schritt := 0
 var fehler: Array[String] = []
 var merk := {}
 var echte_zeiten := false
+var sonde_modus := false   # -- sonde: Sonde 7 erledigt Brakk (26.11.: niemand wird dafür befördert)
 
 
 func _initialize() -> void:
@@ -32,6 +34,7 @@ func _initialize() -> void:
 	r["jagd_start"] = 0
 	r["vorstoss"] = false
 	echte_zeiten = OS.get_cmdline_user_args().has("zeiten")
+	sonde_modus = OS.get_cmdline_user_args().has("sonde")
 	r["herausforderer"] = echte_zeiten   # sonst löst der Test ihn selbst aus
 	if echte_zeiten:
 		r["welle_takt"] = 60
@@ -101,7 +104,7 @@ func _process(_delta: float) -> bool:
 func _fertig() -> bool:
 	Nemesis.zuruecksetzen()
 	# Skriptfehler brechen eine Prüfung still ab: jede erwartete muss gelaufen sein
-	var soll := SOLL_ECHT if echte_zeiten else SOLL_PRUEFUNGEN
+	var soll := SOLL_ECHT if echte_zeiten else SOLL_PRUEFUNGEN + (1 if sonde_modus else 0)
 	if geprueft < soll:
 		fehler.append("nur %d von %d Prüfungen gelaufen" % [geprueft, soll])
 	if fehler.is_empty():
@@ -809,17 +812,24 @@ func _punkt7_weiter() -> void:
 	var h := o.herausforderer
 	h.zeiten = [0.0, o.zeit + 11.0]
 	h.naechste = 1
+	h.sonde_erzwingen = sonde_modus   # 26.11.: die Ziehung fest – sonst wackelt der zweite Auftritt
+	h.sonde_aus = not sonde_modus
 	o._naechste_welle = o.zeit + 500.0
 
 
 func _punkt7_zweiter() -> void:
 	merk["rang"] = int((merk["person"] as Dictionary)["rang"])
+	merk["befoerderungen"] = n.befoerderungen.size()
+	merk["personen"] = n.personen.size()
 
 
 func _punkt7_brakk_faellt() -> void:
 	var h := o.herausforderer
 	var erster: Dictionary = merk["person"]
-	pruefe(h.person != erster and str(h.person["art"]) != str(erster["art"]) and int(erster["rang"]) == int(merk["rang"]), "C1: der Geborgene kommt nicht wieder – %s statt %s" % [str(h.person["art"]), str(erster["art"])])
+	if sonde_modus:
+		pruefe(h.ist_sonde() and int(erster["rang"]) == int(merk["rang"]), "Sonde 7 tritt selbst an (erzwungen)")
+	else:
+		pruefe(h.person != erster and str(h.person["art"]) != str(erster["art"]) and int(erster["rang"]) == int(merk["rang"]), "C1: der Geborgene kommt nicht wieder – %s statt %s" % [str(h.person["art"]), str(erster["art"])])
 	merk["person"] = h.person
 	var p: Dictionary = h.person
 	merk["rang"] = int(p["rang"])
@@ -836,9 +846,18 @@ func _punkt7_bericht() -> void:
 	var h := o.herausforderer
 	var p: Dictionary = merk["person"]
 	var chronik := str((p["chronik"] as Array).map(func(c: Variant) -> String: return str((c as Dictionary).get("text", ""))))
-	pruefe(o.vorbei and str((h.ergebnisse.back() as Array)[1]) == "gesiegt" and chronik.contains("hat Brakk im Duell geschlagen"), "Brakk fällt: er hat gesiegt, steht so in der Chronik")
 	var tod := n.tod_bericht()
-	pruefe(bool(tod.get("duell", false)) and str(tod.get("name", "")).contains(str(p["name"])), "Deathscreen: im Duell erledigt von %s" % str(tod.get("name", "–")))
+	if sonde_modus:
+		pruefe(o.vorbei and str((h.ergebnisse.back() as Array)[1]) == "gesiegt" and chronik == "[]" and int(p["rang"]) == 4, "Brakk fällt: Sonde 7 hat gesiegt – kein Rang, keine Chronik")
+		pruefe(bool(tod.get("duell", false)) and str(tod.get("name", "")) == "Sonde 7" and str(tod.get("art", "")) == Nemesis.TITEL_KOMMANDANTIN \
+			and (Nemesis.TOD_ZEILEN.get("sonde", []) as Array).has(str(tod.get("zeile", ""))) and str(tod.get("bilanz", "")) == "Stand 1 : 0 für sie", \
+			"Deathscreen: im Duell erledigt von %s (%s, „%s“)" % [str(tod.get("name", "–")), str(tod.get("art", "–")), str(tod.get("zeile", "–"))])
+		var neue := n.personen.filter(func(x: Dictionary) -> bool: return str(x.get("tat", "")) == "letzter_treffer" or str(x.get("beiname", "")) == "Brakkbrecher")
+		pruefe(n.befoerderungen.size() == int(merk["befoerderungen"]) and n.personen.size() == int(merk["personen"]) and neue.is_empty() and bool(n.erledigt_von.get("sonde", false)),
+			"für ihren Treffer niemand befördert (Beförderungen %d → %d, Benannte %d → %d)" % [int(merk["befoerderungen"]), n.befoerderungen.size(), int(merk["personen"]), n.personen.size()])
+	else:
+		pruefe(o.vorbei and str((h.ergebnisse.back() as Array)[1]) == "gesiegt" and chronik.contains("hat Brakk im Duell geschlagen"), "Brakk fällt: er hat gesiegt, steht so in der Chronik")
+		pruefe(bool(tod.get("duell", false)) and str(tod.get("name", "")).contains(str(p["name"])), "Deathscreen: im Duell erledigt von %s" % str(tod.get("name", "–")))
 	var b := o.bericht(false)
 	var z := BrakkSieg.herausforderer_zeilen(b.get("herausforderer", []))
 	pruefe(z.size() == 2 and str(z[0][1]) == "vertrieben" and str(z[1][1]) == "hat gesiegt", "Bericht: %s" % " | ".join(PackedStringArray(z.map(func(x: Array) -> String: return "Herausforderer: %s – %s" % [str(x[0]), str(x[1])]))))
@@ -863,6 +882,7 @@ func _schritte_echt() -> bool:
 		0:
 			if o.zeit > 2.0:
 				pruefe(h.zeiten == Werte.HERAUSFORDERER_ZEITEN and h.zeiten == [540.0, 840.0], "er tritt bei 9:00 und 14:00 an")
+				h.sonde_aus = true   # 26.11.: zu 14:00 sonst zufällig Sonde 7 (gleiche Art wie ein Technogunner zuvor)
 				o.zeit = 527.0
 				o._naechste_welle = 600.0
 				_weiter()

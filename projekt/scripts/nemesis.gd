@@ -268,6 +268,12 @@ func person_von(e: Einheit) -> Dictionary:
 	return p as Dictionary if p is Dictionary else {}
 
 
+## 26.11. (Paul): die Einheit, mit der Sonde 7 gerade selbst im Duell steht – sie hat keinen Datensatz und wird nie
+## befördert (sonst bekäme ein neuer Namenloser ihre Tat).
+func ist_sonde_einheit(e: Einheit) -> bool:
+	return e != null and o24 != null and o24.herausforderer != null and o24.herausforderer.ist_sonde() and o24.herausforderer.einheit == e
+
+
 func einheit_von(p: Dictionary) -> Einheit:
 	var e: Variant = _einheit_von.get(int(p.get("id", -1)), null)
 	if e is Einheit and is_instance_valid(e):
@@ -637,6 +643,8 @@ func brakk_erledigt(id: int) -> void:
 	if not (o is Einheit) or not is_instance_valid(o) or not erledigt_von.is_empty():
 		return
 	var e := o as Einheit
+	if ist_sonde_einheit(e):
+		return   # 26.11. (Paul): Sonde 7 – der Herausforderer trägt sie in brakk_faellt ein
 	var p := person_von(e)
 	# 22.11. (Teil 7): für den Deathscreen – wie, womit, die wievielte Begegnung, vorher namenlos?
 	erledigt_info = {"lage": _lage(e), "art": art_von(e), "namenlos": not benannt(p), "rang_vorher": int(p.get("rang", 0)),
@@ -718,7 +726,7 @@ func genau(e: Einheit) -> float:
 
 ## Befördert eine namenlose Einheit (Bedingung `grund`, Lage `lage` für den Beinamen). true = befördert.
 func befoerdern(e: Einheit, grund: String, lage: String = "") -> bool:
-	if e == null or not is_instance_valid(e) or e.kampfunfaehig or e.ist_pilot:
+	if e == null or not is_instance_valid(e) or e.kampfunfaehig or e.ist_pilot or ist_sonde_einheit(e):
 		return false
 	var p := person_von(e)
 	if benannt(p):
@@ -850,7 +858,7 @@ func _garantie() -> void:
 	for id: int in _lauf:
 		var l: Dictionary = _lauf[id]
 		var e: Variant = l["einheit"]
-		if is_instance_valid(e) and not (e as Einheit).kampfunfaehig and not benannt(person_von(e as Einheit)) and float(l["schaden"]) > wert:
+		if is_instance_valid(e) and not (e as Einheit).kampfunfaehig and not benannt(person_von(e as Einheit)) and not ist_sonde_einheit(e as Einheit) and float(l["schaden"]) > wert:
 			wert = float(l["schaden"])
 			beste = e as Einheit
 	if beste == null:
@@ -859,7 +867,7 @@ func _garantie() -> void:
 		var d := INF
 		for x: Variant in o24._truppen():
 			var u := x as Einheit
-			if not u.kampfunfaehig and not benannt(person_von(u)) and k != null and u.position.distance_to(k.position) < d:
+			if not u.kampfunfaehig and not benannt(person_von(u)) and not ist_sonde_einheit(u) and k != null and u.position.distance_to(k.position) < d:
 				d = u.position.distance_to(k.position)
 				beste = u
 	if beste != null and befoerdern(beste, "garantie"):
@@ -1737,6 +1745,11 @@ const TOD_ZEILEN := {
 		"Die Beförderung widme ich Ihnen, Kommandant.",
 		"Ein Name. Endlich. Danke für die Hilfe.",
 	],
+	"sonde": [   # 26.11. (Paul): Sonde 7 selbst hat Brakk im Duell erledigt
+		"Befehl 24 gilt auch für Sie, Kommandant. Ich habe ihn nur selbst ausgeführt.",
+		"Ich habe Ihnen jeden Weg angesagt. Diesen hier habe ich Ihnen verschwiegen.",
+		"Kein Soldat, keine Kartei, kein Name an der Wand. Nur ich, Kommandant.",
+	],
 }
 
 
@@ -1772,6 +1785,13 @@ func tod_bericht() -> Dictionary:
 		"duell": bool(i.get("duell", false)),
 		"aufstieg": "" if bool(i.get("namenlos", false)) or int(p["rang"]) <= int(i.get("rang_vorher", 0)) else "Aufstieg: %s → %s" % [DIENSTGRADE[int(i.get("rang_vorher", 0))], dienstgrad(p)],
 	}
+	if bool(p.get("sonde", false)):   # 26.11. (Paul): Sonde 7 selbst – kein Soldat, kein Dienstgrad, nichts gespeichert
+		aus["art"] = TITEL_KOMMANDANTIN
+		aus["dienstgrad"] = "–"
+		aus["bilanz"] = "Stand 1 : 0 für sie"
+		aus["womit"] = "im Duell mit MG und Lenkraketen"
+		aus["zeile"] = str(Zufall.waehle(TOD_ZEILEN["sonde"] as Array))
+		aus["aufstieg"] = ""
 	return aus
 
 

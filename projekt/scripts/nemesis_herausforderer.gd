@@ -55,6 +55,7 @@ var gebunden_rest := 0.0         # Brakk ist vom Anker des Technogunners gebunde
 var saeulen := 0                 # Brakks Lichtsäulen in diesem Lauf
 var sonde_vertrieben := false    # C3: Sonde 7 trat selbst an und wurde vertrieben (Bericht, Hangar)
 var sonde_erzwingen := false     # Prüfung: zu Minute 14 sicher Sonde 7
+var sonde_aus := false           # Prüfung: nie Sonde 7 (26.11.: herausforderertest wackelte an der Ziehung)
 
 
 func einrichten(p_nem: Nemesis) -> void:
@@ -117,7 +118,7 @@ func _ansagen() -> void:
 
 ## C1: Tritt zu Minute 14 Sonde 7 selbst an? (SONDE_BOSS_CHANCE; nur beim zweiten Termin)
 func sonde_zieht() -> bool:
-	return naechste >= 1 and (sonde_erzwingen or randf() < Werte.SONDE_BOSS_CHANCE)
+	return naechste >= 1 and not sonde_aus and (sonde_erzwingen or randf() < Werte.SONDE_BOSS_CHANCE)
 
 
 func _auftritt() -> void:
@@ -282,7 +283,11 @@ func brakk_faellt() -> void:
 	if zustand != "duell" or person.is_empty():
 		return
 	if ist_sonde():
-		nem.erledigt_info["duell"] = true   # C3: Sonde 7 steht in keiner Liste – kein Rang, keine Chronik
+		# C3: Sonde 7 steht in keiner Liste – kein Rang, keine Chronik. 26.11. (Paul): Der Deathscreen nennt sie
+		# (auch wenn ein Turm den letzten Treffer gab); befördert wird für ihren Treffer niemand.
+		nem.erledigt_info = {"lage": "", "art": str(person["art"]), "namenlos": false, "rang_vorher": int(person["rang"]),
+			"begegnung": 1, "faehigkeit": "", "gewohnheit": "", "taktik": "", "duell": true}
+		nem.erledigt_von = person
 		ende("gesiegt")
 		return
 	if nem.erledigt_von != person:
