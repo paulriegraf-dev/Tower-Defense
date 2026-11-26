@@ -6,9 +6,13 @@ class_name Startmenue extends CanvasLayer
 ##   Einstellungen  → Grafik, Vollbild, Mauern, Übersicht
 ##   Beenden
 ## Oben rechts das Profil (18.11.): Spitzname und Statistiken. Im Phantom-Modus rechts die Rangliste (online, Elo).
-## Maus oder Tasten (↑ ↓ wählen, Enter bestätigt, Esc zurück). Hintergrund: die Abendbühne (assets/neu/menue),
-## rechts posieren die drei Technoclan-Truppen. Gezeichnet im UI-Raster 640×360 (zweifach skaliert).
-## Frühere Fassungen (Knopfliste, Basislager, Basisstraße): _vor_startmenue/.
+## Maus oder Tasten (↑ ↓ wählen, Enter bestätigt, Esc zurück). Gezeichnet im UI-Raster 640×360 (zweifach skaliert).
+## 26.11. (Paul, Ansatz „Ausblick“): Hintergrund ist eine kleine 3D-Bühne (startmenue.tscn, scripts/ui/menue_buehne.gd)
+## im eigenen SubViewport – Brakk und die Truppen auf dem Wall, Blick ins Tal. Hauptmenü: Logo groß oben links, Liste
+## mit Symbolen rechts, Infofeld unten links (statt Kleinzeilen), oben rechts Symbolknöpfe (Profil, Übersicht,
+## Einstellungen, Beenden; auch mit ← →). Unterseiten: schneller Schnitt in die dunkle Tusche-Szene, die Tafel blendet
+## ein; Phantom-Menü bei Nacht; Anführer als hängende Banner. Zeiten in scripts/ui/ui_bewegung.gd.
+## Frühere Fassungen: _vor_startmenue/ (Knopfliste, Basislager, Basisstraße), _vor_startmenue_2/ (Liste über der Kaserne).
 
 signal gewaehlt(sandbox: bool)
 signal phantom_gewaehlt(art: String, pfad: String)
@@ -19,10 +23,34 @@ signal brakk_gewaehlt   # 18.11.: Brakk-Mode
 const Stil := preload("res://scripts/ui/ui_stil.gd")
 const LICHT := Color("7fe0ff")
 const KUPFER_HELL := Color("ffb070")
-const LISTE_X := 56.0
-const LISTE_Y := 128.0
-const ZEILE_H := 24.0
+const LISTE_X := 56.0              # Unterseiten: Liste links auf einer Tafel (26.11.: ohne Kleinzeilen, enger)
+const LISTE_Y := 80.0
+const ZEILE_H := 20.0
 const BREITE := 300.0
+const HAUPT_X := 416.0             # 26.11.: Hauptmenü – Liste rechts mittig
+const HAUPT_Y := 118.0
+const HAUPT_B := 208.0
+const HAUPT_H := 26.0
+const INFO_X := 16.0               # 26.11.: Infofeld unten links (wächst nach oben)
+const INFO_UNTEN := 344.0
+const INFO_B := 300.0
+const TUSCHE := Color("c9b48a")    # Tafelstil „Platte“: Rahmen und Titel (passt zum Tusche-Ton der Bühne)
+const TUSCHE_HELL := Color("f0dcb0")
+const ALT_Y := 128.0               # altes Startmenü (Vergleich): Liste links mit Kleinzeilen
+const ALT_H := 24.0
+## 26.11.: Symbolknöpfe oben rechts im Hauptmenü: [id, Symbol, Name]
+const KNOEPFE := [["profil", "kopf", "Profil"], ["uebersicht", "buch_offen", "Übersicht"], ["einstellungen", "zahnrad", "Einstellungen"], ["beenden", "tuer", "Beenden"]]
+const BUEHNE := preload("res://startmenue.tscn")
+## 26.11. (Paul, 20:22): Tafeln der Unterseiten = Hologramm aus Brakks Handschuh (nur im Startmenü).
+const SZENE := "res://assets/neu/menue/szene/"
+const HOLO := Color("8a5cff")          # Technoclan-Lila
+const HOLO_HELL := Color("c9a8ff")
+const HOLO_TEXT := Color("c8f4ff")     # Text: Cyan/Weiß
+const HOLO_ARM := 0.15                 # Brakk hebt den linken Arm, der Handschuh leuchtet auf …
+const HOLO_STRAHL := 0.2               # … der Strahl wächst von der Handfläche zur Tafel …
+const HOLO_BREITE := 0.1               # … die Tafel entfaltet sich: erst die Breite …
+const HOLO_HOEHE := 0.1                # … dann die Höhe
+const HOLO_ZU := 0.3                   # Zurück: Tafel fällt in den Strahl, die Hand verglimmt
 const LOGO_SKALA := 4.0 / 3.0     # 1 Logopixel = 4 Bildschirmpixel bei 1080p
 ## 18.11.: Adresse von Terrain Conquester für das Emblem unten rechts. Leer = Emblem ausgeblendet (TC noch nicht öffentlich).
 const TC_ADRESSE := "https://paulriegraf-dev.github.io/Terrain-Conquester/"
@@ -51,7 +79,6 @@ var _titel := false
 var _titel_zeit := 0.0
 var _sterne: Array = []
 # Profil und Rangliste (18.11.)
-const PROFIL_H := 18.0
 const TAFEL := Rect2(372, 60, 252, 276)
 var _eingabe: LineEdit              # unsichtbares Eingabefeld für den Spitznamen (gezeichnet wird selbst)
 var _code_modus := false            # 20.11.: das Eingabefeld nimmt gerade einen Entwicklercode auf (Einstellungen)
@@ -59,6 +86,23 @@ var _code := ""                     # 20.11.: getippter Code, solange das Feld n
 var _erststart := false             # erster Start: nach dem Namen fragen
 var _laedt := false                 # ein Online-Phantom wird gerade geladen
 var _online_stand := -1
+# 26.11.: Bühne und Bewegung
+var _buehne: MenueBuehne
+var _buehne_vp: SubViewport
+var _buehne_bild: TextureRect
+var _echt := 0.0                    # Sekunden in Echtzeit (das Spiel dahinter läuft mit Engine.time_scale)
+var _seite_seit := 0.0              # seit wann die Seite offen ist (Echtzeit; Einblenden, Banner)
+var _zeile_t := {}                  # Index -> 0..1, wie weit die Zeile eingerückt ist
+var _knopf_wahl := -1               # Symbolknopf oben rechts, der mit ← → gewählt ist (-1 = keiner)
+var _holo: Flaeche                  # Ebene unter der Oberfläche: Handschuh, Strahl, Hologramm-Rahmen
+var _holo_box: StyleBoxTexture
+var _zu_rect := Rect2()             # Tafel, die gerade in den Strahl zurückfällt
+var _zu_seit := -10.0
+## 26.11. (Paul): zum Vergleichen zwischen neuem und altem Startmenü umschalten (Einstellungen oder [F2])
+var _alt := false
+## 26.11. (Paul): Entwicklerschalter „Tafelstil: Platte / Hologramm“ – Standard Hologramm, die Platte bleibt zum Vergleich
+var _holo_stil := true
+var _letzte_wahl := -1              # Markieren im Hauptmenü: Brakk dreht kurz den Kopf zur Liste
 
 
 class Flaeche extends Control:
@@ -81,6 +125,34 @@ func _init() -> void:
 	_grund.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_grund.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_grund)
+	# 26.11.: Bühne „Ausblick“ in einem eigenen SubViewport (eigene 3D-Welt) hinter der Menüfläche
+	_buehne_vp = SubViewport.new()
+	_buehne_vp.own_world_3d = true
+	_buehne_vp.size = Vector2i(1280, 720)
+	_buehne_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_buehne = BUEHNE.instantiate() as MenueBuehne
+	_buehne.einfach = Touch.ohne_maus()
+	_buehne.szene = str(Profil.einstellung("buehne", "ausblick"))   # 26.11. (Paul): „Ausblick“ oder „Klippe“
+	_buehne_vp.add_child(_buehne)
+	add_child(_buehne_vp)
+	_buehne_bild = TextureRect.new()
+	_buehne_bild.texture = _buehne_vp.get_texture()
+	_buehne_bild.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_buehne_bild.stretch_mode = TextureRect.STRETCH_SCALE
+	_buehne_bild.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_buehne_bild.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_buehne_bild.material = _buehne.post
+	add_child(_buehne_bild)
+	_alt = bool(Profil.einstellung("startmenue_alt", false))
+	_holo_stil = str(Profil.einstellung("tafelstil", "hologramm")) != "platte"
+	_holo = Flaeche.new()
+	_holo.size = Vector2(640, 360)
+	_holo.scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
+	_holo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_holo.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_holo.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	_holo.malen = _male_holo_ebene
+	add_child(_holo)
 	_welt = Flaeche.new()
 	_welt.size = Vector2(640, 360)
 	_welt.scale = Vector2(Stil.UI_SKALA, Stil.UI_SKALA)
@@ -126,7 +198,13 @@ func _zeige(seite: String) -> void:
 		_eingabe.release_focus()
 	if seite == "phantom":
 		Online.lade_listen()   # Rangliste auffrischen
+	if seite == "haupt" and _seite != "haupt" and _seite != "anfuehrer":
+		_zu_rect = _tafel_rect()   # 26.11.: diese Tafel fällt gleich in den Strahl zurück
+		_zu_seit = _echt
 	_seite = seite
+	_seite_seit = _echt   # 26.11.: Tafel blendet ein, Banner fallen
+	_knopf_wahl = -1
+	_zeile_t.clear()
 	_kartenbild_daten.clear()   # 18.11.: Karten können sich geändert haben (Import, Editor)
 	_wahl = 0
 	_meldung = ""
@@ -143,26 +221,32 @@ func _baue() -> void:
 	_eintraege = []
 	match _seite:
 		"haupt":
+			# 26.11. (Paul): Kurztexte stehen im Infofeld; Einstellungen und Beenden sind Symbolknöpfe oben rechts
+			var phantom_text := tr("Deine Verteidigung bleibt als Phantom zurück. Greife die der anderen an.")
 			_eintraege = [
 				# 18.11. (Paul): Reihenfolge nach Wichtigkeit
-				["Spielen", _zeige.bind("spielen"), "", LICHT],
-				["Phantom-Modus", _zeige.bind("phantom"), "Neuer Bericht: dein Phantom war im Einsatz" if Online.bericht_text() != "" else "", Stil.TEXT] if Profil.phantom_frei() else ["Phantom-Modus", _tafel_auf.bind("phantom"), SPERR_TAFEL["phantom"]["bedingung"], GESPERRT],   # 21.11. (Paul): erst nach einem Sieg
-				["Brakk-Mode", _zeige.bind("brakk"), "", Stil.TEXT] if Profil.brakk_modus_frei() else ["Brakk-Mode", _tafel_auf.bind("brakk"), SPERR_TAFEL["brakk"]["bedingung"], GESPERRT],   # 20.11. (Schritt 5b): Unterseite Classic / Rogue; 21.11.: erst nach dem ersten Brakk
-				["Sandbox", _zeige.bind("sandbox"), "", Stil.TEXT],
-				["Herausforderungen", _zeige.bind("herausforderung"), "", Stil.TEXT],
-				["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT],
-				["Beenden", _beenden, "", Stil.TEXT_BLASS],
+				["Spielen", _zeige.bind("spielen"), tr("Verteidige das HQ. 20 Runden."), LICHT],
+				["Phantom-Modus", _zeige.bind("phantom"), phantom_text + ("\n" + tr("Neuer Bericht: dein Phantom war im Einsatz.") if Online.bericht_text() != "" else ""), Stil.TEXT] if Profil.phantom_frei() else ["Phantom-Modus", _tafel_auf.bind("phantom"), phantom_text + "\n" + str(SPERR_TAFEL["phantom"]["bedingung"]), GESPERRT],   # 21.11. (Paul): erst nach einem Sieg
+				["Brakk-Modus", _zeige.bind("brakk"), tr("Der Krieg aus Brakks Augen. Classic: 20 Runden. Befehl 24: allein überleben."), Stil.TEXT] if Profil.brakk_modus_frei() else ["Brakk-Modus", _tafel_auf.bind("brakk"), tr("Der Krieg aus Brakks Augen.") + "\n" + str(SPERR_TAFEL["brakk"]["bedingung"]), GESPERRT],   # 20.11. (Schritt 5b): Unterseite Classic / Befehl 24; 21.11.: erst nach dem ersten Brakk
+				["Sandbox", _zeige.bind("sandbox"), tr("Alles frei, nichts zählt. Oder bau ein eigenes Szenario."), Stil.TEXT],
+				["Herausforderungen", _zeige.bind("herausforderung"), tr("Andere Karten, Modifikatoren, fünf besondere Lagen."), Stil.TEXT],
 			]
+			# 26.11. (Paul): Tutorial im Hauptmenü bis zum ersten Sieg, danach unter Spielen als „Tutorial: an/aus“
+			if not Profil.phantom_frei():
+				_eintraege.insert(1, ["Tutorial", _tutorial_los, tr("Sonde 7 zeigt dir alles. Am Ende geht es direkt ins echte Spiel."), Stil.TEXT])
+			if _alt:   # altes Startmenü (Vergleich): Einstellungen und Beenden stehen in der Liste
+				_eintraege.append(["Einstellungen", _zeige.bind("einstellungen"), "", Stil.TEXT])
+				_eintraege.append(["Beenden", _beenden, "", Stil.TEXT_BLASS])
 			# 18.11.: unterbrochene Partie (Seite neu geladen, Spiel geschlossen) ganz oben anbieten
 			var runde: int = spiel.zwischenstand_runde() if spiel != null else 0
 			if runde > 0:
-				_eintraege.push_front(["Fortsetzen · Runde %d" % runde, _fortsetzen, "deine unterbrochene Partie" + (" im Brakk-Mode" if bool(spiel.lies_zwischenstand().get("brakk_modus", false)) else ""), KUPFER_HELL])   # 19.11.: auch Brakk-Mode
+				_eintraege.push_front([tr("Fortsetzen") + " · " + tr("Runde %d") % runde, _fortsetzen, tr("Deine unterbrochene Partie") + (" " + tr("im Brakk-Modus") if bool(spiel.lies_zwischenstand().get("brakk_modus", false)) else "") + ".", KUPFER_HELL])   # 19.11.: auch Brakk-Modus
 				_eintraege[1][3] = Stil.TEXT
 		"brakk":
-			# 20.11. (Schritt 5b): Classic = der bisherige Brakk-Mode, Rogue = Order 24
+			# 20.11. (Schritt 5b): Classic = der bisherige Brakk-Modus, Befehl 24 = Order 24 (26.11.: ohne „Rogue“ im Namen)
 			_eintraege = [
-				["Classic", _brakk_mode, "20 Runden gegen die Myriaden in der Ego-Sicht – wie bisher", LICHT],
-				["Rogue · Befehl 24", _zeige.bind("rogue"), "der Technoclan hat sich gegen Brakk gewandt: allein überleben", KUPFER_HELL] if Profil.rogue_frei() else ["Rogue · gesperrt", _rogue_gesperrt, "erst Classic gewinnen (Runde 20) – dann geht es weiter …", Stil.TEXT_BLASS],   # 20.11. (Paul)
+				["Classic", _brakk_mode, tr("20 Runden gegen die Myriaden in der Ego-Sicht."), LICHT],
+				["Befehl 24", _zeige.bind("rogue"), tr("Der Technoclan hat sich gegen Brakk gewandt: allein überleben."), KUPFER_HELL] if Profil.rogue_frei() else ["Befehl 24", _rogue_gesperrt, tr("Erst Classic gewinnen (Runde 20) – dann geht es weiter …"), GESPERRT],   # 20.11. (Paul)
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
 			if Profil.rogue_frei():
@@ -175,7 +259,7 @@ func _baue() -> void:
 				if rg is Dictionary and str((rg as Dictionary).get("modus", "")) == "rogue":
 					_eintraege.append(["Eigene: " + _karten_titel(kname), _rogue_los.bind(kname), _karten_text(kname), Stil.TEXT])
 			if _eintraege.size() == 1:
-				_eintraege.append(["Eigene Karte laden", _zeige.bind("rogue"), "noch keine – im Editor (Sandbox → Szenario bauen → Szenarien) aus der Vorlage Order 24 speichern", Stil.TEXT_BLASS])
+				_eintraege.append(["Eigene Karte laden", _zeige.bind("rogue"), tr("Noch keine – im Editor (Sandbox → Szenario bauen → Szenarien) aus der Vorlage Befehl 24 speichern."), Stil.TEXT_BLASS])
 			_eintraege.append(["Zurück", _zeige.bind("brakk"), "", Stil.TEXT_BLASS])
 		"sandbox":
 			# 18.11.: Sandbox als Unterseite – spielen wie bisher oder eigene Karte bauen
@@ -202,10 +286,11 @@ func _baue() -> void:
 			_eintraege.append(["Zurück", func() -> void: _zeige(_af_zurueck), "", Stil.TEXT_BLASS])
 		"spielen":
 			_eintraege = [
-				["Los geht's", _los, "20 Runden gegen die Myriaden" + (" · mit Tutorial" if _tutorial else ""), LICHT],
-				["Tutorial: " + ("an" if _tutorial else "aus"), _tutorial_umschalten, "Sonde 7 erklärt Schritt für Schritt", Stil.TEXT],
+				["Los geht's", _los, tr("Verteidige das HQ. 20 Runden.") + (" " + tr("Mit Tutorial.") if _tutorial else ""), LICHT],
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 			]
+			if Profil.phantom_frei():   # 26.11.: vor dem ersten Sieg steht das Tutorial im Hauptmenü
+				_eintraege.insert(1, [tr("Tutorial") + ": " + (tr("an") if _tutorial else tr("aus")), _tutorial_umschalten, tr("Sonde 7 zeigt dir alles. Am Ende geht es direkt ins echte Spiel."), Stil.TEXT])
 		"szenarien":
 			# 20.11. (Schritt 5): mitgelieferte Szenarien; rechts der Steckbrief der gewählten Karte
 			for kname: String in Werte.SZENARIEN:
@@ -218,8 +303,8 @@ func _baue() -> void:
 			var wo := " online" if on else ""
 			var staerkste := str(Profil.einstellung("phantom_wahl", "zufall")) == "staerkste"
 			_eintraege = [
-				["Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · " + _anzahl(nv, "Phantom" + wo, "Phantome" + wo, "noch keine Phantome hinterlegt"), KUPFER_HELL],
-				["Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · " + _anzahl(na, "Angriff" + wo, "Angriffe" + wo, "noch keine Angriffe hinterlegt"), LICHT],
+				["Angreifen · " + tr("%d online") % nv if on else "Angreifen", _phantom.bind("verteidigung"), "Greife den Bau eines anderen Spielers an · " + _anzahl(nv, "Phantom" + wo, "Phantome" + wo, "noch keine Phantome hinterlegt"), KUPFER_HELL],   # 26.11.: Anzahl rechts in der Zeile
+				["Verteidigen · " + tr("%d online") % na if on else "Verteidigen", _phantom.bind("angriff"), "Tritt gegen den Angriff eines anderen Spielers an · " + _anzahl(na, "Angriff" + wo, "Angriffe" + wo, "noch keine Angriffe hinterlegt"), LICHT],
 				["Gegner: " + ("Stärkste" if staerkste else "Zufall"), _wahl_umschalten, "die fünf Besten der Rangliste" if staerkste else "irgendein Phantom aus dem Pool", Stil.TEXT],
 				["So funktioniert's", _phantom_erklaeren, "Phantome, Elo und Rangliste in 20 Sekunden", Stil.TEXT_BLASS],   # 23.11.: „?“ der Einführung
 				["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
@@ -238,7 +323,7 @@ func _baue() -> void:
 				if _tippt():
 					_eintraege.append(["Übernehmen", _bestaetige_namen, "oder Enter drücken", KUPFER_HELL])   # 21.11.
 				_eintraege += [
-					["Brakk-Mode · " + Anfuehrer.name(_profil_af) if _profil_brakk else "Brakk-Mode", _profil_brakk_umschalten, _profil_brakk_text(), Stil.TEXT],   # 19.11.; 20.11.: je Anführer getrennt, ein Klick blättert weiter
+					["Brakk-Modus · " + Anfuehrer.name(_profil_af) if _profil_brakk else "Brakk-Modus", _profil_brakk_umschalten, _profil_brakk_text(), Stil.TEXT],   # 19.11.; 20.11.: je Anführer getrennt, ein Klick blättert weiter
 					["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS],
 				]
 		"grafik":
@@ -257,15 +342,67 @@ func _baue() -> void:
 				_eintraege.append(["Mauern: " + str(wnamen.get(Werte.wand_stil, "Tech-Mauer")), _naechste_mauer, "auch im Spiel mit [M]", Stil.TEXT])
 			_eintraege.append(["Musik: " + _prozent_text(Werte.musik), _naechste_musik.bind(10), "Klick lauter, Rechtsklick leiser · auch ← →", Stil.TEXT, _naechste_musik])
 			_eintraege.append(["Geräusche: " + _prozent_text(Werte.toene), _naechste_toene.bind(10), "Schüsse nur nah herangezoomt · ← →", Stil.TEXT, _naechste_toene])
-			_eintraege.append(["Übersicht", func(): uebersicht_gewaehlt.emit(), "Gegner, Truppen, Bauten, Regeln", Stil.TEXT])
-			_eintraege.append(["Code: " + _code_text(), _starte_code, "Enter löst ein" if _tippt() else "zum Eingeben klicken", Stil.TEXT])   # 20.11.: Entwicklercodes
-			_eintraege.append(["Einlösen", _loese_code, "", Stil.TEXT])
-			if not Nemesis.meistgesuchte().is_empty():   # 22.11. (Paul, Nemesis Teil 6/8)
-				_eintraege.append(["Meistgesuchte zurücksetzen", _meistgesuchte_weg, "Klick noch einmal: alle Benannten aus Befehl 24 löschen" if _weg_frage else "die Benannten aus Befehl 24 vergessen – nächster Lauf beginnt mit dem Appell", Stil.WARN if _weg_frage else Stil.TEXT])
+			# 26.11. (Paul): Übersicht ist ein Symbolknopf im Hauptmenü; Steuerung und Sprache als Platzhalter; Code in einer Zeile
+			_eintraege.append([tr("Steuerung"), _tafel_auf.bind("steuerung"), tr("Tasten und Maus im Überblick."), Stil.TEXT])
+			_eintraege.append([tr("Sprache") + ": " + tr("Deutsch"), _sprache, tr("Weitere Sprachen folgen."), Stil.TEXT])
+			_eintraege.append(["Code: " + _code_text(), _starte_code, tr("Enter oder „Einlösen“ löst ein.") if _tippt() else tr("Zum Eingeben klicken, dann „Einlösen“."), Stil.TEXT])   # 20.11.: Entwicklercodes
+			# 26.11. (Paul): „Meistgesuchte zurücksetzen“ steht jetzt im Hangar (hangar.gd)
+			_eintraege.append([tr("Startmenü") + ": " + (tr("Alt") if _alt else tr("Neu")), _stil_umschalten, tr("Zum Vergleich zwischen neuem und altem Startmenü wechseln · auch mit [F2]."), Stil.TEXT])
+			if not _alt:   # Entwicklerschalter (Vergleich)
+				_eintraege.append([tr("Tafelstil") + ": " + (tr("Hologramm") if _holo_stil else tr("Platte")), _tafelstil_umschalten, tr("Entwicklerschalter: Unterseiten als Hologramm aus Brakks Handschuh oder als schlichte Platte."), Stil.TEXT])
+				_eintraege.append([tr("Bühne") + ": " + (tr("Klippe") if _buehne.szene == "klippe" else tr("Ausblick")), _buehne_umschalten, tr("Entwicklerschalter: Hintergrund „Ausblick“ (Wall vorn, Tal) oder „Klippe“ (Fels unten links, Verteidigung oben rechts) · auch mit [F3]."), Stil.TEXT])
 			_eintraege.append(["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS])
 	_wahl = clampi(_wahl, 0, _eintraege.size() - 1)
 	if _seite == "brakk":   # 22.11. (Paul): Brakk-Tutorial jederzeit wiederholen (brakk_tutorial.gd)
 		_eintraege.insert(1, ["Tutorial", func() -> void: BrakkTutorial.aus_menue(self), "Sonde 7 zeigt Parkour, Schießstand, Bauen und Ringe – ohne Risiko", Stil.TEXT])
+
+
+## 26.11.: Hauptmenü → Tutorial (bis zum ersten Sieg): gleich los, mit Brakk.
+func _tutorial_los() -> void:
+	_tutorial = true
+	_los()
+
+
+## 26.11. (Paul): zwischen neuem und altem Startmenü wechseln (zum Vergleichen); gemerkt im Profil.
+func _stil_umschalten() -> void:
+	_alt = not _alt
+	Profil.setze_einstellung("startmenue_alt", _alt)
+	_seite_seit = _echt
+	_zu_seit = -10.0
+	var w := _wahl
+	_baue()
+	_wahl = clampi(w, 0, _eintraege.size() - 1)
+
+
+## 26.11. (Paul): Tafelstil Hologramm ↔ Platte (Entwicklerschalter, gemerkt im Profil).
+func _tafelstil_umschalten() -> void:
+	_holo_stil = not _holo_stil
+	Profil.setze_einstellung("tafelstil", "hologramm" if _holo_stil else "platte")
+	var w := _wahl
+	_baue()
+	_wahl = clampi(w, 0, _eintraege.size() - 1)
+
+
+## 26.11. (Paul): Bühne „Ausblick“ ↔ „Klippe“ (Entwicklerschalter, gemerkt im Profil) – die Bühne wird neu aufgebaut.
+func _buehne_umschalten() -> void:
+	var neu := "ausblick" if _buehne.szene == "klippe" else "klippe"
+	Profil.setze_einstellung("buehne", neu)
+	_buehne.queue_free()
+	_buehne_vp.remove_child(_buehne)
+	_buehne = BUEHNE.instantiate() as MenueBuehne
+	_buehne.einfach = Touch.ohne_maus()
+	_buehne.szene = neu
+	_buehne_vp.add_child(_buehne)
+	_buehne_bild.material = _buehne.post
+	var w := _wahl
+	_baue()
+	_wahl = clampi(w, 0, _eintraege.size() - 1)
+
+
+## 26.11.: Sprache – vorerst nur Deutsch (Platzhalter).
+func _sprache() -> void:
+	_meldung = tr("Weitere Sprachen folgen.")
+	_meldung_gold = true
 
 
 ## 18.11.: Kartenwahl auf der Seite „Herausforderungen“ (Titel und Beschreibung stehen in karten/<name>.json).
@@ -441,6 +578,15 @@ func _male_anfuehrer(ci: Control) -> void:
 	else:
 		Stil.schreibe(ci, Vector2(20, 30), "ANFÜHRER WÄHLEN", Stil.GROSS, LICHT)
 		Stil.schreibe(ci, Vector2(20, 48), "Seine Perks gelten ab Runde 1. Seine Figur kaufst du wie Brakk mit [8].", Stil.KLEIN, Stil.TEXT_BLASS)
+	# 26.11.: Lichtschächte von oben, in denen die Banner hängen
+	var licht := 0.0 if _alt else UiBewegung.weich((_echt - _seite_seit) / 0.5)
+	if _alt:
+		ci.draw_rect(Rect2(0, 0, 640, 360), Color(0.03, 0.04, 0.06, 0.72))
+	for i in _af_liste().size():
+		var k := _af_kachel(i)
+		var c := k.get_center().x
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(c - 18.0, 0), Vector2(c + 18.0, 0), Vector2(c + k.size.x * 0.62, 360),
+			Vector2(c - k.size.x * 0.62, 360)]), Color(1.0, 0.92, 0.74, (0.09 if i == _wahl else 0.05) * licht))
 	for i in _af_liste().size():
 		_male_af_kachel(ci, i, _af_liste()[i])
 	var zr := AF_ZURUECK
@@ -457,7 +603,23 @@ func _male_af_kachel(ci: Control, i: int, a: Dictionary) -> void:
 	var frei := _af_frei(id)
 	var an := i == _wahl
 	var farbe: Color = a["farbe"]
-	Stil.platte(ci, r, 4.0, Color(0.05, 0.06, 0.09, 0.92), (LICHT if frei else Stil.RAHMEN_HELL) if an else Stil.RAHMEN)
+	if _alt:
+		Stil.platte(ci, r, 4.0, Color(0.05, 0.06, 0.09, 0.92), (LICHT if frei else Stil.RAHMEN_HELL) if an else Stil.RAHMEN)
+	elif not _holo_stil:
+		# Tafelstil „Platte“: hängendes Banner mit Tuch (Stand vor dem Hologramm)
+		r.position.y += UiBewegung.banner_fall(_echt - _seite_seit, i, 320.0)
+		var rahmen := (LICHT if frei else Stil.RAHMEN_HELL) if an else TUSCHE
+		ci.draw_rect(Rect2(r.position.x - 6.0, r.position.y - 4.0, r.size.x + 12.0, 4.0), Color("8a6a3a"))
+		var tuch := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), Vector2(r.end.x, r.end.y - 10.0),
+			Vector2(r.get_center().x, r.end.y + 8.0), Vector2(r.position.x, r.end.y - 10.0)])
+		ci.draw_colored_polygon(tuch, Color(0.05, 0.06, 0.09, 0.94))
+		ci.draw_polyline(tuch + PackedVector2Array([tuch[0]]), rahmen, 1.0)
+	else:
+		# 26.11.: Banner fallen nacheinander von oben; Rahmen wie die Hologramm-Tafeln (Paul 20:22: statt Tuch)
+		r.position.y += UiBewegung.banner_fall(_echt - _seite_seit, i, 320.0)
+		_male_holo(ci, r, 1.0)
+		if an:
+			ci.draw_rect(r.grow(2.0), Color(LICHT if frei else Stil.RAHMEN_HELL, 0.8), false, 1.0)
 	if an:
 		ci.draw_rect(Rect2(r.position.x + 10.0, r.position.y + 2.0, r.size.x - 20.0, 1.0), LICHT)   # Lichtkante oben
 	var x := r.position.x + 8.0
@@ -530,10 +692,13 @@ func _brakk_mode() -> void:
 ## (Bild, zwei Sätze, Bedingung) und „Verstanden“. Sie rüttelt beim Öffnen kurz wie an einem Schloss.
 const GESPERRT := Color(0.42, 0.44, 0.5)
 const SPERR_TAFEL := {
-	"brakk": {"titel": "BRAKK-MODE", "bedingung": "Stelle Brakk einmal in einer Partie auf",
-		"text": "Nimm selbst das Gewehr in die Hand – der Krieg aus Brakks Augen. In Classic hältst du 20 Runden in der Ego-Sicht, in Rogue kämpfst du allein ums Überleben."},
+	"brakk": {"titel": "BRAKK-MODUS", "bedingung": "Stelle Brakk einmal in einer Partie auf",
+		"text": "Nimm selbst das Gewehr in die Hand – der Krieg aus Brakks Augen. In Classic hältst du 20 Runden in der Ego-Sicht, in Befehl 24 kämpfst du allein ums Überleben."},
 	"phantom": {"titel": "PHANTOM-MODUS", "bedingung": "Überstehe Runde 20",
 		"text": "Deine Verteidigung bleibt als Phantom zurück. Greife die der anderen an."},
+	# 26.11.: keine Sperre, nur eine Tafel (Platzhalter, bis die Tastenbelegung kommt)
+	"steuerung": {"titel": "STEUERUNG", "bedingung": "", "info": true,
+		"text": "Menü: Maus oder ↑ ↓ wählen, Enter bestätigt, Esc zurück. Im Spiel stehen alle Tasten in der Übersicht [I]. Eine eigene Belegung folgt."},
 }
 const TAFEL_RECHT := Rect2(150, 105, 340, 150)
 const TAFEL_KNOPF := Rect2(260, 225, 120, 20)
@@ -554,7 +719,11 @@ var _tafel_ab := 0.0
 func _tafel_auf(art: String) -> void:
 	_tafel = art
 	_tafel_ab = _zeit
-	Ton.spiele(self, "hit-thud", -6.0)
+	if bool(SPERR_TAFEL[art].get("info", false)):
+		_klick()   # 26.11.: Info-Tafel – kein Rütteln am Schloss
+		_tafel_ab = -10.0
+	else:
+		Ton.spiele(self, "hit-thud", -6.0)
 
 
 func _tafel_zu() -> void:
@@ -573,7 +742,10 @@ func _male_tafel(ci: Control) -> void:
 	# Bild links
 	var bild := Rect2(r.position + Vector2(12, 14), Vector2(96, 96))
 	ci.draw_rect(bild, Color(0.08, 0.1, 0.14))
-	if _tafel == "brakk":
+	var info := bool(d.get("info", false))
+	if info:
+		Stil.symbol(ci, "raster", bild.get_center(), 3.0, LICHT)   # 26.11.: Platzhalter-Bild
+	elif _tafel == "brakk":
 		var p: Texture2D = Anfuehrer.portraet("brakk")
 		if p != null:
 			ci.draw_texture_rect(p, bild, false)
@@ -595,7 +767,8 @@ func _male_tafel(ci: Control) -> void:
 	var weite := r.end.x - 12.0 - x
 	Stil.schreibe(ci, Vector2(x, r.position.y + 20.0), str(d["titel"]), Stil.GROSS, LICHT)
 	Stil.absatz(ci, Vector2(x, r.position.y + 34.0), str(d["text"]), weite, Stil.KLEIN, Stil.TEXT)
-	Stil.symbol(ci, "schloss", Vector2(x + 4.0, r.position.y + 100.0), 1.0, KUPFER_HELL)
+	if not info:
+		Stil.symbol(ci, "schloss", Vector2(x + 4.0, r.position.y + 100.0), 1.0, KUPFER_HELL)
 	var bedingung := str(d["bedingung"])
 	if _tafel == "phantom" and int(Profil.stat("beste_runde")) > 0:
 		bedingung += "\nBisher: Runde %d von %d" % [mini(int(Profil.stat("beste_runde")), Werte.LETZTE_RUNDE), Werte.LETZTE_RUNDE]   # 23.11. (Einführung A)
@@ -608,7 +781,7 @@ func _male_tafel(ci: Control) -> void:
 
 
 func _rogue_gesperrt() -> void:
-	_meldung = "Rogue schaltest du frei, wenn du Classic bis Runde 20 gewinnst."
+	_meldung = tr("Befehl 24 schaltest du frei, wenn du Classic bis Runde 20 gewinnst.")
 
 
 ## 20.11. (Schritt 5b): Order 24 auf einer Rogue-Karte (Regelpaket modus "rogue" – main.gd startet dann Order24).
@@ -639,6 +812,7 @@ func _starte(gross: bool, art: String, karte: String = "paulland", herausforderu
 	elif art == "tutorial":
 		tutorial_gewaehlt.emit()
 	elif art == "brakk":
+		UiBewegung.abblenden(_welt.get_tree())   # 26.11.: aus Schwarz in die Ego-Sicht
 		brakk_gewaehlt.emit()
 	elif art.begins_with("angriff:"):
 		phantom_gewaehlt.emit("verteidigung", art.trim_prefix("angriff:"))
@@ -964,27 +1138,51 @@ func _frage_namen_beim_ersten_mal() -> void:
 	_starte_eingabe()
 
 
-## Profil-Schild oben rechts: Brakk-Zeichen und Name.
-func _profil_rect() -> Rect2:
-	var w := Stil.breite(Profil.name(), Stil.NORMAL) + 30.0
-	return Rect2(640.0 - 12.0 - w, 10.0, w, PROFIL_H)
-
-
-func _male_profil_schild(ci: Control) -> void:
-	if _seite == "profil":
-		return
-	var r := _profil_rect()
-	var an := r.has_point(_maus)
-	Stil.platte(ci, r, 3.0, Color(LICHT, 0.14) if an else Stil.METALL_DUNKEL, LICHT if an else Stil.RAHMEN)
-	Stil.symbol(ci, "brakk", Vector2(r.position.x + 11.0, r.get_center().y), 1.0, LICHT)
-	Stil.schreibe(ci, Vector2(r.position.x + 21.0, r.get_center().y), Profil.name(), Stil.NORMAL, Color.WHITE if an else Stil.TEXT)
-
-
 ## 18.11.: Emblem „Terrain Conquester“ unten rechts – Platzhalter aus Stil-Mitteln (Kupferschrift auf Metallplatte),
 ## bis das Logo kommt. Leuchtet beim Überfahren, ein Klick öffnet die Seite.
 func _tc_rect() -> Rect2:
 	var w := Stil.breite("Terrain Conquester", Stil.NORMAL) + 22.0
 	return Rect2(640.0 - 12.0 - w, 341.0, w, 14.0)   # unter den Tafeln (enden bei 336)
+
+
+## 26.11. (Paul): sichtbarer Umschalter im Hauptmenü, links neben dem Emblem – Alt · Ausblick · Klippe (zum Vergleichen).
+const ANSICHTEN := [["alt", "Alt"], ["ausblick", "Ausblick"], ["klippe", "Klippe"]]
+
+
+func _ansicht() -> String:
+	return "alt" if _alt else _buehne.szene
+
+
+func _ansicht_rects() -> Array:
+	var rs: Array = []
+	var x := (_tc_rect().position.x if TC_ADRESSE != "" else 628.0) - 8.0
+	for i in range(ANSICHTEN.size() - 1, -1, -1):
+		var w := Stil.breite(tr(str(ANSICHTEN[i][1])), Stil.NORMAL) + 14.0
+		x -= w
+		rs.push_front(Rect2(x, 341.0, w, 14.0))
+	return rs
+
+
+func _ansicht_setzen(id: String) -> void:
+	if id == "alt":
+		if not _alt:
+			_stil_umschalten()
+		return
+	if _alt:
+		_stil_umschalten()
+	if _buehne.szene != id:
+		_buehne_umschalten()
+
+
+func _male_ansicht(ci: Control) -> void:
+	var rs := _ansicht_rects()
+	var jetzt := _ansicht()
+	for i in rs.size():
+		var r: Rect2 = rs[i]
+		var aktiv: bool = ANSICHTEN[i][0] == jetzt
+		var an := r.has_point(_maus)
+		Stil.platte(ci, r, 3.0, Color(LICHT, 0.22) if aktiv else (Color(LICHT, 0.1) if an else Stil.METALL_DUNKEL), LICHT if aktiv or an else Stil.RAHMEN)
+		Stil.schreibe(ci, Vector2(r.position.x + 7.0, r.get_center().y), tr(str(ANSICHTEN[i][1])), Stil.NORMAL, Color.WHITE if aktiv else (LICHT if an else Stil.TEXT_BLASS))
 
 
 func _male_tc_emblem(ci: Control) -> void:
@@ -1528,13 +1726,86 @@ func _process(delta: float) -> void:
 	_welt.visible = not is_instance_valid(_hangar) and not (spiel != null and spiel.get("_lexikon") != null and spiel._lexikon.visible)
 	SichererRand.einpassen(_welt, Stil.UI_SKALA)   # 19.11.: iPhone – sichere Ränder (am PC unverändert)
 	_grund.visible = _welt.visible and SichererRand.faktor() < 1.0
+	_buehne_weiter(delta)
 	_welt.queue_redraw()
+
+
+## 26.11.: Bühne – so groß wie das Fenster (Handy/Tablet: halb), Abend oder Nacht, Hauptmenü oder Unterseite. Sie ruht,
+## solange Titelbild, Fortsetzen-Bild, Hangar oder Übersicht davor liegen. Das Spiel dahinter zeichnet dann kein 3D.
+func _buehne_weiter(delta: float) -> void:
+	delta /= maxf(Engine.time_scale, 0.01)   # Echtzeit
+	_echt += delta
+	var an := _welt.visible and not _titel and _auto == 0 and not _alt
+	_buehne_bild.visible = _welt.visible and not _alt
+	_holo.visible = _buehne_bild.visible
+	SichererRand.einpassen(_holo, Stil.UI_SKALA)
+	_holo.queue_redraw()
+	_buehne_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if an else SubViewport.UPDATE_DISABLED
+	_buehne.set_process(an)
+	get_viewport().disable_3d = _welt.visible
+	var soll := Vector2i((Vector2(get_window().size) * (0.5 if _buehne.einfach else 1.0)).round())
+	if soll.x > 0 and soll.y > 0 and _buehne_vp.size != soll:
+		_buehne_vp.size = soll
+	_buehne.nacht_ziel = 1.0 if _seite == "phantom" else 0.0
+	_buehne.unter_ziel = 0.0 if _seite == "haupt" else 1.0
+	# Inhalt blendet ein (nur Alpha): Unterseiten erst, wenn das Hologramm entfaltet ist; das Hauptmenü, während die
+	# Tafel in den Strahl zurückfällt
+	var t := _echt - _seite_seit
+	var ab := UiBewegung.UEBERBLENDUNG * 0.5
+	var dauer := UiBewegung.EINBLENDEN
+	if _holo_stil:
+		if _seite == "anfuehrer":
+			ab = 0.0
+		elif _seite != "haupt":
+			ab = HOLO_ARM + HOLO_STRAHL + HOLO_BREITE + HOLO_HOEHE - 0.04
+			dauer = 0.12
+		elif _echt - _zu_seit < HOLO_ZU + 0.1:
+			ab = HOLO_ZU * 0.5
+	_welt.modulate.a = 1.0 if _titel or _auto > 0 or _alt else UiBewegung.weich((t - ab) / dauer)
+	# Brakk: Arm hoch, solange eine Hologramm-Tafel offen ist (und während sie zurückfällt); Markieren = Blick zur Liste
+	_buehne.arm_ziel = 1.0 if _holo_stil and (_seite != "haupt" or _echt - _zu_seit < HOLO_ZU) else 0.0
+	if _seite == "haupt" and _wahl != _letzte_wahl and _letzte_wahl >= 0:
+		_buehne.blick()
+	_letzte_wahl = _wahl if _seite == "haupt" else -1
+	for i in _eintraege.size():
+		_zeile_t[i] = UiBewegung.naeher(float(_zeile_t.get(i, 0.0)), 1.0 if i == _wahl and _knopf_wahl < 0 else 0.0, delta, UiBewegung.ZEILE)
+
+
+func _exit_tree() -> void:
+	get_viewport().disable_3d = false   # 26.11.: das Spiel zeichnet wieder 3D
 
 
 func _zeile(i: int) -> Rect2:
 	if _seite == "anfuehrer":   # 19.11.: Kacheln statt Zeilen
 		return _af_kachel(i) if i < _af_liste().size() else AF_ZURUECK
-	return Rect2(LISTE_X, LISTE_Y + i * ZEILE_H, BREITE, ZEILE_H - 4.0)
+	if _alt:   # altes Startmenü: Liste links mit Kleinzeilen
+		return Rect2(LISTE_X, ALT_Y + i * ALT_H, BREITE, ALT_H - 4.0)
+	if _seite == "haupt":   # 26.11.: Hauptmenü rechts mittig
+		return Rect2(HAUPT_X, HAUPT_Y + i * HAUPT_H, HAUPT_B, HAUPT_H - 4.0)
+	return Rect2(LISTE_X, LISTE_Y + i * _zeile_h(), BREITE, _zeile_h() - 2.0)
+
+
+## 26.11.: Zeilenhöhe der Unterseiten – lange Listen (Einstellungen) rücken enger zusammen, damit die Tafel ins Bild passt.
+func _zeile_h() -> float:
+	return minf(ZEILE_H, floorf(266.0 / maxf(1.0, _eintraege.size())))
+
+
+## 26.11.: Symbolknöpfe oben rechts (nur im Hauptmenü).
+func _knopf_rect(i: int) -> Rect2:
+	return Rect2(640.0 - 12.0 - (KNOEPFE.size() - i) * 24.0, 10.0, 20.0, 20.0)
+
+
+func _knopf(id: String) -> void:
+	_klick()
+	match id:
+		"profil":
+			_zeige("profil")
+		"uebersicht":
+			uebersicht_gewaehlt.emit()
+		"einstellungen":
+			_zeige("einstellungen")
+		"beenden":
+			_beenden()
 
 
 ## 19.11.: Esc / Rechtsklick – von der Anführerwahl zurück auf die Seite davor, sonst ins Hauptmenü.
@@ -1597,19 +1868,41 @@ func _input(event: InputEvent) -> void:
 	if _laedt:
 		get_viewport().set_input_as_handled()
 		return
+	if k == KEY_F2 and not event.echo:
+		_klick()
+		_stil_umschalten()   # 26.11.: neues ↔ altes Startmenü
+		get_viewport().set_input_as_handled()
+		return
+	if k == KEY_F3 and not event.echo and not _alt:
+		_klick()
+		_buehne_umschalten()   # 26.11.: Bühne Ausblick ↔ Klippe
+		get_viewport().set_input_as_handled()
+		return
 	match k:
 		KEY_UP, KEY_W:
+			_knopf_wahl = -1
 			_wahl = posmod(_wahl - 1, _eintraege.size())
 		KEY_DOWN, KEY_S:
+			_knopf_wahl = -1
 			_wahl = posmod(_wahl + 1, _eintraege.size())
 		KEY_LEFT, KEY_RIGHT, KEY_A, KEY_D:
-			var e: Array = _eintraege[_wahl]
-			if e.size() > 4 and (e[4] as Callable).is_valid():
-				(e[4] as Callable).call(-10 if k in [KEY_LEFT, KEY_A] else 10, false)
+			if _seite == "haupt" and not _alt:
+				# 26.11.: ← → führen zu den Symbolknöpfen oben rechts (und zurück in die Liste)
+				var d := -1 if k in [KEY_LEFT, KEY_A] else 1
+				_knopf_wahl = (KNOEPFE.size() - 1 if d < 0 else 0) if _knopf_wahl < 0 else _knopf_wahl + d
+				if _knopf_wahl >= KNOEPFE.size():
+					_knopf_wahl = -1
+			else:
+				var e: Array = _eintraege[_wahl]
+				if e.size() > 4 and (e[4] as Callable).is_valid():
+					(e[4] as Callable).call(-10 if k in [KEY_LEFT, KEY_A] else 10, false)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if not event.echo:
-				_klick()
-				(_eintraege[_wahl][1] as Callable).call()
+				if _seite == "haupt" and _knopf_wahl >= 0:
+					_knopf(str(KNOEPFE[_knopf_wahl][0]))
+				else:
+					_klick()
+					(_eintraege[_wahl][1] as Callable).call()
 		KEY_ESCAPE, KEY_BACKSPACE:
 			if _seite != "haupt" and not event.echo and not _erststart:   # 21.11.: beim ersten Start kein Weg am Namen vorbei
 				_zurueck()   # 19.11.
@@ -1660,6 +1953,11 @@ func _maus_eingabe(event: InputEvent) -> void:
 		for i in _eintraege.size():
 			if _zeile(i).has_point(_maus):
 				_wahl = i
+				_knopf_wahl = -1
+		if _seite == "haupt" and not _alt:
+			for i in KNOEPFE.size():
+				if _knopf_rect(i).has_point(_maus):
+					_knopf_wahl = i
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT and _rang_klick((event as InputEventMouseButton).position):
 			return   # 22.11.: Reiter der Rangliste
@@ -1667,11 +1965,24 @@ func _maus_eingabe(event: InputEvent) -> void:
 			Profil.setze_portrait(Profil.portrait() + 1)   # 25.11.
 			Ton.spiele(_welt, "ui-klick", -6.0)
 			return
+		if event.button_index == MOUSE_BUTTON_LEFT and _seite == "haupt" and _tafel == "" and _karte_profil == "":
+			var rs := _ansicht_rects()
+			for i in rs.size():
+				if (rs[i] as Rect2).has_point((event as InputEventMouseButton).position):
+					_klick()
+					_ansicht_setzen(str(ANSICHTEN[i][0]))   # 26.11.: Umschalter Alt · Ausblick · Klippe
+					return
+		if event.button_index == MOUSE_BUTTON_LEFT and _seite == "haupt" and not _alt:
+			for i in KNOEPFE.size():
+				if _knopf_rect(i).has_point((event as InputEventMouseButton).position):
+					_knopf(str(KNOEPFE[i][0]))   # 26.11.: Symbolknöpfe oben rechts
+					return
+		if event.button_index == MOUSE_BUTTON_LEFT and _alt and _seite != "profil" and _seite != "anfuehrer" and _alt_profil_rect().has_point((event as InputEventMouseButton).position):
+			_klick()
+			_zeige("profil")   # altes Startmenü: Profil-Schild oben rechts
+			return
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_klick()
-		if event.button_index == MOUSE_BUTTON_LEFT and _seite != "profil" and _seite != "anfuehrer" and _profil_rect().has_point((event as InputEventMouseButton).position):
-			_zeige("profil")
-			return
 		if event.button_index == MOUSE_BUTTON_LEFT and TC_ADRESSE != "" and _seite != "anfuehrer" and _tc_rect().has_point((event as InputEventMouseButton).position):
 			_oeffne_tc()
 			return
@@ -1694,6 +2005,9 @@ func _maus_eingabe(event: InputEvent) -> void:
 			for i in _eintraege.size():
 				if _zeile(i).has_point((event as InputEventMouseButton).position):
 					_wahl = i
+					if _ist_code(i) and _einloesen_rect(i).has_point((event as InputEventMouseButton).position):
+						_loese_code()   # 26.11.: „Einlösen“ steht in derselben Zeile
+						return
 					(_eintraege[i][1] as Callable).call()
 					return
 
@@ -1707,30 +2021,72 @@ func _male(ci: Control) -> void:
 	if _titel:
 		_male_titel(ci)
 		return
+	if _alt:
+		_male_alt(ci)   # 26.11.: altes Startmenü zum Vergleich
+		return
+	# 26.11.: Hintergrund ist die Bühne (menue_buehne.gd) – hier nur die Oberfläche
+	if _seite == "anfuehrer":   # 19.11.: eigene Seite – 26.11.: hängende Banner über der dunklen Szene
+		_male_anfuehrer(ci)
+		Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))
+		return
+	if _seite == "haupt":
+		var logo := _bild(SZENE + "logo.png")
+		if logo != null:   # groß: 217 UI-Pixel breit (bei 1080p 3 Bildschirmpixel je Logopixel), auch bei größerem Bild
+			var lg := Vector2(217.0, 217.0 * logo.get_height() / logo.get_width())
+			ci.draw_texture_rect(logo, Rect2(Vector2(16, 12 + roundf(sin(_zeit * 1.2))), lg), false)
+		else:
+			Stil.schreibe(ci, Vector2(24, 60), "PAULS TD BATTLER", 22, Stil.TEXT)
+		for i in _eintraege.size():
+			_male_hauptzeile(ci, i)
+		_male_knoepfe(ci)
+	else:
+		_male_unterseite(ci)
+	if _seite == "phantom":
+		_male_rangliste(ci)
+		_male_bilanz(ci)
+	elif _seite == "herausforderung":
+		_male_kartenbild(ci, _wahl_karte)
+	elif _seite == "szenarien" and _wahl < Werte.SZENARIEN.size():
+		_male_kartenbild(ci, Werte.SZENARIEN[_wahl])   # 20.11.
+	elif _seite == "profil" and not _erststart:
+		if _profil_brakk:
+			_male_profil_brakk(ci)   # 19.11.
+		else:
+			_male_profil_tafel(ci)
+		_male_portrait_wahl(ci)   # 25.11.
+	if _seite != "profil" or _erststart:
+		_male_info(ci)   # 26.11.: Infofeld unten links statt Kleinzeilen (im Profil liegen dort die Erfolge)
+	elif _meldung != "":
+		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * _zeile_h() + 4.0), _meldung, BREITE, Stil.KLEIN, Stil.GOLD if _meldung_gold else Stil.WARN)
+	_male_tc_emblem(ci)
+	if _seite == "haupt":
+		_male_ansicht(ci)
+	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
+	if _tafel != "":
+		_male_tafel(ci)   # 21.11.
+	if _karte_profil != "":
+		_male_spielerkarte(ci)   # 24.11.
+
+
+## 26.11. (Paul): das alte Startmenü zum Vergleich – Kaserne als Bild, Liste links mit Kleinzeilen, kleines Logo,
+## Profil-Schild oben rechts (Stand vor dem Umbau, siehe _vor_startmenue_2/). Inhalte und Aktionen sind dieselben.
+func _male_alt(ci: Control) -> void:
 	var hg := _bild("res://assets/neu/menue/kaserne.png")
 	if hg != null:
 		ci.draw_texture_rect(hg, Rect2(0, 0, 640, 360), false)
 	else:
 		ci.draw_rect(Rect2(0, 0, 640, 360), Color("10141c"))
-	if _seite == "anfuehrer":   # 19.11.: eigene Seite – Kacheln über die ganze Breite
-		ci.draw_rect(Rect2(0, 0, 640, 360), Color(0.03, 0.04, 0.06, 0.72))
+	if _seite == "anfuehrer":
 		_male_anfuehrer(ci)
 		Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))
 		return
-	# links abdunkeln, damit die Liste gut lesbar ist
-	for k in 40:
+	for k in 40:   # links abdunkeln, damit die Liste gut lesbar ist
 		ci.draw_rect(Rect2(k * 8.0, 0, 8, 360), Color(0.03, 0.04, 0.06, 0.8 * (1.0 - k / 40.0)))
-	# (Truppen im Menü entfernt, Paul 16.11.)
-	# Logo (klein, 1 Logopixel = 2 Bildschirmpixel bei 1080p)
 	var logo := _bild("res://assets/neu/menue/logo.png")
 	if logo != null:
 		ci.draw_texture_rect(logo, Rect2(Vector2(LISTE_X - 6.0, 26), Vector2(logo.get_size()) * (2.0 / 3.0)), false)
-	else:
-		Stil.schreibe(ci, Vector2(LISTE_X, 76), "PAULS TD BATTLER", 22, Stil.TEXT)
-	var unter: String = {"haupt": "", "spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil", "grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "anfuehrer": "Anführer", "szenarien": "Szenarien", "brakk": "Brakk-Mode", "rogue": "Rogue"}[_seite]
-	if unter != "":
-		Stil.schreibe(ci, Vector2(LISTE_X, 110), unter, Stil.NORMAL, Stil.TEXT_BLASS)
-	# Liste
+	if _seite != "haupt":
+		Stil.schreibe(ci, Vector2(LISTE_X, 110), tr(str(SEITEN_TITEL.get(_seite, ""))), Stil.NORMAL, Stil.TEXT_BLASS)
 	for i in _eintraege.size():
 		var e: Array = _eintraege[i]
 		var r := _zeile(i)
@@ -1743,38 +2099,311 @@ func _male(ci: Control) -> void:
 			if farbe == Stil.TEXT_BLASS or farbe == Stil.TEXT:
 				farbe = Color.WHITE
 		if e[3] == GESPERRT:
-			Stil.symbol(ci, "schloss", Vector2(r.end.x - 14.0, r.get_center().y), 1.0, GESPERRT.lightened(0.25 if an else 0.0))   # 21.11.
-		var mit_unter := str(e[2]) != ""
-		Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + (6.0 if mit_unter else 10.0)), e[0], Stil.NORMAL, farbe)
-		if mit_unter:
-			Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + 15.0), e[2], Stil.KLEIN, Stil.TEXT_BLASS)
+			Stil.symbol(ci, "schloss", Vector2(r.end.x - 14.0, r.get_center().y), 1.0, GESPERRT.lightened(0.25 if an else 0.0))
+		var unter := str(e[2]).split("\n")[0]
+		Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + (6.0 if unter != "" else 10.0)), e[0], Stil.NORMAL, farbe)
+		if unter != "":
+			Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + 15.0), unter, Stil.KLEIN, Stil.TEXT_BLASS)
 	if _meldung != "":
-		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y + _eintraege.size() * ZEILE_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else (Stil.GOLD if _meldung_gold else Stil.WARN))
+		Stil.absatz(ci, Vector2(LISTE_X, ALT_Y + _eintraege.size() * ALT_H + 4.0), _meldung, BREITE, Stil.KLEIN, LICHT if _laedt else (Stil.GOLD if _meldung_gold else Stil.WARN))
 	if _seite == "phantom":
 		_male_rangliste(ci)
 		_male_bilanz(ci)
 	elif _seite == "herausforderung":
 		_male_kartenbild(ci, _wahl_karte)
 	elif _seite == "szenarien" and _wahl < Werte.SZENARIEN.size():
-		_male_kartenbild(ci, Werte.SZENARIEN[_wahl])   # 20.11.
-	elif _seite == "grafik":
-		Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
+		_male_kartenbild(ci, Werte.SZENARIEN[_wahl])
+	elif _seite == "grafik" or (_seite == "profil" and _erststart):
+		Stil.absatz(ci, Vector2(LISTE_X, ALT_Y - 2.0 + _eintraege.size() * ALT_H + 6.0), _seiten_hinweis(), BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
 	elif _seite == "profil":
-		if _erststart:
-			Stil.absatz(ci, Vector2(LISTE_X, LISTE_Y - 2.0 + _eintraege.size() * ZEILE_H + 6.0), "Wie sollen dich andere Spieler sehen? Der Name steht an deinen Phantomen und in der Rangliste.", BREITE, Stil.KLEIN, Stil.TEXT_BLASS)
+		if _profil_brakk:
+			_male_profil_brakk(ci)
 		else:
-			if _profil_brakk:
-				_male_profil_brakk(ci)   # 19.11.
-			else:
-				_male_profil_tafel(ci)
-			_male_portrait_wahl(ci)   # 25.11.
-	_male_profil_schild(ci)
+			_male_profil_tafel(ci)
+		_male_portrait_wahl(ci)
+	if _seite != "profil":   # Profil-Schild oben rechts
+		var r := _alt_profil_rect()
+		var an := r.has_point(_maus)
+		Stil.platte(ci, r, 3.0, Color(LICHT, 0.14) if an else Stil.METALL_DUNKEL, LICHT if an else Stil.RAHMEN)
+		Stil.symbol(ci, "brakk", Vector2(r.position.x + 11.0, r.get_center().y), 1.0, LICHT)
+		Stil.schreibe(ci, Vector2(r.position.x + 21.0, r.get_center().y), Profil.name(), Stil.NORMAL, Color.WHITE if an else Stil.TEXT)
 	_male_tc_emblem(ci)
-	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))   # 19.11.: welcher Stand läuft (Handy)
+	if _seite == "haupt":
+		_male_ansicht(ci)
+	Stil.schreibe_mittig(ci, Vector2(320, 353), "Version %d" % Werte.VERSION, Stil.KLEIN, Color(Stil.TEXT_BLASS, 0.7))
 	if _tafel != "":
-		_male_tafel(ci)   # 21.11.
+		_male_tafel(ci)
 	if _karte_profil != "":
-		_male_spielerkarte(ci)   # 24.11.
+		_male_spielerkarte(ci)
+
+
+func _alt_profil_rect() -> Rect2:
+	var w := Stil.breite(Profil.name(), Stil.NORMAL) + 30.0
+	return Rect2(640.0 - 12.0 - w, 10.0, w, 18.0)
+
+
+## 26.11.: „Name: Wert“ bzw. „Name · Wert“ → [Name, Wert]; der Wert steht rechtsbündig in der Zeile.
+static func _teile(text: String) -> PackedStringArray:
+	var i := text.find(": ")
+	if i > 0:
+		return PackedStringArray([text.substr(0, i), text.substr(i + 2)])
+	i = text.rfind(" · ")
+	if i > 0:
+		return PackedStringArray([text.substr(0, i), text.substr(i + 3)])
+	return PackedStringArray([text, ""])
+
+
+## 26.11.: Symbol vor einem Eintrag des Hauptmenüs (Platzhalter aus Stil.SYMBOLE, die echten Symbole kommen am 30.11.).
+static func _symbol_fuer(text: String) -> String:
+	for paar: Array in [["Fortsetzen", "play"], ["Spielen", "play"], ["Tutorial", "buch"], ["Phantom", "band"], ["Brakk", "brakk"],
+			["Sandbox", "fabrik"], ["Herausforderungen", "turm"]]:
+		if text.begins_with(str(paar[0])):
+			return str(paar[1])
+	return "raster"
+
+
+## Hauptmenü: Symbol, Name, kurzer Wert rechtsbündig; die gewählte Zeile rückt ein und leuchtet.
+func _male_hauptzeile(ci: Control, i: int) -> void:
+	var e: Array = _eintraege[i]
+	var r := _zeile(i)
+	var t := UiBewegung.weich(float(_zeile_t.get(i, 0.0)))
+	var x := r.position.x + 6.0 * t
+	var cy := r.get_center().y
+	var gesperrt: bool = e[3] == GESPERRT
+	if t > 0.01:
+		Stil.platte(ci, Rect2(Vector2(x - 4.0, r.position.y), r.size), 3.0, Color(Stil.METALL_TIEF, 0.82 * t), Color(LICHT, 0.75 * t))
+		ci.draw_rect(Rect2(x - 4.0, r.position.y + 3.0, 2.0, r.size.y - 6.0), Color(LICHT, t))
+	else:
+		ci.draw_rect(Rect2(x - 4.0, r.position.y + 2.0, r.size.x, r.size.y - 4.0), Color(0, 0, 0, 0.3))
+	var farbe: Color = e[3]
+	if not gesperrt and farbe == Stil.TEXT:
+		farbe = Stil.TEXT.lerp(Color.WHITE, t)
+	var teile := _teile(str(e[0]))
+	Stil.symbol(ci, "schloss" if gesperrt else _symbol_fuer(str(e[0])), Vector2(x + 9.0, cy), 1.0, GESPERRT if gesperrt else (LICHT if t > 0.5 else Stil.TEXT_BLASS))
+	Stil.schreibe(ci, Vector2(x + 22.0, cy), teile[0], Stil.GROSS, farbe)
+	if teile[1] != "":
+		Stil.schreibe(ci, Vector2(r.end.x - 8.0 - Stil.breite(teile[1], Stil.KLEIN), cy + 1.0), teile[1], Stil.KLEIN, Stil.TEXT_BLASS)
+	if str(e[0]) == "Phantom-Modus" and not gesperrt and Online.bericht_text() != "":
+		ci.draw_circle(Vector2(x + 16.0, r.position.y + 5.0), 2.5, KUPFER_HELL)   # Phantom-Bericht: Kupferpunkt
+
+
+## Unterseite: Tafel links mit Titel; Zeilen ohne Kleinzeile, Werte rechtsbündig.
+const SEITEN_TITEL := {"spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil",
+	"grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "szenarien": "Szenarien",
+	"brakk": "Brakk-Modus", "rogue": "Befehl 24"}
+
+## Rechteck der Hologramm-Tafel einer Unterseite (nach der Zahl der Einträge).
+func _tafel_rect() -> Rect2:
+	return Rect2(LISTE_X - 10.0, LISTE_Y - 30.0, BREITE + 20.0, _eintraege.size() * _zeile_h() + 36.0)
+
+
+## Inhalt der Unterseite; Rahmen und Grund zeichnet die Hologramm-Ebene darunter (_male_holo_ebene).
+func _male_unterseite(ci: Control) -> void:
+	var n := _eintraege.size()
+	var titel := tr(str(SEITEN_TITEL.get(_seite, ""))).to_upper()
+	if not _holo_stil:
+		# Tafelstil „Platte“ (Stand vor dem Hologramm, zum Vergleich): dunkle Platte mit Tusche-Rahmen
+		Stil.platte(ci, _tafel_rect(), 4.0, Color(Stil.METALL_DUNKEL, 0.92), TUSCHE)
+		Stil.schreibe(ci, Vector2(LISTE_X, LISTE_Y - 15.0), titel, Stil.GROSS, TUSCHE_HELL)
+	else:
+		# Überschrift als Leuchtzeile
+		Stil.schreibe(ci, Vector2(LISTE_X, LISTE_Y - 15.0), titel, Stil.GROSS, Color.WHITE)
+		var tw := Stil.breite(titel, Stil.GROSS)
+		ci.draw_rect(Rect2(LISTE_X, LISTE_Y - 6.0, tw + 20.0, 1.0), Color(HOLO_TEXT, 0.9))
+		ci.draw_rect(Rect2(LISTE_X, LISTE_Y - 5.0, tw + 20.0, 2.0), Color(HOLO_HELL, 0.25))
+	for i in n:
+		var e: Array = _eintraege[i]
+		var r := _zeile(i)
+		var an := i == _wahl
+		var t := UiBewegung.weich(float(_zeile_t.get(i, 0.0)))
+		var gesperrt: bool = e[3] == GESPERRT
+		if t > 0.01:
+			ci.draw_rect(r, Color(LICHT, 0.16 * t))
+			ci.draw_rect(Rect2(r.position, Vector2(2.0, r.size.y)), Color(LICHT, t))
+		var farbe: Color = e[3]
+		if farbe == Stil.TEXT and _holo_stil:
+			farbe = HOLO_TEXT   # Hologramm: Cyan/Weiß
+		elif farbe == Stil.TEXT_BLASS and _holo_stil:
+			farbe = Color(HOLO_TEXT, 0.6)
+		if an and not gesperrt and farbe != LICHT and farbe != KUPFER_HELL:
+			farbe = Color.WHITE
+		var x := r.position.x + 8.0 + 3.0 * t
+		var cy := r.get_center().y
+		var rechts := r.end.x - 8.0
+		if _ist_code(i):
+			var k := _einloesen_rect(i)   # 26.11.: Code und „Einlösen“ in einer Zeile
+			var ueber := k.has_point(_maus)
+			Stil.platte(ci, k, 2.0, Color(LICHT, 0.22 if ueber else 0.1), LICHT if ueber or _tippt() else Stil.RAHMEN)
+			Stil.schreibe_mittig(ci, k.get_center(), tr("Einlösen"), Stil.KLEIN, Color.WHITE if ueber else LICHT)
+			rechts = k.position.x - 6.0
+		var teile := _teile(str(e[0]))
+		Stil.schreibe(ci, Vector2(x, cy), teile[0], Stil.NORMAL if str(e[0]) == "Zurück" else Stil.GROSS, farbe)
+		if gesperrt:
+			Stil.symbol(ci, "schloss", Vector2(rechts - 4.0, cy), 1.0, GESPERRT.lightened(0.25 if an else 0.0))
+			rechts -= 14.0
+		if teile[1] != "":
+			Stil.schreibe(ci, Vector2(rechts - Stil.breite(teile[1], Stil.NORMAL), cy), teile[1], Stil.NORMAL, LICHT if an else Color(HOLO_TEXT, 0.65))
+
+
+## Hologramm-Ebene (unter der Oberfläche): Brakks Handschuh leuchtet, ein lila Strahl wächst zur Tafel, die Tafel
+## entfaltet sich (erst Breite, dann Höhe). Zurück: die Tafel fällt in den Strahl zurück, die Hand verglimmt.
+func _male_holo_ebene(ci: Control) -> void:
+	var glimmen := 0.0
+	if _titel or _auto > 0 or not _holo_stil:
+		_buehne.hand_leuchten = 0.0
+		return
+	var hand := _buehne.hand_bildpunkt() * Vector2(640.0, 360.0)
+	var t := _echt - _seite_seit
+	if _seite != "haupt":
+		# Handschuh leuchtet auf, sobald der Arm oben ist, und glimmt dann weiter
+		var auf := clampf((t - HOLO_ARM * 0.6) / 0.1, 0.0, 1.0)
+		glimmen = auf * (0.45 + 0.55 * maxf(0.0, 1.0 - absf(t - HOLO_ARM - 0.08) / 0.35))
+		if _seite != "anfuehrer":
+			var r := _tafel_rect()
+			var ts := t - HOLO_ARM
+			var s := clampf(ts / HOLO_STRAHL, 0.0, 1.0)
+			_male_strahl(ci, hand, r, s, 1.0 if s < 1.0 else 0.45)
+			var bw := UiBewegung.weich((ts - HOLO_STRAHL) / HOLO_BREITE)
+			var bh := UiBewegung.weich((ts - HOLO_STRAHL - HOLO_BREITE) / HOLO_HOEHE)
+			if bw > 0.0:
+				_male_holo(ci, _entfaltet(r, bw, bh), 1.0)
+	else:
+		var tz := _echt - _zu_seit
+		if tz < HOLO_ZU:
+			# zurück: erst die Höhe, dann die Breite, der Strahl zieht sich zur Hand zurück
+			var k := 1.0 - tz / HOLO_ZU
+			glimmen = 0.6 * k
+			var bh := UiBewegung.weich((k - 0.5) / 0.5)
+			var bw := UiBewegung.weich(k / 0.5)
+			_male_holo(ci, _entfaltet(_zu_rect, bw, bh), k)
+			_male_strahl(ci, hand, _zu_rect, k, k)
+	_buehne.hand_leuchten = glimmen
+	if glimmen > 0.01:
+		for i in 4:   # Leuchten um den Handschuh
+			ci.draw_circle(hand, 2.0 + i * 3.0, Color(HOLO_HELL, glimmen * (0.5 - i * 0.11)))
+
+
+## Rechteck beim Entfalten: Breite (bw) von der Mitte aus, Höhe (bh) von einer Linie aus.
+static func _entfaltet(r: Rect2, bw: float, bh: float) -> Rect2:
+	var m := r.get_center()
+	var g := Vector2(maxf(2.0, r.size.x * bw), maxf(2.0, r.size.y * bh))
+	return Rect2(m - g / 2.0, g)
+
+
+## Lichtstrahl von der Hand zur Tafel: schmal an der Hand, breit an der Tafel; s = wie weit er gewachsen ist.
+func _male_strahl(ci: Control, hand: Vector2, r: Rect2, s: float, staerke: float) -> void:
+	if s <= 0.0:
+		return
+	var ziel := r.get_center()
+	var ende := hand.lerp(ziel, s)
+	var n := (ende - hand).orthogonal().normalized()
+	var w := 2.0 + r.size.y * 0.18 * s
+	ci.draw_colored_polygon(PackedVector2Array([hand + n, ende + n * w, ende - n * w, hand - n]), Color(HOLO, 0.16 * staerke))
+	ci.draw_line(hand, ende, Color(HOLO_HELL, 0.55 * staerke), 1.0)
+
+
+## Hologramm-Tafel: halbtransparentes Lila, feine Abtastzeilen, flimmernder Rand mit Haltepunkten an den Ecken.
+## Rahmen und Grund sind austauschbare Bilder (assets/neu/menue/szene/holo_rahmen.png, holo_grund.png).
+func _male_holo(ci: Control, r: Rect2, alpha: float) -> void:
+	ci.draw_rect(r, Color(0.09, 0.04, 0.2, 0.62 * alpha))
+	var grund := _bild(SZENE + "holo_grund.png")
+	if grund != null:
+		ci.draw_texture_rect(grund, r, true, Color(HOLO, 0.14 * alpha))
+	var flimmern := 0.78 + 0.22 * sin(_echt * 23.0) * sin(_echt * 7.3)
+	if _holo_box == null and _bild(SZENE + "holo_rahmen.png") != null:
+		_holo_box = StyleBoxTexture.new()
+		_holo_box.texture = _bild(SZENE + "holo_rahmen.png")
+		for seite_: int in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+			_holo_box.set_texture_margin(seite_, 6.0)
+		_holo_box.draw_center = false
+	if _holo_box != null and r.size.x >= 12.0 and r.size.y >= 12.0:
+		_holo_box.modulate_color = Color(HOLO_HELL, flimmern * alpha)
+		ci.draw_style_box(_holo_box, r)
+	else:
+		ci.draw_rect(r, Color(HOLO_HELL, flimmern * alpha), false, 1.0)
+
+
+func _ist_code(i: int) -> bool:
+	return _seite == "einstellungen" and i < _eintraege.size() and str(_eintraege[i][0]).begins_with("Code: ")
+
+
+func _einloesen_rect(i: int) -> Rect2:
+	var r := _zeile(i)
+	return Rect2(r.end.x - 58.0, r.position.y + 2.0, 54.0, r.size.y - 4.0)
+
+
+## Symbolknöpfe oben rechts (Profil = Kopf, Übersicht = Buch, Einstellungen = Zahnrad, Beenden = Tür); beim
+## Darüberfahren ein Tipp darunter.
+const KNOPF_TIPP := {"profil": "Name, Statistik und Erfolge", "uebersicht": "Gegner, Truppen, Bauten, Regeln",
+	"einstellungen": "Grafik, Ton, Steuerung, Sprache", "beenden": "Spiel schließen"}
+
+func _male_knoepfe(ci: Control) -> void:
+	for i in KNOEPFE.size():
+		var r := _knopf_rect(i)
+		var an := i == _knopf_wahl
+		Stil.platte(ci, r, 3.0, Color(LICHT, 0.18) if an else Color(Stil.METALL_TIEF, 0.85), LICHT if an else Stil.RAHMEN)
+		Stil.symbol(ci, str(KNOEPFE[i][1]), r.get_center(), 1.0, LICHT if an else Color.WHITE)
+	if _knopf_wahl >= 0:
+		var id := str(KNOEPFE[_knopf_wahl][0])
+		var name := tr(str(KNOEPFE[_knopf_wahl][2])) + (" · " + Profil.name() if id == "profil" else "")
+		var tipp := tr(str(KNOPF_TIPP[id]))
+		var w := maxf(Stil.breite(name, Stil.NORMAL), Stil.breite(tipp, Stil.KLEIN)) + 14.0
+		var k := _knopf_rect(_knopf_wahl)
+		var tr_ := Rect2(minf(k.get_center().x - w / 2.0, 640.0 - 8.0 - w), k.end.y + 5.0, w, 28.0)
+		Stil.platte(ci, tr_, 3.0, Color(Stil.METALL_TIEF, 0.94), LICHT)
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(k.get_center().x - 3.0, tr_.position.y), Vector2(k.get_center().x + 3.0, tr_.position.y),
+			Vector2(k.get_center().x, tr_.position.y - 4.0)]), LICHT)
+		Stil.schreibe(ci, tr_.position + Vector2(7, 9), name, Stil.NORMAL, Color.WHITE)
+		Stil.schreibe(ci, tr_.position + Vector2(7, 20), tipp, Stil.KLEIN, Stil.TEXT_BLASS)
+
+
+## Erklärung zur ganzen Seite (lange Sätze stehen im Infofeld, nicht unter den Zeilen).
+func _seiten_hinweis() -> String:
+	if _seite == "grafik":
+		return tr("Du spielst auf einem Touchgerät. Ändern kannst du das jederzeit unter Einstellungen → Grafik.")
+	if _seite == "profil" and _erststart:
+		return tr("Wie sollen dich andere Spieler sehen? Der Name steht an deinen Phantomen und in der Rangliste.")
+	return ""
+
+
+## Infofeld unten links: dunkle Platte mit zwei, drei Zeilen zum markierten Eintrag (oder Meldung). Wächst nach oben.
+func _male_info(ci: Control) -> void:
+	var titel := ""
+	var text := ""
+	var farbe := Stil.TEXT
+	if _meldung != "":
+		text = _meldung
+		farbe = LICHT if _laedt else (Stil.GOLD if _meldung_gold else Stil.WARN)
+	elif _seite == "haupt" and _knopf_wahl >= 0:
+		titel = tr(str(KNOEPFE[_knopf_wahl][2]))
+		text = tr({"profil": "Name, Statistik und Erfolge.", "uebersicht": "Gegner, Truppen, Bauten und Regeln.",
+			"einstellungen": "Grafik, Ton, Steuerung, Sprache und Code.", "beenden": "Das Spiel schließen."}[KNOEPFE[_knopf_wahl][0]])
+	elif _wahl < _eintraege.size():
+		titel = _teile(str(_eintraege[_wahl][0]))[0]
+		text = str(_eintraege[_wahl][2])
+	var hinweis := _seiten_hinweis()
+	if hinweis != "":
+		text += ("\n" if text != "" else "") + hinweis
+	if text == "":
+		return
+	var weite := INFO_B - 16.0
+	var h := ceilf(Stil.absatz_groesse(text, weite, Stil.NORMAL).y) + (22.0 if titel != "" else 12.0)
+	var r := Rect2(INFO_X, INFO_UNTEN - h, INFO_B, h)
+	var tafel := _tafel_rect()
+	if not _alt and _seite != "haupt" and _seite != "anfuehrer" and tafel.end.y > r.position.y - 4.0:
+		# 26.11.: lange Tafel (Einstellungen) – das Infofeld steht oben rechts neben der Tafel
+		r.position = Vector2(tafel.end.x + 10.0, tafel.position.y)
+		r.size.x = 640.0 - INFO_X - r.position.x
+		weite = r.size.x - 16.0
+		r.size.y = ceilf(Stil.absatz_groesse(text, weite, Stil.NORMAL).y) + (22.0 if titel != "" else 12.0)
+	Stil.platte(ci, r, 3.0, Color(Stil.METALL_TIEF, 0.9), Stil.RAHMEN)
+	var y := r.position.y + 6.0
+	if titel != "":
+		Stil.schreibe(ci, Vector2(r.position.x + 8.0, r.position.y + 10.0), titel.to_upper(), Stil.KLEIN, LICHT)
+		y += 10.0
+	Stil.absatz(ci, Vector2(r.position.x + 8.0, y), text, weite, Stil.NORMAL, farbe)
+	if titel == "Phantom-Modus" and Online.bericht_text() != "" and Profil.phantom_frei():
+		ci.draw_circle(Vector2(r.end.x - 10.0, r.position.y + 10.0), 2.5, KUPFER_HELL)
 
 
 ## 24.11. (Paul): Zahlen eines Spielers für eine Seite aus den geladenen Online-Listen.
@@ -1790,7 +2419,9 @@ func _zahlen(profil: String, art: String) -> Dictionary:
 
 ## Kleine Bilanz im Phantom-Menü unter der Liste: beide Elo-Werte mit bester Elo und Zählern; Klick öffnet die eigene Karte.
 func _male_bilanz(ci: Control) -> void:
-	var r := Rect2(LISTE_X, 290.0, BREITE, 52.0)
+	var r := Rect2(LISTE_X - 10.0, LISTE_Y + _eintraege.size() * _zeile_h() + 14.0, BREITE + 20.0, 52.0)   # 26.11.: unter der Tafel (unten links liegt das Infofeld)
+	if _alt:
+		r = Rect2(LISTE_X, 290.0, BREITE, 52.0)   # altes Startmenü
 	_bilanz_rect = r
 	var an := r.has_point(_maus) and _karte_profil == ""
 	Stil.platte(ci, r, 3.0, Color(0.05, 0.06, 0.09, 0.88), LICHT if an else Stil.RAHMEN)
@@ -1901,22 +2532,9 @@ var _hangar: Hangar = null
 func _hangar_oeffnen() -> void:
 	_hangar = Hangar.new()
 	_hangar.geschlossen.connect(func() -> void: _klick())
+	_hangar.zurueckgesetzt.connect(func() -> void: _meldung = tr("Die Meistgesuchten sind vergessen."))   # 26.11.: jetzt im Hangar
 	_welt.visible = false
 	add_child(_hangar)
-
-
-var _weg_frage := false   # 22.11.: „Meistgesuchte zurücksetzen“ – erster Klick fragt, der zweite löscht
-
-func _meistgesuchte_weg() -> void:
-	if not _weg_frage:
-		_weg_frage = true
-	else:
-		_weg_frage = false
-		Nemesis.zuruecksetzen()
-		_meldung = "Die Meistgesuchten sind vergessen."
-	var w := _wahl
-	_baue()
-	_wahl = clampi(w, 0, _eintraege.size() - 1)
 
 
 func _male_kartenbild(ci: Control, kname: String) -> void:

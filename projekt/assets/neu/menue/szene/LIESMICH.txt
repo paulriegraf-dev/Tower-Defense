@@ -1,0 +1,40 @@
+Bilder der Startmenü-Szene (26.11.) – zum Austauschen am 30.11.
+==================================================================
+
+Die Szene (scripts/ui/menue_buehne.gd) und die Hologramm-Tafeln (scripts/startmenue.gd) lesen NUR diese Dateien.
+Ersetzen: Datei mit gleichem Namen überschreiben, Godot importiert neu. Höhere Auflösung ist erwünscht – die Größe in
+der Szene hängt nicht an den Pixeln (siehe „Maß in der Szene“), nur Seitenverhältnis bzw. Bildaufteilung müssen bleiben.
+Spiel und Brakk-Modus benutzen diese Dateien nicht.
+
+Datei                   jetzt      Aufbau                                          Maß in der Szene
+----------------------  ---------  ----------------------------------------------  ------------------------------
+logo.png                217×103    Logo oben links (UI)                            1 Logopixel = 1 UI-Pixel*
+himmel_abend.png        8×256      senkrechter Verlauf oben → Horizont             ganzer Himmel; Wolken im Code
+himmel_nacht.png        8×256      dasselbe für die Nacht (Phantom-Menü)
+berge.png               256×128    Bergkette, unten durchsichtig erlaubt           Breite fest (Szene)
+boden.png               32×32      Bodenbild, nahtlos (wird groß gezogen und mit    1 Bild = 4 Felder
+                                   weichen Flecken überlagert – kein Raster)
+wall_front.png          64×64      Plattform vorn (nahtlos waagerecht)             1 Bild = 1 Feld × 0,8 Höhe
+wall_seite.png          64×64      Plattform Seiten/hinten
+wall_oben.png           64×64      Plattform oben (nahtlos)
+wall_leucht.png         64×64      Leuchtstreifen der Front (schwarz = aus)        nachts
+hq.png                  128×128    Myriaden-HQ                                     Breite fest
+vt_turm.png             64×64      Turm auf dem Formturm (Hintergrund)             Breite fest
+brakk.png               13×1 quadr. Brakk: 0–8 Ruhe (halb zum Horizont, Arm unten), Höhe fest (eigene Posen ok)
+                                   9–10 Arm heben, 11 Arm oben (Handfläche nach oben, Handschuh),
+                                   12 Kopf zur Liste – jetzt Platzhalter aus brakk_klein
+truppe_gun/sni/pla.png  N×1 quadr. Truppe: Bild 0 Stand, 1… Standwechsel           Höhe fest
+vt_stellung_gun/sni/pla N×1 quadr. Stellung: Bild 0 Ruhe, 1… Schuss                Höhe fest
+gegner_hund/schild/fahne N×1 quadr. Myriaden laufend (nach rechts schauend)        Höhe fest
+treffer.png             4×1 quadr. Treffer-Funke, 4 Bilder                          Höhe fest
+baum_vorn.png           64×64      großer Baum auf der Klippe (nur Bühne „Klippe“), Breite fest
+                                   Fuß unten in der Mitte – jetzt Platzhalter aus SHEET2
+holo_rahmen.png         24×24      Hologramm-Rahmen, Neunteilung, Rand 6 px        hell/weiß – im Code Lila
+holo_grund.png          4×4        Hologramm-Grund (Abtastzeilen), wird gekachelt  im Code Lila
+
+Die Wälle der Hintergrund-Verteidigung sind Silhouetten (dunkle Blöcke mit Leuchtkante, im Code), die Hügel nutzen
+boden.png. Bühne „Klippe“: der Fels nimmt wall_seite.png (zerklüftet, gefleckt), oben boden.png; die Anhöhe boden.png.
+
+„N×1 quadr.“ = ein waagerechter Streifen gleich großer, quadratischer Bilder (Breite = N × Höhe). Füße unten in der
+Mitte; der leere Rand unter den Füßen wird automatisch erkannt (Schatten sitzt unter den Füßen).
+* Logo: bei einem größeren Bild bleibt die Größe auf dem Schirm gleich (Breite 217 UI-Pixel).

@@ -4,14 +4,17 @@ extends CanvasLayer
 ## Armee-Ansicht aus „Mordors Schatten“. Vorn Rang 1, dahinter Rang 2 und 3; Rang 4 und der Herausforderer (hat noch
 ## keiner den Titel: der mit der besten Bilanz) stehen auf dem Podest. Versetzte stehen grau am Rand, Ausgeschaltete sind ein leerer
 ## Platz mit Namensschild. Klick oder Pfeiltasten wählen: Die Figur tritt vor, die Kamera fährt heran, rechts die Karte.
-## Erreichbar aus dem Startmenü und aus dem Bericht. Liest nur – kein Spielzustand wird verändert.
+## Erreichbar aus dem Startmenü und aus dem Bericht. Liest nur – kein Spielzustand wird verändert; einzige Ausnahme
+## (26.11., Paul): „Meistgesuchte zurücksetzen“ unten neben „Zurück“ (vorher in den Einstellungen; zweiter Klick löscht).
 
 signal geschlossen
+signal zurueckgesetzt
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
 const LILA := Color("a86bff")
 const KARTE := Rect2(372, 34, 256, 300)     # UI-Raster 640×360
 const ZURUECK := Rect2(14, 330, 78, 18)
+const WEG := Rect2(98, 330, 176, 18)        # 26.11.: Meistgesuchte zurücksetzen
 ## Reihen: Tiefe (z), Höhe (Stufe), seitlicher Versatz. 4 = Podest.
 const REIHEN := {1: [1.7, 0.0, 0.0], 2: [-0.9, 0.35, -1.15], 3: [-3.4, 0.7, 1.15], 4: [-6.3, 2.35, 0.0]}
 const PODEST_GROESSE := 1.25                 # wer oben steht, ist etwas größer und gut zu sehen
@@ -46,6 +49,7 @@ var _ui: Control = null
 var _maus := Vector2(-100, -100)
 var _t := 0.0
 var _sofort := false           # Prüfung: Fahrten ohne Übergang
+var _weg_frage := false        # 26.11.: erster Klick auf „Meistgesuchte zurücksetzen“ fragt, der zweite löscht
 
 
 func _init() -> void:
@@ -513,6 +517,15 @@ func klick(punkt: Vector2) -> void:
 	if ZURUECK.has_point(u):
 		zu()
 		return
+	if WEG.has_point(u) and not Nemesis.meistgesuchte().is_empty():
+		if not _weg_frage:
+			_weg_frage = true
+			return
+		Nemesis.zuruecksetzen()   # 26.11.: aus den Einstellungen hierher (Paul)
+		zurueckgesetzt.emit()
+		zu()
+		return
+	_weg_frage = false
 	if gewaehlt >= 0 and KARTE.has_point(u):
 		return
 	waehle(figur_bei(punkt))
@@ -594,6 +607,10 @@ func _male() -> void:
 	var an := ZURUECK.has_point(_maus)
 	Stil.platte(ci, ZURUECK, 2.0, Stil.METALL if an else Stil.METALL_DUNKEL, Stil.LEUCHT if an else Stil.RAHMEN)
 	Stil.schreibe_mittig(ci, ZURUECK.get_center(), tr("Zurück"), Stil.NORMAL, Stil.LEUCHT if an else Stil.TEXT)
+	if not Nemesis.meistgesuchte().is_empty():   # 26.11.: Meistgesuchte zurücksetzen (zweiter Klick löscht)
+		var wa := WEG.has_point(_maus)
+		Stil.platte(ci, WEG, 2.0, Stil.METALL if wa else Stil.METALL_DUNKEL, Stil.WARN if wa or _weg_frage else Stil.RAHMEN)
+		Stil.schreibe_mittig(ci, WEG.get_center(), tr("Wirklich alle vergessen? Noch einmal klicken") if _weg_frage else tr("Meistgesuchte zurücksetzen"), Stil.KLEIN if _weg_frage else Stil.NORMAL, Stil.WARN if _weg_frage else Stil.TEXT)
 	if not figuren.is_empty():
 		var hilfe := tr("Figur anklicken oder mit den Pfeiltasten wählen · Esc zurück")
 		Stil.schreibe(ci, Vector2(626.0 - Stil.breite(hilfe, Stil.KLEIN), 16), hilfe, Stil.KLEIN, Stil.TEXT_BLASS)
