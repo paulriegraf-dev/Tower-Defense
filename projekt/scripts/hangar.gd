@@ -21,9 +21,20 @@ const SCHRITTE := 1.2                        # so weit tritt die gewählte Figur
 const KAMERA := Vector3(0.0, 6.3, 11.2)
 const BLICK := Vector3(0.0, 1.75, -2.0)
 const VERSETZT_MAX := 6
-const LEER_MAX := 4
+## C1 (26.11., Paul): aus dem Bericht geöffnet treten die in diesem Lauf Beförderten nacheinander vor
+const AUFTRITT_WARTEN := 0.6                 # erst kommt die Kamera zur Ruhe …
+const AUFTRITT_SEK := 1.7                    # … dann je Figur so lange: vortreten, Winkel leuchtet, Schild, zurück
+const AUFTRITT_LEUCHT := 0.35                # nach so viel Vortreten leuchtet der Winkel auf
+const AUFTRITT_ZURUECK := 1.3                # ab hier tritt sie zurück
+const AUFTRITT_GOLD := Color("ffd27a")
 
-var figuren: Array = []        # je {"p", "was": "aktiv"|"versetzt"|"ausgeschaltet", "datum", "reihe", "ort", "ziel", "knoten", "sprite", "hoehe", "phase", "dreh"}
+var figuren: Array = []        # je {"p", "was": "aktiv"|"versetzt", "datum", "reihe", "ort", "ziel", "knoten", "sprite", "hoehe", "phase", "dreh", "winkel"}
+var aufstiege: Dictionary = {} # vor dem Öffnen gesetzt (Bericht): Personen-ID -> „befördert“ / „Rang 2 → 3“
+var kommandantin := false      # C3: vor dem Öffnen gesetzt (Bericht) – Sonde 7 wurde vertrieben, sie steht auf dem Podest
+var auftritte: Array = []      # Indizes in `figuren`, die noch vortreten
+var auftritt_protokoll: Array = []   # Prüfung: je {"i", "text"}
+var _auftritt_t := -AUFTRITT_WARTEN
+var _auftritt_schild: Label3D = null
 var gewaehlt := -1
 var kamera: Camera3D = null
 var _blick := BLICK
@@ -73,6 +84,10 @@ func _ready() -> void:
 	_groesse()
 	_raum()
 	_besetzen(Nemesis.meistgesuchte(), Nemesis.ehemalige())
+	for i in figuren.size():   # Podest zuerst, dann nach vorn (Reihenfolge von _besetzen)
+		var f: Dictionary = figuren[i]
+		if str(f["was"]) == "aktiv" and aufstiege.has(int((f["p"] as Dictionary).get("id", -1))):
+			auftritte.append(i)
 	_kamera_stellen(1.0)
 
 
@@ -181,6 +196,8 @@ func _besetzen(personen: Array, ehemalige: Array) -> void:
 	for p: Dictionary in personen:
 		var r := 4 if int(p["rang"]) >= Werte.NEMESIS_RANG_MAX or p == oben else clampi(int(p["rang"]), 1, 3)
 		(reihen[r] as Array).append(p)
+	if kommandantin:
+		(reihen[4] as Array).push_front(Nemesis.sonde_person())
 	var orte := reihen_plaetze({1: (reihen[1] as Array).size(), 2: (reihen[2] as Array).size(), 3: (reihen[3] as Array).size(), 4: (reihen[4] as Array).size()})
 	for r: int in [4, 3, 2, 1]:   # Reihenfolge der Pfeiltasten: Podest zuerst, dann nach vorn
 		var liste: Array = reihen[r]
@@ -188,16 +205,11 @@ func _besetzen(personen: Array, ehemalige: Array) -> void:
 		for i in liste.size():
 			_figur(liste[i] as Dictionary, "aktiv", "", r, Vector3(float((orte[r] as Array)[i]), float(lage[1]), float(lage[0])))
 	var v := 0
-	var l := 0
-	for e: Dictionary in ehemalige:
+	for e: Dictionary in ehemalige:   # C1 (26.11., Paul): Ausgeschaltete stehen nicht mehr im Hangar (kein leerer Platz)
 		if str(e["was"]) == "versetzt" and v < VERSETZT_MAX:
 			var seite := -1.0 if v % 2 == 0 else 1.0
 			_figur(e["person"] as Dictionary, "versetzt", str(e["datum"]), 0, Vector3(seite * (6.5 + 0.2 * float(v / 2)), 0.0, -1.2 - 2.1 * float(v / 2)))
 			v += 1
-		elif str(e["was"]) == "ausgeschaltet" and l < LEER_MAX:
-			var x: float = [-1.15, 1.15, -3.45, 3.45][l]
-			_figur(e["person"] as Dictionary, "ausgeschaltet", str(e["datum"]), 0, Vector3(x, 0.0, 3.1))
-			l += 1
 
 
 ## Plätze je Reihe (x) bei den Besetzungszahlen `je` (Reihe -> Anzahl). Von vorn nach hinten: Stünde jemand genau hinter
@@ -233,6 +245,8 @@ static func reihen_plaetze(je: Dictionary) -> Dictionary:
 
 ## Das Truppenblatt einer Person im Look (Elite-Aussehen wie im Feld).
 static func blatt_von(p: Dictionary) -> Dictionary:
+	if bool(p.get("sonde", false)):
+		return {"tex": load(NemesisBossSonde.BILD) as Texture2D, "zelle": 96}   # C3: Platzhalter bis zu den Generierungen
 	var art := str(p.get("art", "technogunner"))
 	var d: Dictionary = Werte.grafik_daten(Werte.grafik_einheit(Werte.einheit_daten(art, 4, ""), art, 4))
 	var zelle := int(d.get("zelle", 48))
@@ -244,26 +258,7 @@ func _figur(p: Dictionary, was: String, datum: String, reihe: int, ort: Vector3)
 	knoten.position = ort
 	_welt.add_child(knoten)
 	var f := {"p": p, "was": was, "datum": datum, "reihe": reihe, "ort": ort, "ziel": ort, "knoten": knoten, "sprite": null,
-		"hoehe": 0.6, "ton": Color.WHITE, "phase": randf() * TAU, "dreh": 3.0 + randf() * 6.0}
-	if was == "ausgeschaltet":
-		var platte := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(1.5, 0.05, 0.8)
-		platte.mesh = box
-		platte.material_override = _stoff(Color("2b1620"))
-		platte.position = Vector3(0, 0.03, 0)
-		knoten.add_child(platte)
-		for z: float in [-0.4, 0.4]:
-			var rand := MeshInstance3D.new()
-			var b2 := BoxMesh.new()
-			b2.size = Vector3(1.5, 0.06, 0.04)
-			rand.mesh = b2
-			rand.material_override = _stoff(Color("ff5a6e"))
-			rand.position = Vector3(0, 0.05, z)
-			knoten.add_child(rand)
-		_schild(knoten, "%s\n%s" % [str(p.get("name", "?")), tr("ausgeschaltet")], 0.42, Color("ff8a97"), 24)
-		figuren.append(f)
-		return
+		"hoehe": 0.6, "ton": Color.WHITE, "phase": randf() * TAU, "dreh": 3.0 + randf() * 6.0, "winkel": null}
 	var bild := blatt_von(p)
 	var zelle := int(bild["zelle"])
 	var tex: Texture2D = bild["tex"]
@@ -300,12 +295,13 @@ func _figur(p: Dictionary, was: String, datum: String, reihe: int, ort: Vector3)
 		winkel.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		winkel.position = Vector3(0, hoch + 0.12 + winkel.texture.get_height() * 0.015, 0)
 		knoten.add_child(winkel)
-		var text := "%s %s" % [Nemesis.dienstgrad(p), str(p["name"])]
+		f["winkel"] = winkel
+		var text := Nemesis.name_mit_titel(p) if bool(p.get("sonde", false)) else "%s %s" % [Nemesis.dienstgrad(p), str(p["name"])]
 		if str(p.get("beiname", "")) != "":
 			text += "\n‚%s‘" % str(p["beiname"])
 		_schild(knoten, text, hoch + 0.35 + winkel.texture.get_height() * 0.03 + 0.18, farbe.lightened(0.3), 21)
 	if reihe == 4:
-		knoten.scale = Vector3.ONE * PODEST_GROESSE
+		knoten.scale = Vector3.ONE * PODEST_GROESSE * (0.55 if bool(p.get("sonde", false)) else 1.0)   # C3: ihr Bild ist doppelt so groß
 	figuren.append(f)
 
 
@@ -343,13 +339,13 @@ func _schild(an: Node3D, text: String, hoehe: float, farbe: Color, schrift: int)
 func waehle(i: int) -> void:
 	if i < -1 or i >= figuren.size() or i == gewaehlt:
 		return
+	_auftritt_ende()   # wer selbst wählt, braucht die Vorstellung nicht mehr
 	if gewaehlt >= 0:
 		(figuren[gewaehlt] as Dictionary)["ziel"] = (figuren[gewaehlt] as Dictionary)["ort"]
 	gewaehlt = i
 	if i >= 0:
 		var f: Dictionary = figuren[i]
-		var vor := SCHRITTE if str(f["was"]) != "ausgeschaltet" else 0.0
-		f["ziel"] = (f["ort"] as Vector3) + Vector3(0, 0, vor)
+		f["ziel"] = (f["ort"] as Vector3) + Vector3(0, 0, SCHRITTE)
 		Ton.spiele(self, "ui-klick", -6.0)
 	_sicht()
 	if _sofort:
@@ -406,8 +402,76 @@ func _process(delta: float) -> void:
 			f["dreh"] = 1.3 if s.flip_h != bool(f["blickt"]) else 4.0 + randf() * 6.0
 		if i == gewaehlt:
 			s.flip_h = bool(f["blickt"])
+	_auftritt_weiter(echt)
 	_kamera_stellen(1.0 if _sofort else w)
 	_ui.queue_redraw()
+
+
+# ------------------------------------------------------------------ Beförderte treten vor (C1)
+
+## Je Beförderter: zwei Schritte vor, der Rangwinkel leuchtet golden auf (mit Ton), über dem Kopf „befördert“ bzw.
+## „Rang 2 → 3“, dann zurück in die Reihe und der Nächste.
+func _auftritt_weiter(echt: float) -> void:
+	if auftritte.is_empty():
+		return
+	var vorher := _auftritt_t
+	_auftritt_t += echt
+	if _auftritt_t < 0.0:
+		return
+	var i: int = auftritte[0]
+	var f: Dictionary = figuren[i]
+	var knoten: Node3D = f["knoten"]
+	if vorher <= 0.0:
+		f["ziel"] = (f["ort"] as Vector3) + Vector3(0, 0, SCHRITTE)
+	if vorher < AUFTRITT_LEUCHT and _auftritt_t >= AUFTRITT_LEUCHT:
+		var text := str(aufstiege.get(int((f["p"] as Dictionary).get("id", -1)), ""))
+		auftritt_protokoll.append({"i": i, "text": text})
+		Ton.spiele(self, "alert", -5.0)
+		var winkel: Sprite3D = f["winkel"]
+		if winkel != null:
+			var tw := winkel.create_tween()
+			tw.set_ignore_time_scale(true)
+			winkel.modulate = AUFTRITT_GOLD * 1.8
+			winkel.scale = Vector3.ONE * 1.9
+			tw.tween_property(winkel, "scale", Vector3.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(winkel, "modulate", Color.WHITE, 0.9)
+		_auftritt_schild = Label3D.new()
+		_auftritt_schild.text = text
+		_auftritt_schild.font_size = 26
+		_auftritt_schild.outline_size = 8
+		_auftritt_schild.outline_modulate = Color(0.05, 0.03, 0.08, 0.95)
+		_auftritt_schild.modulate = AUFTRITT_GOLD
+		_auftritt_schild.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_auftritt_schild.no_depth_test = true
+		_auftritt_schild.render_priority = 3
+		_auftritt_schild.pixel_size = 0.0078
+		_auftritt_schild.position = Vector3(0, float(f["hoehe"]) + 1.05, 0)
+		knoten.add_child(_auftritt_schild)
+	if vorher < AUFTRITT_ZURUECK and _auftritt_t >= AUFTRITT_ZURUECK:
+		f["ziel"] = f["ort"]
+	if _auftritt_t >= AUFTRITT_SEK:
+		_schild_weg()
+		auftritte.pop_front()
+		_auftritt_t = 0.0 if not auftritte.is_empty() else -AUFTRITT_WARTEN
+
+
+## Vorstellung abbrechen: wer gerade vorn steht, geht zurück.
+func _auftritt_ende() -> void:
+	if auftritte.is_empty():
+		return
+	var f: Dictionary = figuren[auftritte[0]]
+	f["ziel"] = f["ort"]
+	if f["winkel"] != null:
+		(f["winkel"] as Sprite3D).modulate = Color.WHITE
+		(f["winkel"] as Sprite3D).scale = Vector3.ONE
+	_schild_weg()
+	auftritte.clear()
+
+
+func _schild_weg() -> void:
+	if _auftritt_schild != null and is_instance_valid(_auftritt_schild):
+		_auftritt_schild.queue_free()
+	_auftritt_schild = null
 
 
 ## Rechteck einer Figur auf dem Bildschirm (Spielfläche 1280×720); leer, wenn sie hinter der Kamera steht.
@@ -422,7 +486,7 @@ func rechteck(i: int) -> Rect2:
 	var a := kamera.unproject_position(kopf)
 	var b := kamera.unproject_position(fuss)
 	var h := maxf(24.0, b.y - a.y)
-	var breit := h * (1.5 if str(f["was"]) == "ausgeschaltet" else 0.8)
+	var breit := h * 0.8
 	return Rect2(b.x - breit / 2.0, b.y - h, breit, h + 8.0)
 
 

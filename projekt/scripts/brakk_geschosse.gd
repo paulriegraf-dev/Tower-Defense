@@ -40,6 +40,21 @@ func einrichten(p_spiel: Node) -> void:
 	zufall.randomize()
 
 
+## E4 (26.11.): Steht Brakk in einer Zuflucht, schießen Türme (`turm`) und Stellungen (Schütze auf einem Erdwall) nicht
+## auf ihn; Bodentruppen schon.
+func _zuflucht_sperrt(von: Vector2, turm: bool) -> bool:
+	if spiel == null or spiel.order24 == null or not spiel.order24.brakk_in_zuflucht():
+		return false
+	return turm or karte.inhalt(karte.zelle_bei(von)) == Karte.WALL
+
+
+## C1 (26.11.): Lichtwand des Kampfplatzes zwischen `von` und `nach`? Der Punkt an der Wand, sonst INF.
+func _lichtwand(von: Vector2, nach: Vector2) -> Vector2:
+	if spiel == null or spiel.order24 == null:
+		return Vector2.INF
+	return spiel.order24.lichtwand_schnitt(von, nach)
+
+
 ## Ist dieses Ziel Brakk im Brakk-Mode? (Classic: Brakk selbst; Rogue: sein Stellvertreter in der Gegnerliste)
 func ist_brakk(ziel: Variant) -> bool:
 	if spiel == null or ziel == null or not is_instance_valid(ziel):
@@ -65,7 +80,7 @@ func _tempo_mal(art: String) -> float:
 ## 22.11. (Nemesis Teil 3): `punkt` – auf diese Stelle statt auf Brakk (Unterdrückungsfeuer im Kegel; ohne Vorhalt und Streuung).
 func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: String, quelle: String, genau: float = 1.0, punkt: Vector2 = Vector2.INF) -> void:
 	var z := _ziel()
-	if z.is_empty():
+	if z.is_empty() or _zuflucht_sperrt(von, false):   # E4: Stellungen sehen Brakk in der Zuflucht nicht
 		return
 	var w: Dictionary = Werte.BRAKK_GESCHOSS[art]
 	var ziel: Vector2 = z["pos"] if punkt == Vector2.INF else punkt
@@ -79,11 +94,21 @@ func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: Stri
 	var d_ziel := maxf(von.distance_to(ziel), 1.0)
 	var boden := art == "plasma" or art == "hf_kugel"
 	var lang := d_ziel if boden else _bahn_ende(von, r, d_ziel)
+	var wand := _lichtwand(von, von + r * lang)
+	var vor_ziel := false
+	if wand != Vector2.INF:   # C1 (26.11.): der Schuss endet an der Lichtwand des Kampfplatzes
+		lang = maxf(1.0, von.distance_to(wand))
+		vor_ziel = lang < d_ziel   # erst hinter Brakk hinaus: er trifft wie sonst
+		if vor_ziel:
+			ziel = wand
 	var rumpf_h := float(z.get("fuss", 0.0)) + 0.5
 	var g := {"art": art, "von": von, "r": r, "s": 0.0, "lang": lang, "d_ziel": d_ziel,
 		"tempo": float(w["tempo"]) * _tempo_mal(art) * Werte.ZELLE, "radius": float(w["radius"]) * Werte.ZELLE,
 		"h0": von_h, "h1": (float(z.get("fuss", 0.0)) if boden else rumpf_h), "boden": boden,
 		"schaden": schaden, "typ": typ, "quelle": quelle, "leucht": null}
+	if vor_ziel:
+		g["harmlos"] = true
+		g["brand_sek"] = 0.0
 	abgefeuert += 1
 	if spiel != null:
 		var flug := lang / float(g["tempo"])
@@ -101,11 +126,15 @@ func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: Stri
 func scharf(wer: Node2D, von: Vector2, von_h: float, weite: float, schaden: float, quelle: String, sek: float = Werte.BRAKK_SCHARF_ZIEL_SEK,
 		breite_mal: float = 1.0, farbe: Color = Color(1.0, 0.12, 0.1), bei_treffer: Callable = Callable()) -> void:
 	var z := _ziel()
-	if z.is_empty():
+	if z.is_empty() or _zuflucht_sperrt(von, false):   # E4: Stellungen sehen Brakk in der Zuflucht nicht
 		return
 	var r := ((z["pos"] as Vector2) - von).normalized()
 	abgefeuert += 1
-	zielstrahlen.append({"wer": wer, "von": von, "h": von_h, "ende": von + r * weite, "t": 0.0, "schaden": schaden,
+	var ende := von + r * weite
+	var wand := _lichtwand(von, ende)
+	if wand != Vector2.INF:
+		ende = wand   # C1: endet an der Lichtwand
+	zielstrahlen.append({"wer": wer, "von": von, "h": von_h, "ende": ende, "t": 0.0, "schaden": schaden,
 		"quelle": quelle, "ziel_h": float(z.get("fuss", 0.0)) + 0.5, "bild": null, "sek": sek, "breite_mal": breite_mal, "farbe": farbe, "bei_treffer": bei_treffer})
 
 
@@ -114,6 +143,12 @@ func scharf(wer: Node2D, von: Vector2, von_h: float, weite: float, schaden: floa
 ## Sprung, nicht im Tumble) und ein Brandfeld für `brand_sek`.
 func wurf(von: Vector2, punkt: Vector2, flug: float, radius: float, brand_sek: float, dps: float, schaden: float, quelle: String, hoch: bool) -> void:
 	abgefeuert += 1
+	var wand := _lichtwand(von, punkt)
+	if wand != Vector2.INF:   # C1: landet an der Lichtwand und tut drinnen niemandem etwas
+		punkt = wand
+		schaden = 0.0
+		dps = 0.0
+		brand_sek = 0.0
 	var w := {"von": von, "nach": punkt, "t": 0.0, "flug": maxf(0.1, flug), "r": radius, "brand": brand_sek, "dps": dps, "schaden": schaden,
 		"quelle": quelle, "hoch": hoch, "bild": null, "schatten": null}
 	if spiel != null:
@@ -170,12 +205,16 @@ func kegel_bild(von: Vector2, richtung: Vector2, winkel_grad: float, weite: floa
 ## Geschütz- oder Lanzenturm auf Brakk: Aufglühen, dann Schuss auf die Stelle von jetzt. `breite` in Bildpunkten.
 func turm(z: Vector2i, von: Vector2, art: String, schaden: float, weite: float, breite: float, strahlen: int, quelle: String) -> void:
 	var ziel := _ziel()
-	if ziel.is_empty():
+	if ziel.is_empty() or _zuflucht_sperrt(von, true):   # E4: Türme sehen Brakk in der Zuflucht nicht
 		return
 	var r := ((ziel["pos"] as Vector2) - von).normalized()
+	var ende := von + r * weite
+	var wand := _lichtwand(von, ende)
+	if wand != Vector2.INF:
+		ende = wand   # C1: Türme draußen treffen nur die Lichtwand
 	for i in strahlen:
 		abgefeuert += 1
-		gluehen.append({"z": z, "von": von, "ende": von + r * weite, "t": -0.35 * i, "art": art, "schaden": schaden,
+		gluehen.append({"z": z, "von": von, "ende": ende, "t": -0.35 * i, "art": art, "schaden": schaden,
 			"breite": breite, "quelle": quelle, "ziel_h": float(ziel.get("fuss", 0.0)) + 0.5, "bild": null, "zweiter": i > 0})
 
 
@@ -239,7 +278,7 @@ func weiter(dt: float) -> void:
 		b["rest"] = float(b["rest"]) - dt
 		if not z.is_empty() and not bool(z["durchlass"]) and float(z["sprung"]) <= Werte.BRAKK_SPRUNG_BODEN \
 				and (z["pos"] as Vector2).distance_to(b["mitte"]) <= float(b["r"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
-			_treffe_brakk(float(b["dps"]) * dt, "plasmawerfer", str(b["quelle"]), b["mitte"], false)
+			_treffe_brakk(float(b["dps"]) * dt, str(b.get("typ", "plasmawerfer")), str(b["quelle"]), b["mitte"], false)   # C2: Brandfächer zählt wie seine Treffer
 	braende = braende.filter(func(b: Dictionary) -> bool: return float(b["rest"]) > 0.0)
 	noch = []
 	for w: Dictionary in wuerfe:
@@ -272,7 +311,7 @@ func _wurf_landet(w: Dictionary, z: Dictionary) -> void:
 	if not z.is_empty() and not bool(z["durchlass"]) and float(z["sprung"]) <= Werte.BRAKK_SPRUNG_BODEN \
 			and (z["pos"] as Vector2).distance_to(wo) <= r + Werte.BRAKK_RUMPF * Werte.ZELLE:
 		getroffen += 1
-		_treffe_brakk(float(w["schaden"]), "plasmawerfer", str(w["quelle"]), w["von"], true)
+		_treffe_brakk(float(w["schaden"]), str(w.get("typ", "plasmawerfer")), str(w["quelle"]), w["von"], true)   # C2: Mörser zählt wie seine Treffer
 	if float(w["brand"]) > 0.0:
 		braende.append({"mitte": wo, "r": r, "rest": float(w["brand"]), "dps": float(w["dps"]), "quelle": w["quelle"]})
 	if spiel != null:
@@ -320,12 +359,14 @@ func _schatten_bild() -> Node3D:
 
 ## Ein Geschoss ein Stück weiter. false = es ist weg (Treffer oder Einschlag).
 func _geschoss_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
+	if g.has("lenk"):
+		return _lenk_weiter(g, dt, z)   # C3: Lenkgeschoss von Sonde 7
 	var von: Vector2 = g["von"]
 	var r: Vector2 = g["r"]
 	var s_alt := float(g["s"])
 	var s_neu := minf(s_alt + float(g["tempo"]) * dt, float(g["lang"]))
 	g["s"] = s_neu
-	if not z.is_empty() and not bool(g.get("harmlos", false)) and not bool(z["durchlass"]) and not (bool(g["boden"]) and float(z["sprung"]) > Werte.BRAKK_SPRUNG_BODEN):
+	if not z.is_empty() and not bool(g.get("harmlos", false)) and not bool(z["durchlass"]) and not ((bool(g["boden"]) or bool(g.get("flach", false))) and float(z["sprung"]) > Werte.BRAKK_SPRUNG_BODEN):   # C2: flache Schüsse (Ringsalve) – darüber springen
 		var p := Geometry2D.get_closest_point_to_segment(z["pos"], von + r * s_alt, von + r * s_neu)
 		if p.distance_to(z["pos"]) <= float(g["radius"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
 			getroffen += 1
@@ -340,12 +381,119 @@ func _geschoss_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
 			return false
 	if s_neu >= float(g["lang"]):
 		var ende := von + r * s_neu
+		if int(g.get("abprall", 0)) > 0:
+			_abprallen(g, ende)   # C2: Plasmawerfer – vom Erdwall oder der Lichtwand zurück
+			_geschoss_bild_setzen(g)
+			return true
 		_einschlag_bild(ende, _hoehe(g, s_neu), g, false)
 		if bool(g["boden"]):
 			_plasma_landet(g, ende, z, true)
+		if g.has("brand_ende"):
+			_brand_legen(ende, g["brand_ende"] as Dictionary, str(g["quelle"]))
 		return false
 	_geschoss_bild_setzen(g)
 	return true
+
+
+# ------------------------------------------------------------------ C2 (26.11.): Abpraller und Brandfächer
+
+## C3: Lenkgeschoss (Sonde 7) – fliegt sichtbar mit `tempo` (Felder je Sekunde wie hier) los in Richtung `r`, dreht sich
+## höchstens `dreh` Grad je Sekunde zu Brakk, lebt `sek` Sekunden (wie hier). Ein Erdwall oder die Lichtwand fängt es;
+## im Tumble zieht es vorbei.
+func lenk(von: Vector2, r: Vector2, schaden: float, quelle: String, tempo: float, dreh: float, sek: float) -> Dictionary:
+	abgefeuert += 1
+	var g := {"art": "hf_salve", "von": von, "r": r.normalized(), "s": 0.0, "lang": 1.0, "d_ziel": 1.0, "tempo": tempo * Werte.ZELLE,
+		"radius": 0.14 * Werte.ZELLE, "h0": 1.0, "h1": 1.0, "boden": false, "schaden": schaden, "typ": "herausforderer", "quelle": quelle,
+		"leucht": null, "lenk": deg_to_rad(dreh), "alter": 0.0, "lenk_sek": sek}
+	if spiel != null:
+		g["bild"] = _geschoss_bild("hf_salve", 16.0)
+		_geschoss_bild_setzen(g)
+	geschosse.append(g)
+	return g
+
+
+func _lenk_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
+	g["alter"] = float(g["alter"]) + dt
+	var pos: Vector2 = g["von"]
+	var r: Vector2 = g["r"]
+	if float(g["alter"]) >= float(g["lenk_sek"]):
+		_einschlag_bild(pos, 1.0, g, false)   # verfallen
+		return false
+	if not z.is_empty():
+		var soll := ((z["pos"] as Vector2) - pos).normalized()
+		r = r.rotated(clampf(r.angle_to(soll), -float(g["lenk"]) * dt, float(g["lenk"]) * dt))
+	var neu := pos + r * float(g["tempo"]) * dt
+	if _sperrt(pos, neu):
+		_einschlag_bild(pos, 1.0, g, false)   # Erdwall oder Lichtwand
+		return false
+	if not z.is_empty() and not bool(z["durchlass"]):
+		var p := Geometry2D.get_closest_point_to_segment(z["pos"], pos, neu)
+		if p.distance_to(z["pos"]) <= float(g["radius"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
+			getroffen += 1
+			_treffe_brakk(float(g["schaden"]), str(g["typ"]), str(g["quelle"]), pos, true)
+			_einschlag_bild(p, 1.0, g, true)
+			return false
+	g["von"] = neu
+	g["r"] = r
+	g["s"] = 0.0
+	_geschoss_bild_setzen(g)
+	return true
+
+
+## Liegt zwischen a und b eine Mauer, ein Gebäude, Fels, der Kartenrand oder die Lichtwand?
+func _sperrt(a: Vector2, b: Vector2) -> bool:
+	var c := karte.zelle_bei(b)
+	return not karte.in_karte(c) or not karte.ist_frei(c) or _lichtwand(a, b) != Vector2.INF
+
+
+## Wie weit fliegt ein Abpraller von `von` in Richtung `r`, bis ihn etwas aufhält (Bildpunkte, höchstens `hoechstens`)?
+## Steht er anfangs auf einem Wall, zählt erst das nächste Hindernis.
+func abprall_bahn(von: Vector2, r: Vector2, hoechstens: float = 20.0 * Werte.ZELLE) -> float:
+	var st := Werte.ZELLE * 0.1
+	var s := 0.0
+	var frei := karte.ist_frei(karte.zelle_bei(von))
+	while s < hoechstens:
+		if karte.ist_frei(karte.zelle_bei(von + r * s)):
+			frei = true
+		if frei and _sperrt(von + r * s, von + r * (s + st)):
+			return maxf(s, st)
+		s += st
+	return hoechstens
+
+
+## Am Hindernis: Richtung spiegeln (an der getroffenen Seite) und neu losfliegen.
+func _abprallen(g: Dictionary, ende: Vector2) -> void:
+	var r: Vector2 = g["r"]
+	var st := Werte.ZELLE * 0.25
+	var neu := r
+	if _sperrt(ende, ende + Vector2(signf(r.x) * st, 0.0)):
+		neu.x = -neu.x
+	if _sperrt(ende, ende + Vector2(0.0, signf(r.y) * st)):
+		neu.y = -neu.y
+	if neu == r:
+		neu = -r
+	neu = neu.normalized()
+	g["abprall"] = int(g["abprall"]) - 1
+	g["von"] = ende
+	g["r"] = neu
+	g["s"] = 0.0
+	g["lang"] = abprall_bahn(ende, neu)
+	g["d_ziel"] = maxf(1.0, float(g["lang"]))
+	g["harmlos"] = false
+	_blitz(_zu3d(ende, float(g["h1"])), _farbe(str(g["art"])), 0.35)
+	if spiel != null:
+		Ton.am_ort(spiel, "hit-pboom", ende)
+
+
+## Brandfeld an der Landestelle: {"r", "sek", "dps", "max"} – liegen schon `max` dieser Quelle, verlischt das älteste.
+func _brand_legen(wo: Vector2, b: Dictionary, quelle: String) -> void:
+	var eigene := braende.filter(func(x: Dictionary) -> bool: return str(x["quelle"]) == quelle and bool(x.get("boss", false)))
+	while eigene.size() >= int(b["max"]):
+		braende.erase(eigene.pop_front())
+	braende.append({"mitte": wo, "r": float(b["r"]), "rest": float(b["sek"]), "dps": float(b["dps"]), "quelle": quelle, "typ": "herausforderer", "boss": true})
+	if spiel != null:
+		spiel.effekte.brand(wo, float(b["r"]), float(b["sek"]) * Werte.BRAKK_TEMPO)
+		spiel.effekte.flaeche(wo, float(b["r"]), Color("ff8a3d"))
 
 
 ## Plasmaball am Boden: Einschlag mit kleiner Fläche (nur wenn er Brakk nicht schon direkt getroffen hat) und Brandfläche.
@@ -473,6 +621,8 @@ func _farbe(art: String) -> Color:
 			return Color("ff2a2a")
 		"hf_kugel":
 			return Color("ff6a2a")
+		"hf_plasma":
+			return Color("ff8ad8")   # C2: Abpraller und Brandfächer des Plasmawerfers
 		"hf_doppel":
 			return Color("b46bff")
 	return Color("ff5a4a")   # Laser auf Brakk: rot, gut vom eigenen Cyan zu unterscheiden

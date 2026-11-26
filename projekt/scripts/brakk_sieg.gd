@@ -78,6 +78,8 @@ func knoepfe() -> Array:
 
 func hangar_oeffnen() -> Hangar:
 	var h := Hangar.new()   # nur lesend; liegt über dem Bericht und schließt sich selbst
+	h.aufstiege = bericht.get("aufstiege", {})   # C1 (26.11.): die in diesem Lauf Beförderten treten vor
+	h.kommandantin = bool(bericht.get("sonde", false))   # C3: Sonde 7 vertrieben – sie steht auf dem Podest
 	add_child(h)
 	return h
 

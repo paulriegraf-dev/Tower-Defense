@@ -169,7 +169,7 @@ func _baue() -> void:
 				_eintraege.insert(2, ["Hangar", _hangar_oeffnen, "die Benannten des Technoclans, die dich jagen", Stil.TEXT])   # 25.11. (Paul): statt der Liste „Meistgesuchte“
 		"rogue":
 			# 20.11. (Schritt 5b): Order 24 mit Standardwerten oder eine eigene Rogue-Karte aus dem Editor
-			_eintraege = [["Befehl 24 · Standardwerte", _rogue_los.bind("szenario_order24"), _karten_text("szenario_order24"), LICHT]]
+			_eintraege = [["Befehl 24 · Standardwerte", _rogue_los.bind(Werte.ORDER24_KARTE_NAME), _karten_text("szenario_order24"), LICHT]]
 			for kname: String in Werte.eigene_karten():
 				var rg: Variant = Werte.karten_daten(kname).get("regeln", {})
 				if rg is Dictionary and str((rg as Dictionary).get("modus", "")) == "rogue":

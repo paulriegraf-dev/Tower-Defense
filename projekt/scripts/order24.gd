@@ -39,7 +39,7 @@ const STANDARD := {
 	"geheim_hq_leben": 3000,    # Leben des Technoclan-HQ
 	"myr_rueck_sek": 10,        # so lange am besetzten Myriaden-HQ stehen (ohne Technoclan in der Nähe) = zurückerobert
 	"flucht_sek": 45,           # Flucht: niemand jagt, die Truppen gehen in Stellung
-	"jagd_start": 90,           # Sabotage bis hier (Verteidiger statisch), dann Jagd … – 22.11. (Paul): 90 statt 150, die Haufen standen zu lange
+	"jagd_start": 60,           # Sabotage bis hier (Verteidiger statisch), dann Jagd … – 22.11. (Paul): 90 statt 150, die Haufen standen zu lange; 26.11. (Paul): 60
 	"sabotage_ende_fabriken": 2,  # … oder schon, sobald so viele Fabriken zerstört sind
 	"jagd_anteil": 80,          # Prozent der Truppen, die Jagdtrupps bilden (der Rest bleibt in den Nestern)
 	"trupp_min": 3,             # Jagdtrupps zu 3–5
@@ -84,19 +84,24 @@ const STANDARD := {
 	"hinterhalt_abstand": 6,    # … und eröffnet, sobald Brakk so nah ist
 	"vorstoss": true,           # Technoclan darf das Myriaden-HQ einnehmen
 	"vorstoss_start": 480,      # ab dann marschiert ein Jagdtrupp darauf
-	"vorstoss_sek": 30,         # so lange muss er es halten
+	"vorstoss_sek": 20,         # so lange muss er es halten – 26.11. (Paul): 20 statt 30, dafür sichtbarer Einnahme-Ring
+	"vorstoss_rueckgang": 0.35, # 26.11. (Paul): ohne Truppen am HQ sinkt der Ring mit so viel × Fülltempo
 	"brakk_schaden": 45,        # Prozent: so viel Schaden der Verteidigung kommt bei Brakk an – 20.11. (Paul): 45 statt 25, Sabotieren war ohne Gefahr
 	"sabotage_schaden": 150,    # Prozent: Schaden an Brakk, solange er sabotiert (ungeschützt an der Fabrik)
 	"hq_aggro_radius": 10,      # 20.11. (Paul): Felder um den Schild des Technoclan-HQ, in denen die KI aggressiver wird …
 	"hq_aggro_schaden": 50,     # … bis zu so viel Prozent mehr Schaden an Brakk direkt am Schild; ab halber Nähe rücken auch die Verteidiger aus
 	"medkit_takt": 60,          # Med-Kit am Myriaden-HQ liegt so oft wieder, nach dessen Fall so oft eins verstreut
-	"heilturm_prozent": 2,      # 20.11. (Paul): Heilturm am Myriaden-HQ – so viel Prozent von Brakks Leben je Sekunde …
+	"heilturm_prozent": 1,      # 20.11. (Paul): Heilturm am Myriaden-HQ – so viel Prozent von Brakks Leben je Sekunde (E5, 26.11.: 1 statt 2, das HQ ist nicht mehr der einzige Ort zum Heilen) …
 	"heilturm_radius": 2,       # … in so vielen Feldern Umkreis, solange kein Technoclan in 3 Feldern ist
 	"medkit_heilung": 15,       # Prozent von Brakks Leben – 20.11. (Paul): deutlich weniger (vorher 40)
 	"fabriken_aussen": 4,       # Lager über die Karte verteilt (Fabrik, Stellungen, Turm)
 	"fabriken_innen": 3,        # im Schild, für Brakk nicht erreichbar
 	"stufe_innen": 2,           # 20.11. (Paul): Fabriken im Schild ausgebaut wie im normalen Spiel
 	"besatzung_innen": 3,       # so viele Truppen hält jede Fabrik im Schild zur Verteidigung
+	"ausfall_sicht": 8,         # 26.11. (Paul): sieht die Schildbesatzung (Streife zu zweit) Brakk so nah, macht ein Paar einen Ausfall …
+	"ausfall_sek": 15,          # … höchstens so lange, dann zurück in den Schild …
+	"ausfall_pause": 20,        # … und erst danach der nächste (je Schild höchstens einer zugleich)
+	"abstand_min": 0.6,         # 26.11. (Paul): Felder – so weit halten Technoclan-Truppen am Boden mindestens auseinander
 	"praemie_kill": 7,          # 20.11. (Paul): Kopfgeld je Kill (Elite ×3) – 7 statt 12, sonst kommen die Ringe zu schnell
 	"kill_stufe": 2,            # … je so vielen Kills an derselben Stellung (am Boden: derselben Fabrik) sinkt es um 1 …
 	"kill_frist": 30,           # … und ist nach so vielen Sekunden ohne Kill dort wieder voll (gegen stumpfes Abfarmen)
@@ -110,6 +115,7 @@ const STANDARD := {
 	"truppen_leben": 90,        # Prozent: Leben der Technoclan-Truppen – 20.11. (Paul): 90 statt 70, Brakk wird mit mehr Ringen stärker
 	"turm_wall_bonus": 2,       # Felder mehr Reichweite der Türme, solange Brakk auf den Erdwällen läuft
 	"karte": "",                # "" = Zufall unter den Formationen aus [H], sonst eine Formation oder "phantom" (Verteidigungs-Phantom)
+	"gebiete": false,           # E (26.11.): große Karte mit Gebieten und Zufluchten (setzt die Karte befehl24_gross)
 	# 20.11. (Paul, Ergänzung Befehl 24): Regeln nur in diesem Modus
 	"stellungen_je_fabrik": 4,  # Stellungen um jede Fabrik außerhalb des Schilds
 	"patrouille": 2,            # so viele Truppen je Fabrik außerhalb gehen Streife
@@ -130,6 +136,8 @@ const STANDARD := {
 	"spreng_drop_elite": 50,    # Prozent: gefallene Elite lässt eine Sprengladung fallen – 26.11. (Paul): 50 statt immer
 	"spreng_max": 3,            # höchstens so viele im Gepäck
 	"spreng_zuender": 3,        # Sekunden Zünder
+	"ladung_liegt_sek": 20,     # 26.11. (Paul): eine gefallene Sprengladung liegt so lange, dann blendet sie aus …
+	"ladung_liegt_max": 4,      # … und höchstens so viele liegen zugleich (die älteste verschwindet)
 	"mobil_abkling": 125,       # 20.11. (Paul): Prozent Abklingzeit von Q und E (Anker, Lichttreppe, Lichtbrücke) – eher eingekesselt
 	"geschoss_tempo": 75,       # 20.11. (Paul): Prozent Tempo von Laser und Battlesphären-Schüssen auf Brakk (Plasma bleibt) – reagierbar bei vielen Schützen
 	"herausforderer": true,     # 26.11. (Paul): zu Minute 9 und 14 tritt ein Benannter allein an (nemesis_herausforderer.gd)
@@ -162,9 +170,14 @@ const BEUTE_GOLD_ANTEIL := 0.5   # 25.11. (Paul): trägt Brakk alle Ringarten, l
 const BEUTE_GOLD_FARBE := Color("ffd66b")
 const LADUNG_REICHWEITE := 1.8   # 20.11.: Felder – so weit vor Brakk darf der Erdwall für die Sprengladung liegen
 const LADUNG_SCHADEN := 120.0    # 20.11.: Truppen dicht an der Sprengung
+const LADUNG_AUSBLENDEN := 0.8   # 26.11.: Sekunden – so lange blendet eine liegende Sprengladung vor dem Verschwinden aus
 const ALARM_SEK := 20.0          # 20.11.: so lange bleiben alarmierte Truppen an der Fabrik
 const BRAKK_NAH := 5.0            # 20.11. (Paul): Felder – so nah an Brakk geht keine Truppe in eine Stellung
 const TECHNO_FARBE := Color("b46cff")
+const ABSTAND_SCHUB := 2.0        # 26.11.: Felder je Sekunde – so schnell schiebt der Mindestabstand höchstens
+const VORSTOSS_BRAKK_NAH := 3.0   # 26.11. (Paul): Felder – steht Brakk so nah am Myriaden-HQ, füllt sich der Einnahme-Ring …
+const VORSTOSS_BRAKK_TEMPO := 0.5 # … nur mit diesem Anteil des Tempos
+const VORSTOSS_RING_HOEHE := 3.0  # 3D-Höhe des Einnahme-Rings über dem HQ
 
 var spiel: Node
 var karte: Karte
@@ -183,6 +196,8 @@ var bekannt_zeit := -99.0        # … und wann
 var wellen := 0
 var _naechste_welle := 0.0
 var taktik: BrakkJagdtaktik = null   # 26.11.: Angriffstaktiken der Jagdwellen
+var schildwache: BrakkSchildwache = null   # 26.11. (Paul): Streife und Ausfall der Schildbesatzung
+var zuflucht: BrakkZuflucht = null    # E4 (26.11., Paul): Zufluchtsorte der großen Karte (nur mit Regel gebiete)
 var tafeln := NemesisTafeln.new()   # 25.11.: Hologramm-Tafeln (Elite-Auftritt, Beförderung, Vertreibung, Wiedersehen)
 var _elite_zeile_bis := -1.0     # so lange steht „Elitetrupp“ in der Phasenzeile
 var _vorstoss_wahl := 0.0
@@ -202,6 +217,9 @@ var _tore_naechst := 0.0
 var tore_gesetzt := 0
 var tor_versuche := 0             # Prüfung: so oft wurde nach einem Tor gesucht
 var _brakk_ahnt := false
+var _sonde_hq_gemeldet := false   # 26.11.: Sonde 7 bei 50 % Einnahme
+var _ring3d: Sprite3D = null      # 26.11.: Einnahme-Ring über dem Myriaden-HQ
+var _ring_prozent := -1
 var funk: Verrat24 = null         # Funkspruch im Spiel (Steuerung frei)
 var vorstoss_anteil := 0.0       # 0..1 Einnahme des Myriaden-HQ
 var hq_eingenommen := false
@@ -273,7 +291,7 @@ func brakk_gewohnheit(a: String) -> void:
 
 ## 22.11. (Nemesis Teil 5): Elite im Gehen schießen lassen (direkt und Flanke rücken nach, Sperrfeuer weicht zurück).
 func drueckt(e: Einheit) -> bool:
-	return (nemesis != null and nemesis.lernen != null and nemesis.lernen.drueckt(e)) or (taktik != null and taktik.drueckt(e))   # 26.11.: Sturm schießt im Gehen
+	return (nemesis != null and nemesis.lernen != null and nemesis.lernen.drueckt(e)) or (taktik != null and taktik.drueckt(e)) or (schildwache != null and schildwache.drueckt(e))   # 26.11.: Sturm schießt im Gehen; Rückweg nach dem Ausfall
 
 
 ## 22.11. (Nemesis Teil 3): Brakks Lauftempo (Ego-Sicht) – im Kegel eines Unterdrückungsfeuers langsamer.
@@ -326,10 +344,13 @@ func einrichten(p_spiel: Node) -> void:
 	brakk_ziel.rolle = "hund"
 	brakk_ziel.visible = false
 	_zuflucht_legen()
+	if zuflucht != null:
+		zuflucht.einrichten()   # E4: Medkit-Depot und Sprengstoffkasten in jedem Zufluchtsort
 	nemesis = Nemesis.new()
 	add_child(nemesis)
 	nemesis.einrichten(self)
 	taktik = BrakkJagdtaktik.new(self)
+	schildwache = BrakkSchildwache.new(self)
 	herausforderer = NemesisHerausforderer.new()
 	add_child(herausforderer)
 	herausforderer.einrichten(nemesis)
@@ -340,7 +361,7 @@ func _karte_aufbauen() -> void:
 		_karte_uebernehmen()
 		return
 	var wahl := str(w("karte"))
-	var formationen: Array[String] = Werte.ALARM_FORMATIONEN
+	var formationen: Array[String] = BrakkGebiete.formationen_b24() if bool(w("gebiete")) else Werte.ALARM_FORMATIONEN   # E3: die _b24-Fassungen
 	var phantome: Array = Phantom.liste("verteidigung") if Werte.SPALTEN == 28 else []
 	if wahl == "":
 		wahl = formationen.pick_random()   # 20.11. (Paul): eine Formation aus [H] wie in Runde 20 (Phantom nur, wenn gewählt)
@@ -364,7 +385,14 @@ func _karte_aufbauen() -> void:
 	if not phantom_ok:
 		if not Nachschlag.PLAENE_GROSS.has(wahl):
 			wahl = formationen.pick_random()
-		stellungen = spiel.formation_aufbauen(wahl, 0, 0, 0)   # 20.11.: Fabriken und Stellungen setzt Order24 (Lager)
+		if bool(w("gebiete")):
+			var form := BrakkGebiete.formation(wahl)   # E3/E4: _b24-Plan mit Felsen und Zufluchten
+			spiel._setze_stand({"waelle": form["waelle"], "fabriken": [], "batterien": []})
+			for z: Vector2i in form["fels"]:
+				karte.setze_gelaende(z, "fels")
+			zuflucht = BrakkZuflucht.new(self, form["zufluchten"])
+		else:
+			stellungen = spiel.formation_aufbauen(wahl, 0, 0, 0)   # 20.11.: Fabriken und Stellungen setzt Order24 (Lager)
 	print("ORDER24 Karte: %s" % wahl)
 	# Schild um das HQ, darin Fabriken (20.11., Paul: mindestens drei, ausgebaut wie im normalen Spiel)
 	var basis_mitte: Vector2 = karte.mitte(karte.basis) + Vector2(0, -Werte.ZELLE * 0.5)
@@ -404,12 +432,12 @@ func _karte_aufbauen() -> void:
 		for weite: int in [2, 3]:
 			for d: Vector2i in richtungen:
 				var n := z + d * weite
-				if gebaut >= int(w("stellungen_je_fabrik")):
+				if gebaut >= _lager_stellungen(z):   # E: je Gebiet
 					break
 				if karte.inhalt(n) == Karte.WALL and not karte.ausbau.has(n) and not karte.stuetze_von.has(n):
 					karte.baue_aus(n, Karte.STELLUNG)
 					gebaut += 1
-				elif karte.ist_bebaubar(n) and not _im_schild(karte.mitte(n)) and not karte.ist_basis(n):
+				elif karte.ist_bebaubar(n) and not _im_schild(karte.mitte(n)) and not karte.ist_basis(n) and not (zuflucht != null and zuflucht.bereich(n)):
 					karte.setze(n, Karte.WALL)
 					karte.baue_aus(n, Karte.STELLUNG)
 					gebaut += 1
@@ -524,9 +552,65 @@ func _setze_fabrik(z: Vector2i, typ: String, stufe: int) -> bool:
 	return true
 
 
+## E (26.11., Paul): große Karte – die Lager kommen in ihre Gebiete (ORDER24_LAGER: zwei im Gürtel, je eins in den
+## Außenposten), auf das bebaubare Feld nahe dem Wunschfeld, mindestens 4 Felder von anderen Fabriken.
+func _lager_nach_gebieten() -> void:
+	var i := 0
+	for platz: Array in BrakkGebiete.lager_plaetze():
+		var r := BrakkGebiete.rechteck(str(platz[0]))
+		var soll: Vector2i = platz[1]
+		var bestes := Karte.KEINE
+		var beste := INF
+		for y in range(maxi(1, r.position.y), mini(Werte.ZEILEN - 1, r.end.y)):
+			for x in range(r.position.x, r.end.x):
+				var z := Vector2i(x, y)
+				if not karte.ist_bebaubar(z) or _im_schild(karte.mitte(z)) or karte.ist_basis(z) or BrakkGebiete.gebiet(z) != str(platz[0]) or (zuflucht != null and zuflucht.bereich(z)):
+					continue
+				if spiel.fabriken.keys().any(func(f: Vector2i) -> bool: return Vector2(f - z).length() < 4.0):
+					continue
+				var d := Vector2(z - soll).length()
+				if d < beste:
+					beste = d
+					bestes = z
+		if bestes != Karte.KEINE:
+			_setze_fabrik(bestes, Werte.ALARM_TRUPPEN[i % Werte.ALARM_TRUPPEN.size()], 1)
+			i += 1
+
+
+## Stellungen und Streife eines Lagers: auf der großen Karte je Gebiet, sonst die Regeln.
+func _lager_stellungen(z: Vector2i) -> int:
+	var n := BrakkGebiete.stellungen(BrakkGebiete.gebiet(z)) if bool(w("gebiete")) else -1
+	return n if n >= 0 else int(w("stellungen_je_fabrik"))
+
+
+func _lager_streife(z: Vector2i) -> int:
+	var n := BrakkGebiete.streife(BrakkGebiete.gebiet(z)) if bool(w("gebiete")) else -1
+	return n if n >= 0 else int(w("patrouille"))
+
+
+## E: Kills und Schaden an Brakk je Gebiet (wo Brakk stand) – für den Bericht und das Protokoll.
+var gebiet_zahlen := {}
+
+func gebiet_zaehlen(art: String, menge: float) -> void:
+	if not bool(w("gebiete")) or spiel.kommandant == null:
+		return
+	var g := BrakkGebiete.gebiet(karte.zelle_bei((spiel.kommandant as Kommandant).position))
+	var z: Dictionary = gebiet_zahlen.get(g, {"kills": 0.0, "schaden": 0.0, "treffer": 0.0})
+	z[art] = float(z.get(art, 0.0)) + menge
+	if art == "schaden":
+		z["treffer"] = float(z["treffer"]) + 1.0
+	gebiet_zahlen[g] = z
+	var f: BrakkFortschritt = (spiel.kommandant as Kommandant).fortschritt
+	if f != null:
+		f.protokoll.ereignis(spiel, "kill" if art == "kills" else "treffer", {"gebiet": g})
+
+
 ## 20.11. (Paul): `fabriken_aussen` Lager über die Karte verteilt – zwischen Myriaden-Zone und Schild, abwechselnd oben,
 ## unten und in der Mitte, mindestens 4 Felder auseinander.
 func _lager_verteilen() -> void:
+	if bool(w("gebiete")):
+		_lager_nach_gebieten()
+		return
 	var n := int(w("fabriken_aussen"))
 	var x0 := float(Werte.ZONE_SPALTEN + 5)
 	var x1 := float(karte.basis.x - 5)
@@ -563,7 +647,7 @@ func _lager_turm(f: Vector2i) -> void:
 				if maxi(absi(dx), absi(dy)) != r:
 					continue
 				var c := f + Vector2i(dx, dy)
-				if not (karte.ist_bebaubar(c) or (karte.inhalt(c) == Karte.WALL and not karte.ausbau.has(c) and not karte.stuetze_von.has(c))) or _im_schild(karte.mitte(c)) or karte.ist_basis(c):
+				if not (karte.ist_bebaubar(c) or (karte.inhalt(c) == Karte.WALL and not karte.ausbau.has(c) and not karte.stuetze_von.has(c))) or _im_schild(karte.mitte(c)) or karte.ist_basis(c) or (bool(w("gebiete")) and (BrakkGebiete.gebiet(c) != BrakkGebiete.gebiet(f) or (zuflucht != null and zuflucht.bereich(c)))):   # E: im Gebiet des Lagers, nicht an den Zufluchten
 					continue
 				var nah := false
 				for t: Vector2i in karte.ausbau:
@@ -724,7 +808,7 @@ func _zaehle_ausbau(typ: int) -> int:
 func _tuerme_setzen() -> void:
 	var kandidaten: Array = []
 	for z: Vector2i in karte.feld:
-		if karte.feld[z] != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)):
+		if karte.feld[z] != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)) or (bool(w("gebiete")) and BrakkGebiete.gebiet(z) != "guertel"):   # E: Formtürme nur im Gürtel
 			continue
 		var form := karte.turm_form(z)
 		if form == "" or form == "funk":
@@ -740,15 +824,25 @@ func _tuerme_setzen() -> void:
 	for z: Vector2i in karte.ausbau:
 		if karte.ausbau[z] == Karte.TURM:   # schon da (Phantom-Verteidigung): zählen mit
 			gesetzt.append(z)
+			if bool(w("gebiete")):
+				continue   # E: auf der großen Karte sind das Lagertürme – die Formtürme kommen dazu
 			if karte.turm_art.get(z, "") == "heil":
 				heil += 1
 			else:
 				andere += 1
-	for k: Array in kandidaten:
+	# E (26.11., Paul): auf der großen Karte kommt der Heilturm zuerst (erst eine fertige Treppe, sonst eine angebaute),
+	# sonst ist im engen Gürtel nach den Formtürmen oft kein Wallende mit 4 Feldern Abstand mehr frei
+	var nur_heil := bool(w("gebiete"))
+	var reihe: Array = (kandidaten + [[]] + kandidaten) if nur_heil else kandidaten   # zwei Durchgänge, dazwischen die Treppe
+	for k: Array in reihe:
+		if k.is_empty():
+			heil = _heil_treppe(gesetzt, heil)
+			nur_heil = false
+			continue
 		var z: Vector2i = k[1]
 		var form := str(k[2])
 		var ist_heil := form == "heil"
-		if (ist_heil and heil >= int(w("heiltuerme"))) or (not ist_heil and andere >= int(w("tuerme"))):
+		if (ist_heil and heil >= int(w("heiltuerme"))) or (not ist_heil and andere >= int(w("tuerme"))) or (nur_heil and not ist_heil):
 			continue
 		if karte.turm_form(z) != form or karte.stuetze_von.has(z):
 			continue   # ein schon gesetzter Turm hat die Stützen genommen
@@ -770,7 +864,7 @@ func _tuerme_setzen() -> void:
 	for z: Vector2i in karte.feld.keys():
 		if andere >= int(w("tuerme")):
 			break
-		if karte.feld.get(z, Karte.FREI) != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)):
+		if karte.feld.get(z, Karte.FREI) != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)) or (bool(w("gebiete")) and BrakkGebiete.gebiet(z) != "guertel"):
 			continue
 		var zu_nah := false
 		for g: Vector2i in gesetzt:
@@ -788,11 +882,21 @@ func _tuerme_setzen() -> void:
 			karte.baue_aus(z, Karte.TURM)
 			andere += 1
 			gesetzt.append(z)
-	# Heilturm mit Instandsetzung: fehlt eine Treppe, zwei Erdwälle schräg an einen Wall setzen
+	heil = _heil_treppe(gesetzt, heil)
+	for z: Vector2i in gesetzt:
+		kern[z] = wf("kern_leben")
+
+
+## Heilturm mit Instandsetzung: fehlt eine Treppe, zwei Erdwälle schräg an einen Wall setzen (bis `heiltuerme` stehen).
+## Hängt die neuen Türme an `gesetzt` an und gibt die neue Zahl der Heiltürme zurück.
+## E (26.11., Paul): auf der großen Karte jeder Wall im Gürtel, nicht nur Wallenden – dicke Formationen haben vor den
+## Formtürmen gar keine; der Turm wird dort ausdrücklich ein Heilturm (Stützen = das schräge Paar).
+func _heil_treppe(gesetzt: Array[Vector2i], heil: int) -> int:
+	var gebiete := bool(w("gebiete"))
 	for z: Vector2i in karte.feld.keys():
 		if heil >= int(w("heiltuerme")):
 			break
-		if karte.feld.get(z, Karte.FREI) != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)) or karte.freie_stuetzen(z).size() > 1:
+		if karte.feld.get(z, Karte.FREI) != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)) or (karte.freie_stuetzen(z).size() > 1 and not gebiete) or (gebiete and BrakkGebiete.gebiet(z) != "guertel"):
 			continue
 		var zu_nah := false
 		for g: Vector2i in gesetzt:
@@ -810,14 +914,13 @@ func _tuerme_setzen() -> void:
 					if karte.inhalt(n) != Karte.WALL:
 						karte.setze(n, Karte.WALL)
 				break
-		if karte.turm_form(z) == "heil":
-			karte.baue_aus(z, Karte.TURM)
+		if karte.turm_form(z) == "heil" or (gebiete and karte._diagonal_paar(z).size() == 2):
+			karte.baue_aus(z, Karte.TURM, "heil")
 			karte.turm_stufe[z] = 3
 			karte.turm_faehigkeit[z] = "instand"
 			heil += 1
 			gesetzt.append(z)
-	for z: Vector2i in gesetzt:
-		kern[z] = wf("kern_leben")
+	return heil
 
 
 ## 20.11.: Rückseite einer Fabrik = freies Nachbarfeld, möglichst zum Technoclan-HQ hin (dort wird sabotiert).
@@ -1106,6 +1209,7 @@ func _process(delta: float) -> void:
 		_fahrplan_ruht(echt)
 	_tuerme_pflegen(echt)
 	_fabriken_pflegen(k, echt)
+	_abstand_halten(echt)
 	_takt -= echt
 	if _takt <= 0.0:
 		_takt = 1.0
@@ -1114,6 +1218,8 @@ func _process(delta: float) -> void:
 		if phase() == "vorstoss" and not hq_eingenommen and not herausforderer.sperrt():
 			_vorstoss(echt)
 	_medkits_pflegen(k, echt)
+	if zuflucht != null:
+		zuflucht.weiter(echt, k)   # E4: Aufenthaltsuhr, Depot, Kasten, Umformen
 	_3d_pflegen()
 	if wf("ueberleben_sek") > 0.0 and zeit >= wf("ueberleben_sek") and not geheim:
 		_ende(true)
@@ -1156,7 +1262,54 @@ func truppen_limit(z: Vector2i) -> int:
 		return -1
 	if not fabrik_hp.has(z):
 		return int(w("besatzung_innen"))   # 20.11. (Paul): Verteidiger im Schild
-	return int(w("stellungen_je_fabrik")) + int(w("patrouille"))
+	return _lager_stellungen(z) + _lager_streife(z)   # E: auf der großen Karte je Gebiet
+
+
+## 26.11. (Paul): Mindestabstand – Technoclan-Truppen am Boden halten in jedem Zustand abstand_min Felder zueinander
+## (Trennkraft wie bei Boids, ohne den Weg zu ändern; Stellungen ausgenommen). Nachbarn über Feld-Eimer statt aller Paare.
+## Ursache der Stapel: Streife und Ersatz eines Lagers laufen dieselben vier Eckfelder ab und stehen auf der Feldmitte, nur
+## ±10 px Zufallsversatz auseinander; Alarm-Ziele (_freies_feld_nahe) fallen oft auf dasselbe Feld.
+func _abstand_halten(echt: float) -> void:
+	var min_abstand := wf("abstand_min") * Werte.ZELLE
+	if min_abstand <= 0.0 or echt <= 0.0:
+		return
+	var eimer := {}
+	var alle: Array = []
+	for x in _truppen():
+		var u := x as Einheit
+		if u.zustand != Einheit.Zustand.BODEN or u.leben <= 0.0:
+			continue
+		alle.append(u)
+		var z := karte.zelle_bei(u.position)
+		if not eimer.has(z):
+			eimer[z] = []
+		(eimer[z] as Array).append(u)
+	var max_schub := ABSTAND_SCHUB * Werte.ZELLE * echt
+	for u: Einheit in alle:
+		var z := karte.zelle_bei(u.position)
+		var schub := Vector2.ZERO
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				for v: Einheit in eimer.get(z + Vector2i(dx, dy), []):
+					if v == u:
+						continue
+					var d := u.position - v.position
+					var l := d.length()
+					if l >= min_abstand:
+						continue
+					if l < 0.01:   # genau aufeinander: feste Richtung je Paar
+						d = Vector2.RIGHT.rotated(float(u.get_instance_id() % 628) / 100.0)
+						l = 0.01
+					schub += d / l * (min_abstand - l) * 0.5
+		if schub == Vector2.ZERO:
+			continue
+		var neu := u.position + schub.limit_length(max_schub)
+		if not karte.ist_begehbar(karte.zelle_bei(neu)):
+			continue
+		u.position = neu
+		# am letzten Wegpunkt weggeschoben: gilt als angekommen (sonst tritt er dort auf der Stelle)
+		if u._punkte.size() == 1 and u.position.distance_to(u._punkte[0]) <= min_abstand:
+			u._punkte.clear()
 
 
 ## 20.11.: Truppe einer Fabrik im Schild (Verteidiger der Basis, keine Jäger aus der Besatzung).
@@ -1198,7 +1351,23 @@ func gefallen(e: Einheit) -> void:
 		return
 	var chance := wf("spreng_drop_elite") if bool(e.daten.get("elite", false)) else wf("spreng_drop")   # 26.11. (Paul): Elite 50 % statt immer
 	if randf() * 100.0 < chance:
-		ladungen_boden.append({"pos": e.position, "knoten": null})
+		ladung_fallen_lassen(e.position)
+
+
+## 26.11. (Paul): Sprengladung fällt zu Boden. Sie liegt ladung_liegt_sek; liegen schon ladung_liegt_max gefallene,
+## verschwindet die älteste sofort. Die Ladung am Myriaden-HQ („bleibt“) zählt nicht mit und verschwindet nicht.
+func ladung_fallen_lassen(p: Vector2) -> void:
+	var gefallen := ladungen_boden.filter(func(l: Dictionary) -> bool: return not bool(l.get("bleibt", false)))
+	while gefallen.size() >= int(w("ladung_liegt_max")):
+		var alt: Dictionary = gefallen.pop_front()
+		_ladung_weg(alt)
+	ladungen_boden.append({"pos": p, "knoten": null, "bis": zeit + wf("ladung_liegt_sek")})
+
+
+func _ladung_weg(l: Dictionary) -> void:
+	ladungen_boden.erase(l)
+	if l["knoten"] != null and is_instance_valid(l["knoten"]):
+		(l["knoten"] as Node3D).queue_free()
 
 
 # ------------------------------------------------------------------ Sicht und Deckung (20.11.)
@@ -1244,6 +1413,8 @@ func _ziele_pflegen() -> void:
 		t.position = (e as Einheit).position
 		t.leben = (e as Einheit).leben
 		t.max_leben = (e as Einheit).max_leben
+		if herausforderer != null and herausforderer.ist_er(e):
+			t.set_meta("treffer_hoehe", 0.42 + float((e as Einheit).get_meta("hebt_ab", 0.0)))   # C3: Sonde 7 schwebt – Brakk trifft sie dort
 		t.art = "stellung" if (e as Einheit).in_stellung() else "truppe"
 	# 20.11.: Fabriken außerhalb (Leben fabrik_leben) und Turmkerne; Erdwälle sind kein Ziel mehr (nur Sprengladungen)
 	for z: Vector2i in fabrik_hp:
@@ -1315,6 +1486,35 @@ func _neues_ziel(schl: String) -> TechnoZiel:
 func brakk_bewegung(art: String, r: Vector2 = Vector2.ZERO) -> void:
 	if laeuft and not vorbei and nemesis != null and nemesis.lernen != null:
 		nemesis.lernen.bewegung(art, r)
+	brakk_aktion(art)
+
+
+## C2 (26.11.): Brakk springt, tumbelt oder setzt eine Lichtsäule – der Bosstyp reagiert (Ankerwurf reißen, Gel lösen,
+## Lichtsäulen zählen).
+func brakk_aktion(art: String) -> void:
+	if not laeuft or vorbei or herausforderer == null:
+		return
+	if art == "saeule":
+		herausforderer.saeulen += 1
+	if herausforderer.zustand == "duell" and herausforderer.typ != null:
+		herausforderer.typ.brakk_aktion(art)
+
+
+## E4 (26.11., Paul): Steht Brakk in einer Zuflucht? Dann zielen Türme und Stellungen nicht auf ihn (Bodentruppen schon).
+func brakk_in_zuflucht() -> bool:
+	return zuflucht != null and zuflucht.brakk_drin()
+
+
+## E4: Minikarte der Ego-Sicht – Felsen, Zufluchten (Kreuz) und verlorene Zufluchten (Lager).
+func minikarte(ci: CanvasItem, o: Vector2, zelle: float) -> void:
+	if zuflucht != null:
+		zuflucht.minikarte(ci, o, zelle)
+
+
+## C1 (26.11., Paul): Trennt die Lichtwand des Kampfplatzes die Strecke a → b (Bildpunkte)? Dann der Punkt an der Wand,
+## sonst Vector2.INF. Für Schüsse von draußen hinein und von drinnen hinaus.
+func lichtwand_schnitt(a: Vector2, b: Vector2) -> Vector2:
+	return herausforderer.kampfplatz.schnitt(a, b) if herausforderer != null else Vector2.INF
 
 
 ## 26.11.: Ist dieses Ziel der Herausforderer? (Der Ladestrahl nimmt ihm so viel wie einem großen Gegner.)
@@ -1339,6 +1539,8 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 		menge *= nemesis.gewohnheiten.schild_faktor(e)   # 22.11. (Teil 4): Frontschild – von vorn nur 25 %
 		if herausforderer.ist_er(e):
 			menge *= herausforderer.schutz_faktor()   # 26.11.: Vergeltung mit dem Wallring
+			if herausforderer.typ != null:
+				menge = herausforderer.typ.vor_treffer(menge)   # C3: Sonde 7 – Heil-Impuls brechen, geborgen statt gefallen
 		var war_stellung := e.in_stellung()
 		var kg_ort := ("s:%s" % str(e.posten_zelle)) if war_stellung else ("f:%s" % str(e.fabrik_zelle))
 		var elite := bool(e.daten.get("elite", false))
@@ -1352,6 +1554,7 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			t._tot = true
 			sabotage["truppen"] = int(sabotage["truppen"]) + 1
 			kills += 1
+			gebiet_zaehlen("kills", 1.0)   # E: wo Brakk stand
 			_kopfgeld(kg_ort, 3 if elite else 1)   # 20.11. (Paul): Elite bringt dreifaches Kopfgeld
 			var kk: Kommandant = spiel.kommandant
 			if kk != null and kk.fortschritt != null and int(w("xp_kill")) > 0:
@@ -1541,6 +1744,47 @@ func _sabotage_3d(hd: HdAnsicht) -> void:
 			(q.material_override as StandardMaterial3D).albedo_color.a = 0.9 * (1.0 - 0.8 * a)
 
 
+## 26.11. (Paul): Einnahme-Ring über dem Myriaden-HQ – Billboard in Technoclan-Lila, füllt sich im Uhrzeigersinn
+## (von oben). Das Bild wird nur neu gemalt, wenn sich der Prozentwert ändert.
+func _einnahme_3d(hd: HdAnsicht) -> void:
+	var zeigen := einnahme_sichtbar()
+	if _ring3d == null:
+		if not zeigen:
+			return
+		_ring3d = Sprite3D.new()
+		_ring3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_ring3d.shaded = false
+		_ring3d.no_depth_test = true   # auch hinter dem HQ-Dach sichtbar
+		_ring3d.pixel_size = 0.9 / float(RING_BILD)   # knapp ein Feld groß (1,6 verdeckte von nah die Phasenzeile)
+		var p := karte.mitte(Werte.ANGRIFFS_ZELLE)
+		_ring3d.position = Vector3(p.x / Werte.ZELLE, VORSTOSS_RING_HOEHE, (p.y - Werte.KARTE_OBEN) / Werte.ZELLE)
+		hd.add_child(_ring3d)
+	_ring3d.visible = zeigen
+	var pz := floori(100.0 * vorstoss_anteil)
+	if zeigen and pz != _ring_prozent:
+		_ring_prozent = pz
+		_ring3d.texture = ImageTexture.create_from_image(ring_bild(vorstoss_anteil))
+
+
+const RING_BILD := 64   # Kantenlänge des Ringbilds in Pixeln
+
+
+## Ringbild: dunkler Grundring, darauf der gefüllte Teil in Technoclan-Lila ab 12 Uhr im Uhrzeigersinn.
+static func ring_bild(anteil: float) -> Image:
+	var img := Image.create(RING_BILD, RING_BILD, false, Image.FORMAT_RGBA8)
+	var m := RING_BILD / 2.0
+	for y in RING_BILD:
+		for x in RING_BILD:
+			var d := Vector2(x + 0.5 - m, y + 0.5 - m)
+			var r := d.length()
+			if r < m * 0.62 or r > m * 0.98:
+				continue
+			var winkel := fposmod(atan2(d.x, -d.y), TAU)   # 0 oben, wächst im Uhrzeigersinn
+			var voll := winkel <= anteil * TAU
+			img.set_pixel(x, y, TECHNO_FARBE if voll else Color(0.1, 0.06, 0.16, 0.7))
+	return img
+
+
 ## Darstellung: Lichtsäule und Bodenscheibe in der Ringfarbe, darüber schwebt der Ring (Gold: ein goldener Würfel).
 func _beute_3d(hd: HdAnsicht) -> void:
 	var t := float(Time.get_ticks_msec()) / 1000.0
@@ -1665,6 +1909,9 @@ func _instand_nah(z: Vector2i) -> bool:
 ## Aufheben (Gepäck höchstens spreng_max), Zünder herunterzählen.
 func _ladungen_pflegen(k: Kommandant, echt: float) -> void:
 	for l: Dictionary in ladungen_boden.duplicate():
+		if l.has("bis") and zeit >= float(l["bis"]):
+			_ladung_weg(l)   # 26.11. (Paul): liegt nach ladung_liegt_sek nicht mehr
+			continue
 		if ladungen < int(w("spreng_max")) and k.position.distance_to(l["pos"] as Vector2) <= 0.7 * Werte.ZELLE:
 			ladungen += 1
 			ladungen_boden.erase(l)
@@ -1739,6 +1986,7 @@ func sprengen(z: Vector2i) -> void:
 			(x as Einheit).nimm_schaden(LADUNG_SCHADEN * nemesis.spreng_faktor(x as Einheit))   # 22.11.: Nemesis – sprengfest
 			if not is_instance_valid(x) or (x as Einheit).leben <= 0.0:
 				kills += 1
+				gebiet_zaehlen("kills", 1.0)   # E: wo Brakk stand
 				sabotage["truppen"] = int(sabotage["truppen"]) + 1
 			else:
 				nemesis.sprengung_ueberlebt(x as Einheit)   # 22.11.: Feldbeförderung „Taubes Ohr“
@@ -1997,7 +2245,7 @@ func marschziel(e: Einheit) -> Vector2i:
 	if nr >= 0 and nr < trupps.size():
 		return _trupp_ziel(e, trupps[nr] as Dictionary)
 	if _ist_innen(e):
-		return Karte.KEINE   # 20.11. (Paul): Verteidiger bleiben in der Basis
+		return schildwache.ziel(e) if schildwache != null else Karte.KEINE   # 26.11. (Paul): Streife zu zweit im Schild, Ausfall bei Sicht
 	if phase() == "flucht":
 		return Karte.KEINE
 	return _streifenziel(e)
@@ -2054,7 +2302,7 @@ func _fahrplan_ruht(dt: float) -> void:
 
 ## einheit.gd: Hält eine Truppe am Boden das Feuer auf Brakk zurück? (Herausforderung – nur er, Türme und Stellungen)
 func haelt_feuer(ziel: Node2D) -> bool:
-	return herausforderer != null and herausforderer.sperrt() and ziel == brakk_ziel
+	return herausforderer != null and herausforderer.sperrt() and ziel == brakk_ziel and not (herausforderer.typ != null and herausforderer.typ.feuer_frei())   # C3: beim Verstärkungsruf schießen alle
 
 
 func phase() -> String:
@@ -2071,11 +2319,17 @@ func phase() -> String:
 func phase_text() -> String:
 	if herausforderer != null and herausforderer.laeuft():
 		return tr("Herausforderung")
+	var hq := " · " + tr("HQ %d %%") % floori(100.0 * vorstoss_anteil) if einnahme_sichtbar() else ""   # 26.11. (Paul): Einnahme-Ring
 	if zeit < _elite_zeile_bis:
-		return _phase_name() + " · " + tr("Elitetrupp")
+		return _phase_name() + hq + " · " + tr("Elitetrupp")
 	if taktik != null and zeit < taktik.zeile_bis:
-		return _phase_name() + " · " + taktik.zeile   # 26.11.: Taktik der Jagdwelle
-	return _phase_name()
+		return _phase_name() + hq + " · " + taktik.zeile   # 26.11.: Taktik der Jagdwelle
+	return _phase_name() + hq
+
+
+## 26.11. (Paul): Einnahme des Myriaden-HQ läuft (Ring über dem HQ und „HQ 45 %“ in der Phasenzeile) – bis voll oder 0.
+func einnahme_sichtbar() -> bool:
+	return vorstoss_anteil > 0.0 and vorstoss_anteil < 1.0 and not hq_eingenommen and not myr_hq_besetzt
 
 
 func _phase_name() -> String:
@@ -2124,6 +2378,8 @@ func _ablauf(k: Kommandant) -> void:
 	if herausforderer.sperrt():
 		return   # 26.11. (Paul): Herausforderung – keine Wellen, keine Trupps zu Brakk, kein Vorstoß
 	_hq_aggro(k)
+	if schildwache != null:
+		schildwache.weiter(k)   # 26.11. (Paul): Schildbesatzung – Paare, Ausfall
 	if not jagd and not in_deckung:
 		_alarm_auf_brakk(k)   # 20.11. (Paul): schon vor der Jagd Druck – wer ihn sieht, ruft die Truppen in der Nähe
 	if not jagd:
@@ -2683,7 +2939,7 @@ func _neues_lager() -> void:
 	for y in range(1, Werte.ZEILEN - 1):
 		for x in range(Werte.ZONE_SPALTEN + 3, Werte.SPALTEN - 1):
 			var z := Vector2i(x, y)
-			if not karte.ist_bebaubar(z) or _im_schild(karte.mitte(z)) or karte.ist_basis(z) or _terminal_feld(z):
+			if not karte.ist_bebaubar(z) or _im_schild(karte.mitte(z)) or karte.ist_basis(z) or _terminal_feld(z) or (zuflucht != null and zuflucht.bereich(z)):
 				continue
 			if karte.mitte(z).distance_to(k.position) < 7.0 * Werte.ZELLE or karte.sicht_frei(k.position, karte.mitte(z)):
 				continue
@@ -2792,7 +3048,14 @@ func _vorstoss(echt: float) -> void:
 			_brakk_ahnt = true   # 20.11. (Paul): Brakk merkt, dass am Myriaden-HQ etwas vorgeht
 			funken([["BRAKK", "Moment … was treiben die da am Myriaden-HQ?", ""], ["BRAKK", "Nehmen die es ein, ist meine letzte Zuflucht weg. Das lasse ich nicht zu.", ""]])
 			print("ORDER24 Brakk ahnt den Vorstoß bei %.0f s" % zeit)
-		vorstoss_anteil = minf(1.0, vorstoss_anteil + echt / maxf(1.0, wf("vorstoss_sek")))
+		var tempo := 1.0 / maxf(1.0, wf("vorstoss_sek"))
+		var k: Kommandant = spiel.kommandant
+		if k != null and not k.gefallen and k.position.distance_to(hq) <= VORSTOSS_BRAKK_NAH * Werte.ZELLE:
+			tempo *= VORSTOSS_BRAKK_TEMPO   # 26.11. (Paul): Brakk am HQ drosselt die Einnahme
+		vorstoss_anteil = minf(1.0, vorstoss_anteil + echt * tempo)
+		if vorstoss_anteil >= 0.5 and not _sonde_hq_gemeldet:
+			_sonde_hq_gemeldet = true
+			spiel.melde(tr("Sonde 7: „Sie nehmen dein HQ. Beweg dich.“"), 4.0)
 		if vorstoss_anteil >= 1.0:
 			if geheim:
 				myr_hq_besetzt = true   # im Überläufer-Verlauf: kein zweiter Schild, Brakk kann es zurückholen
@@ -2800,7 +3063,7 @@ func _vorstoss(echt: float) -> void:
 			else:
 				_zweites_hq()
 	else:
-		vorstoss_anteil = maxf(0.0, vorstoss_anteil - echt / maxf(1.0, wf("vorstoss_sek")) * 0.5)
+		vorstoss_anteil = maxf(0.0, vorstoss_anteil - echt / maxf(1.0, wf("vorstoss_sek")) * wf("vorstoss_rueckgang"))
 
 
 ## Das Myriaden-HQ fällt: zweiter Schild (Ringterminal darin unerreichbar), Med-Kits dort weg, zwei Fabriken.
@@ -2861,7 +3124,7 @@ func _zuflucht_legen() -> void:
 	if frei.size() > 0:
 		medkits.append({"zelle": frei[0], "da": true, "knoten": null, "hq": true})
 	if frei.size() > 1:
-		ladungen_boden.append({"pos": karte.mitte(frei[1]), "knoten": null})
+		ladungen_boden.append({"pos": karte.mitte(frei[1]), "knoten": null, "bleibt": true})   # 26.11.: wartet auf Brakk, verfällt nicht
 	# 20.11. (Paul): der Heilturm steht in der Myriaden-Zone (innerhalb ihres Schilds), nah am HQ – nicht am Rand
 	var zone_beste := INF
 	for y in range(1, Werte.ZEILEN - 1):
@@ -2980,6 +3243,9 @@ var hq_schild_aus := false
 var tc_hq_leben := 0.0
 var geheim_sieg := false
 var _cp_brakk: Array[float] = [0.0, 0.0]
+var _cp_f := false                # 26.11. (Paul): [F] am Checkpoint gehalten
+const CP_HALTEN_SEK := 3.0        # 26.11. (Paul): so lange [F] am Checkpoint halten
+const CP_FARBE := Color("ff9a3d") # Orange wie die Myriaden-Flagge am Checkpoint
 var _cp_takt := 0.0
 
 
@@ -3042,20 +3308,23 @@ func _geheim_pflegen(k: Kommandant, echt: float) -> void:
 		spiel.budget += int(w("geheim_einkommen"))
 		if not myr_hq_besetzt:
 			_myr_welle()
-	# Brakk nimmt Checkpoints ein (er gehört jetzt zu den Myriaden)
+	# Brakk nimmt Checkpoints ein (er gehört jetzt zu den Myriaden) – 26.11. (Paul): [F] am Checkpoint CP_HALTEN_SEK halten
+	if _cp_f and cp_vor_brakk(k) < 0:
+		_cp_f = false   # weggegangen
 	for i in karte.checkpoints.size():
 		var cp: Vector2i = karte.checkpoints[i]
 		if karte.cp_feind[i]:
 			_cp_brakk[i] = 0.0
 			continue
-		if karte.zelle_bei(k.position).distance_to(cp) <= 1.0 and not _technoclan_nah(karte.mitte(cp), 2.0):
+		if _cp_f and karte.zelle_bei(k.position).distance_to(cp) <= 1.0 and not _technoclan_nah(karte.mitte(cp), 2.0):
 			_cp_brakk[i] += echt
-			if _cp_brakk[i] >= Werte.EINNAHME_SEK:
+			if _cp_brakk[i] >= CP_HALTEN_SEK:
 				_cp_brakk[i] = 0.0
-				spiel.checkpoint_erreicht(i)
-				spiel.melde("Checkpoint %d eingenommen." % (i + 1), 3.0)
+				_cp_f = false
+				spiel.checkpoint_erreicht(i)   # wird orange und wirkt wie ein Myriaden-Checkpoint im Normalspiel
+				spiel._einblendung.banner(tr("CHECKPOINT %d") % (i + 1), tr("Checkpoint für die Myriaden"), CP_FARBE)
 		else:
-			_cp_brakk[i] = maxf(0.0, _cp_brakk[i] - echt)
+			_cp_brakk[i] = 0.0 if not _cp_f else maxf(0.0, _cp_brakk[i] - echt)
 	# Der Technoclan holt verlorene Checkpoints zurück: die nächsten Truppen am Boden laufen hin
 	_cp_takt -= echt
 	if _cp_takt <= 0.0:
@@ -3089,6 +3358,22 @@ func _geheim_pflegen(k: Kommandant, echt: float) -> void:
 				spiel.melde("Myriaden-HQ zurückerobert – die Fabriken laufen wieder.", 4.0)
 		else:
 			_myr_rueck = maxf(0.0, _myr_rueck - echt)
+
+
+## 26.11. (Paul): Checkpoint, den Brakk im Überläufer-Verlauf gerade mit [F] einnehmen kann (-1 = keiner in 1 Feld).
+func cp_vor_brakk(k: Kommandant) -> int:
+	if not geheim or k == null or k.gefallen:
+		return -1
+	var hier := karte.zelle_bei(k.position)
+	for i in karte.checkpoints.size():
+		if not karte.cp_feind[i] and hier.distance_to(karte.checkpoints[i]) <= 1.0:
+			return i
+	return -1
+
+
+## main.fernziel / naechste_bodeneinheit: im Überläufer-Verlauf ist Brakk kein Ziel der Myriaden.
+func kein_gegner_ziel(e: Einheit) -> bool:
+	return geheim and e == spiel.kommandant
 
 
 func _technoclan_nah(p: Vector2, felder: float) -> bool:
@@ -3302,6 +3587,13 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 					spiel.melde(grund, 2.0)
 			return true
 		"F":
+			if geheim and gedrueckt and cp_vor_brakk(spiel.kommandant) >= 0:
+				_cp_f = true   # 26.11. (Paul): Checkpoint für die Myriaden einnehmen
+				return true
+			if not gedrueckt and _cp_f:
+				_cp_f = false
+				_cp_brakk.fill(0.0)   # losgelassen: von vorn
+				return true
 			if gedrueckt:
 				return sabotage_start()
 			if not sabo.is_empty():
@@ -3316,7 +3608,7 @@ func _male_lichtmenue(bild: Control, g: Vector2, Stil: GDScript) -> void:
 		["[1]", "Myriaden-Fabrik bauen (%d) – nur in der Zone am Myriaden-HQ" % myr_preis()],
 		["[C]", "Ringfeld werfen – der Ring bestimmt, welche Myriaden die Fabrik schickt"],
 		["W", "alle %d s zieht eine Welle über die Checkpoints zur Technoclan-Basis" % int(w("myr_takt"))],
-		["CP", "beide Checkpoints %d s halten – dann fällt der Schild des Technoclan-HQ" % int(w("geheim_cp_sek"))],
+		["CP", "[F] am Checkpoint halten, dann beide %d s halten – der Schild des Technoclan-HQ fällt" % int(w("geheim_cp_sek"))],
 	]
 	var breite := minf(g.x - 32.0, 620.0)
 	var r := Rect2((g.x - breite) / 2.0, g.y * 0.22, breite, 34.0 + zeilen.size() * 24.0)
@@ -3430,9 +3722,25 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	# 25.11. (Paul): Hologramm-Tafeln – Elite-Auftritt, Feldbeförderung, Vertreibung, Wiedersehen (das Spiel läuft weiter)
 	y += tafeln.male(bild, m.x, y)
 	_male_bergungen(bild, g, ego, Stil)
+	if herausforderer != null and herausforderer.anvisiert != Vector2.INF and ego != null:
+		# C2: er zielt auf Brakk – Warnung mit Pfeil, der in seine Richtung zeigt (oben = vor Brakk)
+		var zu := herausforderer.anvisiert - ego._fuss2d()
+		var w := Vector2(-sin(ego.gier), -cos(ego.gier)).angle_to(zu)
+		var puls := Color(Color("ff3b3b"), 0.75 + 0.25 * sin(float(Time.get_ticks_msec()) / 60.0))
+		Stil.schreibe_mittig(bild, Vector2(m.x, y + 4.0), tr("ANVISIERT"), 26, puls)
+		var p := Vector2(m.x, y + 40.0)
+		var spitze := Vector2(0, -16).rotated(w)
+		bild.draw_colored_polygon(PackedVector2Array([p + spitze, p + spitze.rotated(2.5) * 0.7, p + spitze.rotated(-2.5) * 0.7]), puls)
+		y += 62.0
 	if herausforderer != null and herausforderer.saeule_ueber_brakk():
 		Stil.schreibe_mittig(bild, Vector2(m.x, y + 4.0), "Lichtsäule über dir – raus aus dem Kreis!", 22, Color(Color("d6b3ff"), 0.7 + 0.3 * sin(float(Time.get_ticks_msec()) / 70.0)))
 		y += 28.0
+	if zuflucht != null and zuflucht.hud_zeile() != "":
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), zuflucht.hud_zeile(), 18, BrakkZuflucht.KREUZ)   # E4
+		y += 22.0
+	if herausforderer != null and herausforderer.typ != null and herausforderer.zustand == "duell" and herausforderer.typ.hud_zeile() != "":
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), herausforderer.typ.hud_zeile(), 18, Color("9dff8a"))   # C2: z. B. im Gel
+		y += 22.0
 	if herausforderer != null and herausforderer.gel_rest > 0.0:
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Gebremst – Vergeltung mit dem Gelring", 16, Color("c9a2ff"))
 		y += 20.0
@@ -3453,6 +3761,21 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 		bild.draw_rect(r, Color("ff5a6e"), false, 1.5)
 		Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), "Sabotage – [F] halten", 14, Color.WHITE)
 		y += 24.0
+	elif cp_vor_brakk(k) >= 0:   # 26.11. (Paul): Überläufer – Checkpoint mit [F] einnehmen
+		var i := cp_vor_brakk(k)
+		if _technoclan_nah(karte.mitte(karte.checkpoints[i]), 2.0):
+			Stil.schreibe_mittig(bild, Vector2(m.x, y), tr("Technoclan am Checkpoint – erst freikämpfen"), 16, Color("ff9a3d"))
+			y += 20.0
+		elif _cp_f:
+			var r := Rect2(m.x - 120.0, y - 8.0, 240.0, 16.0)
+			bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.8))
+			bild.draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(float(_cp_brakk[i]) / CP_HALTEN_SEK, 0.0, 1.0), r.size.y)), Color(CP_FARBE, 0.85))
+			bild.draw_rect(r, CP_FARBE, false, 1.5)
+			Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), tr("Checkpoint – [F] halten"), 14, Color.WHITE)
+			y += 24.0
+		else:
+			Stil.schreibe_mittig(bild, Vector2(m.x, y), tr("[F] halten: Checkpoint für die Myriaden"), 16, CP_FARBE)
+			y += 20.0
 	elif k != null and fabrik_an_rueckseite(k.position) != Karte.KEINE:
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), "[F] halten: Fabrik sabotieren", 16, Stil.GOLD)
 		y += 20.0
@@ -3600,6 +3923,11 @@ func _3d_pflegen() -> void:
 			_kasten3d(kn, Vector3(0.32, 0.04, 0.06), Color("ffe14d"), Vector3(0, 0.19, 0))
 			l["knoten"] = kn
 		(l["knoten"] as Node3D).rotation.y = float(t_ms % 4000) / 4000.0 * TAU
+		if l.has("bis"):   # 26.11. (Paul): in der letzten LADUNG_AUSBLENDEN-Sekunde ausblenden
+			var a := clampf((float(l["bis"]) - zeit) / LADUNG_AUSBLENDEN, 0.0, 1.0)
+			for m: Node in (l["knoten"] as Node3D).get_children():
+				if m is GeometryInstance3D:
+					(m as GeometryInstance3D).transparency = 1.0 - a
 	var hoch: float = hd.H
 	for zu: Dictionary in zuender:
 		if zu["knoten"] == null:
@@ -3612,6 +3940,7 @@ func _3d_pflegen() -> void:
 	_fabrik_balken_pflegen(hd)
 	_beute_3d(hd)
 	_sabotage_3d(hd)
+	_einnahme_3d(hd)
 	for z: Vector2i in kern_aus:
 		if not _qualm3d.has(z):
 			_qualm3d[z] = _kasten3d(hd, Vector3(0.5, 0.5, 0.5), Color("50505a"), Vector3(float(z.x) + 0.5, hoch + 1.0, float(z.y) + 0.5))
@@ -3794,10 +4123,14 @@ func bericht(sieg: bool) -> Dictionary:
 		(b["hoehepunkte"] as Array).append(["Überläufer: Myriaden-Fabriken", str(myr_fabriken.size())])
 	if herausforderer != null and (not herausforderer.zeiten.is_empty() or not herausforderer.ergebnisse.is_empty()):
 		b["herausforderer"] = herausforderer.ergebnisse.duplicate()   # 26.11.: je Duell [Name, Ausgang]; leer = nicht gestellt
+		b["sonde"] = herausforderer.sonde_vertrieben   # C3: Sonde 7 steht im Hangar auf dem Podest
 	if nemesis != null:
 		b["nemesis"] = nemesis.lauf_liste()   # 22.11. (Teil 7): Feldbeförderungen, Vertriebene, Ausgeschaltete
+		b["aufstiege"] = nemesis.aufstiege()   # C1: im Hangar treten sie vor
 		if not sieg:
 			b["nemesis_tod"] = nemesis.tod_bericht()   # Deathscreen „Erledigt von …“ (leer: kein Soldat – bisheriger Schluss)
+	if bool(w("gebiete")):
+		b["gebiete"] = gebiet_zahlen.duplicate(true)   # E: Kills und Schaden je Gebiet
 	return b
 
 
@@ -3833,6 +4166,7 @@ class BrakkZiel extends Gegner:
 				if o24.herausforderer != null:
 					anteil *= o24.herausforderer.treffer_mal(menge)   # Vergeltung mit einem Ring
 			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * anteil
+			o24.gebiet_zaehlen("schaden", menge * anteil)   # E: je Gebiet
 			var vor := k.leben
 			k.nimm_schaden(menge * anteil)
 			# 22.11. (Paul): Nemesis – der Schütze steht hinter „#“ in der Quelle (Einheit._auf_brakk)

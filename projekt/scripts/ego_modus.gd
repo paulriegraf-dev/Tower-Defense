@@ -824,6 +824,10 @@ func _process(delta: float) -> void:
 
 
 func _gehen(dt: float) -> void:
+	if spiel.order24 != null and spiel.order24.herausforderer != null and spiel.order24.herausforderer.gebunden_rest > 0.0:
+		_geht = false   # C2 (26.11.): vom Anker des Technogunners herangezogen – kurz bewegungsunfähig
+		brakk._sprite.bewegt(false)
+		return
 	var r := Vector2.ZERO
 	if Input.is_physical_key_pressed(KEY_W):
 		r.y += 1.0
@@ -860,6 +864,8 @@ func _schritt(s: Vector2) -> void:
 	if s == Vector2.ZERO:
 		return
 	var neu := _fuss2d() + s
+	if spiel.order24 != null and spiel.order24.lichtwand_schnitt(_fuss2d(), neu) != Vector2.INF:
+		return   # C1 (26.11.): die Lichtwand des Kampfplatzes ist nicht durchschreitbar
 	if brakk.oben:
 		var z := karte.zelle_bei(neu)
 		if hd.ist_hoch(z):
@@ -974,6 +980,11 @@ func _verstecke() -> void:
 ## `ohne`: dieses Feld hält nicht auf (die Fabrik, auf die gerade geprüft wird).
 func _strahl_bis(von: Vector3, r: Vector3, weite: float, ohne: Vector2i = Karte.KEINE) -> float:
 	var eigene := karte.zelle_bei(_fuss2d()) if brakk.oben else Karte.KEINE
+	if spiel.order24 != null:   # C1 (26.11.): die Lichtwand des Kampfplatzes fängt Schüsse, Fadenkreuz, Treppe und Anker
+		var wand: Vector2 = spiel.order24.lichtwand_schnitt(_zu2d(von), _zu2d(von + r * weite))
+		var flach := Vector2(r.x, r.z).length()
+		if wand != Vector2.INF and flach > 0.001:
+			weite = minf(weite, wand.distance_to(_zu2d(von)) / Werte.ZELLE / flach)
 	var t := 0.0
 	while t < weite:
 		var p := von + r * t
@@ -2002,6 +2013,8 @@ func _male_minikarte() -> void:
 		ci.draw_rect(Rect2(o + Vector2(z) * zelle, Vector2(zelle, zelle)), f)
 	if karte.basis != Karte.KEINE:
 		ci.draw_rect(Rect2(o + Vector2(karte.basis) * zelle, Vector2(zelle, zelle)), LICHT)
+	if spiel.order24 != null:
+		spiel.order24.minikarte(ci, o, zelle)   # E4 (26.11.): Felsen und Zufluchten
 	var k := zelle / float(Werte.ZELLE)
 	for gg: Gegner in spiel.ego_gegner():
 		if is_instance_valid(gg) and not gg._tot:
@@ -3653,6 +3666,8 @@ func _saeule_bestaetigen(punkt: Vector2 = Vector2.INF, richtung: Vector2 = Vecto
 	_saeule_ziel = p
 	_saeule_t = 0.0
 	_zaehle("saeulen")
+	if spiel.order24 != null:
+		spiel.order24.brakk_aktion("saeule")   # C2 (26.11.): der Technogunner kennt den Trick ab der dritten
 	_saeule_rest = SAEULE_ABKLING
 	_saeule_blick = richtung if richtung != Vector2.ZERO else _blick2d()
 	_hand_zeigen = maxf(_hand_zeigen, SAEULE_VORLAUF + 0.3)   # Brakk wirbelt mit dem Finger, bis die Säule einschlägt

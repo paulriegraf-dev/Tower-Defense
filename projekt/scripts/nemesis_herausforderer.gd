@@ -16,7 +16,7 @@ var naechste := 0                # Index in zeiten
 var zustand := "ruhe"            # "ruhe", "angesagt", "duell"
 var einheit: Einheit = null
 var person: Dictionary = {}
-var vorher: Dictionary = {}      # der Herausforderer davor (kommt wieder, wenn er geborgen wurde)
+var vorher: Dictionary = {}      # der Herausforderer davor – C1: er und seine Truppenart kommen in diesem Lauf nicht wieder
 var seit := 0.0                  # so lange läuft das Duell (Sekunden)
 var protokoll: Array = []        # Prüfung: {"was", "bei", …}
 var ergebnisse: Array = []       # für den Bericht: je [Name, "vertrieben" | "gesiegt"]
@@ -43,6 +43,18 @@ var _vergeltung_in := 12.0
 var marke_rest := 0.0            # Zielring: Brakk ist markiert
 var gel_rest := 0.0              # Gelring: Brakk ist gebremst
 var _marke: Node3D = null        # Vorschau der kopierten Lichtsäule
+## C1 (26.11., Paul): Kampfplatz und Auftritt als Sequenz
+var kampfplatz: BrakkKampfplatz = null
+var einzug := {}                 # er kommt von außen: {"teil": "lauf"|"sprung"|"ladung"|"durch", "t", "vor", "wall", "drinnen", "weg"}
+var _aufbau_versucht := false
+var _drohne: Drohne = null       # Erscheinungsmusik (Platzhalter)
+## C2 (26.11., Paul): Bosstyp nach Truppenart (nemesis_boss*.gd)
+var typ: NemesisBoss = null
+var anvisiert := Vector2.INF     # er zielt auf Brakk (HUD „ANVISIERT“ mit Richtungspfeil): von hier
+var gebunden_rest := 0.0         # Brakk ist vom Anker des Technogunners gebunden (kann nicht gehen)
+var saeulen := 0                 # Brakks Lichtsäulen in diesem Lauf
+var sonde_vertrieben := false    # C3: Sonde 7 trat selbst an und wurde vertrieben (Bericht, Hangar)
+var sonde_erzwingen := false     # Prüfung: zu Minute 14 sicher Sonde 7
 
 
 func einrichten(p_nem: Nemesis) -> void:
@@ -50,6 +62,9 @@ func einrichten(p_nem: Nemesis) -> void:
 	o24 = nem.o24
 	spiel = nem.spiel
 	zeiten = Werte.HERAUSFORDERER_ZEITEN.duplicate() if bool(o24.w("herausforderer")) else []
+	kampfplatz = BrakkKampfplatz.new()
+	add_child(kampfplatz)
+	kampfplatz.einrichten(o24)
 
 
 ## Steht er gerade und ruht deshalb der Fahrplan? (nach HERAUSFORDERER_PAUSE_MAX s nicht mehr)
@@ -74,6 +89,9 @@ func weiter(dt: float) -> void:
 			if naechste < zeiten.size() and not o24.geheim and o24.zeit >= float(zeiten[naechste]) - Werte.HERAUSFORDERER_ANSAGE_SEK:
 				_ansagen()
 		"angesagt":
+			if not _aufbau_versucht and o24.zeit >= float(zeiten[naechste]) - Werte.HERAUSFORDERER_ANSAGE_SEK + Werte.KAMPFPLATZ_RAEUM_VERZUG:
+				_aufbau_versucht = true
+				kampfplatz.aufbauen(o24.karte.zelle_bei(kampfplatz._fuss()))
 			if o24.zeit >= float(zeiten[naechste]):
 				_auftritt()
 		"duell":
@@ -90,15 +108,31 @@ func _ansagen() -> void:
 	protokoll.append({"was": "ansage", "bei": o24.zeit})
 	spiel.melde("Sonde 7: „Da kommt einer allein. Er will dich.“", 6.0)
 	Ton.spiele(spiel, "alert", -2.0)
-	Musik.duell(spiel.get_tree(), true)
+	Musik.duell(spiel.get_tree(), true)   # C1: Musik aus (HERAUSFORDERER_MUSIK_DB) …
+	_aufbau_versucht = false
+	_drohne_aus(0.1)
+	_drohne = Drohne.new()                # … dafür die Erscheinungsmusik
+	add_child(_drohne)
+
+
+## C1: Tritt zu Minute 14 Sonde 7 selbst an? (SONDE_BOSS_CHANCE; nur beim zweiten Termin)
+func sonde_zieht() -> bool:
+	return naechste >= 1 and (sonde_erzwingen or randf() < Werte.SONDE_BOSS_CHANCE)
 
 
 func _auftritt() -> void:
-	var p := nem.herausforderer_waehlen(vorher)
+	var p: Dictionary = {}
+	if sonde_zieht():
+		protokoll.append({"was": "sonde_gezogen", "bei": o24.zeit})
+		p = Nemesis.sonde_person()   # C3: Sonde 7 selbst
+	else:
+		p = nem.herausforderer_waehlen(vorher)
 	if p.is_empty():
 		zustand = "ruhe"
 		naechste += 1
 		Musik.duell(spiel.get_tree(), false)
+		kampfplatz.aufloesen(null, "bleibt")   # niemand kam: zurück zur Karte, Brakk bleibt, wo er ist
+		_drohne_aus(1.0)
 		return
 	person = p
 	# steht er schon im Feld (oder liegt er dort), verschwindet er dort und kommt allein per Beam
@@ -111,14 +145,23 @@ func _auftritt() -> void:
 	var quelle := _fabrik_fuer(str(p["art"]))
 	var e := o24._neue_truppe(str(p["art"]), quelle, 4)
 	p["geborgen"] = false   # er tritt ausgeruht an
-	nem.einkleiden(e, p)
+	if not ist_sonde():
+		nem.einkleiden(e, p)
 	einheit = e
 	# 26.11. (Paul): feste Werte – Rangbonus, „zäh“ und Narben zählen hier nicht
 	var k: Kommandant = spiel.kommandant
-	e.max_leben = Werte.HERAUSFORDERER_LEBEN_MAL * k.max_leben
+	typ = NemesisBoss.fuer("sonde" if ist_sonde() else str(p["art"]), self)   # C2, C3
+	typ.einrichten_figur(e)
+	e.max_leben = Werte.HERAUSFORDERER_LEBEN_MAL * k.max_leben * typ.leben_mal()
 	e.leben = e.max_leben
-	var ort := ankunft()
-	e.position = o24.karte.mitte(ort)
+	# C1: Steht der Kampfplatz, beamt er vor einem Randwall herein und kommt von außen; sonst wie bisher vor Brakk.
+	einzug = _zugang() if kampfplatz.aktiv() else {}
+	if not einzug.is_empty():
+		e.position = o24.karte.mitte(einzug["start"] as Vector2i)
+	elif kampfplatz.aktiv():
+		e.position = o24.karte.mitte(kampfplatz._frei_innen(kampfplatz.mitte + Vector2i(0, -3)))
+	else:
+		e.position = o24.karte.mitte(ankunft())
 	e.halt = true            # ab jetzt steuert ihn diese Datei
 	e.zustand = Einheit.Zustand.BODEN
 	e._punkte.clear()
@@ -150,14 +193,21 @@ func _auftritt() -> void:
 	p["duell"] = {"abstand": kennwerte["abstand"], "je_min": kennwerte["je_min"], "seite": kennwerte["seite"], "wall": kennwerte["wall"]}   # für die Karte
 	_gefecht_raeumen()
 	_beam_an(e.position)
-	var faehig := PackedStringArray(NemesisFaehigkeiten.von_person(p).map(func(f: Variant) -> String: return NemesisFaehigkeiten.name_von(str(f))))
-	o24.tafeln.zeige({"art": "herausforderer", "titel": Nemesis.name_mit_titel(p), "zeilen": [
-		"%s · %s" % [str(Nemesis.ART_TEXT.get(str(p["art"]), "")), " · ".join(faehig) if not faehig.is_empty() else "—"],
-		tr("Er will dich. Allein.")], "rechts": Nemesis.bilanz_text(p).trim_prefix("Stand "), "farbe": Nemesis.umriss_farbe(p),
-		"sek": Werte.HERAUSFORDERER_TAFEL_SEK, "pause": 0.3})
+	if ist_sonde():   # C3: ihr eigenes Banner
+		o24.tafeln.zeige({"art": "herausforderer", "titel": Nemesis.name_mit_titel(p), "zeilen": [tr("Befehl 24 – ich übernehme selbst.")],
+			"rechts": "", "farbe": NemesisBossSonde.CYAN, "sek": Werte.HERAUSFORDERER_TAFEL_SEK, "pause": 0.3})
+	else:
+		var faehig := PackedStringArray(NemesisFaehigkeiten.von_person(p).map(func(f: Variant) -> String: return NemesisFaehigkeiten.name_von(str(f))))
+		o24.tafeln.zeige({"art": "herausforderer", "titel": Nemesis.name_mit_titel(p), "zeilen": [
+			"%s · %s" % [str(Nemesis.ART_TEXT.get(str(p["art"]), "")), " · ".join(faehig) if not faehig.is_empty() else "—"],
+			tr("Er will dich. Allein.")], "rechts": Nemesis.bilanz_text(p).trim_prefix("Stand "), "farbe": Nemesis.umriss_farbe(p),
+			"sek": Werte.HERAUSFORDERER_TAFEL_SEK, "pause": 0.3})
 	protokoll.append({"was": "auftritt", "bei": o24.zeit, "name": Nemesis.voller_name(p),
-		"abstand": e.position.distance_to(spiel.kommandant.position) / Werte.ZELLE})
-	nem._chronik(p, "fordert Brakk heraus")
+		"abstand": e.position.distance_to(spiel.kommandant.position) / Werte.ZELLE, "einzug": not einzug.is_empty()})
+	if not ist_sonde():
+		nem._chronik(p, "fordert Brakk heraus")
+	if einzug.is_empty() and kampfplatz.aktiv():
+		_drin()   # kein Zugang von außen: er steht schon drin
 
 
 ## Duell vorbei: `wie` = "vertrieben" (er liegt) oder "gesiegt" (Brakk liegt).
@@ -174,7 +224,13 @@ func ende(wie: String) -> void:
 	Musik.duell(spiel.get_tree(), false)
 	angriff = {}
 	_aktion = {}
+	einzug = {}
+	# C1: nach der Bergung zurück zur normalen Karte, Brakk ans Myriaden-HQ; fällt Brakk, ist der Lauf vorbei (sofort)
+	kampfplatz.aufloesen(einheit if wie == "vertrieben" and einheit != null and is_instance_valid(einheit) else null, "sofort" if wie == "gesiegt" else "hq")
+	_drohne_aus(1.0)
 	vergeltung_aus()
+	if typ != null:
+		typ.ende()   # C2: Stellungen, Bunker, Gel- und Brandflächen weg
 	marke_rest = 0.0
 	gel_rest = 0.0
 	_marke_weg()
@@ -199,7 +255,7 @@ func quelle() -> String:
 
 ## Felder je echter Sekunde: Brakks Lauftempo in der Ego-Sicht, etwas schneller.
 func tempo() -> float:
-	return EgoModus.TEMPO * float((Werte.ANFUEHRER_EGO["brakk"] as Dictionary)["tempo"]) * Werte.HERAUSFORDERER_TEMPO_MAL
+	return EgoModus.TEMPO * float((Werte.ANFUEHRER_EGO["brakk"] as Dictionary)["tempo"]) * Werte.HERAUSFORDERER_TEMPO_MAL * (typ.tempo_mal() if typ != null else 1.0)
 
 
 ## Er liegt: kurze Zeitlupe, der Ring fällt sofort, Banner. Danach läuft alles wie sonst – [E] halten schaltet ihn
@@ -210,13 +266,24 @@ func _besiegt() -> void:
 	if spiel.ego != null:
 		spiel.ego.kurze_lupe(Werte.HERAUSFORDERER_ENDE_LUPE_SEK)
 	o24.beute_legen_herausforderer(einheit.position)
-	o24.tafeln.zeige({"art": "herausforderer", "titel": tr("Herausforderer vertrieben"), "zeilen": [Nemesis.name_mit_titel(person)],
-		"farbe": Color("7fe0ff"), "sek": Werte.HERAUSFORDERER_TAFEL_SEK, "pause": 0.3})
+	if ist_sonde():
+		sonde_vertrieben = true   # C3: Bericht und Hangar zeigen sie auf dem Podest
+	o24.tafeln.zeige({"art": "herausforderer", "titel": tr("Sonde 7 vertrieben") if ist_sonde() else tr("Herausforderer vertrieben"),
+		"zeilen": [Nemesis.name_mit_titel(person)], "farbe": Color("7fe0ff"), "sek": Werte.HERAUSFORDERER_TAFEL_SEK, "pause": 0.3})
+
+
+## C3: Tritt gerade (oder trat zuletzt) Sonde 7 selbst an?
+func ist_sonde() -> bool:
+	return bool(person.get("sonde", false))
 
 
 ## Brakk ist gefallen, während er stand: Er hat das Duell gewonnen (auch wenn ein Turm den letzten Treffer gab).
 func brakk_faellt() -> void:
 	if zustand != "duell" or person.is_empty():
+		return
+	if ist_sonde():
+		nem.erledigt_info["duell"] = true   # C3: Sonde 7 steht in keiner Liste – kein Rang, keine Chronik
+		ende("gesiegt")
 		return
 	if nem.erledigt_von != person:
 		var pl: Dictionary = person["lauf"]
@@ -314,6 +381,155 @@ func _beam_an(pos: Vector2) -> void:
 
 
 
+# ------------------------------------------------------------------ Einzug in den Kampfplatz (C1)
+
+## Woher er kommt: ein Randwall neben einer Lücke (vor ihm und dahinter frei), am liebsten in Brakks Blickrichtung.
+## Er beamt KAMPFPLATZ_ANMARSCH Felder davor herein. {} = kein Zugang.
+func _zugang() -> Dictionary:
+	var karte: Karte = o24.karte
+	var kp := kampfplatz
+	var k: Kommandant = spiel.kommandant
+	var blick := Vector2.RIGHT
+	if spiel.ego != null:
+		blick = Vector2(-sin(spiel.ego.gier), -cos(spiel.ego.gier))
+	var beste := {}
+	var wert := -INF
+	for s: String in BrakkKampfplatz.SEITEN:
+		var raus := BrakkKampfplatz.aussen(s)
+		var quer := Vector2i(absi(raus.y), absi(raus.x))   # entlang der Seite
+		var lu := BrakkKampfplatz.luecke(s)
+		for wall_r: Vector2i in [lu[0] - quer, lu[lu.size() - 1] + quer]:
+			var wall := kp.mitte + wall_r
+			var vor := wall + raus
+			var drinnen := wall - raus
+			if karte.inhalt(wall) != Karte.WALL or not kp.gesetzt.has(wall) or not _frei(vor) or not _frei(drinnen):
+				continue
+			var start := o24._freies_feld_bei(karte.mitte(wall + raus * Werte.KAMPFPLATZ_ANMARSCH), vor)
+			var weg := karte.einheiten_weg(start, vor)
+			if start != vor and weg.is_empty():
+				continue
+			var w := blick.dot((karte.mitte(wall) - k.position).normalized()) + randf() * 0.6
+			if w > wert:
+				wert = w
+				beste = {"teil": "lauf", "t": 0.0, "start": start, "vor": vor, "wall": wall, "drinnen": drinnen, "weg": weg}
+	return beste
+
+
+func _frei(z: Vector2i) -> bool:
+	return o24.karte.in_karte(z) and o24.karte.ist_begehbar(z) and o24.karte.ist_frei(z)
+
+
+## Er läuft zum Randwall, dann springt er darüber oder sprengt ihn (je zur Hälfte). Drinnen schließt sich die Lichtwand.
+func _einzug_weiter(dt: float) -> void:
+	var karte: Karte = o24.karte
+	einzug["t"] = float(einzug["t"]) + dt
+	var t := float(einzug["t"])
+	match str(einzug["teil"]):
+		"lauf":
+			var ziel := karte.mitte(einzug["vor"] as Vector2i)
+			var weg: Array = einzug["weg"]
+			var rest := tempo() * Werte.ZELLE * dt
+			while rest > 0.0 and not weg.is_empty():
+				var p := karte.mitte(weg[0] as Vector2i)
+				var d := einheit.position.distance_to(p)
+				if d <= rest:
+					einheit.position = p
+					weg.pop_front()
+					rest -= d
+				else:
+					einheit.position = einheit.position.move_toward(p, rest)
+					rest = 0.0
+			einheit._sprite.bewegt(true)
+			if weg.is_empty() or t >= Werte.KAMPFPLATZ_ANMARSCH_MAX:
+				einheit.position = ziel
+				einzug["t"] = 0.0
+				if randf() < 0.5:
+					einzug["teil"] = "sprung"
+					_aktion = {"art": "sprung", "t": 0.0, "sek": Werte.KAMPFPLATZ_SPRUNG_SEK, "von": ziel, "nach": karte.mitte(einzug["drinnen"] as Vector2i), "hoch": Werte.KAMPFPLATZ_SPRUNG_HOCH}
+				else:
+					einzug["teil"] = "ladung"
+					einheit._sprite.bewegt(false)
+					einheit._sprite.angriff(Werte.KAMPFPLATZ_SPRENG_ANSAGE)
+					spiel.effekte.warnung(karte.mitte(einzug["wall"] as Vector2i), Werte.KAMPFPLATZ_SPRENG_ANSAGE * Werte.BRAKK_TEMPO)
+					Ton.am_ort(spiel, "tc-arc", einheit.position)
+				protokoll.append({"was": "einzug_" + str(einzug["teil"]), "bei": o24.zeit})
+		"ladung":
+			if int(t * 6.0) != int((t - dt) * 6.0):   # die Ladung blinkt
+				(spiel.brakk_geschosse as BrakkGeschosse).aufblitzen(karte.mitte(einzug["wall"] as Vector2i), Color("ff3b3b"))
+			if t >= Werte.KAMPFPLATZ_SPRENG_ANSAGE:
+				kampfplatz.sprengen(einzug["wall"] as Vector2i)
+				einzug["teil"] = "durch"
+				_aktion = {"art": "lauf", "t": 0.0, "sek": 0.6, "von": einheit.position, "nach": karte.mitte(einzug["drinnen"] as Vector2i)}
+		"sprung", "durch":
+			_aktion_weiter(dt)
+			if _aktion.is_empty():
+				_drin()
+
+
+## Er ist drin: Die Lichtwand schließt sich, der Kampf beginnt.
+func _drin() -> void:
+	einzug = {}
+	_aktion = {}
+	_weg.clear()
+	einheit.set_meta("hebt_ab", 0.0)
+	einheit._sprite.bewegt(false)
+	_bis_angriff = Werte.HERAUSFORDERER_ERSTER_ANGRIFF
+	kampfplatz.licht_an()
+	_drohne_aus(3.0)
+	protokoll.append({"was": "drin", "bei": o24.zeit, "innen": kampfplatz.innen_px(einheit.position)})
+
+
+func _drohne_aus(sek: float) -> void:
+	if _drohne != null and is_instance_valid(_drohne):
+		_drohne.aus(sek)
+	_drohne = null
+
+
+## Erscheinungsmusik (Platzhalter, bis das Ton-Paket ein eigenes Stück bringt): ein tiefer Drone aus drei Sinustönen,
+## der in 2 s anschwillt und langsam pulsiert. Lautstärke wie die Musik.
+class Drohne extends AudioStreamPlayer:
+	const RATE := 22050.0
+	const TOENE := [55.0, 82.4, 110.6]
+	const ANTEIL := [0.5, 0.3, 0.15]
+	var _phase := [0.0, 0.0, 0.0]
+	var _t := 0.0
+	var _aus := -1.0
+	var _aus_sek := 1.0
+
+	func _ready() -> void:
+		var g := AudioStreamGenerator.new()
+		g.mix_rate = RATE
+		g.buffer_length = 0.3
+		stream = g
+		volume_db = -4.0 + Musik.prozent_db(Werte.musik)
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		play()
+
+	func aus(sek: float) -> void:
+		_aus = 0.0
+		_aus_sek = maxf(0.05, sek)
+
+	func _process(delta: float) -> void:
+		if _aus >= 0.0:
+			_aus += delta
+			if _aus >= _aus_sek:
+				queue_free()
+				return
+		var pb := get_stream_playback() as AudioStreamGeneratorPlayback
+		if pb == null:
+			return
+		for i in mini(pb.get_frames_available(), 4096):
+			_t += 1.0 / RATE
+			var pegel := clampf(_t / 2.0, 0.0, 1.0) * (1.0 - clampf(_aus / _aus_sek, 0.0, 1.0) if _aus >= 0.0 else 1.0)
+			var s := 0.0
+			for j in 3:
+				_phase[j] = fmod(float(_phase[j]) + TAU * float(TOENE[j]) / RATE, TAU)
+				s += sin(float(_phase[j])) * float(ANTEIL[j])
+			s *= pegel * (0.75 + 0.25 * sin(_t * TAU * 0.5)) * 0.4
+			pb.push_frame(Vector2(s, s))
+
+
+
 # ------------------------------------------------------------------ Er spielt wie Brakk (Punkt 4)
 
 func _physics_process(_takt: float) -> void:
@@ -334,16 +550,28 @@ func schritt(dt: float) -> void:
 	var k: Kommandant = spiel.kommandant
 	if k == null or k.gefallen or einheit == null or not is_instance_valid(einheit) or einheit.kampfunfaehig:
 		return
+	if not einzug.is_empty():
+		einheit.halt = true
+		_einzug_weiter(dt)
+		_aussehen(k)
+		return
+	if kampfplatz.zu() and _aktion.is_empty() and not kampfplatz.innen_px(einheit.position):
+		einheit.position = o24.karte.mitte(kampfplatz._frei_innen(o24.karte.zelle_bei(einheit.position)))   # C1: geschoben – zurück hinein
 	_ausweich_rest -= dt
 	_wall_abkling -= dt
 	_aktion_in -= dt   # sein Takt läuft auch während der Angriffe; ausgeführt wird erst in der nächsten Bewegung
 	einheit.halt = true   # nichts anderes steuert ihn
 	_wut_pruefen()
 	_vergeltung_weiter(dt)
+	anvisiert = Vector2.INF
+	gebunden_rest = maxf(0.0, gebunden_rest - dt)
+	typ.immer(dt, k)
 	if greift_an():
 		_angriff_weiter(dt, k)
 	elif not _aktion.is_empty():
 		_aktion_weiter(dt)
+	elif typ.steht():
+		einheit._sprite.bewegt(false)   # C3: Sonde 7 am Boden – ihr Fenster
 	else:
 		_bis_angriff -= dt
 		var d := einheit.position.distance_to(k.position) / Werte.ZELLE
@@ -366,21 +594,21 @@ func _bewegen(dt: float, k: Kommandant) -> void:
 		if _wall_rest <= 0.0:
 			_vom_wall()
 		return
-	if _wall_abkling <= 0.0 and (k.oben or bool(kennwerte.get("wall", false))):
-		_wall_abkling = 9.0
+	if _wall_abkling <= 0.0 and typ.wall_abkling() < INF and (k.oben or bool(kennwerte.get("wall", false)) or typ.wall_abkling() < 9.0):
+		_wall_abkling = typ.wall_abkling()   # C2: der Scharfschütze wechselt oft die Krone, der Technogunner nie
 		if _auf_den_wall(k):
 			return
 	if _aktion_in <= 0.0:
-		_aktion_in = float(kennwerte.get("takt", 4.0)) * randf_range(0.75, 1.25)
+		_aktion_in = typ.takt(float(kennwerte.get("takt", 4.0))) * randf_range(0.75, 1.25)
 		var seite := str(kennwerte.get("seite", ""))
 		if seite == "" or randf() > 0.65:
 			seite = "links" if randf() < 0.5 else "rechts"
-		if randf() < float(kennwerte.get("sprung_anteil", 0.4)):
+		if randf() < typ.sprung_anteil(float(kennwerte.get("sprung_anteil", 0.4))):
 			sprung(seite)
 		else:
 			tumble(seite)
 		return
-	_laufe(dt, k, float(kennwerte.get("abstand", Werte.HERAUSFORDERER_ABSTAND_SONST)), tempo())
+	_laufe(dt, k, typ.abstand(float(kennwerte.get("abstand", Werte.HERAUSFORDERER_ABSTAND_SONST))), tempo())
 
 
 ## Auf Lieblingsabstand gehen: alle halbe Sekunde ein Feld mit Sicht in der Nähe wählen, dessen Abstand passt.
@@ -397,6 +625,8 @@ func _laufe(dt: float, k: Kommandant, abstand: float, v: float) -> void:
 			var ziel := o24._erreichbar_nahe(karte.zelle_bei(k.position), hier)
 			var pfad := karte.einheiten_weg(hier, ziel)
 			for i in mini(3, pfad.size()):
+				if not _begehbar(pfad[i]) or not typ.feld_ok(pfad[i]):
+					break   # C1: nicht durch die Lichtwand
 				_weg.append(karte.mitte(pfad[i]))
 		else:
 			var beste := hier
@@ -404,7 +634,7 @@ func _laufe(dt: float, k: Kommandant, abstand: float, v: float) -> void:
 			for dy in range(-2, 3):
 				for dx in range(-2, 3):
 					var z := hier + Vector2i(dx, dy)
-					if not _begehbar(z):
+					if not _begehbar(z) or not typ.feld_ok(z):
 						continue
 					var p := karte.mitte(z)
 					var w := -absf(p.distance_to(k.position) / Werte.ZELLE - abstand) * 2.0 + (4.0 if karte.sicht_frei(p, k.position) else 0.0) + randf() * 1.2 - 0.15 * Vector2(dx, dy).length()
@@ -427,8 +657,9 @@ func _laufe(dt: float, k: Kommandant, abstand: float, v: float) -> void:
 			rest = 0.0
 
 
+## C1: Ist die Lichtwand zu, nur Felder im Platz.
 func _begehbar(z: Vector2i) -> bool:
-	return o24.karte.in_karte(z) and o24.karte.ist_begehbar(z) and o24.karte.ist_frei(z)
+	return o24.karte.in_karte(z) and o24.karte.ist_begehbar(z) and o24.karte.ist_frei(z) and (not kampfplatz.zu() or kampfplatz.innen(z))
 
 
 ## Landepunkt `weit` Felder zur Seite (aus seiner Sicht, mit Blick zu Brakk); geht es dort nicht, die andere Seite.
@@ -442,15 +673,19 @@ func seitwaerts(seite: String, weit: float) -> Vector2:
 		var r: Vector2 = richtungen.get(s, rechts)
 		for anteil: float in [1.0, 0.6]:
 			var p := einheit.position + r * weit * anteil * Werte.ZELLE
-			if _begehbar(o24.karte.zelle_bei(p)) and _begehbar(o24.karte.zelle_bei(einheit.position.lerp(p, 0.5))):
+			if _begehbar(o24.karte.zelle_bei(p)) and _begehbar(o24.karte.zelle_bei(einheit.position.lerp(p, 0.5))) and (typ == null or typ.feld_ok(o24.karte.zelle_bei(p))):
 				return p
 	return Vector2.INF
 
 
-## Tumble: ein schneller Seitschritt mit Staub.
+## Tumble: ein schneller Seitschritt mit Staub. C2: Wer nicht tumbelt (Plasmawerfer), macht einen langsamen Seitschritt.
 func tumble(seite: String) -> void:
 	var ziel := seitwaerts(seite, Werte.HERAUSFORDERER_TUMBLE_WEIT)
 	if ziel == Vector2.INF:
+		return
+	if typ != null and not typ.tumble_ok():
+		_aktion = {"art": "lauf", "t": 0.0, "sek": Werte.BOSS_SEITSCHRITT_SEK, "von": einheit.position, "nach": ziel}
+		_weg.clear()
 		return
 	_aktion = {"art": "tumble", "t": 0.0, "sek": Werte.HERAUSFORDERER_TUMBLE_SEK, "von": einheit.position, "nach": ziel}
 	_weg.clear()
@@ -471,13 +706,18 @@ func sprung(seite: String) -> void:
 func _aktion_weiter(dt: float) -> void:
 	_aktion["t"] = float(_aktion["t"]) + dt
 	var a := clampf(float(_aktion["t"]) / float(_aktion["sek"]), 0.0, 1.0)
+	var vorlauf := float(_aktion.get("vorlauf", 0.0))   # C2: Anker – erst steht das Seil, dann der Zug
+	if vorlauf > 0.0:
+		a = clampf((float(_aktion["t"]) - vorlauf) / (float(_aktion["sek"]) - vorlauf), 0.0, 1.0)
 	einheit.position = (_aktion["von"] as Vector2).lerp(_aktion["nach"] as Vector2, a)
-	einheit.set_meta("hebt_ab", 4.0 * a * (1.0 - a) * Werte.BRAKK_SPRUNG_HOEHE_FELD if str(_aktion["art"]) == "sprung" else 0.0)
+	var schweben := typ.schwebe() if typ != null else 0.0   # C3: Sonde 7 schwebt
+	einheit.set_meta("hebt_ab", schweben + (4.0 * a * (1.0 - a) * Werte.BRAKK_SPRUNG_HOEHE_FELD * float(_aktion.get("hoch", 1.0)) if str(_aktion["art"]) == "sprung" else 0.0))
+	einheit._sprite.bewegt(str(_aktion["art"]) == "lauf")
 	if a >= 1.0:
 		if str(_aktion["art"]) == "tumble":
 			spiel.effekte.flaeche(einheit.position, Werte.ZELLE * 0.35, Color(0.75, 0.68, 0.55))
 		_aktion = {}
-		einheit.set_meta("hebt_ab", 0.0)
+		einheit.set_meta("hebt_ab", schweben)
 
 
 ## Auf eine Wallkrone in der Nähe, von der er Brakk im Lieblingsabstand sieht. Oben zählt er wie in einer Stellung.
@@ -487,18 +727,21 @@ func _auf_den_wall(k: Kommandant) -> bool:
 	var abstand := float(kennwerte.get("abstand", 7.0))
 	var beste := Karte.KEINE
 	var wert := INF
+	var platz := kampfplatz.zu()
 	for dy in range(-4, 5):
 		for dx in range(-4, 5):
 			var z := hier + Vector2i(dx, dy)
 			if not karte.in_karte(z) or karte.inhalt(z) != Karte.WALL or karte.zelle_bei(k.position) == z:
 				continue
-			var w := absf(karte.mitte(z).distance_to(k.position) / Werte.ZELLE - abstand)
+			if (platz and not kampfplatz.im_innern(z)) or karte.ausbau.has(z):
+				continue   # C1: im Kampfplatz nicht auf den Rand (von dort sprang er hinaus); C2: nicht in Stellungen
+			var w := absf(karte.mitte(z).distance_to(k.position) / Werte.ZELLE - abstand) - (2.0 if kampfplatz.ist_krone(z) else 0.0)   # C1: die festen Wälle bevorzugt
 			if w < wert:
 				wert = w
 				beste = z
 	if beste == Karte.KEINE or wert > 5.0:
 		return false
-	_aktion = {"art": "sprung", "t": 0.0, "sek": Werte.HERAUSFORDERER_SPRUNG_SEK, "von": einheit.position, "nach": karte.mitte(beste)}
+	_aktion = typ.weg_auf_krone(einheit.position, karte.mitte(beste))   # C2: Sprung, beim Scharfschützen der Anker
 	_weg.clear()
 	_wall_rest = randf_range(Werte.HERAUSFORDERER_WALL_SEK.x, Werte.HERAUSFORDERER_WALL_SEK.y)
 	einheit.zustand = Einheit.Zustand.AUF_POSTEN   # Höhe: die HD-Ansicht und Brakks Waffen sehen ihn oben
@@ -509,6 +752,8 @@ func _auf_den_wall(k: Kommandant) -> bool:
 func _vom_wall() -> void:
 	var karte: Karte = o24.karte
 	var unten := karte.mitte(o24._freies_feld_bei(einheit.position, karte.zelle_bei((spiel.kommandant as Kommandant).position)))
+	if kampfplatz.zu() and not kampfplatz.im_innern(karte.zelle_bei(unten)):
+		unten = karte.mitte(kampfplatz._frei_innen(karte.zelle_bei(einheit.position)))   # C1: herunter nur nach innen
 	einheit.zustand = Einheit.Zustand.BODEN
 	_wall_rest = 0.0
 	_aktion = {"art": "sprung", "t": 0.0, "sek": Werte.HERAUSFORDERER_SPRUNG_SEK, "von": einheit.position, "nach": unten}
@@ -538,8 +783,11 @@ const ANGRIFFE: Array[String] = ["salve", "kugel", "sturm"]
 
 
 ## Welcher Angriff als Nächstes? Nie derselbe dreimal in Folge; die Entfernung (Felder) gewichtet.
-static func waehle_angriff(abstand: float, letzte: Array) -> String:
-	var gewichte := {"salve": 1.0, "kugel": 1.0 if abstand >= 3.0 else 0.4, "sturm": 1.7 if abstand < 5.0 else (1.0 if abstand < 9.0 else 0.5)}
+## C2: `eigene` – die Gewichte des Bosstyps (leer: Salve, Kugel, Sturm).
+static func waehle_angriff(abstand: float, letzte: Array, eigene: Dictionary = {}) -> String:
+	var gewichte := eigene.duplicate() if not eigene.is_empty() else {"salve": 1.0, "kugel": 1.0 if abstand >= 3.0 else 0.4, "sturm": 1.7 if abstand < 5.0 else (1.0 if abstand < 9.0 else 0.5)}
+	if gewichte.size() == 1:
+		return str(gewichte.keys()[0])   # ein erzwungener Angriff (z. B. die Zielmarkierung)
 	if letzte.size() >= 2 and str(letzte[-1]) == str(letzte[-2]):
 		gewichte.erase(str(letzte[-1]))
 	var summe := 0.0
@@ -565,6 +813,8 @@ func beginne_angriff(art: String) -> void:
 	einheit.set_meta("hebt_ab", 0.0)
 	_letzte.append(art)
 	angriff = {"art": art, "teil": "ansage", "t": 0.0, "um": 0.0, "angesagt": 0.0, "ziel": k.position, "richtung": (k.position - einheit.position).normalized()}
+	if typ != null and typ.beginne(art):
+		return   # C2: ein Angriff des Bosstyps
 	match art:
 		"salve":
 			_salve_ansage()
@@ -603,23 +853,30 @@ func _angriff_weiter(dt: float, k: Kommandant) -> void:
 			if t >= float(a["um"]):
 				a["angesagt"] = t
 				einheit._sprite.modulate = Color.WHITE
-				match art:
-					"salve":
-						_salve_feuer()
-					"kugel":
-						_kugel_feuer()
-					"sturm":
-						_sturm_schlag(k)
-					"doppel":
-						_doppel_feuer()
-					"strahl":
-						_strahl_feuer()
-					"saeule":
-						_saeule_feuer(k)
-				if art == "salve" and ring_kopie() == "minigun" and not bool(a.get("zweite", false)):
+				if typ != null and typ.feuer(art, k):
+					pass   # C2: ein Angriff des Bosstyps
+				else:
+					match art:
+						"salve":
+							_salve_feuer()
+						"kugel":
+							_kugel_feuer()
+						"sturm":
+							_sturm_schlag(k)
+						"doppel":
+							_doppel_feuer()
+						"strahl":
+							_strahl_feuer()
+						"saeule":
+							_saeule_feuer(k)
+				if str(a["teil"]) == "typ":
+					pass   # C2: der Bosstyp führt weiter und ruft fenster()
+				elif art == "salve" and ring_kopie() == "minigun" and not bool(a.get("zweite", false)):
 					_zweite_salve(k)
 				else:
-					_fenster()
+					fenster(typ.fenster_mal(art) if typ != null else 1.0)
+		"typ":
+			typ.weiter_angriff(dt, k)
 		"fenster":   # er steht und ist verwundbar
 			einheit._sprite.bewegt(false)
 			if t >= float(a["um"]):
@@ -628,9 +885,10 @@ func _angriff_weiter(dt: float, k: Kommandant) -> void:
 				_bis_angriff = randf_range(Werte.HERAUSFORDERER_BEWEGEN.x, Werte.HERAUSFORDERER_BEWEGEN.y)
 
 
-func _fenster() -> void:
+## Nach dem Angriff steht er verwundbar da. C2: `mal` – der Bosstyp kann es kürzen (z. B. nach dem Sturm mit Gel).
+func fenster(mal: float = 1.0) -> void:
 	var dauer := randf_range(Werte.HERAUSFORDERER_FENSTER.x, Werte.HERAUSFORDERER_FENSTER.y) * (Werte.HERAUSFORDERER_WUT_FENSTER if wut else 1.0) \
-		* (Werte.HERAUSFORDERER_RING_TAKT_FENSTER if ring_kopie() == "feuerteam" else 1.0)
+		* (Werte.HERAUSFORDERER_RING_TAKT_FENSTER if ring_kopie() == "feuerteam" else 1.0) * mal
 	protokoll.append({"was": "angriff", "bei": o24.zeit, "art": str(angriff["art"]), "angesagt": float(angriff["angesagt"]), "fenster": dauer, "wut": wut})
 	angriff["teil"] = "fenster"
 	angriff["t"] = 0.0
@@ -775,6 +1033,7 @@ func _wut_pruefen() -> void:
 		nem.gewohnheiten.doppelgaenger(einheit, person, einheit.fabrik_zelle)
 	var namen := PackedStringArray(ag.map(func(x: Variant) -> String: return NemesisGewohnheiten.name_von(str(x))))
 	spiel.melde("%s wird gefährlicher%s." % [str(person["name"]), (" – " + ", ".join(namen)) if not namen.is_empty() else ""], 3.5)
+	typ.wut()   # C2: Phase 2 des Bosstyps
 
 
 
@@ -874,10 +1133,10 @@ func vergeltung_aus() -> void:
 func naechster_angriff(abstand: float) -> String:
 	var wunsch := ""
 	if not vergeltung.is_empty():
-		wunsch = str(RING_ANGRIFF.get(ring_kopie(), "")) if str(vergeltung["art"]) == "ring" else str(WAFFEN_ANGRIFF[str(vergeltung["art"])])
+		wunsch = (typ.ring_angriff(str(RING_ANGRIFF.get(ring_kopie(), ""))) if typ != null else str(RING_ANGRIFF.get(ring_kopie(), ""))) if str(vergeltung["art"]) == "ring" else str(WAFFEN_ANGRIFF[str(vergeltung["art"])])
 	if wunsch != "" and not (_letzte.size() >= 2 and str(_letzte[-1]) == wunsch and str(_letzte[-2]) == wunsch):
 		return wunsch
-	return waehle_angriff(abstand, _letzte)
+	return waehle_angriff(abstand, _letzte, typ.gewichte(abstand, _letzte) if typ != null else {})
 
 
 ## Order24 (Brakks Stellvertreter): einer seiner Treffer landet. Gibt den Faktor auf den Schaden zurück und setzt, was
@@ -905,7 +1164,7 @@ func schutz_faktor() -> float:
 
 ## Brakks Lauftempo (Gelring).
 func brakk_bremse() -> float:
-	return Werte.HERAUSFORDERER_RING_GEL_TEMPO if gel_rest > 0.0 else 1.0
+	return minf(Werte.HERAUSFORDERER_RING_GEL_TEMPO if gel_rest > 0.0 else 1.0, typ.bremse() if typ != null and zustand == "duell" else 1.0)
 
 
 ## Wirbelring: nach der ersten Salve gleich die zweite – mit eigener, voller Ankündigung.

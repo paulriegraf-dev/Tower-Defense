@@ -76,7 +76,7 @@ func _bild(name: String) -> void:
 
 
 func _aktive() -> Array:
-	return hangar.figuren.filter(func(f: Dictionary) -> bool: return str(f["was"]) == "aktiv")
+	return hangar.figuren.filter(func(f: Dictionary) -> bool: return str(f["was"]) == "aktiv" and not bool((f["p"] as Dictionary).get("sonde", false)))
 
 
 func _process(_delta: float) -> bool:
@@ -92,6 +92,9 @@ func _process(_delta: float) -> bool:
 		0:
 			_datei_bauen(n)
 			hangar = Hangar.new()
+			if n == 6:
+				hangar.aufstiege = {4: "befördert", 2: "Rang 1 → 2"}   # C1: wie aus dem Bericht
+				hangar.kommandantin = true   # C3: Sonde 7 vertrieben
 			_zu = false
 			hangar.geschlossen.connect(func() -> void: _zu = true)
 			root.add_child(hangar)
@@ -196,10 +199,14 @@ func _pruefe_aufbau(n: int) -> void:
 	pruefe(aktiv.all(func(f: Dictionary) -> bool: return int(f["reihe"]) == 4 or int(f["reihe"]) == int(f["p"]["rang"])), "%d: Reihen nach Rang" % n)
 	if n == 6:
 		pruefe(oben.any(func(f: Dictionary) -> bool: return int(f["p"]["rang"]) == 4), "6: Rang 4 steht auf dem Podest")
+		var sonde := hangar.figuren.filter(func(f: Dictionary) -> bool: return bool((f["p"] as Dictionary).get("sonde", false)))
+		pruefe(sonde.size() == 1 and int(sonde[0]["reihe"]) == 4 and Nemesis.name_mit_titel(sonde[0]["p"] as Dictionary) == "Sonde 7 · Kommandantin", "6: Sonde 7 steht als Kommandantin auf dem Podest (C3)")
 	var versetzt := hangar.figuren.filter(func(f: Dictionary) -> bool: return str(f["was"]) == "versetzt")
 	var leer := hangar.figuren.filter(func(f: Dictionary) -> bool: return str(f["was"]) == "ausgeschaltet")
 	pruefe(versetzt.size() == 2 and (versetzt[0]["knoten"] as Node3D).scale.x < 0.9 and (versetzt[0]["sprite"] as Sprite3D).modulate.r < 0.6, "%d: 2 Versetzte grau und kleiner (auch ein alter Eintrag ohne Bild)" % n)
-	pruefe(leer.size() == 1 and leer[0]["sprite"] == null, "%d: Ausgeschaltete als leerer Platz" % n)
+	pruefe(leer.is_empty(), "%d: Ausgeschaltete stehen nicht mehr im Hangar (C1)" % n)
+	if n == 6:
+		_pruefe_auftritt()
 	for f: Dictionary in aktiv:
 		var z := {}
 		for zeile: Array in Hangar.karten_zeilen(f["p"] as Dictionary):
@@ -208,6 +215,29 @@ func _pruefe_aufbau(n: int) -> void:
 			pruefe(str(z["Stärke"]) == "?" and str(z["Schwäche"]) == "?" and str(z["Taktik"]).contains("Flanke") and str(z["Titel"]) == "Unbelehrbar", "%d: Karte Pell – Unbekanntes „?“, erlebte Taktik, Titel" % n)
 		elif str(f["p"]["name"]) == "Vex":
 			pruefe(str(z["Stärke"]).begins_with("zäh") and str(z["Taktik"]) == "?", "%d: Karte Vex – gesehene Stärke steht da, Taktik noch „?“" % n)
+
+
+## C1: aus dem Bericht geöffnet treten die Beförderten nacheinander vor (Podest zuerst), Winkel leuchtet, Schild mit Text.
+func _pruefe_auftritt() -> void:
+	pruefe(hangar.auftritte.size() == 2, "6: zwei Beförderte warten auf ihren Auftritt (%d)" % hangar.auftritte.size())
+	hangar.auftritt_protokoll.clear()
+	hangar._auftritt_t = -Hangar.AUFTRITT_WARTEN
+	var vor := {}
+	var schild := false
+	var leuchtet := false
+	for k in 300:   # 5 s
+		hangar._auftritt_weiter(1.0 / 60.0)
+		for i: int in hangar.auftritte.slice(0, 1):
+			var f: Dictionary = hangar.figuren[i]
+			if (f["ziel"] as Vector3).z > (f["ort"] as Vector3).z + Hangar.SCHRITTE * 0.9:
+				vor[str(f["p"]["name"])] = true
+			if f["winkel"] != null and (f["winkel"] as Sprite3D).scale.x > 1.2:
+				leuchtet = true
+		if hangar._auftritt_schild != null:
+			schild = true
+	var texte := hangar.auftritt_protokoll.map(func(x: Dictionary) -> String: return "%s: %s" % [str(hangar.figuren[int(x["i"])]["p"]["name"]), str(x["text"])])
+	pruefe(vor.size() == 2 and texte.size() == 2 and str(texte[0]).begins_with("Zed") and str(texte[1]).contains("Rang 1 → 2"), "6: nacheinander vorgetreten – %s" % " · ".join(PackedStringArray(texte)))
+	pruefe(leuchtet and schild and hangar.auftritte.is_empty() and hangar.figuren.all(func(f: Dictionary) -> bool: return f["ziel"] == f["ort"]), "6: Winkel leuchtet, Schild erscheint, alle wieder in der Reihe")
 
 
 func _pruefe_tasten(n: int) -> void:

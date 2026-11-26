@@ -4359,6 +4359,8 @@ func naechste_bodeneinheit(von: Vector2, max_abstand: float) -> Einheit:
 	for e in einheiten:
 		if not e.am_boden():
 			continue
+		if order24 != null and order24.kein_gegner_ziel(e):
+			continue   # 26.11.: Befehl 24, Überläufer – die Myriaden greifen Brakk nicht an
 		var d := von.distance_squared_to(e.position)
 		if d <= beste:
 			beste = d
@@ -4373,6 +4375,8 @@ func fernziel(von: Vector2, weite: float, nur: int = 0) -> Einheit:
 	var bestes: Einheit = null
 	var beste := weite * weite
 	for e in einheiten:
+		if order24 != null and order24.kein_gegner_ziel(e):
+			continue   # 26.11.: Befehl 24, Überläufer – die Myriaden greifen Brakk nicht an
 		var d := von.distance_squared_to(e.position)
 		if d <= beste and e.am_boden() and karte.boden_bei(e.position) == "wald" and d > pow(Werte.WALD_SICHT * Werte.ZELLE, 2.0):
 			continue   # 18.11.: im Wald erst aus der Nähe zu sehen

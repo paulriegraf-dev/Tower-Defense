@@ -43,7 +43,7 @@ func _initialize() -> void:
 	spiel.protokoll_an = false
 
 
-const SOLL_PRUEFUNGEN := 87
+const SOLL_PRUEFUNGEN := 108
 const SOLL_ECHT := 6
 var geprueft := 0
 
@@ -124,11 +124,30 @@ func _schritte() -> bool:
 		2:
 			if _seit() > 1.5:
 				_punkt2_ansage()
+				_c1_vorher()
 				_weiter()
 		3:
-			if o.zeit > float(merk["auftritt_um"]) + 0.8:
-				_punkt2_auftritt()
+			var kp := o.herausforderer.kampfplatz
+			if not merk.has("c1"):
+				if o.zeit > float(merk["auftritt_um"]) + 0.8:
+					_punkt2_auftritt()
+					_c1_gemerkt()
+					merk["c1"] = 0
+					merk["t"] = o.zeit
+			elif int(merk["c1"]) == 0:
+				if kp.zu() and o.herausforderer.einzug.is_empty() and kp._plan.is_empty():
+					_c1_platz()
+					merk["c1"] = 1
+					merk["t"] = o.zeit
+				elif _seit() > 16.0:
+					pruefe(false, "C1: Kampfplatz nach 16 s nicht fertig (Lichtwand %.2f, Einzug %s)" % [kp.licht, str(o.herausforderer.einzug.get("teil", "–"))])
+					return _fertig()
+			elif kp.zustand == "aus":
+				_c1_aufgeloest()
 				_weiter()
+			elif _seit() > 15.0:
+				pruefe(false, "C1: Kampfplatz nach 15 s nicht aufgelöst")
+				return _fertig()
 		4:
 			if _seit() > 5.0:
 				_punkt2_pause()
@@ -231,9 +250,26 @@ func _punkt1() -> void:
 	var p := n.herausforderer_waehlen()
 	pruefe(not p.is_empty() and Nemesis.hat_titel(p, Nemesis.TITEL_HERAUSFORDERER), "gewählt mit Titel: %s" % Nemesis.name_mit_titel(p))
 	var rang := int(p["rang"])
-	var gewohnt := NemesisGewohnheiten.von_person(p).size()
 	var p2 := n.herausforderer_waehlen(p)
-	pruefe(p2 == p and int(p["rang"]) == mini(4, rang + 1) and NemesisGewohnheiten.von_person(p).size() == gewohnt + 1, "geborgen: er kommt wieder, Rang %d → %d, eine Angewohnheit mehr" % [rang, int(p["rang"])])
+	pruefe(p2 != p and str(p2.get("art", "")) != str(p["art"]) and int(p["rang"]) == rang, "C1 Rotation: zu Minute 14 ein anderer, andere Art (%s → %s)" % [str(p["art"]), str(p2.get("art", "–"))])
+	# C1: über 20 zufällige Besetzungen ist die zweite Art nie die erste – auch ohne passenden Benannten
+	var arten := ["technogunner", "scharfschuetze", "plasmawerfer"]
+	var gleich := 0
+	var befoerdert := 0
+	for i in 20:
+		n.personen = []
+		var nur := str(arten[i % 3]) if i % 4 == 0 else ""   # jede vierte Besetzung: alle Benannten gleicher Art
+		for j in randi_range(2, 5):
+			var q := n.neue_person(nur if nur != "" else str(arten.pick_random()), randi_range(1, 4), "T%d" % j, "der Rest")
+			q["bilanz"] = {"er": randi_range(0, 5), "brakk": randi_range(0, 3)}
+		var erst := n.herausforderer_waehlen()
+		var zweit := n.herausforderer_waehlen(erst)
+		if zweit.is_empty() or str(zweit["art"]) == str(erst["art"]):
+			gleich += 1
+		if not zweit.is_empty() and int(zweit["rang"]) == 2 and str(zweit.get("tat", "")) == "garantie":
+			befoerdert += 1
+	pruefe(gleich == 0 and befoerdert >= 5, "C1: 20 Läufe – zweite Art nie gleich der ersten (%d gleich, %d befördert mangels Benannter)" % [gleich, befoerdert])
+	n.personen = alte.duplicate()
 	n.personen.erase(p)
 	n.ausgeschaltet.append(p)
 	var p3 := n.herausforderer_waehlen(p)
@@ -245,6 +281,21 @@ func _punkt1() -> void:
 	var p4 := n.herausforderer_waehlen()
 	pruefe(int(p4.get("rang", 0)) == 2 and n.einheit_von(p4) == e, "niemand benannt: die Truppe mit dem meisten Schaden wird Rang 2 (%s)" % Nemesis.voller_name(p4))
 	n.personen = alte
+	# C1: Sonde 7 zu Minute 14 – etwa SONDE_BOSS_CHANCE von 200 Ziehungen, zu Minute 9 nie
+	var h := o.herausforderer
+	var alt_naechste := h.naechste
+	h.naechste = 1
+	var sonde := 0
+	for i in 200:
+		if h.sonde_zieht():
+			sonde += 1
+	h.naechste = 0
+	var vorn := 0
+	for i in 200:
+		if h.sonde_zieht():
+			vorn += 1
+	h.naechste = alt_naechste
+	pruefe(sonde >= 50 and sonde <= 90 and vorn == 0, "C1: Sonde 7 zu Minute 14 in %d von 200 Ziehungen (Soll ~70), zu Minute 9 in %d" % [sonde, vorn])
 
 
 # ------------------------------------------------------------------ Punkt 2: Auftritt und Pause
@@ -273,7 +324,8 @@ func _punkt2_auftritt() -> void:
 		if str(x["was"]) == "auftritt":
 			a = x
 	pruefe(h.zustand == "duell" and h.einheit != null and h.einheit.halt and h.einheit.has_meta("herausforderer"), "er ist da: %s" % str(a.get("name", "–")))
-	pruefe(float(a.get("abstand", 0.0)) >= 6.0 and float(a.get("abstand", 99.0)) <= 18.0, "kommt %.1f Felder vor Brakk an (Soll 10–12, sonst weiterer Ring)" % float(a.get("abstand", 0.0)))
+	h.typ = NemesisBoss.new(h)   # C2: hier das Gerüst (Salve, Kugel, Sturm); die Bosstypen prüft bosstest.gd
+	pruefe(bool(a.get("einzug", false)) and float(a.get("abstand", 0.0)) >= 6.0 and float(a.get("abstand", 99.0)) <= 30.0, "C1: beamt %.1f Felder entfernt vor dem Kampfplatz herein und kommt von außen" % float(a.get("abstand", 0.0)))
 	pruefe(_tafeln("herausforderer").size() == 1 and Nemesis.hat_titel(h.person, Nemesis.TITEL_HERAUSFORDERER), "Banner mit Titel")
 	var jaeger: Array = (merk["jaeger"] as Array).filter(func(x: Variant) -> bool: return Nemesis.lebt(x) and x != h.einheit and (x as Einheit).zustand == Einheit.Zustand.BODEN)
 	pruefe(not jaeger.is_empty() and jaeger.all(func(x: Variant) -> bool: return o.marschziel(x as Einheit) == o._erreichbar_nahe((x as Einheit).fabrik_zelle, o.karte.zelle_bei((x as Einheit).position))), "%d Jäger ziehen sich zu ihren Fabriken zurück" % jaeger.size())
@@ -295,6 +347,163 @@ func _punkt2_ende() -> void:
 	var h := o.herausforderer
 	pruefe(h.zustand == "duell" and not h.sperrt() and not o.haelt_feuer(o.brakk_ziel), "nach 90 s kommen die Jagdtrupps zurück, er bleibt")
 	pruefe(o.plan_zeit() - float(merk["plan"]) > 1.0, "der Fahrplan läuft weiter")
+
+
+# ------------------------------------------------------------------ C1: Kampfplatz
+
+## Vor dem Räumen (bei der Ansage): die ganze Karte merken – nach dem Duell muss der Bereich wieder genau so aussehen.
+func _c1_vorher() -> void:
+	merk["feld_vorher"] = o.karte.feld.duplicate()
+	merk["ausbau_vorher"] = o.karte.ausbau.duplicate()
+	merk["fabriken_vorher"] = spiel.fabriken.duplicate()
+	merk["fabrik_hp_vorher"] = o.fabrik_hp.duplicate()
+
+
+## Während des Duells: der Bereich wurde 1 s nach der Ansage gemerkt und geräumt.
+func _c1_gemerkt() -> void:
+	var kp := o.herausforderer.kampfplatz
+	pruefe(kp.aktiv() and absf(float((kp.protokoll[0] as Dictionary)["bei"]) - (float(merk["auftritt_um"]) - 9.0)) < 0.2, "C1: 1 s nach der Ansage gemerkt und geräumt: %d Felder (Mitte %s, Brakk %s)" % [kp.gespeichert.size(), str(kp.mitte), str((kp.protokoll[0] as Dictionary).get("brakk", "–"))])
+	var falsch := 0
+	var fabriken := 0
+	for e: Dictionary in kp.gespeichert:
+		var z: Vector2i = e["z"]
+		if e["fabrik"] != null:
+			fabriken += 1
+		if spiel.fabriken.has(z) or o.fabrik_hp.has(z) or (o.karte.feld.has(z) and not BrakkKampfplatz.fallplan().has(z - kp.mitte)):
+			falsch += 1
+	pruefe(falsch == 0 and not kp.gespeichert.is_empty(), "C1: nichts Gemerktes steht mehr im Bereich (%d Felder, davon %d Fabriken; %d falsch)" % [kp.gespeichert.size(), fabriken, falsch])
+
+
+func _c1_platz() -> void:
+	var h := o.herausforderer
+	var kp := h.kampfplatz
+	var karte: Karte = o.karte
+	var k: Kommandant = spiel.kommandant
+	var bg: BrakkGeschosse = spiel.brakk_geschosse
+	var fehlt := 0
+	for r: Vector2i in BrakkKampfplatz.fallplan():
+		if karte.inhalt(kp.mitte + r) != Karte.WALL:
+			fehlt += 1
+	pruefe(fehlt == 0 and kp.gesetzt.size() >= 30, "C1: alle Wälle des Platzes stehen (%d selbst gesetzt, %d Felder ohne Wall)" % [kp.gesetzt.size(), fehlt])
+	var luecken := 0
+	for s: String in BrakkKampfplatz.SEITEN:
+		for r: Vector2i in BrakkKampfplatz.luecke(s):
+			if not kp.gesetzt.has(kp.mitte + r):
+				luecken += 1
+	pruefe(luecken == 4 * Werte.KAMPFPLATZ_LUECKE and BrakkKampfplatz.luecke("oben").size() == 2, "C1: vier Lücken zu je 2 Feldern bleiben ohne Wall")
+	var drin := h.protokoll.filter(func(x: Dictionary) -> bool: return str(x["was"]) == "drin")
+	var wie := h.protokoll.filter(func(x: Dictionary) -> bool: return str(x["was"]).begins_with("einzug_"))
+	pruefe(not drin.is_empty() and bool(drin[0]["innen"]) and kp.innen_px(h.einheit.position), "C1: der Herausforderer ist drin (%s)" % (str(wie[0]["was"]) if not wie.is_empty() else "–"))
+	var gesprengt := kp.protokoll.filter(func(x: Dictionary) -> bool: return str(x["was"]) == "gesprengt")
+	if not gesprengt.is_empty():
+		pruefe(karte.inhalt(gesprengt[0]["z"] as Vector2i) == Karte.WALL and kp.gesetzt.has(gesprengt[0]["z"] as Vector2i), "C1: gesprengter Randwall ist ersetzt")
+	else:
+		pruefe(not wie.is_empty() and str(wie[0]["was"]) == "einzug_sprung", "C1: er ist über den Randwall gesprungen")
+	pruefe(kp.zu() and kp.innen_px(kp._fuss()), "C1: Lichtwand zu, Brakk steht drin")
+	# Schüsse von draußen: Technogunner, Scharfschütze, Turm
+	h._bis_angriff = 999.0
+	h.angriff = {}
+	bg.leeren()
+	var aussen := Vector2(kp.rechteck.position.x - 3.0 * Werte.ZELLE, k.position.y)
+	var vorher := bg.getroffen
+	bg.schiesse("laser", aussen, 0.5, 50.0, "technogunner", "test", 0.0)
+	bg.scharf(null, aussen, 0.5, 30.0 * Werte.ZELLE, 50.0, "test")
+	bg.turm(karte.zelle_bei(aussen), aussen, "lanze", 50.0, 30.0 * Werte.ZELLE, 0.3 * Werte.ZELLE, 1, "test")
+	var turm_ende: Vector2 = (bg.gluehen.back() as Dictionary)["ende"] if not bg.gluehen.is_empty() else k.position
+	for i in 150:
+		bg.weiter(Werte.SPIELTEMPO / 60.0)
+	pruefe(bg.getroffen == vorher and not kp.rechteck.grow(-2.0).has_point(turm_ende), "C1: Schüsse und Turmstrahl von draußen enden an der Lichtwand (%d Treffer)" % (bg.getroffen - vorher))
+	bg.leeren()
+	# Brakk kommt nicht hinaus: zu Fuß nicht durch die Lücke, und wer doch draußen landet, steht wieder drin
+	var ego: EgoModus = spiel.ego
+	var lz := kp.mitte + BrakkKampfplatz.luecke("links")[0]
+	k.oben = false
+	ego.hoehe = 0.0
+	ego._setze_fuss(karte.mitte(lz))
+	var da := ego._fuss2d()
+	ego._schritt(Vector2(-1.0 * Werte.ZELLE, 0.0))
+	pruefe(ego._fuss2d() == da, "C1: zu Fuß nicht durch die Lichtwand")
+	kp._process(0.016)
+	k.position = aussen
+	kp._process(0.016)
+	pruefe(kp.innen_px(kp._fuss()), "C1: wer draußen landet, steht wieder drin")
+	ego._setze_fuss(karte.mitte(lz + Vector2i(1, 0)))   # vor der Lücke: geradeaus hindurch hielte nur die Lichtwand
+	var schuss := ego._strahl_bis(ego._zu3d(ego._fuss2d(), 1.0), Vector3(-1, 0, 0), 30.0)
+	pruefe(schuss < 2.0, "C1: Brakks Schüsse enden an der Lichtwand (%.2f Felder durch die Lücke)" % schuss)
+	# eine Truppe, die sich hineindrängt, steht wieder draußen
+	var t := o._neue_truppe("technogunner", spiel.fabriken.keys()[0], 1)
+	t.position = karte.mitte(kp._frei_innen(kp.mitte + Vector2i(3, 0)))
+	kp.schritt(0.016)
+	pruefe(not kp.rechteck.has_point(t.position), "C1: Truppen im Platz stehen wieder draußen")
+	# Mitte verschoben, wenn der Schild in der Nähe ist
+	var s := karte.zelle_bei(o.schild_mitten[0])
+	var r := (Vector2(karte.zelle_bei(k.position) - s)).normalized()
+	var start := s + Vector2i(roundi(r.x * 9.0), roundi(r.y * 9.0))
+	var m := kp.mitte_suchen(start)
+	pruefe(not kp.platz_ok(start) and m != start and (m == Karte.KEINE or kp.platz_ok(m)), "C1: über dem Schild verschoben: %s → %s" % [str(start), str(m)])
+	_c1_bewegung()
+	merk["bereich"] = kp._bereich(kp.mitte)
+	kp.aufloesen()   # wie am Ende des Duells (ohne liegenden Herausforderer: gleich zurück); die übrigen Prüfungen laufen ohne Platz
+
+
+## C1.3: 12 s Bewegung im Platz (ohne Angriffe): er bleibt drin und steigt auf die festen Wälle innen.
+func _c1_bewegung() -> void:
+	var h := o.herausforderer
+	var kp := h.kampfplatz
+	var k: Kommandant = spiel.kommandant
+	k.position = o.karte.mitte(kp._frei_innen(kp.mitte + Vector2i(4, 0)))
+	k.oben = false
+	h.einheit.position = o.karte.mitte(kp._frei_innen(kp.mitte + Vector2i(-3, -1)))
+	h.einheit.zustand = Einheit.Zustand.BODEN
+	h._aktion = {}
+	h._weg.clear()
+	h.kennwerte["wall"] = true
+	h._wall_abkling = 0.0
+	h._wall_rest = 0.0
+	h.zaehler = {"sprung": 0, "tumble": 0, "ausweichen": 0, "wall": 0}
+	var raus := 0
+	var kronen := {}
+	var rand := 0
+	for i in 720:
+		h._bis_angriff = 999.0
+		h.angriff = {}
+		h._vergeltung_in = 999.0
+		h.schritt(1.0 / 60.0)
+		if not kp.innen_px(h.einheit.position):
+			raus += 1
+		if h.einheit.zustand == Einheit.Zustand.AUF_POSTEN and h._aktion.is_empty():
+			var z := o.karte.zelle_bei(h.einheit.position)
+			if kp.ist_krone(z):
+				kronen[z] = true
+			elif not kp.im_innern(z):
+				rand += 1
+	pruefe(raus == 0 and rand == 0, "C1: 12 s Bewegung – immer im Platz, nie auf dem Rand (%d Bilder draußen)" % raus)
+	pruefe(int(h.zaehler["wall"]) >= 1 and not kronen.is_empty(), "C1: er steigt auf die festen Wälle innen (%d-mal, Kronen %s)" % [int(h.zaehler["wall"]), str(kronen.keys())])
+	pruefe(is_equal_approx(Werte.HERAUSFORDERER_VERGELTUNG_ABKLING, 20.0), "C1: Vergeltung alle 20 s")
+	h.kennwerte["wall"] = false
+
+
+## Nach dem Duell: Brakk am Myriaden-HQ, und im Bereich steht wieder alles wie vor dem Räumen.
+func _c1_aufgeloest() -> void:
+	var kp := o.herausforderer.kampfplatz
+	var karte: Karte = o.karte
+	var b: Rect2i = merk["bereich"]
+	var feld_v: Dictionary = merk["feld_vorher"]
+	var ausbau_v: Dictionary = merk["ausbau_vorher"]
+	var fab_v: Dictionary = merk["fabriken_vorher"]
+	var hp_v: Dictionary = merk["fabrik_hp_vorher"]
+	var anders: Array = []
+	for y in range(b.position.y, b.end.y):
+		for x in range(b.position.x, b.end.x):
+			var z := Vector2i(x, y)
+			if feld_v.get(z, -1) != karte.feld.get(z, -1) or ausbau_v.get(z, -1) != karte.ausbau.get(z, -1) \
+					or fab_v.has(z) != spiel.fabriken.has(z) or (fab_v.has(z) and fab_v[z] != spiel.fabriken[z]) or hp_v.get(z, -1.0) != o.fabrik_hp.get(z, -1.0):
+				anders.append(z)
+	var waelle := feld_v.keys().filter(func(z: Vector2i) -> bool: return b.has_point(z)).size()
+	pruefe(anders.is_empty() and waelle > 0, "C1: nach %.1f s steht im Bereich alles wie vorher (%d Gebäude; abweichend: %s)" % [_seit(), waelle, str(anders.slice(0, 6))])
+	var hq: Vector2 = o.hq_mitte()
+	pruefe(kp._fuss().distance_to(hq) < 4.0 * Werte.ZELLE, "C1: Brakk steht danach am Myriaden-HQ (%.1f Felder)" % (kp._fuss().distance_to(hq) / Werte.ZELLE))
+	pruefe(kp.zustand == "aus" and o.lichtwand_schnitt(kp.rechteck.get_center(), kp.rechteck.position - Vector2(50, 50)) == Vector2.INF, "C1: Lichtwand aus, Kampfplatz weg")
 
 
 # ------------------------------------------------------------------ Punkt 3: Leben, Schaden, Tempo
@@ -609,8 +818,10 @@ func _punkt7_zweiter() -> void:
 
 func _punkt7_brakk_faellt() -> void:
 	var h := o.herausforderer
-	var p: Dictionary = merk["person"]
-	pruefe(h.person == p and int(p["rang"]) == mini(4, int(merk["rang"]) + 1), "der Geborgene kommt wieder, Rang %d → %d" % [int(merk["rang"]), int(p["rang"])])
+	var erster: Dictionary = merk["person"]
+	pruefe(h.person != erster and str(h.person["art"]) != str(erster["art"]) and int(erster["rang"]) == int(merk["rang"]), "C1: der Geborgene kommt nicht wieder – %s statt %s" % [str(h.person["art"]), str(erster["art"])])
+	merk["person"] = h.person
+	var p: Dictionary = h.person
 	merk["rang"] = int(p["rang"])
 	merk["ende_erwartet"] = true
 	merk["heilen"] = false
@@ -679,7 +890,7 @@ func _schritte_echt() -> bool:
 		4:
 			if h.zustand == "duell":
 				pruefe(absf(float(_eintrag("ansage", 1)["bei"]) - 830.0) < 0.2 and absf(float(_eintrag("auftritt", 1)["bei"]) - 840.0) < 0.2, "zweites Mal: Ansage %.1f s, Auftritt %.1f s" % [float(_eintrag("ansage", 1)["bei"]), float(_eintrag("auftritt", 1)["bei"])])
-				pruefe(h.person == merk["p"] and int(h.person["rang"]) == mini(4, int(merk["rang"]) + 1), "der Geborgene kommt wieder, Rang %d → %d" % [int(merk["rang"]), int(h.person["rang"])])
+				pruefe(h.person != merk["p"] and str(h.person["art"]) != str((merk["p"] as Dictionary)["art"]), "C1: zweites Mal ein anderer, andere Art (%s nach %s)" % [str(h.person["art"]), str((merk["p"] as Dictionary)["art"])])
 				_weiter()
 			elif _seit() > 30.0:
 				pruefe(false, "bei 840 s kam niemand")
@@ -939,4 +1150,4 @@ func _punkt6_takt_aus() -> void:
 	var h := o.herausforderer
 	pruefe(h.vergeltung.is_empty() and not (h.einheit.get_meta("nemesis_umriss") as Color).is_equal_approx(NemesisHerausforderer.VERGELTUNG_UMRISS), "nach 10 s vorbei, Umriss wie vorher")
 	var rest := Werte.HERAUSFORDERER_VERGELTUNG_ABKLING - (o.zeit - float(merk["v_ab"]) - 0.5)
-	pruefe(absf(h._vergeltung_in - rest) < 0.7, "die nächste erst 25 s nach Beginn (noch %.1f s)" % h._vergeltung_in)
+	pruefe(absf(h._vergeltung_in - rest) < 0.7, "die nächste erst 20 s nach Beginn (noch %.1f s)" % h._vergeltung_in)

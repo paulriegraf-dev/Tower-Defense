@@ -88,7 +88,6 @@ const TAT_STAERKE := {
 const TAT_SCHWAECHE := {"rest": "nerven_letzter", "sichtung": "nachtragend", "anteil": "nachtragend", "medkit": "nachladen"}
 ## 26.11. (Paul): der Herausforderer – diesen Titel trägt immer nur einer (er führt im Hangar aufs Podest)
 const TITEL_HERAUSFORDERER := "Herausforderer"
-const HERAUSFORDERER_GEWOHNHEITEN := ["tumble", "sprengen", "fern", "klon"]   # was einem im Duell nützt
 const TAT_TEXT := {
 	"zwei_begegnungen": "hat zwei Begegnungen mit Brakk überlebt",
 	"anteil": "hat Brakk in einer Begegnung mehr als ein Viertel seines Lebens genommen",
@@ -213,6 +212,8 @@ static func dienstgrad(p: Dictionary) -> String:
 
 ## „Gefreiter Vex ‚der Pünktliche‘“ (namenlos: leer)
 static func voller_name(p: Dictionary) -> String:
+	if bool(p.get("sonde", false)):
+		return str(p["name"])   # C3: Sonde 7 selbst – kein Dienstgrad
 	if p.is_empty() or int(p.get("rang", 0)) <= 0 or str(p.get("name", "")) == "":
 		return ""
 	var s := "%s %s" % [dienstgrad(p), str(p["name"])]
@@ -878,21 +879,15 @@ static func bester_herausforderer(liste: Array) -> Dictionary:
 	return wahl
 
 
-## Wer tritt an? `vorher` = der Herausforderer davor: Wurde er geborgen (steht noch auf der Liste), kommt er wieder –
-## einen Rang höher und mit einer Angewohnheit mehr. Sonst der Beste aus der Liste. Gibt es keinen Benannten, wird die
-## Truppe mit dem meisten Schaden an Brakk auf der Stelle befördert. Er allein trägt danach den Titel.
+## Wer tritt an? Der Beste aus der Liste. 26.11. (Paul, C1): `vorher` = der Herausforderer davor – er kommt im selben
+## Lauf nicht wieder, und seine Truppenart auch nicht (Rotation; seine Lernwerte bleiben für spätere Läufe). Gibt es
+## keinen passenden Benannten, wird die Truppe anderer Art mit dem meisten Schaden an Brakk auf der Stelle befördert.
+## Er allein trägt danach den Titel.
 func herausforderer_waehlen(vorher: Dictionary = {}) -> Dictionary:
-	var p: Dictionary = {}
-	if not vorher.is_empty() and personen.has(vorher):
-		p = vorher
-		p["rang"] = mini(Werte.NEMESIS_RANG_MAX, int(p["rang"]) + 1)
-		(p["lauf"] as Dictionary)["rang_plus"] = true
-		_gewohnheit_dazu(p)
-		_chronik(p, "tritt noch einmal an – jetzt als %s" % dienstgrad(p))
-	else:
-		p = bester_herausforderer(benannte().filter(func(q: Dictionary) -> bool: return q != vorher))
+	var ohne_art := "" if vorher.is_empty() else str(vorher.get("art", ""))
+	var p := bester_herausforderer(benannte().filter(func(q: Dictionary) -> bool: return q != vorher and str(q["art"]) != ohne_art))
 	if p.is_empty():
-		p = _herausforderer_befoerdern()
+		p = _herausforderer_befoerdern(ohne_art)
 	if p.is_empty():
 		return {}
 	for q: Dictionary in personen + versetzt + ausgeschaltet:
@@ -904,26 +899,26 @@ func herausforderer_waehlen(vorher: Dictionary = {}) -> Dictionary:
 	return p
 
 
-func _gewohnheit_dazu(p: Dictionary) -> void:
-	var hat := NemesisGewohnheiten.von_person(p)
-	var frei: Array = HERAUSFORDERER_GEWOHNHEITEN.filter(func(a: String) -> bool: return not hat.has(a))
-	if frei.is_empty():
-		return
-	var neu := str(Zufall.waehle(frei))
-	if str(p.get("angewohnheit", "")) == "":
-		p["angewohnheit"] = neu
-	else:
-		p["angewohnheit2"] = neu
+## C3 (26.11., Paul): Sonde 7 als Boss – ein eigener Datensatz, der in keiner Liste steht (kein Benannter, kein Hangar-
+## Platz außer dem Podest im Bericht). Titel „Kommandantin“.
+const TITEL_KOMMANDANTIN := "Kommandantin"
+
+static func sonde_person() -> Dictionary:
+	return {"id": -7, "sonde": true, "art": "technogunner", "rang": 4, "name": "Sonde 7", "beiname": "", "titel": [TITEL_KOMMANDANTIN],
+		"tat": "", "faehigkeit": "", "angewohnheit": "", "staerke": "", "schwaeche": "", "staerke_bekannt": false, "schwaeche_bekannt": false,
+		"bilanz": {"er": 0, "brakk": 0}, "begegnungen": 0, "bergungen": 0, "narbe": 0, "geborgen": false, "taktik": {}, "chronik": [],
+		"look": -1, "duell": {}, "vergeltung": "", "lauf": {"dabei": true, "schaden": 0.0, "geborgen": false, "rang_plus": false,
+		"begegnungen": 0, "bergungen": 0, "erlaubt": false, "neu": false, "wiedersehen": false}}
 
 
 ## Kein Benannter da: die lebende Truppe mit dem meisten Schaden an Brakk, sonst die nächste, sonst eine neue aus einer
-## Fabrik – sofort Rang 2.
-func _herausforderer_befoerdern() -> Dictionary:
+## Fabrik – sofort Rang 2. `ohne_art`: diese Truppenart nicht (Rotation, C1).
+func _herausforderer_befoerdern(ohne_art: String = "") -> Dictionary:
 	var beste: Einheit = null
 	var wert := -1.0
 	for id: int in _lauf:
 		var x: Variant = (_lauf[id] as Dictionary)["einheit"]
-		if Nemesis.lebt(x) and not (x as Einheit).ist_pilot and float((_lauf[id] as Dictionary)["schaden"]) > wert:
+		if Nemesis.lebt(x) and not (x as Einheit).ist_pilot and art_von(x as Einheit) != ohne_art and float((_lauf[id] as Dictionary)["schaden"]) > wert:
 			wert = float((_lauf[id] as Dictionary)["schaden"])
 			beste = x as Einheit
 	if beste == null:
@@ -931,12 +926,12 @@ func _herausforderer_befoerdern() -> Dictionary:
 		var nah := INF
 		for y: Variant in o24._truppen():
 			var u := y as Einheit
-			if Nemesis.lebt(u) and not u.ist_pilot and k != null and u.position.distance_to(k.position) < nah:
+			if Nemesis.lebt(u) and not u.ist_pilot and art_von(u) != ohne_art and k != null and u.position.distance_to(k.position) < nah:
 				nah = u.position.distance_to(k.position)
 				beste = u
 	if beste == null:
 		for z: Vector2i in spiel.fabriken:
-			if str(spiel.fabriken[z]["typ"]) != "pilot":
+			if str(spiel.fabriken[z]["typ"]) != "pilot" and str(spiel.fabriken[z]["typ"]) != ohne_art:
 				beste = o24._neue_truppe(str(spiel.fabriken[z]["typ"]), z, 4)
 				break
 	if beste == null:
@@ -983,7 +978,7 @@ func rettet(e: Einheit) -> bool:
 	e._sprite.scale = Vector2(e._sprite.scale.x, e._sprite.scale.x * 0.45)   # sackt zusammen
 	e._sprite.modulate = Color(0.55, 0.55, 0.62)
 	_aus_trupp(e)
-	o24.ladungen_boden.append({"pos": e.position, "knoten": null})   # Sprengladung fällt trotzdem (Elitetrupp: sicher)
+	o24.ladung_fallen_lassen(e.position)   # Sprengladung fällt trotzdem (Elitetrupp: sicher); 26.11.: liegt 20 s, höchstens 4
 	p["bergungen"] = int(p["bergungen"]) + 1
 	p["narbe"] = int(p["narbe"]) + 1
 	p["geborgen"] = true
@@ -1794,6 +1789,21 @@ func lauf_liste() -> Array:
 		aus.append([name_mit_titel(p), "ausgeschaltet", ""])
 	for p: Dictionary in versetzt:
 		aus.append([name_mit_titel(p), "versetzt", str(p.get("nachfolger", ""))])   # 22.11. (Teil 6): von einem Neuen verdrängt
+	return aus
+
+
+## C1 (26.11., Paul): wer in diesem Lauf befördert wurde oder Rang gewonnen hat – Personen-ID -> Text fürs Namensschild
+## im Hangar („befördert“ / „Rang 2 → 3“).
+func aufstiege() -> Dictionary:
+	var aus := {}
+	for p: Dictionary in personen:
+		var pl: Dictionary = p.get("lauf", {})
+		if not benannt(p):
+			continue
+		if bool(pl.get("neu", false)):
+			aus[int(p["id"])] = tr("befördert")
+		elif bool(pl.get("rang_plus", false)):
+			aus[int(p["id"])] = tr("Rang %d → %d") % [int(p["rang"]) - 1, int(p["rang"])]
 	return aus
 
 
