@@ -161,7 +161,7 @@ func _e3_formationen() -> void:
 	pruefe(dateien.size() == Werte.ALARM_FORMATIONEN.size() and passend.size() == dateien.size(), "E3: %d _b24-Dateien, alle %d×%d" % [dateien.size(), Werte.SPALTEN, Werte.ZEILEN])
 	var zahl := {}
 	for z: Vector2i in karte.feld:
-		if karte.inhalt(z) == Karte.WALL:
+		if karte.inhalt(z) == Karte.WALL and not o.zuflucht.im_ring(z):   # G: ohne die Erdwall-Ringe der Zufluchten
 			var g := BrakkGebiete.gebiet(z)
 			zahl[g] = int(zahl.get(g, 0)) + 1
 	pruefe(int(zahl.get("niemandsland", 0)) >= 3 and int(zahl.get("niemandsland", 0)) <= 12 and int(zahl.get("aussen_oben", 0)) >= 4 and int(zahl.get("aussen_unten", 0)) >= 4 and int(zahl.get("guertel", 0)) > 20,
@@ -187,8 +187,9 @@ func _e4_zufluchten() -> void:
 	var bg: BrakkGeschosse = spiel.brakk_geschosse
 	var namen := zf.orte.map(func(x: Dictionary) -> String: return str(x["name"]))
 	namen.sort()
+	var ring := karte.feld.keys().filter(func(z: Vector2i) -> bool: return zf.im_ring(z) and karte.inhalt(z) == Karte.WALL).size()
 	var fels := karte.gelaende.keys().filter(func(z: Vector2i) -> bool: return karte.ist_fels(z)).size()
-	pruefe(namen == ["absatz_oben", "absatz_unten", "hoehle"] and fels >= 20, "E4: drei Zufluchten %s, %d Felsen" % [str(namen), fels])
+	pruefe(namen == ["absatz_oben", "absatz_unten", "hoehle"] and ring >= 20 and fels == 0, "E4: drei Zufluchten %s, Ringe aus %d Erdwällen (G: kein Fels mehr, %d)" % [str(namen), ring, fels])
 	var depots := zf.orte.all(func(x: Dictionary) -> bool: return o.medkits.any(func(m: Dictionary) -> bool: return str(m.get("zuflucht", "")) == str(x["name"])) and o.ladungen_boden.any(func(l: Dictionary) -> bool: return str(l.get("zuflucht", "")) == str(x["name"])))
 	var eingaenge := zf.orte.all(func(x: Dictionary) -> bool: return (x["eingang"] as Vector2i) != Karte.KEINE and not karte.einheiten_weg(x["eingang"] as Vector2i, Werte.ANGRIFFS_ZELLE + Vector2i(2, 0)).is_empty())
 	pruefe(depots and eingaenge, "E4: je Ort Medkit und Sprengladung, Eingang erreichbar")
@@ -312,13 +313,21 @@ func _e7_kampfplatz() -> void:
 	var brakk := Vector2i(24, Werte.ZEILEN / 2)   # Brakk im Gürtel
 	var m := kp.mitte_suchen(brakk)
 	pruefe(m != Karte.KEINE and BrakkGebiete.gebiet(m) == "niemandsland", "E7: Brakk im Gürtel – Mitte des Platzes im Niemandsland (%s)" % str(m))
+	var ring_vorher := o.karte.feld.keys().filter(func(z: Vector2i) -> bool: return zf.im_ring(z) and o.karte.inhalt(z) == Karte.WALL).size()
 	kp.aufbauen(brakk)
+	while not kp._raeumen.is_empty():
+		kp._raeume(kp._raeumen.pop_front() as Dictionary, false)
 	var hoehle: Dictionary = zf.orte.filter(func(x: Dictionary) -> bool: return str(x["name"]) == "hoehle")[0]
+	var im_platz := o.karte.feld.keys().filter(func(z: Vector2i) -> bool: return zf.im_ring(z) and kp.im_innern(z) and o.karte.inhalt(z) == Karte.WALL).size()
+	var weg := ring_vorher - o.karte.feld.keys().filter(func(z: Vector2i) -> bool: return zf.im_ring(z) and o.karte.inhalt(z) == Karte.WALL).size()
+	pruefe(im_platz == 0 and weg > 0, "G: der Platz räumt den Erdwall-Ring der Höhle (%d weg, %d innen übrig)" % [weg, im_platz])
 	_brakk_auf((hoehle["felder"] as Array)[1])
 	var ruht := zf.ruht(hoehle) and not zf.brakk_drin() and zf.hud_zeile() == ""
 	var uhr := float(hoehle["uhr"])
 	zf.weiter(5.0, spiel.kommandant)
-	pruefe(kp.aktiv() and ruht and float(hoehle["uhr"]) == uhr, "E7: die Höhle liegt im Platz und ruht (kein Schutz, keine Uhr), die Felsen bleiben")
+	pruefe(kp.aktiv() and ruht and float(hoehle["uhr"]) == uhr, "E7: die Höhle liegt im Platz und ruht (kein Schutz, keine Uhr)")
 	kp.aufloesen(null, "sofort")
+	var ring_nachher := o.karte.feld.keys().filter(func(z: Vector2i) -> bool: return zf.im_ring(z) and o.karte.inhalt(z) == Karte.WALL).size()
+	pruefe(ring_nachher == ring_vorher, "G: nach dem Duell steht der Ring wieder (%d / %d)" % [ring_nachher, ring_vorher])
 	pruefe(kp.zustand == "aus" and not zf.ruht(hoehle) and zf.brakk_drin(), "E7: nach dem Duell ist sie wieder eine Zuflucht")
 	_brakk_auf(Werte.ANGRIFFS_ZELLE + Vector2i(3, 0))

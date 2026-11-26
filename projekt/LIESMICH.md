@@ -533,6 +533,11 @@ Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme
 - **Scharfschütze (F5):** Gewichte Salve 1,0 · Laservisier 1,0 ab 6 Feldern (sonst 0,3) · Sturm 1,2 unter 6 Feldern (sonst 0,5); nach einem Sturm Laser 1,8; nie dreimal derselbe. Krone alle `BOSS_SNIPER_KRONE_SEK` 7 s (vorher 4), nur zwischen zwei Angriffen; von jeder Krone mindestens ein Angriff (höchstens 7 s Warten). Ursache des Hüpfens: Von der Krone versperrte ihm das Nachbarfeld seines eigenen Walls die Sicht – er griff oben nie an. Jetzt sieht er wie eine Stellung über das eigene Wallstück und wählt nur Kronen mit Sicht auf Brakk. Je Duell zählt das Protokoll die Angriffe je Art („HERAUSFORDERER Angriffe je Art“).
 - Prüfen: `werkzeuge/herausforderertest.gd` (F1: 120-s-Duell, F2: Q/E am Rand-Wall), `werkzeuge/befehl24test.gd` (F4: Werte, Gold −20 %), `werkzeuge/bosstest.gd -- scharf` (F5: 120-s-Duell, Laser im Mittel ≥ 25 %).
 
+**Nachtrag 12 (26.11., Paul): Technogunner und Zufluchts-Ringe (G)**
+- **Technogunner:** Ringsalve mit `BOSS_GUNNER_RING_TAKT` 2,0 s zwischen den drei Schussringen (vorher 0,5; der Bodenring 0,6 s vorher bleibt, jeder Ring steht jetzt für sich). Minigun-Verfolgung: er läuft dabei mit `BOSS_GUNNER_MINIGUN_TEMPO` 0,35 seines Tempos (vorher 0,7, etwa 1,1 statt 2,2 Felder/s) – wer neben ihm steht, ist nach rund 2 s aus dem 6-Felder-Ring.
+- **Zufluchten:** Der Ring um Höhle und Felsabsätze ist aus normalen Erdwällen (vorher Fels). Wie alle Wälle in Befehl 24 nicht abreißbar, aber sprengbar; Brakk kommt mit [Q]/[E] hinauf. Der Aufbau öffnet den Ring nicht (`BrakkZuflucht.im_ring`: keine Durchbrüche, kein Tor). Liegt der Kampfplatz über einer Zuflucht, räumt er ihren Ring wie jeden Wall und baut ihn nach dem Duell wieder auf. Beim Umformen fallen Turm und Stellungen auf die Ring-Wälle, die schon dort stehen.
+- Prüfen: `werkzeuge/b24kartetest.gd` (Ringe aus Erdwällen, Platz räumt und baut sie zurück), `werkzeuge/bosstest.gd -- gunner`.
+
 ### Menü und Editor (20.11., Schritt 5b)
 - **Brakk-Mode** im Startmenü hat jetzt zwei Unterpunkte: **Classic** (der bisherige Brakk-Mode) und **Rogue · Order 24**. Die Szenarien
   stehen weiter unter Herausforderungen (Paul, 20.11.).

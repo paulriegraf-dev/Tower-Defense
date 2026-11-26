@@ -8,7 +8,7 @@ extends SceneTree
 ## user://nemesis_bosstest.json. Am Ende „TEST BOSS <art> OK“ oder die Fehler.
 
 const ARTEN := {"scharf": "scharfschuetze", "gunner": "technogunner", "plasma": "plasmawerfer", "sonde": "technogunner"}
-const SOLL := {"scharf": 16, "gunner": 15, "plasma": 14, "sonde": 18}   # so viele Prüfungen muss jede Art schaffen (Skriptfehler brechen still ab)
+const SOLL := {"scharf": 16, "gunner": 16, "plasma": 14, "sonde": 18}   # so viele Prüfungen muss jede Art schaffen (Skriptfehler brechen still ab)
 
 var spiel: Node
 var o: Order24
@@ -323,11 +323,11 @@ func _gunner() -> void:
 	# Ringsalve: stehen bleiben trifft, darüber springen nicht
 	_stelle(Vector2i(2, -1), Vector2i(-2, -1))
 	h.beginne_angriff("ringsalve")
-	var steht := _lauf(2.5)
+	var steht := _lauf(Werte.BOSS_GUNNER_RING_TAKT * float(Werte.BOSS_GUNNER_RING_ZAHL - 1) + 1.5)   # G: Ringe alle 2,0 s
 	pruefe(_eintraege("schussring").size() == Werte.BOSS_GUNNER_RING_ZAHL and steht >= Werte.BOSS_GUNNER_RING_ANTEIL - 0.01, "Ringsalve: %d Ringe, stehen bleiben kostet %.2f Treffer" % [_eintraege("schussring").size(), steht])
 	_stelle(Vector2i(2, -1), Vector2i(-2, -1))
 	h.beginne_angriff("ringsalve")
-	var springt := _lauf(2.5, func(_i: int) -> void: ego.hoehe = 1.2)
+	var springt := _lauf(Werte.BOSS_GUNNER_RING_TAKT * float(Werte.BOSS_GUNNER_RING_ZAHL - 1) + 1.5, func(_i: int) -> void: ego.hoehe = 1.2)
 	ego.hoehe = 0.0
 	pruefe(springt == 0.0, "Ringsalve: wer darüber springt, bleibt heil (%.2f)" % springt)
 	# Ankerwurf: trifft, zieht heran und hält fest; Tumble im Flug reißt das Seil
@@ -363,6 +363,20 @@ func _gunner() -> void:
 			draussen[0] += g.minigun_schaden - float(draussen[1])
 		draussen[1] = g.minigun_schaden)
 	pruefe(draussen[0] == 0.0, "Minigun außerhalb des Rings: 0 Schaden")
+	# G (26.11., Paul): wer direkt neben ihm steht und sofort wegläuft, ist vor dem Ende aus dem Ring (er läuft langsamer nach)
+	_stelle(Vector2i(-5, 0), Vector2i(-6, 0))
+	var flucht := [g.minigun_schaden, 0.0, 0.0]   # [Stand, Sekunde des letzten Treffers, Zeit]
+	h.beginne_angriff("minigun")
+	_lauf(Werte.BOSS_GUNNER_MINIGUN_ANLAUF + Werte.BOSS_GUNNER_MINIGUN_SEK, func(_i: int) -> void:
+		h._bis_angriff = 999.0
+		flucht[2] = float(flucht[2]) + 1.0 / 60.0
+		var p := k.position + Vector2(EgoModus.TEMPO * Werte.ZELLE / 60.0, 0.0)
+		if kp.im_innern(o.karte.zelle_bei(p)):
+			spiel.ego._setze_fuss(p)
+		if g.minigun_schaden > float(flucht[0]):
+			flucht[1] = flucht[2]
+		flucht[0] = g.minigun_schaden)
+	pruefe(float(flucht[1]) < Werte.BOSS_GUNNER_MINIGUN_ANLAUF + Werte.BOSS_GUNNER_MINIGUN_SEK - 0.5, "Minigun: von direkt daneben weggelaufen – letzter Treffer nach %.1f s (feuert bis %.1f s)" % [float(flucht[1]), Werte.BOSS_GUNNER_MINIGUN_ANLAUF + Werte.BOSS_GUNNER_MINIGUN_SEK])
 	# Lichtsäule: vor der dritten nie, danach etwa jede zweite
 	var ausweichen := func(n: int) -> int:
 		var vor := _eintraege("saeule_ausweichen").size()

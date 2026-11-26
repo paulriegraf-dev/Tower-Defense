@@ -1,8 +1,9 @@
 class_name BrakkZuflucht
 extends RefCounted
 ## E4 (26.11., Paul): Befehl 24, große Karte – drei Zufluchtsorte (Höhle im Niemandsland, Felsabsatz hinter jedem
-## Außenposten). Felsen rundum, ein Eingang, kein Versteck: Türme und Stellungen nehmen Brakk dort nicht als Ziel,
-## Bodentruppen schon. Je Ort ein Medkit-Depot (medkit_takt) und ein Sprengstoffkasten (ZUFLUCHT_LADUNG_SEK).
+## Außenposten). Ein Ring aus Erdwällen rundum (G, 26.11., Paul: vorher Fels), ein Eingang, kein Versteck: Türme und
+## Stellungen nehmen Brakk dort nicht als Ziel, Bodentruppen schon.
+## Je Ort ein Medkit-Depot (medkit_takt) und ein Sprengstoffkasten (ZUFLUCHT_LADUNG_SEK).
 ## Gegen Camping: Eine Uhr läuft, solange Brakk drin steht (draußen halb so schnell zurück). Bei ZUFLUCHT_WARNUNG_SEK
 ## warnt Sonde 7, bei ZUFLUCHT_VERLUST_SEK formen die Verteidiger den Ort um – Fabrik, Geschützturm und zwei Stellungen
 ## fallen vom Himmel, der Ort ist danach ein Lager.
@@ -64,10 +65,19 @@ func brakk_drin() -> bool:
 	return k != null and not k.gefallen and not ort_bei(karte.zelle_bei(_fuss())).is_empty()
 
 
-## Gehört das Feld zu einem Ort samt Felsen und Vorplatz? (Dort baut der Aufbau nichts hin.)
+## Gehört das Feld zu einem Ort samt Ring und Vorplatz? (Dort baut der Aufbau nichts hin.)
 func bereich(z: Vector2i) -> bool:
 	for ort: Dictionary in orte:
 		if (ort["rechteck"] as Rect2i).grow(2).has_point(z):
+			return true
+	return false
+
+
+## G: Gehört das Feld zum Erdwall-Ring einer Zuflucht (ohne den Eingang)? Den öffnet der Aufbau nicht.
+func im_ring(z: Vector2i) -> bool:
+	for ort: Dictionary in orte:
+		var r: Rect2i = ort["rechteck"]
+		if r.grow(1).has_point(z) and not r.has_point(z) and z != (ort["eingang"] as Vector2i):
 			return true
 	return false
 
@@ -124,8 +134,9 @@ func _depot(ort: Dictionary, dt: float) -> void:
 
 # ------------------------------------------------------------------ Verlust: der Ort wird ein Lager
 
-## Was fällt, je Ort: Fabrik innen, Geschützturm auf einem T-Stück am Rand (Turmfeld, zwei Stützen im Felsring, eine
-## innen), zwei Stellungen im Felsring. Felder, auf denen Brakk steht, bleiben aus.
+## Was fällt, je Ort: Fabrik innen, Geschützturm auf einem T-Stück am Rand (Turmfeld, zwei Stützen im Ring, eine
+## innen), zwei Stellungen im Ring (G: auf den Erdwällen, die dort schon stehen). Felder, auf denen Brakk
+## steht, bleiben aus.
 func umbau(ort: Dictionary) -> Array:
 	var r: Rect2i = ort["rechteck"]
 	if str(ort["name"]) == "hoehle":
@@ -196,16 +207,13 @@ func _fall_weiter(_dt: float) -> void:
 			karte.aktualisiere_pfad()
 
 
-## Ein Teil der neuen Basis schlägt auf. Fels darunter verschwindet; steht Brakk auf dem Hauptfeld, bleibt es aus.
+## Ein Teil der neuen Basis schlägt auf (G: Ring-Felder sind schon Erdwälle). Steht Brakk auf dem Hauptfeld, bleibt es aus.
 func _aufschlag(art: String, zellen: Array, ort: Dictionary) -> void:
 	var brakk := karte.zelle_bei(_fuss())
 	var haupt: Vector2i = zellen[0]
 	if haupt == brakk:
 		protokoll.append({"was": "ausgelassen", "bei": o24.zeit, "art": art})
 		return
-	for z: Vector2i in zellen:
-		if z != brakk and karte.ist_fels(z):
-			karte.setze_gelaende(z, "")
 	match art:
 		"fabrik":
 			if karte.ist_frei(haupt) and o24._setze_fabrik(haupt, str(Werte.ALARM_TRUPPEN.pick_random()), 1):
@@ -246,9 +254,6 @@ func hud_zeile() -> String:
 
 ## Minikarte der Ego-Sicht: Kreuz je Zuflucht (blinkt nach der Warnung), verlorene als Lager-Symbol.
 func minikarte(ci: CanvasItem, o: Vector2, zelle: float) -> void:
-	for z: Vector2i in karte.gelaende:
-		if karte.ist_fels(z):
-			ci.draw_rect(Rect2(o + Vector2(z) * zelle, Vector2(zelle, zelle)), Color("4a4f5c"))
 	for ort: Dictionary in orte:
 		var r: Rect2i = ort["rechteck"]
 		var m := o + (Vector2(r.position) + Vector2(r.size) * 0.5) * zelle

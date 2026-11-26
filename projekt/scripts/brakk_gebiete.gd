@@ -116,7 +116,7 @@ static func plan_b24(name: String) -> Array[String]:
 		for p: Vector2i in [c + Vector2i(-1, 0), c, c + Vector2i(1, 0), c + Vector2i(0, innen), Vector2i(r.position.x + 2, c.y + 2 * innen), Vector2i(r.position.x + 3, c.y + 2 * innen)]:
 			if p.x >= 0 and p.y >= 0 and p.x < s and p.y < h:
 				feld[p.y][p.x] = "#"
-	# E4: Zufluchten – Felder „z“, Felsen „R“ rundum (nicht über den Kartenrand), Eingang „e“ nach Westen
+	# E4: Zufluchten – Felder „z“, Ring „R“ rundum (G: Erdwälle, nicht über den Kartenrand), Eingang „e“ nach Westen
 	for zname: String in Werte.ZUFLUCHTEN:
 		var innen_r := zuflucht_rechteck(zname)
 		var ring := innen_r.grow(1)
@@ -185,14 +185,14 @@ static func formationen_b24() -> Array[String]:
 	return aus if not aus.is_empty() else Werte.ALARM_FORMATIONEN.duplicate()
 
 
-## Ein _b24-Plan, mal oben, mal unten gespiegelt: {"waelle": im Format von main._setze_stand, "fels": Felder,
-## "zufluchten": je {"name", "felder", "eingang", "ring"}}. Der Name der Zuflucht folgt ihrer Lage nach dem Spiegeln.
+## Ein _b24-Plan, mal oben, mal unten gespiegelt: {"waelle": im Format von main._setze_stand,
+## "zufluchten": je {"name", "felder", "eingang", "rechteck"}}. Der Name der Zuflucht folgt ihrer Lage nach dem Spiegeln.
+## G (26.11., Paul): Die Ringe („R“ im Plan) sind normale Erdwälle (vorher Fels) – sie stehen in `waelle`.
 static func formation(name: String) -> Dictionary:
 	var plan: Array = plan_laden(name).duplicate()
 	if Zufall.ganz(2) == 1:
 		plan.reverse()
 	var waelle: Array = []
-	var fels: Array[Vector2i] = []
 	var felder: Array[Vector2i] = []
 	var eingaenge: Array[Vector2i] = []
 	for y in plan.size():
@@ -202,7 +202,7 @@ static func formation(name: String) -> Dictionary:
 				"#", "O":
 					waelle.append([x, y, "tor" if zeile[x] == "O" else ""])
 				"R":
-					fels.append(Vector2i(x, y))
+					waelle.append([x, y, ""])
 				"z":
 					felder.append(Vector2i(x, y))
 				"e":
@@ -229,4 +229,4 @@ static func formation(name: String) -> Dictionary:
 				eingang = e
 		var zname := "hoehle" if gebiet(gruppe[0]) == "niemandsland" else ("absatz_oben" if r.position.y < Werte.ZEILEN / 2 else "absatz_unten")
 		zufluchten.append({"name": zname, "felder": gruppe, "eingang": eingang, "rechteck": r})
-	return {"waelle": waelle, "fels": fels, "zufluchten": zufluchten}
+	return {"waelle": waelle, "zufluchten": zufluchten}

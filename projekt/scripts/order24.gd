@@ -388,10 +388,8 @@ func _karte_aufbauen() -> void:
 		if not Nachschlag.PLAENE_GROSS.has(wahl):
 			wahl = formationen.pick_random()
 		if bool(w("gebiete")):
-			var form := BrakkGebiete.formation(wahl)   # E3/E4: _b24-Plan mit Felsen und Zufluchten
-			spiel._setze_stand({"waelle": form["waelle"], "fabriken": [], "batterien": []})
-			for z: Vector2i in form["fels"]:
-				karte.setze_gelaende(z, "fels")
+			var form := BrakkGebiete.formation(wahl)   # E3/E4: _b24-Plan mit Zufluchten
+			spiel._setze_stand({"waelle": form["waelle"], "fabriken": [], "batterien": []})   # G: samt den Erdwall-Ringen der Zufluchten
 			zuflucht = BrakkZuflucht.new(self, form["zufluchten"])
 		else:
 			stellungen = spiel.formation_aufbauen(wahl, 0, 0, 0)   # 20.11.: Fabriken und Stellungen setzt Order24 (Lager)
@@ -789,6 +787,8 @@ func _oeffne_weg(von: Array[Vector2i], ziel: Vector2i, extra: Dictionary) -> int
 func _durchgang_kosten(z: Vector2i) -> float:
 	if not karte.in_karte(z):
 		return INF
+	if zuflucht != null and zuflucht.im_ring(z):
+		return INF   # G: der Erdwall-Ring einer Zuflucht bleibt zu (sie hat ihren Eingang)
 	if karte.inhalt(z) == Karte.WALL:
 		return 6.0 if not karte.ausbau.has(z) and not karte.stuetze_von.has(z) else INF
 	if karte.ist_begehbar(z) and karte.ist_frei(z):
@@ -3015,7 +3015,7 @@ func _tor_setzen() -> void:
 	if vorher == 0:
 		vorher = 999
 	for z: Vector2i in karte.feld.keys():
-		if karte.feld[z] != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)):
+		if karte.feld[z] != Karte.WALL or karte.ausbau.has(z) or karte.stuetze_von.has(z) or _im_schild(karte.mitte(z)) or (zuflucht != null and zuflucht.im_ring(z)):   # G: kein Tor in den Ring einer Zuflucht
 			continue
 		var quer := (karte.inhalt(z + Vector2i(0, 1)) == Karte.WALL and karte.inhalt(z - Vector2i(0, 1)) == Karte.WALL) or (karte.inhalt(z + Vector2i(1, 0)) == Karte.WALL and karte.inhalt(z - Vector2i(1, 0)) == Karte.WALL)
 		if not quer:

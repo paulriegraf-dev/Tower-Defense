@@ -211,7 +211,7 @@ func weiter_angriff(dt: float, k: Kommandant) -> void:
 				a["angesagt"] = Werte.BOSS_GUNNER_MINIGUN_ANLAUF
 				a["ring_in"] = 0.0
 		"feuer":
-			h._laufe(dt, k, 2.0, h.tempo() * 0.7)
+			h._laufe(dt, k, 2.0, h.tempo() * Werte.BOSS_GUNNER_MINIGUN_TEMPO)
 			a["ring_in"] = float(a["ring_in"]) - dt
 			if float(a["ring_in"]) <= 0.0:   # der Reichweitenring geht mit
 				a["ring_in"] = 0.25
