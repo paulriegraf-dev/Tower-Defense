@@ -1632,16 +1632,17 @@ func ausschalten_hinweis() -> Dictionary:
 	if k.is_empty():
 		return {}
 	var p: Dictionary = k["person"]
-	return {"text": "[E] halten – endgültig ausschalten (%d Gold, Sprengladung)" % Werte.NEMESIS_BEUTE_GOLD, "name": voller_name(p),
+	return {"text": "[E] halten – endgültig ausschalten (%d Gold, Sprengladung)" % roundi(Werte.NEMESIS_BEUTE_GOLD * o24.wf("gold_faktor")), "name": voller_name(p),
 		"farbe": umriss_farbe(p), "anteil": float(_halten["t"]) / halte_zeit(p) if not _halten.is_empty() else -1.0}
 
 
 ## 25.11. (Paul): Beute fürs endgültige Ausschalten – Gold, eine Sprengladung ins Gepäck (bis spreng_max; im
 ## Überläufer-Verlauf gibt es keine) und Erfahrung. Kein Ring mehr.
 func _belohnung() -> String:
-	var teile: PackedStringArray = ["%d Gold" % Werte.NEMESIS_BEUTE_GOLD]
-	spiel.budget += Werte.NEMESIS_BEUTE_GOLD
-	o24.sabotage["geld"] = int(o24.sabotage["geld"]) + Werte.NEMESIS_BEUTE_GOLD
+	var beute := o24.gold(Werte.NEMESIS_BEUTE_GOLD)   # F4 (26.11., Paul): gold_faktor
+	var teile: PackedStringArray = ["%d Gold" % beute]
+	spiel.budget += beute
+	o24.sabotage["geld"] = int(o24.sabotage["geld"]) + beute
 	if not o24.geheim:
 		if o24.ladungen < int(o24.w("spreng_max")):
 			o24.ladungen += 1

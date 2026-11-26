@@ -314,10 +314,10 @@ func _dauerfeuer(ego: EgoModus, k: Kommandant) -> void:
 		_treffer += 1
 	_hp_vorher = hp
 	var sek := (Time.get_ticks_msec() - t0) / 1000.0
-	if not o.fabrik_hp.has(fz) or sek > 25.0:
+	if not o.fabrik_hp.has(fz) or sek > 35.0:   # F4: 1380 Leben
 		ego._feuer = false
-		pruefe(not o.fabrik_hp.has(fz) and sek > 12.5 and sek < 17.5, "5 Fabrik mit %d Leben fällt nach %.1f s Dauerfeuer (Stufe %d, ohne Ringe): %d Schüsse, davon %d Treffer an der Fabrik" % [int(o.wf("fabrik_leben")), sek, k.fortschritt.stufe, schuesse, _treffer])
-		pruefe(int(Order24.STANDARD["fabrik_leben"]) == 920 and is_equal_approx(Order24.LANZE_FABRIK, 0.10), "5 fabrik_leben 920, Ladestrahl weiter mindestens 10 %")
+		pruefe(not o.fabrik_hp.has(fz) and sek > 18.75 and sek < 26.25, "5 Fabrik mit %d Leben fällt nach %.1f s Dauerfeuer (Stufe %d, ohne Ringe): %d Schüsse, davon %d Treffer an der Fabrik" % [int(o.wf("fabrik_leben")), sek, k.fortschritt.stufe, schuesse, _treffer])
+		pruefe(int(Order24.STANDARD["fabrik_leben"]) == 1380 and is_equal_approx(Order24.LANZE_FABRIK, 0.10), "5 fabrik_leben 1380 (F4: × 1,5), Ladestrahl weiter mindestens 10 %")
 		_weiter()
 
 
@@ -410,7 +410,7 @@ func _beute(_ego: EgoModus, k: Kommandant) -> void:
 	k.position = o.beute_boden[0]["pos"]
 	var leer := str(o.beute_boden[0]["ring"]) == ""
 	o._beute_pflegen(k)
-	pruefe(leer and int(spiel.budget) == budget + int(o.wf("praemie_fabrik") * 0.5), "6 alle Arten: stattdessen Gold (+%d)" % (int(spiel.budget) - budget))
+	pruefe(leer and int(spiel.budget) == budget + roundi(int(o.wf("praemie_fabrik") * 0.5) * o.wf("gold_faktor")), "6 alle Arten: stattdessen Gold (+%d)" % (int(spiel.budget) - budget))
 	f.ringe.assign(merk_ringe)
 	f.ring_stufen = merk_stufen
 	# Sabotage gibt keinen Ring
@@ -439,7 +439,7 @@ func _ausschalten(k: Kommandant) -> void:
 		var ringe: Dictionary = k.fortschritt.ring_stufen.duplicate()
 		var xp := k.fortschritt.erfahrung
 		var hinweis := n.ausschalten_hinweis()
-		pruefe(str(hinweis.get("text", "")) == "[E] halten – endgültig ausschalten (50 Gold, Sprengladung)" and hinweis.has("farbe"), "7 Hinweis: „%s“" % str(hinweis.get("text", "")))
+		pruefe(str(hinweis.get("text", "")) == "[E] halten – endgültig ausschalten (40 Gold, Sprengladung)" and hinweis.has("farbe"), "7 Hinweis: „%s“" % str(hinweis.get("text", "")))
 		n.ausschalten_taste(true)
 		for i in 9:
 			n._halten_weiter(0.1)
@@ -448,7 +448,7 @@ func _ausschalten(k: Kommandant) -> void:
 			n._halten_weiter(0.1)
 		var voll := int(o.w("spreng_max"))
 		pruefe(noch and not n.personen.has(p), "7 Rang %d: nach 0,9 s noch da, nach 1,1 s ausgeschaltet" % rang)
-		pruefe(int(spiel.budget) == budget + 50 and k.fortschritt.ring_stufen == ringe and k.fortschritt.erfahrung >= xp + 10, "7 Beute: +%d Gold, +%d Erfahrung, kein Ring" % [int(spiel.budget) - budget, k.fortschritt.erfahrung - xp])
+		pruefe(int(spiel.budget) == budget + 40 and k.fortschritt.ring_stufen == ringe and k.fortschritt.erfahrung >= xp + 10, "7 Beute: +%d Gold, +%d Erfahrung, kein Ring" % [int(spiel.budget) - budget, k.fortschritt.erfahrung - xp])
 		pruefe(o.ladungen == (1 if rang == 1 else voll), "7 Sprengladungen im Gepäck: %d (höchstens %d)" % [o.ladungen, voll])
 
 

@@ -159,6 +159,7 @@ func _process(_delta: float) -> bool:
 			_weiter()
 		11:
 			_phasen_pruefen()
+			_f4_balance()
 			if fehler.is_empty():
 				print("TEST BEFEHL24 OK")
 			else:
@@ -274,6 +275,29 @@ func _zerstoeren() -> void:
 		pruefe(not spiel.fabriken.has(z) and o.truemmer.has(z) and int(o.sabotage["fabriken"]) == vorher + 1, "Zerstörung: Fabrik %s ist Trümmer" % str(z))
 		pruefe(o.truppen_limit(z) == -1, "Zerstörung: kommt nicht wieder")
 		return
+
+
+## F4 (26.11., Paul): Werte und Gold. Erst die Goldsumme dieses Laufs (Sabotage, Zerstörung, Kills), dann eine
+## typische Folge von Einnahmen – beides −20 % ± 2.
+func _f4_balance() -> void:
+	var s := Order24.STANDARD
+	pruefe(int(s["welle_takt"]) == 45 and int(s["welle_takt_min"]) == 19 and int(s["fabrik_leben"]) == 1380 and int(s["pilot_verzug"]) == 25 and int(s["pilot_neu"]) == 30 and int(s["pilot_reparatur"]) == 5 and is_equal_approx(float(s["gold_faktor"]), 0.8),
+		"F4: Wellentakt 45/19 s, Fabrik 1380 Leben, Pilot 25/30/5 s, Gold × 0,8")
+	var lauf := float(o.sabotage["geld"]) / maxf(1.0, float(o.gold_roh))
+	pruefe(o.gold_roh > 0 and absf(lauf - 0.8) <= 0.02, "F4: Gold dieses Laufs %d statt %d (%.1f %%)" % [int(o.sabotage["geld"]), o.gold_roh, (lauf - 1.0) * 100.0])
+	var roh_vorher := o.gold_roh
+	var summe := 0
+	var folge: Array[int] = []
+	for i in 120:
+		folge.append(7)   # Kopfgeld
+	for i in 12:
+		folge.append(21)   # Elite
+	folge.append_array([200, 200, 100, 100, 100, 50])   # Fabriken, Sabotagen, Beute-Gold, Ausschalten
+	var roh := 0
+	for b: int in folge:
+		roh += b
+		summe += o.gold(b)
+	pruefe(absf(float(summe) / float(roh) - 0.8) <= 0.02 and o.gold_roh - roh_vorher == roh, "F4: typische Folge %d statt %d Gold (%.1f %%)" % [summe, roh, (float(summe) / float(roh) - 1.0) * 100.0])
 
 
 ## Phasen nach Zeit (Stellschrauben): Flucht → Sabotage → Jagd → Vorstoß.

@@ -43,7 +43,6 @@ var _licht3d: Array = []          # je Wandstück [MeshInstance3D, gehört zu ei
 var _brakk_gut := {}              # letzte Lage Brakks innerhalb der Lichtwand
 var _warte_auf: Einheit = null    # der Herausforderer, solange er auf die Bergung wartet
 var _warte_t := 0.0
-var _zum_hq := true               # nach dem Duell: Brakk ans Myriaden-HQ
 
 
 func einrichten(p_o24: Order24) -> void:
@@ -79,9 +78,15 @@ func im_innern(z: Vector2i) -> bool:
 	return aktiv() and z.x > mitte.x - h.x and z.x < mitte.x + h.x - 1 and z.y > mitte.y - h.y and z.y < mitte.y + h.y - 1
 
 
-## Ist das Feld einer der festen Wälle innen (KAMPFPLATZ_INNEN)?
+## Eine Krone, auf die der Boss steigt: F2 (26.11., Paul) ein Wall des Randrings (innen steht nichts Festes mehr;
+## vorher KAMPFPLATZ_INNEN).
 func ist_krone(z: Vector2i) -> bool:
-	return aktiv() and Werte.KAMPFPLATZ_INNEN.has(z - mitte)
+	return ist_rand(z) and karte.inhalt(z) == Karte.WALL
+
+
+## F2: Gehört das Feld zum Randring des Platzes (Rand-Wall oder Lücke)? Diese Wälle sprengt Brakk nicht.
+func ist_rand(z: Vector2i) -> bool:
+	return innen(z) and not im_innern(z)
 
 
 # ------------------------------------------------------------------ Form (relativ zur Mitte)
@@ -286,7 +291,9 @@ func _zurueck(e: Dictionary) -> void:
 	for x: Variant in spiel.einheiten.duplicate():
 		if is_instance_valid(x) and x != spiel.kommandant and karte.zelle_bei((x as Einheit).position) == z:
 			(x as Einheit).position = karte.mitte(o24._freies_feld_bei(karte.mitte(z), z))
+	var k: Kommandant = spiel.kommandant
 	var kd: Dictionary = e["karte"]
+	var brakk_hier := k != null and not k.gefallen and (kd.has("feld") or e["fabrik"] != null) and karte.zelle_bei(_fuss()) == z
 	for name: String in kd:
 		(karte.get(name) as Dictionary)[z] = kd[name]
 	for name: String in ["paar", "generator_paar"]:   # Paare in beide Richtungen
@@ -299,6 +306,8 @@ func _zurueck(e: Dictionary) -> void:
 		var f: Dictionary = e["fabrik"]
 		f["einheiten"] = (f.get("einheiten", []) as Array).filter(func(x: Variant) -> bool: return is_instance_valid(x))
 		spiel.fabriken[z] = f
+	if brakk_hier:
+		_brakk_versetzen(karte.mitte(o24._freies_feld_bei(karte.mitte(z), z)), false)   # F1: Brakk blieb im Platz stehen – erst jetzt ist sein Feld belegt
 	karte._gewichte_fuer(z)
 	if kd.has("feld"):
 		var p := karte.mitte(z)
@@ -350,15 +359,14 @@ func licht_an() -> void:
 
 
 ## Duell vorbei. `geborgen_wird`: der Herausforderer liegt – erst nach seiner Bergung (oder [E]) geht es zurück.
-## `art`: "hq" (Brakk ans Myriaden-HQ), "bleibt" (Brakk bleibt stehen), "sofort" (ohne Bilder und Wartezeit – Brakk ist
-## gefallen, der Lauf ist vorbei).
-func aufloesen(geborgen_wird: Einheit = null, art: String = "hq") -> void:
+## `art`: "bleibt" (Brakk bleibt stehen – F1, 26.11., Paul: kein Versetzen ans Myriaden-HQ mehr), "sofort" (ohne
+## Bilder und Wartezeit – Brakk ist gefallen, der Lauf ist vorbei).
+func aufloesen(geborgen_wird: Einheit = null, art: String = "bleibt") -> void:
 	if not aktiv():
 		return
 	protokoll.append({"was": "aufloesen", "bei": o24.zeit, "art": art})
-	_zum_hq = art == "hq"
 	if art == "sofort":
-		_rueck_starten(false)
+		_rueck_starten()
 		for z: Vector2i in _steigen:
 			if karte.inhalt(z) == Karte.WALL:
 				karte.entferne(z)
@@ -375,7 +383,7 @@ func aufloesen(geborgen_wird: Einheit = null, art: String = "hq") -> void:
 
 ## Zurück zur normalen Karte: Lichtwand aus, Brakk an das Myriaden-HQ (mit dem Ring des Herausforderers), die Wälle des
 ## Platzes steigen auf, dann fällt, was vorher dort stand.
-func _rueck_starten(beam: bool) -> void:
+func _rueck_starten() -> void:
 	zustand = "rueck"
 	_licht_an = false
 	licht = 0.0
@@ -400,15 +408,7 @@ func _rueck_starten(beam: bool) -> void:
 			i += 1
 		else:
 			_zurueck(e)   # nur Daten (z. B. ein gesprengter Wall, der nachgebaut wird)
-	var k: Kommandant = spiel.kommandant
-	if beam and k != null and not k.gefallen:
-		var ziel := o24._freies_feld_bei(o24.hq_mitte() + Vector2(2.0 * Werte.ZELLE, 0.0), karte.zelle_bei(o24.hq_mitte()))
-		_brakk_versetzen(karte.mitte(ziel), true)
-		spiel.melde(tr("Sonde 7: „Zurück zum HQ. Der Technoclan baut wieder auf.“"), 3.5)
-		for b: Dictionary in o24.beute_boden:
-			if bool(b.get("herausforderer", false)):
-				b["pos"] = karte.mitte(o24._freies_feld_bei(karte.mitte(ziel) + Vector2(Werte.ZELLE, 0.0), ziel))
-				o24._beute_bild_weg(b)   # wird am neuen Ort neu gebaut
+	# F1 (26.11., Paul): Brakk bleibt, wo er steht – fällt etwas Gemerktes auf sein Feld, schiebt _zurueck ihn beiseite
 	protokoll.append({"was": "rueck", "bei": o24.zeit, "steigen": _steigen.size(), "zurueck": _plan.size()})
 
 
@@ -445,7 +445,7 @@ func schritt(dt: float) -> void:
 			_warte_t += dt
 			var liegt := _warte_auf != null and is_instance_valid(_warte_auf) and o24.nemesis.kampfunfaehig.any(func(k: Dictionary) -> bool: return k["einheit"] == _warte_auf)
 			if not liegt or _warte_t >= Werte.KAMPFPLATZ_BERGUNG_MAX:
-				_rueck_starten(_zum_hq)
+				_rueck_starten()
 			return
 		"rueck":
 			_takt -= dt
@@ -505,6 +505,7 @@ func _lande(z: Vector2i) -> bool:
 			_raus(x as Einheit, false)
 	karte.setze(z, Karte.WALL)
 	gesetzt.append(z)
+	karte.fest[z] = true   # F2: nicht abreißbar (wie alle Wälle in Befehl 24)
 	spiel.effekte.flaeche(p, Werte.ZELLE * 0.8, STAUB)
 	Ton.am_ort(spiel, "tf-earth", p)
 	_ruetteln(p, 0.08)
@@ -516,12 +517,12 @@ func _steige(z: Vector2i) -> void:
 	if karte.inhalt(z) != Karte.WALL:
 		return
 	karte.entferne(z)
+	karte.fest.erase(z)
 	spiel.effekte.flaeche(karte.mitte(z), Werte.ZELLE * 0.6, STAUB)
 	var hd: HdAnsicht = spiel.hd
 	if hd == null:
 		return
-	var kasten := _kasten(hd, ERDE)
-	kasten.position = _zu3d(karte.mitte(z), hd.H * 0.5)
+	var kasten := _block(hd, z, false)   # F3: der echte Erdwall steigt auf (Mesh liegt am Boden des Felds)
 	var tw := kasten.create_tween()
 	tw.tween_property(kasten, "position:y", Werte.KAMPFPLATZ_FALL_HOEHE, 0.5).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	tw.tween_callback(kasten.queue_free)
@@ -681,13 +682,13 @@ func _zu3d(p: Vector2, h: float) -> Vector3:
 	return Vector3(p.x / Werte.ZELLE, h, (p.y - Werte.KARTE_OBEN) / Werte.ZELLE)
 
 
-func _kasten(hd: HdAnsicht, farbe: Color) -> MeshInstance3D:
-	var kasten := o24._kasten3d(hd, Vector3(1.0, hd.H, 1.0), farbe, Vector3.ZERO)
-	var stoff := kasten.material_override as StandardMaterial3D
-	stoff.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	stoff.emission_enabled = false
-	stoff.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-	return kasten
+## F3 (26.11., Paul): ein Erdwall (bzw. Fabriksockel) aus der HD-Ansicht, wie er auf der Karte steht – für das, was
+## fällt oder aufsteigt. Das Mesh liegt am Boden des Felds `z`; verschoben wird nur in der Höhe.
+func _block(hd: HdAnsicht, z: Vector2i, fabrik: bool) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	m.mesh = hd.einzel_mesh(z, "fabrik" if fabrik else "mauer")
+	hd.add_child(m)
+	return m
 
 
 ## Ein fallender Block: der Kasten stürzt aus KAMPFPLATZ_FALL_HOEHE, sein Schatten am Boden wächst mit (`anteil` 0..1).
@@ -696,7 +697,7 @@ func _fallen_bild(z: Vector2i, anteil: float, fabrik: bool) -> void:
 	if hd == null:
 		return
 	if not _fallend.has(z):
-		var kasten := _kasten(hd, FABRIK_FARBE if fabrik else ERDE)
+		var kasten := _block(hd, z, fabrik)   # F3 (26.11., Paul): Erdwall bzw. Fabriksockel wie auf der Karte, kein Platzhalter
 		var schatten := MeshInstance3D.new()
 		var scheibe := CylinderMesh.new()
 		scheibe.top_radius = 0.6
@@ -713,7 +714,7 @@ func _fallen_bild(z: Vector2i, anteil: float, fabrik: bool) -> void:
 		_fallend[z] = [kasten, schatten]
 	var b: Array = _fallend[z]
 	var fall := anteil * anteil   # er wird schneller
-	(b[0] as Node3D).position = _zu3d(karte.mitte(z), hd.H * 0.5 + Werte.KAMPFPLATZ_FALL_HOEHE * (1.0 - fall))
+	(b[0] as Node3D).position = Vector3(0.0, Werte.KAMPFPLATZ_FALL_HOEHE * (1.0 - fall), 0.0)   # F3: das Mesh liegt schon am Feld
 	(b[1] as Node3D).scale = Vector3.ONE * maxf(0.05, anteil)
 
 

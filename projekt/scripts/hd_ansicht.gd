@@ -931,6 +931,32 @@ func _ist_wand(z: Vector2i) -> bool:
 	return karte.feld.get(z, -1) == Karte.WALL
 
 
+## F3 (26.11., Paul, Befehl 24): ein einzelner Bau als eigenes Mesh – "mauer" (wie _baue_waende: Tech-Mauer bzw.
+## Block mit Fase und Krone, alle Seiten offen) oder "fabrik" (Sockel wie _fabrik_block). Liegt am Boden des Felds `z`;
+## den Kontaktschatten lässt es weg (beim Fallen zeichnet der Aufrufer den wachsenden Schatten).
+func einzel_mesh(z: Vector2i, art: String) -> ArrayMesh:
+	if _mats.is_empty():
+		_wand_materialien()
+	var alt := _flaechen
+	_flaechen = {}
+	if art == "fabrik":
+		_fabrik_block(z)
+	else:
+		_mauer(z, Werte.wand_stil == "block", true)
+	var mesh := ArrayMesh.new()
+	var i := 0
+	for name: String in _flaechen:
+		if name == "kontakt":
+			continue
+		var st: SurfaceTool = _flaechen[name]
+		st.generate_normals()
+		st.commit(mesh)
+		mesh.surface_set_material(i, _mats[name])
+		i += 1
+	_flaechen = alt
+	return mesh
+
+
 func _baue_waende() -> void:
 	if _mats.is_empty():
 		_wand_materialien()
@@ -1002,15 +1028,16 @@ func _oben_viereck(x0: float, x1: float, z0: float, z1: float, y: float) -> void
 
 
 ## Tech-Mauer (bzw. schlichter Block): Körper, Oberseite mit der Karte, abgeschrägte Kanten an offenen Seiten.
-func _mauer(z: Vector2i, schlicht: bool) -> void:
+## `allein`: ohne Nachbarn, alle Seiten offen (einzel_mesh, Befehl 24).
+func _mauer(z: Vector2i, schlicht: bool, allein := false) -> void:
 	var x0 := float(z.x)
 	var x1 := x0 + 1.0
 	var z0 := float(z.y)
 	var z1 := z0 + 1.0
-	var n := _ist_wand(z + Vector2i.UP)
-	var s := _ist_wand(z + Vector2i.DOWN)
-	var w := _ist_wand(z + Vector2i.LEFT)
-	var o := _ist_wand(z + Vector2i.RIGHT)
+	var n := _ist_wand(z + Vector2i.UP) and not allein
+	var s := _ist_wand(z + Vector2i.DOWN) and not allein
+	var w := _ist_wand(z + Vector2i.LEFT) and not allein
+	var o := _ist_wand(z + Vector2i.RIGHT) and not allein
 	var f := 0.0 if schlicht else FASE
 	var hk := H - f   # Höhe des Körpers bis zur Fase
 	# Oberseite (eingerückt an offenen Seiten)

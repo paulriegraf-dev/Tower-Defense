@@ -167,7 +167,7 @@ static var sim_mal: int = 1
 
 static func sim_schritt() -> float:
 	return SIM_SCHRITT * float(sim_mal)
-const VERSION: int = 78       # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 79      # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1920,7 +1920,8 @@ const HERAUSFORDERER_BEVORZUGT_RANG := 3   # bevorzugt: Brakkbrecher oder mindes
 const SONDE_BOSS_CHANCE := 0.35           # C1: zu Minute 14 tritt mit dieser Chance Sonde 7 selbst an (statt eines Benannten)
 const HERAUSFORDERER_ANSAGE_SEK := 10.0   # so lange vorher meldet sich Sonde 7
 const HERAUSFORDERER_ABSTAND := Vector2(10.0, 12.0)   # so weit vor Brakk kommt er an (Felder, von-bis)
-const HERAUSFORDERER_PAUSE_MAX := 90.0    # so lange ruht der Fahrplan höchstens; dann kommen die Jagdtrupps zurück
+const HERAUSFORDERER_PAUSE_MAX := 90.0    # ohne Lichtwand ruht der Fahrplan höchstens so lange; dann kommen die Jagdtrupps zurück (F1: mit Lichtwand ruht er, bis sie fällt)
+const HERAUSFORDERER_SCHONFRIST := 5.0    # F1 (26.11., Paul): nach dem Duell so lange keine neue Welle
 const HERAUSFORDERER_TAFEL_SEK := 3.5
 const HERAUSFORDERER_MUSIK_DB := -80.0    # C1: die Musik ist während der Herausforderung aus (vorher -9); dafür die Erscheinungsmusik
 const HERAUSFORDERER_LEBEN_MAL := 6.0     # sein Leben: so oft Brakks Maximalleben beim Auftritt
@@ -1979,12 +1980,7 @@ const HERAUSFORDERER_RING_GEL_TEMPO := 0.55       # … auf so viel Lauftempo
 ## Süden; der Platz reicht von -8 bis 7 und von -6 bis 5.
 const KAMPFPLATZ_GROESSE := Vector2i(16, 12)   # Außenmaß in Feldern; der Rand ist ein Ring aus Erdwällen …
 const KAMPFPLATZ_LUECKE := 2                   # … mit einer Lücke je Seite, so breit (Felder, mittig)
-const KAMPFPLATZ_INNEN: Array[Vector2i] = [    # innen, fest: zwei 2×1-Blöcke, ein L aus drei Wällen, eine Krone 2×2
-	Vector2i(-5, -3), Vector2i(-4, -3),
-	Vector2i(3, 2), Vector2i(4, 2),
-	Vector2i(2, -3), Vector2i(3, -3), Vector2i(3, -2),
-	Vector2i(-5, 1), Vector2i(-4, 1), Vector2i(-5, 2), Vector2i(-4, 2),
-]
+const KAMPFPLATZ_INNEN: Array[Vector2i] = []   # F2 (26.11., Paul): innen neutral – nur der Randring; nur die Bosse stellen etwas hinein (vorher zwei 2×1-Blöcke, ein L, eine Krone 2×2)
 const KAMPFPLATZ_ABSTAND := 1                  # so viele Felder rund um den Platz werden mit geräumt (und dürfen nicht im Schild liegen)
 const KAMPFPLATZ_RAEUM_VERZUG := 1.0           # so lange nach der Ansage merkt sich das Spiel den Bereich und räumt ihn …
 const KAMPFPLATZ_RAEUM_TAKT := 0.04            # … alle so viele Sekunden ein Feld (spätestens, wenn die Wälle fallen, ist alles weg)
@@ -2038,7 +2034,7 @@ const BOSS_SEITSCHRITT_SEK := 0.5              # wer nicht tumbelt, macht so lan
 ## Scharfschütze – Distanz und Wälle
 const BOSS_SNIPER_ABSTAND_MAL := 1.3           # Lieblingsabstand × …
 const BOSS_SNIPER_ABSTAND_MIN := 8.0           # … mindestens so weit
-const BOSS_SNIPER_KRONE_SEK := 4.0             # so oft wechselt er die Wallkrone …
+const BOSS_SNIPER_KRONE_SEK := 7.0             # so oft wechselt er die Wallkrone (F5, 26.11., Paul: 7 statt 4; nur zwischen zwei Angriffen, auf der Krone mindestens einer – höchstens so lange wartet er dort darauf) …
 const BOSS_SNIPER_ANKER_ANSAGE := 0.5          # … mit Brakks Anker: so lange steht das Seil …
 const BOSS_SNIPER_ANKER_ZUG := 0.35            # … dann zieht es ihn hinauf
 const BOSS_SNIPER_SALVE_ANSAGE := 0.6          # Salve in Wellen: Ansage (die Fächer am Boden) …

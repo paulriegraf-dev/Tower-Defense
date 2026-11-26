@@ -46,8 +46,8 @@ const STANDARD := {
 	"trupp_max": 5,
 	"sicht_verlust": 8,         # so lange aus der Sicht, dann sucht der Trupp …
 	"such_sek": 20,             # … so lange um den letzten Punkt, dann wieder Streife
-	"welle_takt": 60,           # in der Jagd alle so viele Sekunden ein neuer Trupp aus den Schild-Fabriken
-	"welle_takt_min": 25,       # 20.11. (Paul): 25 statt 40 s, Eskalation – der Takt sinkt bis hierhin …
+	"welle_takt": 45,           # in der Jagd alle so viele Sekunden ein neuer Trupp aus den Schild-Fabriken – F4 (26.11., Paul): 45 statt 60 (Gegnerfrequenz +25 %)
+	"welle_takt_min": 19,       # 20.11. (Paul): 25 statt 40 s; F4 (26.11.): 19 statt 25 – Eskalation – der Takt sinkt bis hierhin …
 	"eskalation_sek": 600,      # … über so viele Sekunden ab Jagdbeginn
 	"welle_wachsen_sek": 120,   # alle so viele Sekunden ein Mann mehr je Welle
 	"stufe2_ab": 300,           # ab hier kommen Wellen auf Fabrik-Stufe 2 …
@@ -106,6 +106,7 @@ const STANDARD := {
 	"kill_stufe": 2,            # … je so vielen Kills an derselben Stellung (am Boden: derselben Fabrik) sinkt es um 1 …
 	"kill_frist": 30,           # … und ist nach so vielen Sekunden ohne Kill dort wieder voll (gegen stumpfes Abfarmen)
 	"praemie_fabrik": 200,      # 20.11. (Paul): wenig Geld, dafür Erfahrung
+	"gold_faktor": 0.8,         # F4 (26.11., Paul): jedes Gold-Einkommen × so viel (Kills, Fabriken, Sabotage, Beute-Gold, Kopfgeld beim Ausschalten, geheimes Einkommen; vorher 1,0); Erfahrung bleibt
 	"praemie_stellung": 0,
 	"praemie_wall": 0,
 	"xp_fabrik": 25,            # Erfahrung für Brakk: zerstörte Fabrik …
@@ -123,13 +124,13 @@ const STANDARD := {
 	"tuerme": 6,                # Formtürme auf der Formation
 	"lager_tuerme": 1,          # dazu je Lager ein Geschützturm
 	"heiltuerme": 1,            # dazu Heiltürme mit Instandsetzung
-	"fabrik_leben": 920,        # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon) – 25.11. (Paul): rund 15 s Dauerfeuer auf der Startstufe (vorher 1500)
+	"fabrik_leben": 1380,       # Fabrik außerhalb: so viel Schaden bis zu Trümmern (Ladestrahl zählt mit 10 % davon) – 25.11. (Paul): rund 15 s Dauerfeuer auf der Startstufe (vorher 1500); F4 (26.11., Paul): × 1,5 – vorher 920
 	"sabotage_halten": 5,       # Sekunden [F] an der Rückseite halten – 20.11. (Paul): 5 statt 3, dafür brechen Treffer nicht mehr ab
 	"sabotage_lahm": 0,         # so lange liefert eine sabotierte Fabrik nichts – 0 = bis der Pilot sie repariert (20.11., Paul)
 	"praemie_sabotage": 100,
 	"alarm_radius": 6,          # Felder: bei Angriff auf eine Fabrik laufen Truppen im Umkreis hin
-	"pilot_verzug": 40,         # Sekunden nach einer Sabotage geht ein Pilot mit zwei Begleitern los
-	"pilot_neu": 45,            # fällt der Pilot, dauert der nächste so lange
+	"pilot_verzug": 25,         # F4 (26.11., Paul): 25 statt 40 – Sekunden nach einer Sabotage geht ein Pilot mit zwei Begleitern los
+	"pilot_neu": 30,            # F4: 30 statt 45 – fällt der Pilot, dauert der nächste so lange
 	"pilot_reparatur": 5,       # Sekunden Reparatur vor Ort
 	"kern_leben": 400,          # Turmkern: leer geschossen fällt der Turm aus, bis ein Pilot ihn repariert (20.11., Paul)
 	"spreng_drop": 5,           # Prozent: gefallene Truppe lässt eine Sprengladung fallen – 20.11. (Paul): vorher 12
@@ -272,6 +273,7 @@ var schild_auf := 1.0             # 0..1 Kuppel des Schilds (schließt sich in d
 var nemesis: Nemesis = null       # 22.11. (Paul): Nemesis-System – Eliten sind Personen (scripts/nemesis.gd)
 var herausforderer: NemesisHerausforderer = null   # 26.11.: der Boss zu Minute 9 und 14
 var plan_pause := 0.0             # so lange ruhte der Fahrplan schon (Herausforderung)
+var _war_gesperrt := false        # F1: ruhte der Fahrplan im letzten Bild (danach die Schonfrist)
 var sichter: Einheit = null       # 22.11.: Stellung, die Brakk zuletzt gesehen hat (Nemesis: Sichtung)
 var markiert_bis := -1.0          # 22.11. (Nemesis Teil 3): bis hier kennen alle Trupps Brakks Ort (Markierung)
 var _zange := {}                 # 23.11.: {"ziel": Vector2i, "erst_bereit": float, "los": bool}
@@ -1205,8 +1207,12 @@ func _process(delta: float) -> void:
 	_beute_pflegen(k)
 	tafeln.weiter(echt)
 	herausforderer.weiter(echt)
-	if herausforderer.sperrt():
+	var gesperrt := herausforderer.sperrt()
+	if gesperrt:
 		_fahrplan_ruht(echt)
+	elif _war_gesperrt:
+		_naechste_welle = maxf(_naechste_welle, zeit + Werte.HERAUSFORDERER_SCHONFRIST)   # F1 (26.11., Paul): Schonfrist nach dem Duell
+	_war_gesperrt = gesperrt
 	_tuerme_pflegen(echt)
 	_fabriken_pflegen(k, echt)
 	_abstand_halten(echt)
@@ -1218,8 +1224,8 @@ func _process(delta: float) -> void:
 		if phase() == "vorstoss" and not hq_eingenommen and not herausforderer.sperrt():
 			_vorstoss(echt)
 	_medkits_pflegen(k, echt)
-	if zuflucht != null:
-		zuflucht.weiter(echt, k)   # E4: Aufenthaltsuhr, Depot, Kasten, Umformen
+	if zuflucht != null and not gesperrt:
+		zuflucht.weiter(echt, k)   # E4: Aufenthaltsuhr, Depot, Kasten, Umformen (F1: ruht im Duell)
 	_3d_pflegen()
 	if wf("ueberleben_sek") > 0.0 and zeit >= wf("ueberleben_sek") and not geheim:
 		_ende(true)
@@ -1678,10 +1684,10 @@ func _beute_pflegen(k: Kommandant) -> void:
 		if k.gefallen or k.position.distance_to(b["pos"] as Vector2) > BEUTE_NAH * Werte.ZELLE:
 			continue
 		if ring == "":
-			var gold := int(wf("praemie_fabrik") * BEUTE_GOLD_ANTEIL)
-			spiel.budget += gold
-			sabotage["geld"] = int(sabotage["geld"]) + gold
-			spiel.melde("Gold geborgen: +%d" % gold, 3.0)
+			var geborgen := gold(int(wf("praemie_fabrik") * BEUTE_GOLD_ANTEIL))   # F4: gold_faktor
+			spiel.budget += geborgen
+			sabotage["geld"] = int(sabotage["geld"]) + geborgen
+			spiel.melde("Gold geborgen: +%d" % geborgen, 3.0)
 		elif bool(b.get("stufe", false)):
 			if f == null or f.schenke_stufe(ring, spiel) != "":
 				continue
@@ -1838,14 +1844,30 @@ func _kopfgeld(ort: String, mal: int = 1) -> void:
 	var n := int(m[0]) if zeit - float(m[1]) < wf("kill_frist") else 0
 	if ort.begins_with("f:"):
 		n = 0   # 20.11. (Paul): Truppen am Boden bringen immer das volle Kopfgeld – nur Stellungen nutzen sich ab
-	var betrag := maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe")))) * mal
+	var betrag := gold(maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe")))) * mal)   # F4: gold_faktor
 	_kopfgeld_merk[ort] = [n + 1, zeit]
 	if betrag > 0:
 		sabotage["geld"] = int(sabotage["geld"]) + betrag
 		spiel.budget += betrag   # ohne Meldung: sie würde wichtigere Zeilen verdrängen – das Budget oben zählt mit
 
 
+## F4 (26.11., Paul): Gold-Einkommen × gold_faktor. Der Rest hinter dem Komma wird mitgeführt – so stimmt auch die
+## Summe vieler kleiner Kopfgelder (7 × 0,8 gibt abwechselnd 5 und 6). `gold_roh`: was es ohne Faktor gewesen wäre.
+var gold_roh := 0
+var _gold_rest := 0.0
+
+func gold(betrag: int) -> int:
+	if betrag <= 0:
+		return betrag
+	gold_roh += betrag
+	var g := float(betrag) * wf("gold_faktor") + _gold_rest
+	var ganz := floori(g + 0.0001)
+	_gold_rest = g - float(ganz)
+	return ganz
+
+
 func _praemie(was: String, betrag: int, text: String, xp: int = 0) -> void:
+	betrag = gold(betrag)   # F4 (26.11., Paul): gold_faktor
 	sabotage[was] = int(sabotage[was]) + 1
 	sabotage["geld"] = int(sabotage["geld"]) + betrag
 	spiel.budget += betrag
@@ -1936,6 +1958,8 @@ func ladung_setzen(z: Vector2i) -> String:
 		return "Kein Erdwall vor dir – stell dich direkt davor."
 	if _im_schild(karte.mitte(z)):
 		return "Der Schild schützt diesen Erdwall."
+	if herausforderer != null and herausforderer.kampfplatz.ist_rand(z):
+		return tr("Die Lichtwand hält diesen Wall – im Kampfplatz wird nicht gesprengt.")   # F2 (26.11., Paul)
 	for zu: Dictionary in zuender:
 		if zu["zelle"] == z:
 			return "Hier tickt schon eine Ladung."
@@ -2298,6 +2322,9 @@ func _fahrplan_ruht(dt: float) -> void:
 	_vorstoss_wahl += dt
 	_lager_naechst += dt
 	_tore_naechst += dt
+	_pilot_ab += dt   # F1 (26.11., Paul): auch der Pilot wartet
+	for a: Dictionary in pilot_auftraege:
+		a["ab"] = float(a["ab"]) + dt
 
 
 ## einheit.gd: Hält eine Truppe am Boden das Feuer auf Brakk zurück? (Herausforderung – nur er, Türme und Stellungen)
@@ -3305,7 +3332,7 @@ func _geheim_pflegen(k: Kommandant, echt: float) -> void:
 	_myr_uhr += echt
 	if _myr_uhr >= wf("myr_takt"):
 		_myr_uhr = 0.0
-		spiel.budget += int(w("geheim_einkommen"))
+		spiel.budget += gold(int(w("geheim_einkommen")))   # F4: gold_faktor
 		if not myr_hq_besetzt:
 			_myr_welle()
 	# Brakk nimmt Checkpoints ein (er gehört jetzt zu den Myriaden) – 26.11. (Paul): [F] am Checkpoint CP_HALTEN_SEK halten

@@ -8,7 +8,7 @@ extends SceneTree
 ## user://nemesis_bosstest.json. Am Ende „TEST BOSS <art> OK“ oder die Fehler.
 
 const ARTEN := {"scharf": "scharfschuetze", "gunner": "technogunner", "plasma": "plasmawerfer", "sonde": "technogunner"}
-const SOLL := {"scharf": 14, "gunner": 15, "plasma": 14, "sonde": 18}   # so viele Prüfungen muss jede Art schaffen (Skriptfehler brechen still ab)
+const SOLL := {"scharf": 16, "gunner": 15, "plasma": 14, "sonde": 18}   # so viele Prüfungen muss jede Art schaffen (Skriptfehler brechen still ab)
 
 var spiel: Node
 var o: Order24
@@ -191,7 +191,7 @@ func _scharf() -> void:
 	var s := h.typ as NemesisBossScharf
 	var k: Kommandant = spiel.kommandant
 	pruefe(s.abstand(5.0) == Werte.BOSS_SNIPER_ABSTAND_MIN and is_equal_approx(s.abstand(8.0), 10.4), "Abstand ×1,3, mindestens 8 Felder")
-	_folge(6.0, func(letzte: Array, a: String) -> bool: return a != "kugel" and (letzte.is_empty() or str(letzte[-1]) != "sturm" or a == "laser"))
+	_folge(6.0, func(_letzte: Array, a: String) -> bool: return a != "kugel")   # F5: nach einem Sturm kein erzwungener Laser mehr
 	# Salve in vier Wellen: wer stehen bleibt, wird getroffen
 	_stelle(Vector2i(5, -1), Vector2i(-3, -1))
 	h.beginne_angriff("salve")
@@ -222,6 +222,7 @@ func _scharf() -> void:
 	h.kennwerte["wall"] = true
 	_lauf(4.0)
 	pruefe(not _eintraege("anker").is_empty() and int(h.zaehler["wall"]) >= 1, "mit dem Anker auf die Krone (%d-mal)" % _eintraege("anker").size())
+	_scharf_120()
 	# Phase 2: Zielmarkierung – genau sechs Stellungen, keine nach
 	_stelle(Vector2i(5, -1), Vector2i(-3, -1))
 	h.einheit.leben = h.einheit.max_leben * 0.4
@@ -253,6 +254,49 @@ func _scharf() -> void:
 			break
 	var bleiben := Werte.BOSS_SNIPER_STELLUNGEN.filter(func(r: Vector2i) -> bool: return not (merk_gesetzt as Array).has(kp.mitte + r))
 	pruefe(kp.zustand == "aus" and bleiben.is_empty(), "die Stellungen gehörten zum Platz und sind mit ihm aufgestiegen")
+
+
+## F5 (26.11., Paul): 120 s freies Duell (Brakk steht 8 Felder entfernt). Laservisier mindestens 25 % der Angriffe;
+## Kronenwechsel nur zwischen zwei Angriffen, von jeder Krone mindestens ein Angriff.
+func _scharf_120() -> void:
+	_stelle(Vector2i(5, -1), Vector2i(-3, -1))
+	h._wall_abkling = 0.0
+	h._bis_angriff = 1.0
+	h.kennwerte["wall"] = true
+	var vorher: Dictionary = h.angriffe_je_art.duplicate()
+	var ohne_vorher := h.kronen_ohne_angriff
+	var gelesen := [h.protokoll.size()]
+	var anker := [0, 0]   # [Kronenwechsel, davon während eines Angriffs]
+	var erwartung := [0.0, 0]   # [Summe der Laser-Wahrscheinlichkeiten, Zahl der Wahlen]
+	_lauf(120.0, func(_i: int) -> void:
+		while gelesen[0] < h.protokoll.size():
+			var x: Dictionary = h.protokoll[gelesen[0]]
+			if str(x["was"]) == "anker":
+				anker[0] += 1
+				if not h.angriff.is_empty():
+					anker[1] += 1
+			elif str(x["was"]) == "wahl":
+				var g: Dictionary = (x["gewichte"] as Dictionary).duplicate()
+				var l: Array = x["letzte"]
+				if g.size() > 1 and l.size() >= 2 and str(l[-1]) == str(l[-2]):
+					g.erase(str(l[-1]))   # wie waehle_angriff: nie dreimal derselbe
+				var s := 0.0
+				for a: String in g:
+					s += float(g[a])
+				erwartung[0] += float(g.get("laser", 0.0)) / maxf(0.001, s)
+				erwartung[1] += 1
+			gelesen[0] += 1)
+	var je := {}
+	var summe := 0
+	for a: String in h.angriffe_je_art:
+		je[a] = int(h.angriffe_je_art[a]) - int(vorher.get(a, 0))
+		summe += int(je[a])
+	var laser := float(je.get("laser", 0)) / maxf(1.0, float(summe))
+	print("     Angriffe je Art in 120 s: %s" % str(je))
+	var erwartet := float(erwartung[0]) / maxf(1.0, float(erwartung[1]))
+	pruefe(summe >= 10 and erwartet >= 0.25 and laser >= 0.15, "120-s-Duell: %d Angriffe, Laservisier erwartet %.0f %% (mindestens 25 %%), gezogen %.0f %%" % [summe, erwartet * 100.0, laser * 100.0])
+	pruefe(anker[0] >= 2 and anker[1] == 0 and h.kronen_ohne_angriff == ohne_vorher,
+		"120-s-Duell: %d Kronenwechsel (alle %.0f s möglich), keiner während eines Angriffs, keine Krone ohne Angriff verlassen" % [anker[0], Werte.BOSS_SNIPER_KRONE_SEK])
 
 
 func _sein_schaden() -> float:
@@ -425,7 +469,7 @@ func _plasma() -> void:
 	_lauf(0.1)
 	pruefe(p.phase2 and p.gewichte(5.0, []).has("brandfaecher"), "Phase 2: Brandfächer dazu")
 	var meiste := [0]
-	for n in 3:
+	for n in 6:   # F2: ohne die festen Wälle innen fliegen die Geschosse weiter – mehr Fächer, bis die Grenze greift
 		h.angriff = {}
 		h.einheit.position = o.karte.mitte(_feld(kp.mitte + Vector2i(-3, -1)))
 		h.beginne_angriff("brandfaecher")

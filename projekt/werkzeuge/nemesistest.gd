@@ -391,7 +391,8 @@ func _ausschalten_und_wiedersehen() -> void:
 		for r: String in k.fortschritt.ringe:
 			stufen2 += k.fortschritt.ring_stufe(r)
 	pruefe(not n.personen.has(p) and n.ausgeschaltet.has(p), "Ausschalten: Ziv ist endgültig weg (Liste, Chronik: „%s“)" % str(((p["chronik"] as Array).back() as Dictionary).get("text", "")))
-	pruefe(stufen2 == stufen and int(spiel.budget) == budget + Werte.NEMESIS_BEUTE_GOLD, "Ausschalten: Beute %d Gold, kein Ring (Budget %d → %d, Ringe %d → %d, Stufen %d → %d)" % [Werte.NEMESIS_BEUTE_GOLD, budget, int(spiel.budget), ringe, k.fortschritt.ringe.size() if k.fortschritt != null else 0, stufen, stufen2])
+	var beute := roundi(Werte.NEMESIS_BEUTE_GOLD * o.wf("gold_faktor"))   # F4 (26.11.): Gold × 0,8
+	pruefe(stufen2 == stufen and int(spiel.budget) == budget + beute, "Ausschalten: Beute %d Gold, kein Ring (Budget %d → %d, Ringe %d → %d, Stufen %d → %d)" % [beute, budget, int(spiel.budget), ringe, k.fortschritt.ringe.size() if k.fortschritt != null else 0, stufen, stufen2])
 	# Namenlose kann man so nicht ausschalten
 	var q := n.neue_person("plasmawerfer")
 	var e2 := truppe("plasmawerfer", 4, 0.5)

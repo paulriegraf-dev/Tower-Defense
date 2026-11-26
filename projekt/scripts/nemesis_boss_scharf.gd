@@ -4,7 +4,7 @@ extends NemesisBoss
 ##  - Bewegung: größerer Abstand (Lieblingsabstand × 1,3, mindestens 8 Felder), wechselt oft die Wallkrone und zieht sich
 ##    mit Brakks Anker hinauf (0,5 s steht das Seil, dann der Zug).
 ##  - Phase 1: Salve in vier Wellen (Fächer zu drei Schüssen, je 6° weiter – Stehenbleiben reicht nie), Sturm wie bisher,
-##    nach einem Sturm das Laservisier (Ring 10 Felder; 1,5 s rote Linie und „ANVISIERT“, dann Strahl je Sekunde, solange
+##    das Laservisier (F5: regulär, nach einem Sturm bevorzugt) (Ring 10 Felder; 1,5 s rote Linie und „ANVISIERT“, dann Strahl je Sekunde, solange
 ##    Brakk in Reichweite und Sicht ist, höchstens 2,5 s).
 ##  - Phase 2: einmal die Zielmarkierung – sechs Erdwälle mit Stellung fallen an den Rand des Kampfplatzes, je mit einem
 ##    Scharfschützen Stufe 1 (sichtbare Geschosse mit Aufleuchten, nichts wird ersetzt; der Boss geht nicht hinein).
@@ -26,6 +26,10 @@ func wall_abkling() -> float:
 	return Werte.BOSS_SNIPER_KRONE_SEK
 
 
+func krone_mit_angriff() -> bool:
+	return true   # F5: kein Hüpfen von Krone zu Krone ohne Schuss
+
+
 ## Mit Brakks Anker auf die Krone: das Seil steht 0,5 s, dann zieht es ihn hinauf.
 func weg_auf_krone(von: Vector2, nach: Vector2) -> Dictionary:
 	var hoch: float = spiel.hd.H if spiel.hd != null else 1.0
@@ -39,9 +43,11 @@ func weg_auf_krone(von: Vector2, nach: Vector2) -> Dictionary:
 func gewichte(abstand_felder: float, letzte: Array) -> Dictionary:
 	if _marke_offen and not marke_gesetzt:
 		return {"zielmarkierung": 1.0}
+	# F5 (26.11., Paul): das Laservisier ist ein regulärer Angriff (vorher nur nach einem Sturm, dann erzwungen)
+	var g := {"salve": 1.0, "laser": 1.0 if abstand_felder >= 6.0 else 0.3, "sturm": 1.2 if abstand_felder < 6.0 else 0.5}
 	if not letzte.is_empty() and str(letzte[-1]) == "sturm":
-		return {"laser": 1.0}   # nach einem Sturm läuft er in Reichweite und zielt
-	return {"salve": 1.0, "sturm": 1.6 if abstand_felder < 6.0 else 0.7}
+		g["laser"] = 1.8   # nach einem Sturm läuft er gern in Reichweite und zielt
+	return g
 
 
 ## Ringe für Salve (Durchschlag, Wirbel) wirken auf seine Salve in Wellen; eine Kugel hat er nicht.
@@ -119,7 +125,7 @@ func weiter_angriff(dt: float, k: Kommandant) -> void:
 	var t := float(a["t"])
 	var e := h.einheit
 	var d := e.position.distance_to(k.position) / Werte.ZELLE
-	var sicht := o24.karte.sicht_frei(e.position, k.position)
+	var sicht := h.sieht(e.position, k.position)   # F5: von der Krone über das eigene Wallstück
 	match str(a.get("phase", "anlauf")):
 		"anlauf":
 			if (d <= Werte.BOSS_SNIPER_LASER_WEITE - 0.5 and sicht) or t >= Werte.BOSS_SNIPER_LASER_ANLAUF:

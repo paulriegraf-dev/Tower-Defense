@@ -68,6 +68,11 @@ func wall_abkling() -> float:
 	return 9.0
 
 
+## F5 (26.11., Paul): Muss er von einer Krone erst einen Angriff ausführen, bevor er wieder herunter darf?
+func krone_mit_angriff() -> bool:
+	return false
+
+
 ## Der Weg auf die Krone (eine Aktion des Herausforderers): ein Sprung.
 func weg_auf_krone(von: Vector2, nach: Vector2) -> Dictionary:
 	return {"art": "sprung", "t": 0.0, "sek": Werte.HERAUSFORDERER_SPRUNG_SEK, "von": von, "nach": nach}

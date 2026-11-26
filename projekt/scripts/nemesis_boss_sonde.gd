@@ -327,7 +327,7 @@ func _krone_bei(p: Vector2) -> Vector2i:
 	for dy in range(-2, 3):
 		for dx in range(-2, 3):
 			var z := c + Vector2i(dx, dy)
-			if karte.inhalt(z) == Karte.WALL and not karte.ausbau.has(z) and (not h.kampfplatz.zu() or h.kampfplatz.im_innern(z)) and Vector2(dx, dy).length() < weit:
+			if karte.inhalt(z) == Karte.WALL and not karte.ausbau.has(z) and (not h.kampfplatz.zu() or h.kampfplatz.innen(z)) and Vector2(dx, dy).length() < weit:
 				weit = Vector2(dx, dy).length()
 				beste = z
 	return beste

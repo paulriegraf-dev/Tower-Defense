@@ -4,7 +4,8 @@ extends Node
 ##  - 10 s vorher meldet sich Sonde 7, die Phasenzeile heißt „Herausforderung“, die Musik wird leiser.
 ##  - Solange er steht, ruht der Fahrplan des Technoclan (Wellen, Vorstoß, Eskalation, Überläufer – nur die
 ##    Überlebens-Uhr läuft weiter). Jagdtrupps ziehen sich zu ihren Fabriken zurück, Bodentruppen schießen nicht;
-##    Türme und Stellungen schießen weiter. Nach HERAUSFORDERER_PAUSE_MAX s kommen die Trupps zurück.
+##    Türme und Stellungen schießen weiter. F1 (26.11., Paul): Das gilt, solange die Lichtwand des Kampfplatzes steht;
+##    nur ohne Lichtwand kommen die Trupps nach HERAUSFORDERER_PAUSE_MAX s zurück.
 ## Dieses Kind von Order24 führt den Ablauf; die Figur selbst steuert es mit angehaltener Truppenlogik (halt).
 
 var o24: Order24
@@ -30,6 +31,10 @@ var _ausweich_rest := 0.0
 var _wall_rest := 0.0            # > 0: er steht auf einer Wallkrone
 var _wall_abkling := 4.0
 var zaehler := {"sprung": 0, "tumble": 0, "ausweichen": 0, "wall": 0}
+var angriffe_je_art := {}         # F5 (26.11., Paul): je Duell, wie oft welcher Angriff (Protokoll, Test)
+var _krone_angriffe := 0         # F5: Angriffe von der aktuellen Krone …
+var _krone_warte := 0.0          # … und wie lange er schon auf den ersten wartet
+var kronen_ohne_angriff := 0     # F5: Prüfung – Kronen, die er ohne Angriff verließ (nach BOSS_SNIPER_KRONE_SEK Warten)
 ## Angriffe (Punkt 5)
 var angriff := {}                # {"art", "teil": "anlauf"|"ansage"|"fenster", "t", "um", "ziel", "richtung"}
 var wut := false                 # unter halbem Leben
@@ -68,9 +73,10 @@ func einrichten(p_nem: Nemesis) -> void:
 	kampfplatz.einrichten(o24)
 
 
-## Steht er gerade und ruht deshalb der Fahrplan? (nach HERAUSFORDERER_PAUSE_MAX s nicht mehr)
+## Ruht deshalb der Fahrplan? F1 (26.11., Paul): solange die Lichtwand steht (auch bis zur Bergung); ohne Lichtwand
+## nur die ersten HERAUSFORDERER_PAUSE_MAX s des Duells.
 func sperrt() -> bool:
-	return zustand == "duell" and seit <= Werte.HERAUSFORDERER_PAUSE_MAX
+	return kampfplatz.zu() or (zustand == "duell" and seit <= Werte.HERAUSFORDERER_PAUSE_MAX)
 
 
 ## Läuft eine Herausforderung (angesagt oder im Gang)?
@@ -178,6 +184,7 @@ func _auftritt() -> void:
 	_wall_rest = 0.0
 	_wall_abkling = 4.0
 	zaehler = {"sprung": 0, "tumble": 0, "ausweichen": 0, "wall": 0}
+	angriffe_je_art = {}
 	kennwerte = nem.lernen.kennwerte()
 	_aktion_in = float(kennwerte["takt"])
 	angriff = {}
@@ -216,6 +223,8 @@ func ende(wie: String) -> void:
 	if zustand != "duell":
 		return
 	zustand = "ruhe"
+	protokoll.append({"was": "angriffe", "bei": o24.zeit, "je_art": angriffe_je_art.duplicate(), "kronen_ohne_angriff": kronen_ohne_angriff})   # F5
+	print("HERAUSFORDERER Angriffe je Art: %s" % str(angriffe_je_art))
 	naechste += 1
 	while naechste < zeiten.size() and float(zeiten[naechste]) - Werte.HERAUSFORDERER_ANSAGE_SEK <= o24.zeit:
 		naechste += 1   # dauerte das Duell über den nächsten Termin hinaus, fällt der aus
@@ -226,8 +235,9 @@ func ende(wie: String) -> void:
 	angriff = {}
 	_aktion = {}
 	einzug = {}
-	# C1: nach der Bergung zurück zur normalen Karte, Brakk ans Myriaden-HQ; fällt Brakk, ist der Lauf vorbei (sofort)
-	kampfplatz.aufloesen(einheit if wie == "vertrieben" and einheit != null and is_instance_valid(einheit) else null, "sofort" if wie == "gesiegt" else "hq")
+	# C1: nach der Bergung zurück zur normalen Karte; F1 (26.11., Paul): Brakk bleibt, wo er steht. Fällt Brakk, ist der
+	# Lauf vorbei (sofort).
+	kampfplatz.aufloesen(einheit if wie == "vertrieben" and einheit != null and is_instance_valid(einheit) else null, "sofort" if wie == "gesiegt" else "bleibt")
 	_drohne_aus(1.0)
 	vergeltung_aus()
 	if typ != null:
@@ -580,7 +590,7 @@ func schritt(dt: float) -> void:
 	else:
 		_bis_angriff -= dt
 		var d := einheit.position.distance_to(k.position) / Werte.ZELLE
-		if _bis_angriff <= 0.0 and d <= Werte.HERAUSFORDERER_ANGRIFF_WEITE and o24.karte.sicht_frei(einheit.position, k.position):
+		if _bis_angriff <= 0.0 and d <= Werte.HERAUSFORDERER_ANGRIFF_WEITE and sieht(einheit.position, k.position):
 			beginne_angriff(naechster_angriff(d))
 		else:
 			_bewegen(dt, k)
@@ -597,7 +607,13 @@ func _bewegen(dt: float, k: Kommandant) -> void:
 	if _wall_rest > 0.0:
 		_wall_rest -= dt
 		if _wall_rest <= 0.0:
-			_vom_wall()
+			if typ.krone_mit_angriff() and _krone_angriffe < 1 and _krone_warte < Werte.BOSS_SNIPER_KRONE_SEK:
+				_wall_rest = 0.25   # F5 (26.11., Paul): erst ein Angriff von dieser Krone
+				_krone_warte += 0.25
+			else:
+				if typ.krone_mit_angriff() and _krone_angriffe < 1:
+					kronen_ohne_angriff += 1
+				_vom_wall()
 		return
 	if _wall_abkling <= 0.0 and typ.wall_abkling() < INF and (k.oben or bool(kennwerte.get("wall", false)) or typ.wall_abkling() < 9.0):
 		_wall_abkling = typ.wall_abkling()   # C2: der Scharfschütze wechselt oft die Krone, der Technogunner nie
@@ -725,6 +741,16 @@ func _aktion_weiter(dt: float) -> void:
 		einheit.set_meta("hebt_ab", schweben)
 
 
+## F5 (26.11., Paul): Sieht er Brakk von `von` aus? Auf einer Wallkrone wie eine Stellung: über das eigene Wallstück
+## hinweg (vorher versperrte ihm das Nachbarfeld seiner Krone die Sicht – er griff von oben nie an).
+func sieht(von: Vector2, nach: Vector2) -> bool:
+	var karte: Karte = o24.karte
+	var z := karte.zelle_bei(von)
+	if einheit != null and is_instance_valid(einheit) and einheit.zustand == Einheit.Zustand.AUF_POSTEN and karte.inhalt(z) == Karte.WALL:
+		return karte.sicht_von_wall(z, von, nach)
+	return karte.sicht_frei(von, nach)
+
+
 ## Auf eine Wallkrone in der Nähe, von der er Brakk im Lieblingsabstand sieht. Oben zählt er wie in einer Stellung.
 func _auf_den_wall(k: Kommandant) -> bool:
 	var karte: Karte = o24.karte
@@ -733,14 +759,17 @@ func _auf_den_wall(k: Kommandant) -> bool:
 	var beste := Karte.KEINE
 	var wert := INF
 	var platz := kampfplatz.zu()
-	for dy in range(-4, 5):
-		for dx in range(-4, 5):
+	var r := 6 if platz else 4   # F2: im Platz liegen die Kronen am Rand – weiter suchen
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
 			var z := hier + Vector2i(dx, dy)
 			if not karte.in_karte(z) or karte.inhalt(z) != Karte.WALL or karte.zelle_bei(k.position) == z:
 				continue
-			if (platz and not kampfplatz.im_innern(z)) or karte.ausbau.has(z):
-				continue   # C1: im Kampfplatz nicht auf den Rand (von dort sprang er hinaus); C2: nicht in Stellungen
-			var w := absf(karte.mitte(z).distance_to(k.position) / Werte.ZELLE - abstand) - (2.0 if kampfplatz.ist_krone(z) else 0.0)   # C1: die festen Wälle bevorzugt
+			if (platz and not kampfplatz.innen(z)) or karte.ausbau.has(z):
+				continue   # F2 (26.11., Paul): im Kampfplatz auf den Randring (herunter springt er nach innen, _vom_wall); C2: nicht in Stellungen
+			if not karte.sicht_von_wall(z, karte.mitte(z), k.position):
+				continue   # F5 (26.11., Paul): nur Kronen, von denen er Brakk sieht – sonst hüpft er oben nur herum
+			var w := absf(karte.mitte(z).distance_to(k.position) / Werte.ZELLE - abstand) - (2.0 if kampfplatz.ist_krone(z) else 0.0)   # F2: die Kronen des Randrings bevorzugt
 			if w < wert:
 				wert = w
 				beste = z
@@ -750,6 +779,8 @@ func _auf_den_wall(k: Kommandant) -> bool:
 	_weg.clear()
 	_wall_rest = randf_range(Werte.HERAUSFORDERER_WALL_SEK.x, Werte.HERAUSFORDERER_WALL_SEK.y)
 	einheit.zustand = Einheit.Zustand.AUF_POSTEN   # Höhe: die HD-Ansicht und Brakks Waffen sehen ihn oben
+	_krone_angriffe = 0
+	_krone_warte = 0.0
 	zaehler["wall"] += 1
 	return true
 
@@ -817,6 +848,9 @@ func beginne_angriff(art: String) -> void:
 	_weg.clear()
 	einheit.set_meta("hebt_ab", 0.0)
 	_letzte.append(art)
+	angriffe_je_art[art] = int(angriffe_je_art.get(art, 0)) + 1   # F5
+	if einheit.zustand == Einheit.Zustand.AUF_POSTEN:
+		_krone_angriffe += 1
 	angriff = {"art": art, "teil": "ansage", "t": 0.0, "um": 0.0, "angesagt": 0.0, "ziel": k.position, "richtung": (k.position - einheit.position).normalized()}
 	if typ != null and typ.beginne(art):
 		return   # C2: ein Angriff des Bosstyps
@@ -1141,7 +1175,9 @@ func naechster_angriff(abstand: float) -> String:
 		wunsch = (typ.ring_angriff(str(RING_ANGRIFF.get(ring_kopie(), ""))) if typ != null else str(RING_ANGRIFF.get(ring_kopie(), ""))) if str(vergeltung["art"]) == "ring" else str(WAFFEN_ANGRIFF[str(vergeltung["art"])])
 	if wunsch != "" and not (_letzte.size() >= 2 and str(_letzte[-1]) == wunsch and str(_letzte[-2]) == wunsch):
 		return wunsch
-	return waehle_angriff(abstand, _letzte, typ.gewichte(abstand, _letzte) if typ != null else {})
+	var gewichte: Dictionary = typ.gewichte(abstand, _letzte) if typ != null else {}
+	protokoll.append({"was": "wahl", "bei": o24.zeit, "gewichte": gewichte.duplicate(), "letzte": _letzte.slice(-2)})   # F5: für die Erwartung je Art
+	return waehle_angriff(abstand, _letzte, gewichte)
 
 
 ## Order24 (Brakks Stellvertreter): einer seiner Treffer landet. Gibt den Faktor auf den Schaden zurück und setzt, was

@@ -46,7 +46,7 @@ func _initialize() -> void:
 	spiel.protokoll_an = false
 
 
-const SOLL_PRUEFUNGEN := 108
+const SOLL_PRUEFUNGEN := 115   # F1: +3, F2: +4
 const SOLL_ECHT := 6
 var geprueft := 0
 
@@ -145,6 +145,20 @@ func _schritte() -> bool:
 				elif _seit() > 16.0:
 					pruefe(false, "C1: Kampfplatz nach 16 s nicht fertig (Lichtwand %.2f, Einzug %s)" % [kp.licht, str(o.herausforderer.einzug.get("teil", "–"))])
 					return _fertig()
+			elif int(merk["c1"]) == 1:
+				if _f1_einfrieren_laeuft():
+					merk["c1"] = 2
+					merk["t"] = o.zeit
+			elif int(merk["c1"]) == 2:
+				if _seit() > 0.1:
+					pruefe(not o.herausforderer.sperrt() and o._naechste_welle >= o.zeit + Werte.HERAUSFORDERER_SCHONFRIST - 0.5,
+						"F1: Lichtwand fällt – Fahrplan läuft, nächste Welle frühestens in %.1f s (Schonfrist %.0f s)" % [o._naechste_welle - o.zeit, Werte.HERAUSFORDERER_SCHONFRIST])
+					# weiter wie vor F1: das Duell läuft ohne Platz, seine Uhr neu (Punkt 2 prüft die 90 s), keine Welle
+					o.herausforderer.seit = 0.0
+					o._naechste_welle = o.zeit + 9999.0
+					merk["plan"] = o.plan_zeit()
+					merk["wellen"] = o.wellen
+					merk["c1"] = 3
 			elif kp.zustand == "aus":
 				_c1_aufgeloest()
 				_weiter()
@@ -446,7 +460,34 @@ func _c1_platz() -> void:
 	pruefe(not kp.platz_ok(start) and m != start and (m == Karte.KEINE or kp.platz_ok(m)), "C1: über dem Schild verschoben: %s → %s" % [str(start), str(m)])
 	_c1_bewegung()
 	merk["bereich"] = kp._bereich(kp.mitte)
-	kp.aufloesen()   # wie am Ende des Duells (ohne liegenden Herausforderer: gleich zurück); die übrigen Prüfungen laufen ohne Platz
+	_f1_einfrieren_start()
+
+
+## F1 (26.11., Paul): 120 s Duell hinter der Lichtwand – der Fahrplan steht, auch nach HERAUSFORDERER_PAUSE_MAX.
+func _f1_einfrieren_start() -> void:
+	var h := o.herausforderer
+	o.vorstoss_anteil = 0.4
+	o._naechste_welle = o.zeit + 10.0   # ohne Pause käme in 10 s eine Welle
+	merk["f1"] = {"wellen": o.wellen, "anteil": o.vorstoss_anteil, "plan": o.plan_zeit(), "t": o.zeit, "pilot": o._pilot_ab}
+	h.seit = 0.0
+
+
+func _f1_einfrieren_laeuft() -> bool:
+	var h := o.herausforderer
+	_f2_q_e()   # F2: in den ersten Sekunden des 120-s-Duells
+	h._bis_angriff = 999.0
+	h._vergeltung_in = 999.0
+	h.angriff = {}
+	var f: Dictionary = merk["f1"]
+	if o.zeit - float(f["t"]) < 120.0:
+		return false
+	pruefe(h.zustand == "duell" and h.seit > Werte.HERAUSFORDERER_PAUSE_MAX and h.sperrt() and h.kampfplatz.zu() and o.haelt_feuer(o.brakk_ziel),
+		"F1: nach %.0f s Duell hinter der Lichtwand ruht der Fahrplan noch (ohne Lichtwand nur %.0f s)" % [h.seit, Werte.HERAUSFORDERER_PAUSE_MAX])
+	pruefe(o.wellen == int(f["wellen"]) and is_equal_approx(o.vorstoss_anteil, float(f["anteil"])) and absf(o.plan_zeit() - float(f["plan"])) < 0.1 and o._pilot_ab - float(f["pilot"]) > 119.0,
+		"F1: 120 s Duell – Wellen %d → %d, Einnahme %.2f → %.2f, Fahrplan %.1f → %.1f s, Pilot wartet mit" % [int(f["wellen"]), o.wellen, float(f["anteil"]), o.vorstoss_anteil, float(f["plan"]), o.plan_zeit()])
+	merk["brakk_im_platz"] = h.kampfplatz._fuss()
+	h.kampfplatz.aufloesen()   # wie am Ende des Duells (ohne liegenden Herausforderer: gleich zurück); die übrigen Prüfungen laufen ohne Platz
+	return true
 
 
 ## C1.3: 12 s Bewegung im Platz (ohne Angriffe): er bleibt drin und steigt auf die festen Wälle innen.
@@ -480,8 +521,8 @@ func _c1_bewegung() -> void:
 				kronen[z] = true
 			elif not kp.im_innern(z):
 				rand += 1
-	pruefe(raus == 0 and rand == 0, "C1: 12 s Bewegung – immer im Platz, nie auf dem Rand (%d Bilder draußen)" % raus)
-	pruefe(int(h.zaehler["wall"]) >= 1 and not kronen.is_empty(), "C1: er steigt auf die festen Wälle innen (%d-mal, Kronen %s)" % [int(h.zaehler["wall"]), str(kronen.keys())])
+	pruefe(raus == 0 and rand == 0, "C1: 12 s Bewegung – immer im Platz (%d Bilder draußen), oben nur auf dem Randring" % raus)
+	pruefe(int(h.zaehler["wall"]) >= 1 and not kronen.is_empty(), "F2: er steigt auf die Kronen des Randrings (%d-mal, Kronen %s)" % [int(h.zaehler["wall"]), str(kronen.keys())])
 	pruefe(is_equal_approx(Werte.HERAUSFORDERER_VERGELTUNG_ABKLING, 20.0), "C1: Vergeltung alle 20 s")
 	h.kennwerte["wall"] = false
 
@@ -504,8 +545,10 @@ func _c1_aufgeloest() -> void:
 				anders.append(z)
 	var waelle := feld_v.keys().filter(func(z: Vector2i) -> bool: return b.has_point(z)).size()
 	pruefe(anders.is_empty() and waelle > 0, "C1: nach %.1f s steht im Bereich alles wie vorher (%d Gebäude; abweichend: %s)" % [_seit(), waelle, str(anders.slice(0, 6))])
-	var hq: Vector2 = o.hq_mitte()
-	pruefe(kp._fuss().distance_to(hq) < 4.0 * Werte.ZELLE, "C1: Brakk steht danach am Myriaden-HQ (%.1f Felder)" % (kp._fuss().distance_to(hq) / Werte.ZELLE))
+	var vorher: Vector2 = merk["brakk_im_platz"]
+	var fz := karte.zelle_bei(kp._fuss())
+	pruefe(kp._fuss().distance_to(vorher) < 3.0 * Werte.ZELLE and karte.ist_begehbar(fz) and karte.inhalt(fz) != Karte.WALL,
+		"F1: Brakk bleibt im Platz stehen (%.1f Felder vom Duell-Ort – fiel dort Gemerktes zurück, steht er daneben; nicht am Myriaden-HQ)" % (kp._fuss().distance_to(vorher) / Werte.ZELLE))
 	pruefe(kp.zustand == "aus" and o.lichtwand_schnitt(kp.rechteck.get_center(), kp.rechteck.position - Vector2(50, 50)) == Vector2.INF, "C1: Lichtwand aus, Kampfplatz weg")
 
 
@@ -903,10 +946,17 @@ func _schritte_echt() -> bool:
 				h.einheit.nimm_schaden(9999999.0)
 				_weiter()
 		3:
-			if _seit() > 4.0:
-				pruefe(h.zustand == "ruhe" and o.beute_boden.size() >= 1 and o.wellen > int(merk["wellen"]), "vertrieben: Ring liegt, die Wellen laufen wieder")
+			# F1 (26.11., Paul): erst wenn die Lichtwand fällt (nach der Bergung), dann die Schonfrist – danach Wellen
+			if not merk.has("frei_um") and h.zustand == "ruhe" and not h.sperrt():
+				merk["frei_um"] = o.zeit
+				o._naechste_welle = minf(o._naechste_welle, o.zeit + 1.0)
+			if merk.has("frei_um") and o.zeit - float(merk["frei_um"]) > Werte.HERAUSFORDERER_SCHONFRIST + 2.0:
+				pruefe(h.zustand == "ruhe" and o.beute_boden.size() >= 1 and o.wellen > int(merk["wellen"]), "vertrieben: Ring liegt, nach Lichtwand und Schonfrist laufen die Wellen wieder")
 				o.zeit = 827.0
 				_weiter()
+			elif _seit() > 40.0:
+				pruefe(false, "vertrieben: Lichtwand nach 40 s noch zu")
+				return _fertig()
 		4:
 			if h.zustand == "duell":
 				pruefe(absf(float(_eintrag("ansage", 1)["bei"]) - 830.0) < 0.2 and absf(float(_eintrag("auftritt", 1)["bei"]) - 840.0) < 0.2, "zweites Mal: Ansage %.1f s, Auftritt %.1f s" % [float(_eintrag("ansage", 1)["bei"]), float(_eintrag("auftritt", 1)["bei"])])
@@ -1171,3 +1221,73 @@ func _punkt6_takt_aus() -> void:
 	pruefe(h.vergeltung.is_empty() and not (h.einheit.get_meta("nemesis_umriss") as Color).is_equal_approx(NemesisHerausforderer.VERGELTUNG_UMRISS), "nach 10 s vorbei, Umriss wie vorher")
 	var rest := Werte.HERAUSFORDERER_VERGELTUNG_ABKLING - (o.zeit - float(merk["v_ab"]) - 0.5)
 	pruefe(absf(h._vergeltung_in - rest) < 0.7, "die nächste erst 20 s nach Beginn (noch %.1f s)" % h._vergeltung_in)
+
+
+
+
+
+
+
+
+# ------------------------------------------------------------------ F2: Kampfplatz innen neutral, Rand interaktiv
+
+func _f2_zielen(wand: Vector2i, stand: Vector2i, hoch: float) -> void:
+	var ego: EgoModus = spiel.ego
+	var k: Kommandant = spiel.kommandant
+	k.oben = false
+	k.posten_zelle = Karte.KEINE
+	ego.hoehe = 0.0
+	ego._setze_fuss(o.karte.mitte(stand))
+	ego._kamera()
+	spiel.hd.kamera.look_at(ego._zu3d(o.karte.mitte(wand), hoch), Vector3.UP)
+
+
+## F2 (26.11., Paul): innen keine festen Wälle; [Q] Lichtanker und [E] Lichttreppe greifen an den Rand-Wällen;
+## Sprengladungen nicht. Läuft Bild für Bild in den ersten 8 s des 120-s-Duells (F1).
+func _f2_q_e() -> void:
+	var kp := o.herausforderer.kampfplatz
+	var ego: EgoModus = spiel.ego
+	var k: Kommandant = spiel.kommandant
+	var h := BrakkKampfplatz._halb()
+	var q_wand: Vector2i = kp.mitte + Vector2i(h.x - 1, 2)
+	var e_wand: Vector2i = kp.mitte + Vector2i(h.x - 1, -3)
+	var t := o.zeit - float((merk["f1"] as Dictionary)["t"])
+	match int(merk.get("f2", 0)):
+		0:
+			var innen := 0
+			for y in range(-h.y, h.y):
+				for x in range(-h.x, h.x):
+					var z: Vector2i = kp.mitte + Vector2i(x, y)
+					if kp.im_innern(z) and o.karte.inhalt(z) == Karte.WALL:
+						innen += 1
+			pruefe(innen == 0 and Werte.KAMPFPLATZ_INNEN.is_empty() and kp.ist_krone(q_wand) and kp.ist_krone(e_wand), "F2: innen keine Wälle (%d), nur der Randring" % innen)
+			o.ladungen = 1
+			var grund := o.ladung_setzen(q_wand)
+			pruefe(grund != "" and o.ladungen == 1 and o.zuender.is_empty(), "F2: Rand-Wall nicht sprengbar („%s“)" % grund)
+			k.fortschritt.alle_frei = true
+			_f2_zielen(q_wand, kp._frei_innen(kp.mitte + Vector2i(h.x - 4, 2)), spiel.hd.H * 0.95)
+			ego._anker_rest = 0.0
+			ego._anker_start()
+			merk["f2"] = 1
+		1:
+			if t > 0.6:
+				ego._anker_start()   # zweites [Q]: zieht hinauf
+				merk["f2"] = 2
+		2:
+			if t > 3.5:
+				pruefe(k.oben and k.posten_zelle == q_wand, "F2: [Q] Lichtanker zieht Brakk auf die Krone eines Rand-Walls (%s, oben %s)" % [str(k.posten_zelle), str(k.oben)])
+				_f2_zielen(e_wand, kp._frei_innen(kp.mitte + Vector2i(h.x - 4, -3)), spiel.hd.H * 0.5)
+				k.e_rest = 0.0
+				ego._versuche_klettern(false)   # [E]: Treppe an den Rand-Wall
+				merk["f2"] = 3
+		3:
+			if t > 4.0:
+				if ego._treppe_fuss2d != Vector2.INF:
+					ego._setze_fuss(ego._treppe_fuss2d)
+				ego._versuche_klettern(false)   # [E] am Fuß der Treppe: hinauf
+				merk["f2"] = 4
+		4:
+			if t > 7.0:
+				pruefe(k.oben and k.posten_zelle == e_wand, "F2: [E] Lichttreppe an einen Rand-Wall, Brakk steht oben (%s)" % str(k.posten_zelle))
+				_f2_zielen(e_wand, kp._frei_innen(kp.mitte), 0.5)   # wieder hinunter, mitten in den Platz
+				merk["f2"] = 5
