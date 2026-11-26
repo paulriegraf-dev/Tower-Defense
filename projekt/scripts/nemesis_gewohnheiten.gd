@@ -180,6 +180,10 @@ func weiter(dt: float) -> void:
 		if not Nemesis.lebt(o):
 			continue
 		var e := o as Einheit
+		if nem.o24.herausforderer != null and nem.o24.herausforderer.ist_er(e) and not e.has_meta("wut"):
+			continue   # 26.11.: seine Angewohnheiten erst ab halbem Leben
+		if nem.o24.herausforderer != null and nem.o24.herausforderer.sperrt() and not e.in_stellung() and not nem.o24.herausforderer.ist_er(e):
+			continue   # 26.11.: in der Herausforderung ruht am Boden alles andere
 		var p: Dictionary = nem._person_von[id]
 		var ag := von_person(p)
 		if ag.is_empty():
@@ -249,7 +253,7 @@ func darf_auf_wall(e: Einheit) -> bool:
 
 ## Treffer von Brakk: Frontschild – von vorn nur 25 %.
 func schild_faktor(e: Einheit) -> float:
-	if not hat(e, "fern"):
+	if not hat(e, "fern") or (e.has_meta("herausforderer") and not e.has_meta("wut")):   # 26.11.: beim Herausforderer erst ab halbem Leben
 		return 1.0
 	var k: Kommandant = nem.spiel.kommandant
 	if k == null:

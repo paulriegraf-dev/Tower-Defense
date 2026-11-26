@@ -54,7 +54,7 @@ func ist_brakk(ziel: Variant) -> bool:
 ## 20.11. (Paul): In Befehl 24 fliegen Laser und Battlesphären-Schüsse langsamer (Regelpaket geschoss_tempo), damit man
 ## gegen viele Schützen zugleich noch reagieren kann. Plasma bleibt (ist schon gut lesbar). Classic unverändert.
 func _tempo_mal(art: String) -> float:
-	if spiel == null or spiel.order24 == null or art == "plasma":
+	if spiel == null or spiel.order24 == null or art == "plasma" or art.begins_with("hf_"):   # 26.11.: Herausforderer – feste Flugzeiten
 		return 1.0
 	return spiel.order24.wf("geschoss_tempo") / 100.0
 
@@ -77,7 +77,7 @@ func schiesse(art: String, von: Vector2, von_h: float, schaden: float, typ: Stri
 		ziel += Vector2(-r.y, r.x) * zufall.randf_range(-1.0, 1.0) * Werte.BRAKK_STREUUNG * genau * Werte.ZELLE   # Streuung quer zur Bahn
 	r = (ziel - von).normalized() if ziel.distance_to(von) > 1.0 else r
 	var d_ziel := maxf(von.distance_to(ziel), 1.0)
-	var boden := art == "plasma"
+	var boden := art == "plasma" or art == "hf_kugel"
 	var lang := d_ziel if boden else _bahn_ende(von, r, d_ziel)
 	var rumpf_h := float(z.get("fuss", 0.0)) + 0.5
 	var g := {"art": art, "von": von, "r": r, "s": 0.0, "lang": lang, "d_ziel": d_ziel,
@@ -325,12 +325,16 @@ func _geschoss_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
 	var s_alt := float(g["s"])
 	var s_neu := minf(s_alt + float(g["tempo"]) * dt, float(g["lang"]))
 	g["s"] = s_neu
-	if not z.is_empty() and not bool(z["durchlass"]) and not (bool(g["boden"]) and float(z["sprung"]) > Werte.BRAKK_SPRUNG_BODEN):
+	if not z.is_empty() and not bool(g.get("harmlos", false)) and not bool(z["durchlass"]) and not (bool(g["boden"]) and float(z["sprung"]) > Werte.BRAKK_SPRUNG_BODEN):
 		var p := Geometry2D.get_closest_point_to_segment(z["pos"], von + r * s_alt, von + r * s_neu)
 		if p.distance_to(z["pos"]) <= float(g["radius"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
 			getroffen += 1
 			_treffe_brakk(float(g["schaden"]), str(g["typ"]), str(g["quelle"]), von, true)
 			_einschlag_bild(p, _hoehe(g, von.distance_to(p)), g, true)
+			if g.has("gruppe"):   # 26.11.: die Salve des Herausforderers trifft nur einmal
+				for x: Dictionary in geschosse:
+					if x.get("gruppe", -1) == g["gruppe"]:
+						x["harmlos"] = true
 			if bool(g["boden"]):
 				_plasma_landet(g, p, z, false)
 			return false
@@ -346,16 +350,21 @@ func _geschoss_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
 
 ## Plasmaball am Boden: Einschlag mit kleiner Fläche (nur wenn er Brakk nicht schon direkt getroffen hat) und Brandfläche.
 func _plasma_landet(g: Dictionary, wo: Vector2, z: Dictionary, flaeche: bool) -> void:
-	var w: Dictionary = Werte.BRAKK_GESCHOSS["plasma"]
+	var w: Dictionary = Werte.BRAKK_GESCHOSS[str(g["art"])]
 	var radius := float(w["einschlag"]) * Werte.ZELLE
 	if flaeche and not z.is_empty() and not bool(z["durchlass"]) and float(z["sprung"]) <= Werte.BRAKK_SPRUNG_BODEN \
 			and (z["pos"] as Vector2).distance_to(wo) <= radius + Werte.BRAKK_RUMPF * Werte.ZELLE:
 		getroffen += 1
 		_treffe_brakk(float(g["schaden"]), str(g["typ"]), str(g["quelle"]), g["von"], true)
-	braende.append({"mitte": wo, "r": radius, "rest": float(w["brand_sek"]), "dps": float(g["schaden"]) * float(w["brand_anteil"]), "quelle": g["quelle"]})
+	var brand_sek := float(g.get("brand_sek", w["brand_sek"]))   # 26.11.: der Brandring gibt auch der Kugel Feuer
+	if brand_sek > 0.0:   # die schwere Kugel des Herausforderers hinterlässt sonst nichts
+		braende.append({"mitte": wo, "r": radius, "rest": brand_sek, "dps": float(g["schaden"]) * float(g.get("brand_anteil", w["brand_anteil"])), "quelle": g["quelle"]})
+	if g.has("danach"):
+		(g["danach"] as Callable).call_deferred(wo)   # erst nach dem Durchlauf der Geschossliste
 	if spiel != null:
-		spiel.effekte.brand(wo, radius, float(w["brand_sek"]) * Werte.BRAKK_TEMPO)
-		spiel.effekte.flaeche(wo, radius, _farbe("plasma"))
+		if brand_sek > 0.0:
+			spiel.effekte.brand(wo, radius, brand_sek * Werte.BRAKK_TEMPO)
+		spiel.effekte.flaeche(wo, radius, _farbe(str(g["art"])))
 
 
 func _turm_feuer(t: Dictionary, z: Dictionary) -> void:
@@ -460,6 +469,12 @@ func _farbe(art: String) -> Color:
 			return Color("ff8ad8")
 		"sph":
 			return Color("ff4fd8")
+		"hf_salve":
+			return Color("ff2a2a")
+		"hf_kugel":
+			return Color("ff6a2a")
+		"hf_doppel":
+			return Color("b46bff")
 	return Color("ff5a4a")   # Laser auf Brakk: rot, gut vom eigenen Cyan zu unterscheiden
 
 

@@ -61,8 +61,27 @@ const STANDARD := {
 	"tore_ab": 480,             # ab hier setzt er Tore in seine Wälle Richtung Myriaden-HQ …
 	"tore_takt": 60,            # … so oft …
 	"tore_max": 4,              # … höchstens so viele
-	"welle_groesse": 8,         # so groß (jede zerstörte Fabrik draußen: einer weniger, dauerhaft)   # 20.11. (Paul): +2
+	"welle_groesse": 8,         # so groß (dazu +1 je welle_wachsen_sek)   # 20.11. (Paul): +2
+	"welle_minus_je_fabrik": 0, # so viele Mann weniger je zerstörter Fabrik draußen, dauerhaft – 26.11. (Paul): 0 (vorher 1); die Fabriken geben dafür Ringe als Beute, die Wellen bleiben planbar
 	"elite_jede": 2,            # jede so vielte Welle ein Elitetrupp aus genau drei
+	# 26.11. (Paul): Angriffstaktiken der Jagdwellen (brakk_jagdtaktik.gd)
+	"taktik_an": true,          # false = altes Verhalten (jagen nur bei Sicht oder Meldung), für Vergleiche
+	"ortung_takt": 15,          # Funkortung: so oft kennt eine Welle Brakks Ort neu …
+	"ortung_ungenau": 3,        # … bis zu so viele Felder daneben
+	"taktik_gewicht_sturm": 2.0,   # Wahl gewichtet zufällig – Paul: Sturm bevorzugt
+	"taktik_gewicht_zange": 1.0,
+	"taktik_gewicht_feuerschutz": 1.0,
+	"taktik_gewicht_hinterhalt": 1.0,
+	"zange_min": 6,             # Mindestgrößen, sonst Sturm
+	"feuerschutz_min": 4,       # (dazu zwei Fernkämpfer)
+	"sturm_streuung": 130,      # Prozent Streuung beim Schießen im Gehen
+	"feuerschutz_abstand_min": 7,  # Feuergruppe: so weit weg von Brakk – gekappt auf die eigene Reichweite
+	"feuerschutz_abstand_max": 9,
+	"feuerschutz_sprung": 3.5,  # Sturmgruppe: so viele Felder je Sprung …
+	"feuerschutz_halten": 2.0,  # … dann so lange halten und schießen
+	"feuerschutz_nah": 4,       # geht Brakk so nah an die Feuergruppe, stürmen alle
+	"hinterhalt_warten": 25,    # Hinterhalt: so lange wartet er höchstens …
+	"hinterhalt_abstand": 6,    # … und eröffnet, sobald Brakk so nah ist
 	"vorstoss": true,           # Technoclan darf das Myriaden-HQ einnehmen
 	"vorstoss_start": 480,      # ab dann marschiert ein Jagdtrupp darauf
 	"vorstoss_sek": 30,         # so lange muss er es halten
@@ -107,11 +126,13 @@ const STANDARD := {
 	"pilot_neu": 45,            # fällt der Pilot, dauert der nächste so lange
 	"pilot_reparatur": 5,       # Sekunden Reparatur vor Ort
 	"kern_leben": 400,          # Turmkern: leer geschossen fällt der Turm aus, bis ein Pilot ihn repariert (20.11., Paul)
-	"spreng_drop": 5,           # Prozent: gefallene Truppe lässt eine Sprengladung fallen (Elite immer) – 20.11. (Paul): vorher 12
+	"spreng_drop": 5,           # Prozent: gefallene Truppe lässt eine Sprengladung fallen – 20.11. (Paul): vorher 12
+	"spreng_drop_elite": 50,    # Prozent: gefallene Elite lässt eine Sprengladung fallen – 26.11. (Paul): 50 statt immer
 	"spreng_max": 3,            # höchstens so viele im Gepäck
 	"spreng_zuender": 3,        # Sekunden Zünder
 	"mobil_abkling": 125,       # 20.11. (Paul): Prozent Abklingzeit von Q und E (Anker, Lichttreppe, Lichtbrücke) – eher eingekesselt
 	"geschoss_tempo": 75,       # 20.11. (Paul): Prozent Tempo von Laser und Battlesphären-Schüssen auf Brakk (Plasma bleibt) – reagierbar bei vielen Schützen
+	"herausforderer": true,     # 26.11. (Paul): zu Minute 9 und 14 tritt ein Benannter allein an (nemesis_herausforderer.gd)
 }
 const SCHILD_RADIUS := 3.2       # Felder um das Technoclan-HQ, in die Brakk nicht hineinkommt
 const SICHT_JAEGER := 7.0        # Felder: so weit sieht ein Jäger Brakk (mit freier Sicht)
@@ -161,6 +182,7 @@ var bekannt := Karte.KEINE       # Brakks letzter bekannter Ort …
 var bekannt_zeit := -99.0        # … und wann
 var wellen := 0
 var _naechste_welle := 0.0
+var taktik: BrakkJagdtaktik = null   # 26.11.: Angriffstaktiken der Jagdwellen
 var tafeln := NemesisTafeln.new()   # 25.11.: Hologramm-Tafeln (Elite-Auftritt, Beförderung, Vertreibung, Wiedersehen)
 var _elite_zeile_bis := -1.0     # so lange steht „Elitetrupp“ in der Phasenzeile
 var _vorstoss_wahl := 0.0
@@ -230,6 +252,8 @@ var verrat_fertig := false
 var _verraeter: Array = []        # die drei Technogunner der Sequenz
 var schild_auf := 1.0             # 0..1 Kuppel des Schilds (schließt sich in der Sequenz)
 var nemesis: Nemesis = null       # 22.11. (Paul): Nemesis-System – Eliten sind Personen (scripts/nemesis.gd)
+var herausforderer: NemesisHerausforderer = null   # 26.11.: der Boss zu Minute 9 und 14
+var plan_pause := 0.0             # so lange ruhte der Fahrplan schon (Herausforderung)
 var sichter: Einheit = null       # 22.11.: Stellung, die Brakk zuletzt gesehen hat (Nemesis: Sichtung)
 var markiert_bis := -1.0          # 22.11. (Nemesis Teil 3): bis hier kennen alle Trupps Brakks Ort (Markierung)
 var _zange := {}                 # 23.11.: {"ziel": Vector2i, "erst_bereit": float, "los": bool}
@@ -249,12 +273,13 @@ func brakk_gewohnheit(a: String) -> void:
 
 ## 22.11. (Nemesis Teil 5): Elite im Gehen schießen lassen (direkt und Flanke rücken nach, Sperrfeuer weicht zurück).
 func drueckt(e: Einheit) -> bool:
-	return nemesis != null and nemesis.lernen != null and nemesis.lernen.drueckt(e)
+	return (nemesis != null and nemesis.lernen != null and nemesis.lernen.drueckt(e)) or (taktik != null and taktik.drueckt(e))   # 26.11.: Sturm schießt im Gehen
 
 
 ## 22.11. (Nemesis Teil 3): Brakks Lauftempo (Ego-Sicht) – im Kegel eines Unterdrückungsfeuers langsamer.
 func brakk_tempo_faktor() -> float:
-	return nemesis.faehigkeiten.tempo_faktor() if nemesis != null and nemesis.faehigkeiten != null else 1.0
+	var mal := nemesis.faehigkeiten.tempo_faktor() if nemesis != null and nemesis.faehigkeiten != null else 1.0
+	return mal * (herausforderer.brakk_bremse() if herausforderer != null else 1.0)   # 26.11.: Vergeltung mit dem Gelring
 
 
 func w(schluessel: String) -> Variant:
@@ -304,6 +329,10 @@ func einrichten(p_spiel: Node) -> void:
 	nemesis = Nemesis.new()
 	add_child(nemesis)
 	nemesis.einrichten(self)
+	taktik = BrakkJagdtaktik.new(self)
+	herausforderer = NemesisHerausforderer.new()
+	add_child(herausforderer)
+	herausforderer.einrichten(nemesis)
 
 
 func _karte_aufbauen() -> void:
@@ -1072,6 +1101,9 @@ func _process(delta: float) -> void:
 	_ladungen_pflegen(k, echt)
 	_beute_pflegen(k)
 	tafeln.weiter(echt)
+	herausforderer.weiter(echt)
+	if herausforderer.sperrt():
+		_fahrplan_ruht(echt)
 	_tuerme_pflegen(echt)
 	_fabriken_pflegen(k, echt)
 	_takt -= echt
@@ -1079,14 +1111,14 @@ func _process(delta: float) -> void:
 		_takt = 1.0
 		_ablauf(k)   # 20.11.: Phasen, Jagdtrupps, Wellen, Vorstoß
 	if jagd:
-		if phase() == "vorstoss" and not hq_eingenommen:
+		if phase() == "vorstoss" and not hq_eingenommen and not herausforderer.sperrt():
 			_vorstoss(echt)
 	_medkits_pflegen(k, echt)
 	_3d_pflegen()
 	if wf("ueberleben_sek") > 0.0 and zeit >= wf("ueberleben_sek") and not geheim:
 		_ende(true)
 	# 20.11. (Paul): hält Brakk das Myriaden-HQ bis geheim_ab, beginnt der geheime Verlauf
-	if not geheim and wf("geheim_ab") > 0.0 and zeit >= wf("geheim_ab") and not hq_eingenommen:
+	if not geheim and wf("geheim_ab") > 0.0 and plan_zeit() >= wf("geheim_ab") and not hq_eingenommen and not herausforderer.laeuft():
 		_geheim_starten()
 	if geheim:
 		_geheim_pflegen(k, echt)
@@ -1134,7 +1166,7 @@ func _ist_innen(e: Einheit) -> bool:
 
 ## 20.11. (Paul): Jede neue Technoclan-Truppe in Befehl 24 ist schwächer (truppen_leben), es gibt dafür mehr Fabriken.
 func neue_einheit(e: Einheit) -> void:
-	var minuten := zeit / 60.0   # 20.11. (Paul): Eskalation – nicht nur Leben, auch Schaden und Tempo wachsen mit der Zeit
+	var minuten := plan_zeit() / 60.0   # 20.11. (Paul): Eskalation – nicht nur Leben, auch Schaden und Tempo wachsen mit der Zeit
 	e.max_leben *= wf("truppen_leben") / 100.0 * (1.0 + wf("leben_je_min") / 100.0 * minuten)
 	e.leben = e.max_leben
 	e.daten = e.daten.duplicate()
@@ -1164,7 +1196,8 @@ func _schnellstart_pruefen() -> void:
 func gefallen(e: Einheit) -> void:
 	if e.ist_pilot or not laeuft:
 		return
-	if bool(e.daten.get("elite", false)) or randf() * 100.0 < wf("spreng_drop"):
+	var chance := wf("spreng_drop_elite") if bool(e.daten.get("elite", false)) else wf("spreng_drop")   # 26.11. (Paul): Elite 50 % statt immer
+	if randf() * 100.0 < chance:
 		ladungen_boden.append({"pos": e.position, "knoten": null})
 
 
@@ -1278,6 +1311,17 @@ func _neues_ziel(schl: String) -> TechnoZiel:
 	return t
 
 
+## 26.11.: Ego-Sicht – Brakk springt oder tumbelt (der Herausforderer schaut es sich ab).
+func brakk_bewegung(art: String, r: Vector2 = Vector2.ZERO) -> void:
+	if laeuft and not vorbei and nemesis != null and nemesis.lernen != null:
+		nemesis.lernen.bewegung(art, r)
+
+
+## 26.11.: Ist dieses Ziel der Herausforderer? (Der Ladestrahl nimmt ihm so viel wie einem großen Gegner.)
+func ist_herausforderer_ziel(g: Gegner) -> bool:
+	return g is TechnoZiel and herausforderer != null and herausforderer.ist_er((g as TechnoZiel).einheit)
+
+
 ## Brakk hat einen Stellvertreter getroffen.
 func treffer(t: TechnoZiel, menge: float) -> void:
 	if t.einheit != null:
@@ -1293,6 +1337,8 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 		if str(spiel.brakk_quelle) == "lanze":
 			nemesis.gewohnheiten.fernschuss(e)   # 22.11. (Teil 4): Kampf aus der Ferne zählt
 		menge *= nemesis.gewohnheiten.schild_faktor(e)   # 22.11. (Teil 4): Frontschild – von vorn nur 25 %
+		if herausforderer.ist_er(e):
+			menge *= herausforderer.schutz_faktor()   # 26.11.: Vergeltung mit dem Wallring
 		var war_stellung := e.in_stellung()
 		var kg_ort := ("s:%s" % str(e.posten_zelle)) if war_stellung else ("f:%s" % str(e.fabrik_zelle))
 		var elite := bool(e.daten.get("elite", false))
@@ -1382,12 +1428,44 @@ func beute_legen(z: Vector2i) -> void:
 	Ton.spiele(spiel, "alert", -4.0)
 
 
+## 26.11. (Paul): Der Herausforderer lässt sofort einen Ring fallen – eine neue Art. Trägt Brakk schon so viele Ringe,
+## wie er je tragen kann, ist es eine Stufe für einen davon (das gibt es nur hier). Sind alle auf der höchsten: Gold.
+func beute_legen_herausforderer(pos: Vector2) -> void:
+	var ort := pos
+	if not karte.ist_frei(karte.zelle_bei(pos)):
+		ort = karte.mitte(_freies_feld_bei(pos, karte.zelle_bei(spiel.kommandant.position)))
+	var b := {"pos": ort, "ring": "", "knoten": null, "hinweis": -99.0, "herausforderer": true, "stufe": false}
+	_beute_waehlen(b)
+	beute_boden.append(b)
+	Ton.spiele(spiel, "alert", -4.0)
+
+
+func _beute_waehlen(b: Dictionary) -> void:
+	var f: BrakkFortschritt = spiel.kommandant.fortschritt if spiel.kommandant != null else null
+	b["stufe"] = false
+	b["ring"] = ""
+	if f == null:
+		return
+	var arten := beute_arten()
+	if f.ringe.size() >= BrakkFortschritt.FINGER_AB.size() or arten.is_empty():
+		var hoeher: Array = f.ringe.filter(func(r: String) -> bool: return f.ring_stufe(r) < BrakkFortschritt.RING_PREISE.size())
+		if not hoeher.is_empty():
+			b["ring"] = str(hoeher.pick_random())
+			b["stufe"] = true
+		return
+	b["ring"] = str(arten.pick_random())
+
+
 ## Aufheben durch Drüberlaufen. Ohne freien Finger bleibt der Ring liegen.
 func _beute_pflegen(k: Kommandant) -> void:
 	var f := k.fortschritt
 	for b: Dictionary in beute_boden.duplicate():
 		var ring := str(b["ring"])
-		if ring != "" and f != null and f.ring_stufe(ring) > 0:
+		if bool(b.get("herausforderer", false)) and f != null and ((bool(b["stufe"]) and (ring == "" or f.ring_stufe(ring) == 0 or f.ring_stufe(ring) >= BrakkFortschritt.RING_PREISE.size())) or (not bool(b["stufe"]) and ring != "" and (f.ring_stufe(ring) > 0 or f.ringe.size() >= BrakkFortschritt.FINGER_AB.size()))):
+			_beute_waehlen(b)   # am Terminal verändert: neu bestimmen
+			ring = str(b["ring"])
+			_beute_bild_weg(b)
+		elif not bool(b.get("herausforderer", false)) and ring != "" and f != null and f.ring_stufe(ring) > 0:
 			# inzwischen am Terminal gekauft: eine andere neue Art (sonst gäbe das Aufheben eine Stufe)
 			b["ring"] = ""
 			var arten := beute_arten()
@@ -1401,6 +1479,10 @@ func _beute_pflegen(k: Kommandant) -> void:
 			spiel.budget += gold
 			sabotage["geld"] = int(sabotage["geld"]) + gold
 			spiel.melde("Gold geborgen: +%d" % gold, 3.0)
+		elif bool(b.get("stufe", false)):
+			if f == null or f.schenke_stufe(ring, spiel) != "":
+				continue
+			spiel.melde("Ring geborgen: %s – jetzt Stufe %d" % [str((BrakkFortschritt.RINGE[ring] as Dictionary).get("name", ring)), f.ring_stufe(ring)], 4.0)
 		else:
 			if f == null:
 				continue
@@ -1805,7 +1887,7 @@ func _alarm(z: Vector2i) -> void:
 ## 20.11. (Paul): Druck – Truppen am Boden im Umkreis (alarm_radius × 1,5) laufen zu Brakks Ort (höchstens alle 5 s).
 ## Jäger, Pilot, Begleiter und die Verteidiger im Schild bleiben bei ihrer Aufgabe.
 func _alarm_auf_brakk(k: Kommandant) -> void:
-	if k == null or zeit < _druck_naechster:
+	if k == null or zeit < _druck_naechster or herausforderer.sperrt():
 		return
 	_druck_naechster = zeit + 5.0
 	var ziel := karte.zelle_bei(k.position)
@@ -1904,6 +1986,11 @@ func marschziel(e: Einheit) -> Vector2i:
 	var nz := nemesis.marschziel(e)   # 22.11.: Nemesis – Schwächen und Rückzug gehen vor
 	if nz != Karte.KEINE:
 		return nz
+	if herausforderer.sperrt() and (jaeger.has(id) or alarm.has(id)):
+		return _erreichbar_nahe(e.fabrik_zelle, karte.zelle_bei(e.position))   # 26.11.: die Jagdtrupps ziehen sich zurück
+	var tnr := int(jaeger.get(id, -1))
+	if tnr >= 0 and tnr < trupps.size() and (trupps[tnr] as Dictionary).has("taktik") and taktik.an():
+		return _trupp_ziel(e, trupps[tnr] as Dictionary)   # 26.11.: Taktik geht vor dem Alarm (der Hinterhalt bleibt liegen)
 	if alarm.has(id):
 		return (alarm[id] as Dictionary)["ziel"]
 	var nr := int(jaeger.get(id, -1))
@@ -1950,10 +2037,30 @@ func phase_bei(t: float, zerstoert: int) -> String:
 	return "sabotage"
 
 
+## 26.11. (Paul): die Uhr des Technoclan. Sie steht, solange ein Herausforderer allein kämpft – die Überlebens-Uhr (zeit)
+## läuft weiter. Alles, was mit der Zeit kommt oder stärker wird, richtet sich nach dieser.
+func plan_zeit() -> float:
+	return zeit - plan_pause
+
+
+## Der Fahrplan ruht: seine Uhr und alle schon gesetzten Termine rücken mit.
+func _fahrplan_ruht(dt: float) -> void:
+	plan_pause += dt
+	_naechste_welle += dt
+	_vorstoss_wahl += dt
+	_lager_naechst += dt
+	_tore_naechst += dt
+
+
+## einheit.gd: Hält eine Truppe am Boden das Feuer auf Brakk zurück? (Herausforderung – nur er, Türme und Stellungen)
+func haelt_feuer(ziel: Node2D) -> bool:
+	return herausforderer != null and herausforderer.sperrt() and ziel == brakk_ziel
+
+
 func phase() -> String:
 	if not laeuft:
 		return "flucht"
-	var p := phase_bei(zeit, int(sabotage["fabriken"]))
+	var p := phase_bei(plan_zeit(), int(sabotage["fabriken"]))
 	if jagd and (p == "flucht" or p == "sabotage"):
 		return "jagd"
 	return p
@@ -1962,7 +2069,13 @@ func phase() -> String:
 ## 22.11. (Paul): unter der Uhr nur noch die Phase – wann es weitergeht, zeigt der Balken (balken_anteil).
 ## 25.11. (Paul): kommt ein Elitetrupp, steht kurz „Elitetrupp“ dabei.
 func phase_text() -> String:
-	return _phase_name() + (" · " + tr("Elitetrupp") if zeit < _elite_zeile_bis else "")
+	if herausforderer != null and herausforderer.laeuft():
+		return tr("Herausforderung")
+	if zeit < _elite_zeile_bis:
+		return _phase_name() + " · " + tr("Elitetrupp")
+	if taktik != null and zeit < taktik.zeile_bis:
+		return _phase_name() + " · " + taktik.zeile   # 26.11.: Taktik der Jagdwelle
+	return _phase_name()
 
 
 func _phase_name() -> String:
@@ -1983,7 +2096,7 @@ func balken_anteil() -> float:
 	if geheim:
 		return clampf(_myr_uhr / maxf(1.0, wf("myr_takt")), 0.0, 1.0)
 	if not jagd:
-		return clampf(zeit / maxf(1.0, wf("jagd_start")), 0.0, 1.0)
+		return clampf(plan_zeit() / maxf(1.0, wf("jagd_start")), 0.0, 1.0)
 	var takt := maxf(1.0, welle_takt_jetzt())
 	return clampf(1.0 - (_naechste_welle - zeit) / takt, 0.0, 1.0)
 
@@ -2008,6 +2121,8 @@ func _ablauf(k: Kommandant) -> void:
 			_jagd_eroeffnen(k)
 		elif p == "vorstoss" and not jagd:
 			_jagd_eroeffnen(k)   # der Vorstoß selbst wird nicht angesagt
+	if herausforderer.sperrt():
+		return   # 26.11. (Paul): Herausforderung – keine Wellen, keine Trupps zu Brakk, kein Vorstoß
 	_hq_aggro(k)
 	if not jagd and not in_deckung:
 		_alarm_auf_brakk(k)   # 20.11. (Paul): schon vor der Jagd Druck – wer ihn sieht, ruft die Truppen in der Nähe
@@ -2123,9 +2238,9 @@ func _jagdwelle() -> void:
 		return
 	wellen += 1
 	var elite := int(w("elite_jede")) > 0 and wellen % int(w("elite_jede")) == 0
-	var wachsen := floori(maxf(0.0, zeit - wf("jagd_start")) / maxf(10.0, wf("welle_wachsen_sek")))   # 20.11. (Paul): Eskalation
-	var n := 3 if elite else maxi(1, int(w("welle_groesse")) + wachsen - int(sabotage["fabriken"]))
-	var stufe := 4 if elite else (3 if zeit >= wf("faehigkeit_ab") else (2 if zeit >= wf("stufe2_ab") else 1))
+	var wachsen := floori(maxf(0.0, plan_zeit() - wf("jagd_start")) / maxf(10.0, wf("welle_wachsen_sek")))   # 20.11. (Paul): Eskalation
+	var n := 3 if elite else maxi(1, int(w("welle_groesse")) + wachsen - floori(float(sabotage["fabriken"]) * wf("welle_minus_je_fabrik")))
+	var stufe := 4 if elite else (3 if plan_zeit() >= wf("faehigkeit_ab") else (2 if plan_zeit() >= wf("stufe2_ab") else 1))
 	var neu: Array = []
 	if elite:
 		neu = nemesis.elitetrupp(quellen)   # 22.11. (Paul): der Elitetrupp sind Personen (Benannte zuerst, bis zu fünf)
@@ -2145,6 +2260,8 @@ func _jagdwelle() -> void:
 	var anzahl := 1
 	if elite:
 		_neuer_trupp(neu, "jagd")
+	elif taktik != null and taktik.an() and spiel.kommandant != null:
+		anzahl = taktik.welle(neu, wellen)   # 26.11. (Paul): Funkortung und Angriffstaktik
 	else:
 		anzahl = 0
 		for teil: Array in _aufteilen(neu):   # 23.11. (Paul): mehrere kleine Trupps statt eines großen Pulks
@@ -2152,7 +2269,7 @@ func _jagdwelle() -> void:
 			anzahl += 1
 	spiel.melde(("Ein Elitetrupp verlässt den Schild (%d)." % n) if elite else ("Jagdtrupps verlassen den Schild (%d in %d Trupps)." % [n, anzahl] if anzahl > 1 else "Ein Jagdtrupp verlässt den Schild (%d)." % n), 3.0)
 	if spiel.has_method("befehl24_protokoll"):
-		spiel.befehl24_protokoll("welle", {"welle": wellen, "n": n, "elite": elite, "trupps": anzahl, "stufe": stufe})   # 23.11.
+		spiel.befehl24_protokoll("welle", {"welle": wellen, "n": n, "elite": elite, "trupps": anzahl, "stufe": stufe, "taktik": taktik.letzte if not elite and taktik != null and taktik.an() else ""})   # 23.11.; 26.11.: Taktik
 	print("ORDER24 Welle %d bei %.0f s: %d%s · Stufe %d · Takt %.0f s" % [wellen, zeit, n, " Elite" if elite else "", stufe, welle_takt_jetzt()])
 
 
@@ -2170,6 +2287,8 @@ func _trupps_lenken(k: Kommandant) -> void:
 	var bz := karte.zelle_bei(k.position)
 	for t: Dictionary in trupps:
 		t["mitglieder"] = (t["mitglieder"] as Array).filter(func(x: Variant) -> bool: return is_instance_valid(x))
+		if (t["mitglieder"] as Array).is_empty() and t.has("taktik"):
+			taktik.ende(t)   # 26.11.: Bilanz des Trupps ins Protokoll
 		if (t["mitglieder"] as Array).is_empty() or str(t["modus"]) == "vorstoss":
 			continue
 		var sieht := false
@@ -2200,6 +2319,10 @@ func _trupps_lenken(k: Kommandant) -> void:
 			t["zuletzt"] = bekannt   # eine Stellung hat ihn gemeldet
 			t["gesehen"] = zeit
 			t["modus"] = "jagd"
+		if t.has("taktik") and taktik.an():
+			taktik.lenken(t, sieht, k)   # 26.11.: Funkortung, Auslöser, Übergänge
+			t["ziel_ok"] = _erreichbar_nahe(t["zuletzt"] as Vector2i, karte.zelle_bei(((t["mitglieder"] as Array)[0] as Node2D).position))
+			continue
 		# 20.11.: Ziel, das die Truppen zu Fuß erreichen (Brakk oben auf einem Wall oder in einer Tasche: das nächste Feld daneben)
 		t["ziel_ok"] = _erreichbar_nahe(t["zuletzt"] as Vector2i, karte.zelle_bei(((t["mitglieder"] as Array)[0] as Node2D).position))
 		match str(t["modus"]):
@@ -2236,6 +2359,10 @@ func _trupp_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 				s = {"z": _freies_feld_nahe(t["zuletzt"] as Vector2i, 4), "bis": zeit + 5.0}
 				_suchziel[id] = s
 			return s["z"]
+	if t.has("taktik") and taktik.an():
+		var tz := taktik.ziel(e, t)   # 26.11.: Feuerschutz, Hinterhalt
+		if tz != Karte.KEINE:
+			return tz
 	return _jagd_ziel(e, t)
 
 
@@ -2317,11 +2444,16 @@ func _schussfeld_suchen(von: Vector2i, punkt: Vector2, reichweite: float) -> Vec
 
 ## Einmal je Bild: Anmarschpunkte verteilen, Bereitschaft prüfen, gemeinsam zuschlagen.
 func _zange_pflegen(k: Kommandant) -> void:
-	var jagende: Array = trupps.filter(func(x: Dictionary) -> bool: return str(x["modus"]) == "jagd" and not (x["mitglieder"] as Array).is_empty())
+	var jagende: Array = trupps.filter(func(x: Dictionary) -> bool: return str(x["modus"]) == "jagd" and not (x["mitglieder"] as Array).is_empty() and str(x.get("taktik", "")) in ["", "zange"])   # 26.11.: Sturm, Feuerschutz, Hinterhalt gehen eigene Wege
 	if jagende.is_empty():
 		_zange = {}
 		return
 	var ziel: Vector2i = bekannt
+	if ziel == Karte.KEINE or zeit - bekannt_zeit > wf("ortung_takt"):
+		for t: Dictionary in jagende:
+			if str(t.get("taktik", "")) == "zange":
+				ziel = t["zuletzt"]   # 26.11.: niemand sieht ihn – die Zange zielt auf die Funkortung
+				break
 	if ziel == Karte.KEINE:
 		return
 	if _zange.is_empty() or Vector2(ziel - (_zange["ziel"] as Vector2i)).length() > ZANGE_NEU:
@@ -2345,7 +2477,7 @@ func _zange_pflegen(k: Kommandant) -> void:
 		if bool(_zange["los"]) or mitte.distance_to(ziel_p) <= ZANGE_AB * Werte.ZELLE:
 			t["zu"] = true   # schon nah dran oder die Zange läuft schon: direkt angreifen
 			continue
-		var start := karte.zelle_bei(((t["mitglieder"] as Array)[0] as Node2D).position)
+		var start := startfeld(((t["mitglieder"] as Array)[0] as Node2D).position)   # 26.11.: frisch aus der Fabrik: ab ihrem Ausgang
 		var a := _anflug_planen(start, ziel, (mitte - ziel_p).angle(), seiten, belegt)
 		if a.is_empty():
 			t["zu"] = true
@@ -2431,6 +2563,16 @@ func _weg_mit_strafe(von: Vector2i, nach: Vector2i, belegt: Array[Vector2i]) -> 
 	return weg
 
 
+## 26.11.: Feld, von dem aus eine Truppe ihren Weg sucht – steht sie noch in der Fabrik (nicht begehbar), deren Ausgang.
+func startfeld(p: Vector2) -> Vector2i:
+	var z := karte.zelle_bei(p)
+	if karte.ist_begehbar(z):
+		return z
+	for c: Vector2i in karte.ausgang(z):
+		return c
+	return z
+
+
 ## 20.11.: `ziel` selbst, wenn es von `von` zu Fuß erreichbar ist – sonst das nächste erreichbare Feld bis 4 Felder daneben.
 func _erreichbar_nahe(ziel: Vector2i, von: Vector2i) -> Vector2i:
 	if von == ziel or not karte.einheiten_weg(von, ziel).is_empty():
@@ -2514,22 +2656,22 @@ func _wege_loggen() -> void:
 
 ## Wie stark der Druck gerade ist (1 = Jagdbeginn) – für die Anzeige.
 func druck() -> float:
-	return 1.0 + maxf(0.0, zeit - wf("jagd_start")) / maxf(60.0, wf("eskalation_sek"))
+	return 1.0 + maxf(0.0, plan_zeit() - wf("jagd_start")) / maxf(60.0, wf("eskalation_sek"))
 
 
 ## Abstand der Jagdwellen: von welle_takt zum Jagdbeginn auf welle_takt_min nach eskalation_sek.
 func welle_takt_jetzt() -> float:
-	var t := clampf(maxf(0.0, zeit - wf("jagd_start")) / maxf(1.0, wf("eskalation_sek")), 0.0, 1.0)
+	var t := clampf(maxf(0.0, plan_zeit() - wf("jagd_start")) / maxf(1.0, wf("eskalation_sek")), 0.0, 1.0)
 	var takt := lerpf(wf("welle_takt"), wf("welle_takt_min"), t)
 	return takt * (1.5 if geheim else 1.0)
 
 
 ## Neue Lager außer Brakks Sicht und Tore in den Wällen Richtung Myriaden-HQ.
 func _eskalation() -> void:
-	if zeit >= wf("lager_neu_ab") and zeit >= _lager_naechst and fabrik_hp.size() < int(w("lager_max")):
+	if plan_zeit() >= wf("lager_neu_ab") and zeit >= _lager_naechst and fabrik_hp.size() < int(w("lager_max")):
 		_lager_naechst = zeit + wf("lager_neu_takt")
 		_neues_lager()
-	if zeit >= wf("tore_ab") and zeit >= _tore_naechst and tore_gesetzt < int(w("tore_max")):
+	if plan_zeit() >= wf("tore_ab") and zeit >= _tore_naechst and tore_gesetzt < int(w("tore_max")):
 		_tore_naechst = zeit + wf("tore_takt")
 		_tor_setzen()
 
@@ -2557,7 +2699,7 @@ func _neues_lager() -> void:
 	if kandidaten.is_empty():
 		return
 	var z: Vector2i = kandidaten.pick_random()
-	_setze_fabrik(z, Werte.ALARM_TRUPPEN[randi() % Werte.ALARM_TRUPPEN.size()], 2 if zeit >= wf("stufe2_ab") else 1)
+	_setze_fabrik(z, Werte.ALARM_TRUPPEN[randi() % Werte.ALARM_TRUPPEN.size()], 2 if plan_zeit() >= wf("stufe2_ab") else 1)
 	var gebaut := 0
 	for d: Vector2i in [Vector2i(-2, 0), Vector2i(0, -2), Vector2i(0, 2), Vector2i(2, 0), Vector2i(-2, -2), Vector2i(-2, 2), Vector2i(2, -2), Vector2i(2, 2)]:
 		var n := z + d
@@ -3288,6 +3430,15 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	# 25.11. (Paul): Hologramm-Tafeln – Elite-Auftritt, Feldbeförderung, Vertreibung, Wiedersehen (das Spiel läuft weiter)
 	y += tafeln.male(bild, m.x, y)
 	_male_bergungen(bild, g, ego, Stil)
+	if herausforderer != null and herausforderer.saeule_ueber_brakk():
+		Stil.schreibe_mittig(bild, Vector2(m.x, y + 4.0), "Lichtsäule über dir – raus aus dem Kreis!", 22, Color(Color("d6b3ff"), 0.7 + 0.3 * sin(float(Time.get_ticks_msec()) / 70.0)))
+		y += 28.0
+	if herausforderer != null and herausforderer.gel_rest > 0.0:
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Gebremst – Vergeltung mit dem Gelring", 16, Color("c9a2ff"))
+		y += 20.0
+	if herausforderer != null and herausforderer.marke_rest > 0.0:
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Markiert – sein nächster Treffer sitzt härter", 16, Color("c9a2ff"))
+		y += 20.0
 	# Zünder
 	for zu: Dictionary in zuender:
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Sprengladung: %d s" % ceili(float(zu["rest"])), 16, Color("ff9a3d"))
@@ -3578,6 +3729,9 @@ func _ende(sieg: bool) -> void:
 		return
 	vorbei = true
 	sabo = {}
+	herausforderer.brakk_faellt()   # 26.11.: stand er noch, hat er das Duell gewonnen
+	for t: Dictionary in trupps:
+		taktik.ende(t)   # 26.11.: Bilanz der Trupps, die noch stehen
 	nemesis.lauf_ende()   # 22.11.: Rang +1 für die, die Brakk hart zugesetzt oder ohne Bergung überstanden haben
 	print("ORDER24 Ende: %s nach %.0f s · Sabotage %s · Kills %d · Deckung %d %% · Schaden an Brakk %s" % ["Sieg" if sieg else "Niederlage", zeit, str(sabotage), kills, roundi(100.0 * deckung_sek / maxf(1.0, zeit)), str(schaden_an_brakk)])
 	spiel.befehl24_protokoll("ende", {"sieg": sieg, "sabotage": sabotage.duplicate(), "kills": kills, "wellen": wellen, "deckung_prozent": roundi(100.0 * deckung_sek / maxf(1.0, zeit))})   # 23.11.
@@ -3638,6 +3792,8 @@ func bericht(sieg: bool) -> Dictionary:
 	]
 	if geheim:
 		(b["hoehepunkte"] as Array).append(["Überläufer: Myriaden-Fabriken", str(myr_fabriken.size())])
+	if herausforderer != null and (not herausforderer.zeiten.is_empty() or not herausforderer.ergebnisse.is_empty()):
+		b["herausforderer"] = herausforderer.ergebnisse.duplicate()   # 26.11.: je Duell [Name, Ausgang]; leer = nicht gestellt
 	if nemesis != null:
 		b["nemesis"] = nemesis.lauf_liste()   # 22.11. (Teil 7): Feldbeförderungen, Vertriebene, Ausgeschaltete
 		if not sieg:
@@ -3672,6 +3828,10 @@ class BrakkZiel extends Gegner:
 			var quelle := str(spiel.schadensquelle).get_slice(":", 0)
 			var anteil := o24.wf("brakk_schaden") / 100.0 * (o24.wf("sabotage_schaden") / 100.0 if not o24.sabo.is_empty() else 1.0)   # 20.11. (Paul): beim Sabotieren verwundbarer
 			anteil *= 1.0 + o24.wf("hq_aggro_schaden") / 100.0 * o24.hq_naehe()   # 20.11. (Paul): je näher am Technoclan-HQ, desto gefährlicher
+			if quelle.begins_with("herausforderer"):
+				anteil = 1.0   # 26.11. (Paul): seine Treffer sind fest – keine Regeln der Verteidigung
+				if o24.herausforderer != null:
+					anteil *= o24.herausforderer.treffer_mal(menge)   # Vergeltung mit einem Ring
 			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * anteil
 			var vor := k.leben
 			k.nimm_schaden(menge * anteil)

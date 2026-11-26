@@ -634,6 +634,8 @@ func _leertaste() -> void:
 	if hoehe <= _boden() + 0.001:
 		steig = SPRUNG
 		_doppelt_genutzt = false
+		if spiel.order24 != null:
+			spiel.order24.brakk_bewegung("sprung")   # 26.11.: der Herausforderer schaut es sich ab
 		if _haken >= 0.0:
 			_flug = _lauf * SCHWING_MAL   # 19.11. (Paul): am Lichtanker schwingen
 	elif not _doppelt_genutzt and (brakk.fortschritt == null or brakk.fortschritt.frei("doppelsprung")):   # 19.11. (Paul): ab Stufe 2
@@ -747,6 +749,8 @@ func _process(delta: float) -> void:
 			brakk.fortschritt.zaehle_zeit("kampf_sek", echt)   # 19.11.: Sieg-Übersicht
 			if brakk.oben:
 				brakk.fortschritt.zaehle_zeit("wall_sek", echt)
+			if brakk.fortschritt.aktiv() != "":
+				brakk.fortschritt.zaehle_zeit("aktiv_" + brakk.fortschritt.aktiv(), echt)   # 26.11.: welcher Ring wie lange aktiv war
 			brakk.fortschritt.protokoll.tick(spiel, brakk, brakk.fortschritt)   # 23.11.: Run-Protokoll
 	for i in 2:
 		_rueckstoss[i] = maxf(0.0, float(_rueckstoss[i]) - echt * 6.0)
@@ -1278,6 +1282,12 @@ func befoerderungs_lupe(e: Node2D) -> bool:
 	_lupe_zoom_bis_ms = _lupe_bis_ms
 	_fov_puls = maxf(_fov_puls, Werte.NEMESIS_LUPE_ZOOM)
 	return true
+
+
+## 26.11. (Paul): Befehl 24 – der Herausforderer geht zu Boden.
+func kurze_lupe(sek: float) -> void:
+	_einfrieren(sek, Werte.NEMESIS_LUPE_TEMPO)
+	_lupe_bis_ms = Time.get_ticks_msec() + int(sek * 1000.0)
 
 
 ## Steht die Figur im Bild und ist nichts davor?
@@ -2240,6 +2250,8 @@ func _tumble_start() -> void:
 		r = Vector2(0, 1)
 	r = r.normalized()
 	_tumble_seite = r.x
+	if spiel.order24 != null:
+		spiel.order24.brakk_bewegung("tumble", r)   # 26.11.
 	var v := _vorne() * r.y + _rechts() * r.x
 	_tumble_r = Vector2(v.x, v.z).normalized()
 	_tumble = 0.0
@@ -2319,7 +2331,8 @@ func _lanze_feuer() -> void:
 		if _ist_fabrik_ziel(g):
 			_funke(von + r * (t - 0.08), 0.35)
 		# 19.11. (Paul): dazu ein Anteil des maximalen Lebens (große Gegner weniger) – trägt die Lanze ins späte Spiel
-		var anteil := float(BrakkFortschritt.LANZE_ANTEIL["gross" if BrakkFortschritt.gross(g) else "normal"])
+		var grosser: bool = BrakkFortschritt.gross(g) or (spiel.order24 != null and spiel.order24.ist_herausforderer_ziel(g))   # 26.11.: der Herausforderer zählt als groß
+		var anteil := float(BrakkFortschritt.LANZE_ANTEIL["gross" if grosser else "normal"])
 		g.nimm_schaden(LANZE_SCHADEN * _faehigkeit_faktor() * lanze_hitze * _gel_bonus(g, true) + g.max_leben * anteil)
 		treffer += 1
 		if g._tot:

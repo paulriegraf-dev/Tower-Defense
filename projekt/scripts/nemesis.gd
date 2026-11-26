@@ -86,6 +86,9 @@ const TAT_STAERKE := {
 	"ladung": "sprengfest", "sprengung": "sprengfest", "sichtung": "verstaerkung", "letzter_treffer": "nerven", "garantie": "verstaerkung",
 }
 const TAT_SCHWAECHE := {"rest": "nerven_letzter", "sichtung": "nachtragend", "anteil": "nachtragend", "medkit": "nachladen"}
+## 26.11. (Paul): der Herausforderer – diesen Titel trägt immer nur einer (er führt im Hangar aufs Podest)
+const TITEL_HERAUSFORDERER := "Herausforderer"
+const HERAUSFORDERER_GEWOHNHEITEN := ["tumble", "sprengen", "fern", "klon"]   # was einem im Duell nützt
 const TAT_TEXT := {
 	"zwei_begegnungen": "hat zwei Begegnungen mit Brakk überlebt",
 	"anteil": "hat Brakk in einer Begegnung mehr als ein Viertel seines Lebens genommen",
@@ -178,7 +181,7 @@ func neue_person(art: String, rang: int = 0, eigenname: String = "", beiname: St
 	var p := {"id": _naechste_id, "art": art, "rang": rang, "name": eigenname, "beiname": beiname, "titel": [], "tat": "",
 		"faehigkeit": "", "angewohnheit": "", "staerke": "", "schwaeche": "", "staerke_bekannt": false, "schwaeche_bekannt": false,
 		"bilanz": {"er": 0, "brakk": 0}, "begegnungen": 0, "bergungen": 0, "narbe": 0, "geborgen": false,
-		"taktik": {}, "chronik": [], "look": -1, "lauf": _neuer_lauf()}
+		"taktik": {}, "chronik": [], "look": -1, "duell": {}, "vergeltung": "", "lauf": _neuer_lauf()}
 	_naechste_id += 1
 	personen.append(p)
 	if rang > 0:
@@ -619,6 +622,8 @@ func erlitten(e: Einheit, menge: float) -> void:
 
 func von_brakk(e: Einheit) -> void:
 	_beg(e)["zuletzt"] = zeit()
+	if lernen != null:
+		lernen.treffer_abstand(e)   # 26.11.: Brakks Lieblingsabstand
 	var p := person_von(e)
 	if benannt(p) and not bool((p["lauf"] as Dictionary).get("wiedersehen", false)):
 		(p["lauf"] as Dictionary)["wiedersehen"] = true
@@ -704,7 +709,8 @@ func sprengung_ueberlebt(e: Einheit) -> void:
 
 ## Eliten schießen genauer (Anteil der Streuung).
 func genau(e: Einheit) -> float:
-	return Werte.NEMESIS_GENAU if not person_von(e).is_empty() or bool(e.daten.get("elite", false)) else 1.0
+	var g := Werte.NEMESIS_GENAU if not person_von(e).is_empty() or bool(e.daten.get("elite", false)) else 1.0
+	return g * (o24.taktik.streuung(e) if o24 != null and o24.taktik != null else 1.0)   # 26.11.: im Gehen etwas ungenauer
 
 
 # ------------------------------------------------------------------ Feldbeförderung
@@ -859,6 +865,100 @@ func _garantie() -> void:
 		print("NEMESIS Garantie: %s (%.0f Schaden an Brakk)" % [voller_name(person_von(beste)), maxf(0.0, wert)])
 
 
+# ------------------------------------------------------------------ Herausforderer (26.11., Paul)
+
+## Aus den Benannten: die beste Bilanz gegen Brakk – bevorzugt ein „Brakkbrecher“ oder wer mindestens
+## HERAUSFORDERER_BEVORZUGT_RANG hat. {} = keiner.
+static func bester_herausforderer(liste: Array) -> Dictionary:
+	var bevorzugt := liste.filter(func(p: Dictionary) -> bool: return str(p["beiname"]) == str(BEINAME_TAT["letzter_treffer"]) or int(p["rang"]) >= Werte.HERAUSFORDERER_BEVORZUGT_RANG)
+	var wahl: Dictionary = {}
+	for p: Dictionary in (bevorzugt if not bevorzugt.is_empty() else liste):
+		if wahl.is_empty() or _guete(p) > _guete(wahl):
+			wahl = p
+	return wahl
+
+
+## Wer tritt an? `vorher` = der Herausforderer davor: Wurde er geborgen (steht noch auf der Liste), kommt er wieder –
+## einen Rang höher und mit einer Angewohnheit mehr. Sonst der Beste aus der Liste. Gibt es keinen Benannten, wird die
+## Truppe mit dem meisten Schaden an Brakk auf der Stelle befördert. Er allein trägt danach den Titel.
+func herausforderer_waehlen(vorher: Dictionary = {}) -> Dictionary:
+	var p: Dictionary = {}
+	if not vorher.is_empty() and personen.has(vorher):
+		p = vorher
+		p["rang"] = mini(Werte.NEMESIS_RANG_MAX, int(p["rang"]) + 1)
+		(p["lauf"] as Dictionary)["rang_plus"] = true
+		_gewohnheit_dazu(p)
+		_chronik(p, "tritt noch einmal an – jetzt als %s" % dienstgrad(p))
+	else:
+		p = bester_herausforderer(benannte().filter(func(q: Dictionary) -> bool: return q != vorher))
+	if p.is_empty():
+		p = _herausforderer_befoerdern()
+	if p.is_empty():
+		return {}
+	for q: Dictionary in personen + versetzt + ausgeschaltet:
+		if q.get("titel", null) is Array:
+			(q["titel"] as Array).erase(TITEL_HERAUSFORDERER)
+	titel_geben(p, TITEL_HERAUSFORDERER)
+	(p["lauf"] as Dictionary)["erlaubt"] = true
+	(p["lauf"] as Dictionary)["dabei"] = true
+	return p
+
+
+func _gewohnheit_dazu(p: Dictionary) -> void:
+	var hat := NemesisGewohnheiten.von_person(p)
+	var frei: Array = HERAUSFORDERER_GEWOHNHEITEN.filter(func(a: String) -> bool: return not hat.has(a))
+	if frei.is_empty():
+		return
+	var neu := str(Zufall.waehle(frei))
+	if str(p.get("angewohnheit", "")) == "":
+		p["angewohnheit"] = neu
+	else:
+		p["angewohnheit2"] = neu
+
+
+## Kein Benannter da: die lebende Truppe mit dem meisten Schaden an Brakk, sonst die nächste, sonst eine neue aus einer
+## Fabrik – sofort Rang 2.
+func _herausforderer_befoerdern() -> Dictionary:
+	var beste: Einheit = null
+	var wert := -1.0
+	for id: int in _lauf:
+		var x: Variant = (_lauf[id] as Dictionary)["einheit"]
+		if Nemesis.lebt(x) and not (x as Einheit).ist_pilot and float((_lauf[id] as Dictionary)["schaden"]) > wert:
+			wert = float((_lauf[id] as Dictionary)["schaden"])
+			beste = x as Einheit
+	if beste == null:
+		var k: Kommandant = spiel.kommandant
+		var nah := INF
+		for y: Variant in o24._truppen():
+			var u := y as Einheit
+			if Nemesis.lebt(u) and not u.ist_pilot and k != null and u.position.distance_to(k.position) < nah:
+				nah = u.position.distance_to(k.position)
+				beste = u
+	if beste == null:
+		for z: Vector2i in spiel.fabriken:
+			if str(spiel.fabriken[z]["typ"]) != "pilot":
+				beste = o24._neue_truppe(str(spiel.fabriken[z]["typ"]), z, 4)
+				break
+	if beste == null:
+		return {}
+	var p := person_von(beste)
+	if p.is_empty():
+		p = neue_person(art_von(beste))
+		_zuordnen(beste, p)
+	p["rang"] = 2
+	p["name"] = _eigenname()
+	p["beiname"] = _beiname("garantie", "", beste)
+	p["tat"] = "garantie"
+	_staerke_schwaeche(p, "garantie")
+	p["faehigkeit"] = NemesisFaehigkeiten.ziehen(str(p["art"]), "", false)
+	(p["lauf"] as Dictionary)["neu"] = true
+	(p["lauf"] as Dictionary)["rang_plus"] = true
+	look_geben(p, personen)
+	befoerderungen.append({"person": p, "grund": "garantie", "zeit": zeit()})
+	_chronik(p, "Feldbeförderung: %s" % str(TAT_TEXT["garantie"]))
+	return p
+
+
 # ------------------------------------------------------------------ Kampfunfähig und Bergung
 
 ## main.lazarett_rettet: Eine Person fällt nicht – sie wird kampfunfähig und nach NEMESIS_BERGUNG_SEK geborgen.
@@ -899,7 +999,7 @@ func rettet(e: Einheit) -> bool:
 	_chronik(p, "von Brakk kampfunfähig geschossen (Bergung %d)" % int(p["bergungen"]))
 	if gewohnheiten != null:
 		gewohnheiten.abschauen(p, "kampfunfähig geschossen")   # 22.11. (Teil 4): kommt mit dem zurück, womit Brakk ihn besiegt hat
-	if benannt(p):   # 25.11. (Paul): kurze Tafel statt der Meldungszeile
+	if benannt(p) and not (o24.herausforderer != null and o24.herausforderer.ist_er(e)):   # 25.11. (Paul): kurze Tafel statt der Meldungszeile; der Herausforderer hat eine eigene
 		o24.tafeln.zeige({"art": "vertrieben", "titel": tr("%s vertrieben (%d.)") % [voller_name(p), int(p["bergungen"])], "zeilen": [],
 			"farbe": Color("7fe0ff"), "sek": Werte.NEMESIS_VERTRIEBEN_TAFEL_SEK, "pause": 0.2})
 	kampfunfaehig.append({"einheit": e, "person": p, "bis": zeit() + Werte.NEMESIS_BERGUNG_SEK, "groesse": e._sprite.scale})
@@ -1215,7 +1315,7 @@ const FELDER := {
 	"id": 0, "art": "technogunner", "rang": 1, "name": "?", "beiname": "", "titel": [], "tat": "", "faehigkeit": "", "angewohnheit": "",
 	"staerke": "", "schwaeche": "", "staerke_bekannt": false, "schwaeche_bekannt": false, "bilanz": {"er": 0, "brakk": 0},
 	"begegnungen": 0, "bergungen": 0, "narbe": 0, "geborgen": false, "taktik": {}, "chronik": [], "appell": false,
-	"letzter_schaden": 0.0, "zuletzt_erledigt": false, "angewohnheit2": "", "look": -1,
+	"letzter_schaden": 0.0, "zuletzt_erledigt": false, "angewohnheit2": "", "look": -1, "duell": {}, "vergeltung": "",
 }
 const CHRONIK_MAX := 12
 
@@ -1674,6 +1774,7 @@ func tod_bericht() -> Dictionary:
 		"zeile": str(zeilen[randi() % zeilen.size()]), "namenlos": bool(i.get("namenlos", false)),
 		"art_dativ": "Scharfschützen" if art == "scharfschuetze" else str(ART_TEXT.get(art, art)),
 		"grund": "Begründung: %s" % str(TAT_TEXT["letzter_treffer"]),
+		"duell": bool(i.get("duell", false)),
 		"aufstieg": "" if bool(i.get("namenlos", false)) or int(p["rang"]) <= int(i.get("rang_vorher", 0)) else "Aufstieg: %s → %s" % [DIENSTGRADE[int(i.get("rang_vorher", 0))], dienstgrad(p)],
 	}
 	return aus

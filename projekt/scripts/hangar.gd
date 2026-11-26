@@ -1,8 +1,8 @@
 class_name Hangar
 extends CanvasLayer
 ## 25.11. (Paul): Hangar des Technoclan – die Benannten aus nemesis.json als Figuren in Reihen nach Rang, wie die
-## Armee-Ansicht aus „Mordors Schatten“. Vorn Rang 1, dahinter Rang 2 und 3; Rang 4 und der Herausforderer (bis es ihn
-## gibt: der mit der besten Bilanz) stehen auf dem Podest. Versetzte stehen grau am Rand, Ausgeschaltete sind ein leerer
+## Armee-Ansicht aus „Mordors Schatten“. Vorn Rang 1, dahinter Rang 2 und 3; Rang 4 und der Herausforderer (hat noch
+## keiner den Titel: der mit der besten Bilanz) stehen auf dem Podest. Versetzte stehen grau am Rand, Ausgeschaltete sind ein leerer
 ## Platz mit Namensschild. Klick oder Pfeiltasten wählen: Die Figur tritt vor, die Kamera fährt heran, rechts die Karte.
 ## Erreichbar aus dem Startmenü und aus dem Bericht. Liest nur – kein Spielzustand wird verändert.
 
@@ -163,8 +163,11 @@ func _raum() -> void:
 
 # ------------------------------------------------------------------ Besetzung
 
-## Wer oben steht: Rang NEMESIS_RANG_MAX und der Herausforderer (bis es ihn gibt: die beste Bilanz).
+## Wer oben steht: Rang NEMESIS_RANG_MAX und der Herausforderer (hat noch keiner den Titel: die beste Bilanz).
 static func herausforderer(personen: Array) -> Dictionary:
+	for p: Dictionary in personen:
+		if Nemesis.hat_titel(p, Nemesis.TITEL_HERAUSFORDERER):
+			return p
 	var bester: Dictionary = {}
 	for p: Dictionary in personen:
 		if bester.is_empty() or Nemesis._guete(p) > Nemesis._guete(bester):
@@ -544,11 +547,20 @@ static func karten_zeilen(p: Dictionary) -> Array:
 		["Bilanz", Nemesis.bilanz_text(p)],
 		["Fähigkeit", " · ".join(PackedStringArray(faehig.map(func(f: Variant) -> String: return NemesisFaehigkeiten.name_von(str(f))))) if not faehig.is_empty() else "—"],
 		["Gelernt von dir", " · ".join(PackedStringArray(gelernt.map(func(a: Variant) -> String: return NemesisGewohnheiten.name_von(str(a))))) if not gelernt.is_empty() else "—"],
+		["Spielt wie du", NemesisLernen.duell_text(p) if NemesisLernen.duell_text(p) != "" else "—"],   # 26.11.: der Herausforderer
 		["Taktik", "bevorzugt " + NemesisLernen.name_von(taktik) if taktik != "" else "?"],
 		["Stärke", str(Nemesis.STAERKEN.get(str(p.get("staerke", "")), "?")) if bool(p.get("staerke_bekannt", false)) else "?"],
 		["Schwäche", str(Nemesis.SCHWAECHEN.get(str(p.get("schwaeche", "")), "?")) if bool(p.get("schwaeche_bekannt", false)) else "?"],
 		["Titel", Nemesis.titel_text(p) if Nemesis.titel_text(p) != "" else "—"],
 	]
+
+
+## 26.11.: die Zeilen der Karte, dazu „Vergeltung“, sobald er sie einmal gezeigt hat.
+static func karten_zeilen_alle(p: Dictionary) -> Array:
+	var aus := karten_zeilen(p)
+	if str(p.get("vergeltung", "")) != "":
+		aus.append(["Vergeltung", "kopiert %s" % str(p["vergeltung"])])
+	return aus
 
 
 func _male_karte(f: Dictionary) -> void:
@@ -575,7 +587,7 @@ func _male_karte(f: Dictionary) -> void:
 			kurz += "\n" + Nemesis.titel_text(p)
 		Stil.absatz(ci, Vector2(x, y), kurz, weite, Stil.NORMAL, Stil.TEXT)
 		return
-	for z: Array in karten_zeilen(p):
+	for z: Array in karten_zeilen_alle(p):
 		Stil.schreibe(ci, Vector2(x, y + 4.0), str(z[0]), Stil.KLEIN, Stil.TEXT_BLASS)
 		var wert := str(z[1])
 		Stil.absatz(ci, Vector2(x + 66.0, y), wert, weite - 66.0, Stil.KLEIN, Stil.TEXT_BLASS if wert in ["?", "—"] else Stil.TEXT)

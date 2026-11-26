@@ -167,7 +167,7 @@ static var sim_mal: int = 1
 
 static func sim_schritt() -> float:
 	return SIM_SCHRITT * float(sim_mal)
-const VERSION: int = 75       # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
+const VERSION: int = 76       # 19.11.: Web-Version – je Veröffentlichung um 1 hochzählen (steht unten im Startmenü)
 const BRAKK_TEMPO: float = 2.0     # 18.11.: Brakk-Mode läuft fest auf ×2 (nicht umschaltbar)
 const TRUPP_PAUSE: float = 3.0     # Sekunden zwischen zwei Trupps einer Welle
 
@@ -1912,6 +1912,66 @@ const NEMESIS_BEAM_HUB := 1.4            # so viele Felder hebt die Figur ab …
 const NEMESIS_BEAM_KLEIN := 0.45         # … und so klein wird sie dabei
 const NEMESIS_RAUCH_SEK := 3.0           # Rauchrest nach dem Beam
 const NEMESIS_HINWEIS_WEIT := 14.0       # bis so viele Felder steht der Ausschalten-Hinweis neben der Figur
+## 26.11. (Paul): der Herausforderer – ein Benannter allein gegen Brakk (nemesis_herausforderer.gd)
+const HERAUSFORDERER_ZEITEN: Array[float] = [540.0, 840.0]   # Minute 9 und 14 auf der Überlebens-Uhr
+const HERAUSFORDERER_BEVORZUGT_RANG := 3   # bevorzugt: Brakkbrecher oder mindestens dieser Rang
+const HERAUSFORDERER_ANSAGE_SEK := 10.0   # so lange vorher meldet sich Sonde 7
+const HERAUSFORDERER_ABSTAND := Vector2(10.0, 12.0)   # so weit vor Brakk kommt er an (Felder, von-bis)
+const HERAUSFORDERER_PAUSE_MAX := 90.0    # so lange ruht der Fahrplan höchstens; dann kommen die Jagdtrupps zurück
+const HERAUSFORDERER_TAFEL_SEK := 3.5
+const HERAUSFORDERER_MUSIK_DB := -9.0     # so viel leiser ist die Musik während der Herausforderung
+const HERAUSFORDERER_LEBEN_MAL := 6.0     # sein Leben: so oft Brakks Maximalleben beim Auftritt
+const HERAUSFORDERER_TREFFER_ANTEIL := 0.182   # jeder seiner Treffer: so viel von Brakks Maximalleben – der 6. fällt ihn (ohne Wallring)
+const HERAUSFORDERER_TEMPO_MAL := 1.05    # sein Tempo gegen Brakks Lauftempo
+## Er spielt wie Brakk (Punkt 4)
+const HERAUSFORDERER_MERKEN := 300        # so viele Treffer-Entfernungen merkt sich das Spiel
+const HERAUSFORDERER_ABSTAND_SONST := 7.0   # Lieblingsabstand, solange zu wenig bekannt ist (Felder)
+const HERAUSFORDERER_AKTION_TAKT := Vector2(1.6, 8.0)   # Sekunden zwischen zwei Sprüngen/Tumble (aus Brakks Takt, von-bis)
+const HERAUSFORDERER_WALL_ANTEIL := 0.15  # ab diesem Anteil der Kampfzeit auf Wällen kämpft er auch oben
+const HERAUSFORDERER_SPRUNG_SEK := 0.75   # sein Sprung: so lange in der Luft …
+const HERAUSFORDERER_TUMBLE_SEK := 0.28   # … sein Tumble: so schnell …
+const HERAUSFORDERER_TUMBLE_WEIT := 2.0   # … so weit (Felder)
+const HERAUSFORDERER_WALL_SEK := Vector2(3.0, 5.0)   # so lange bleibt er auf einer Wallkrone
+const HERAUSFORDERER_AUSWEICH_PAUSE := 3.0   # so oft höchstens weicht er dem Ladestrahl aus
+## Drei Angriffe (Punkt 5) – Ankündigungen mindestens 0,5 s
+const HERAUSFORDERER_ERSTER_ANGRIFF := 3.0   # so lange nach der Ankunft erst der erste
+const HERAUSFORDERER_BEWEGEN := Vector2(0.8, 1.6)    # nach dem Fenster so lange Bewegung bis zum nächsten Angriff
+const HERAUSFORDERER_ANGRIFF_WEITE := 14.0  # nur mit Sicht und höchstens so weit (Felder)
+const HERAUSFORDERER_FENSTER := Vector2(1.0, 1.5)    # nach jedem Angriff steht er so lange verwundbar da …
+const HERAUSFORDERER_WUT_ANTEIL := 0.5    # … unter diesem Anteil seines Lebens …
+const HERAUSFORDERER_WUT_FENSTER := 0.7   # … nur noch so viel davon, und seine Angewohnheiten kommen dazu
+const HERAUSFORDERER_SALVE_ANSAGE := 0.7
+const HERAUSFORDERER_SALVE_FAECHER := 14.0  # Grad zwischen den drei Schüssen
+const HERAUSFORDERER_KUGEL_ANSAGE := 1.2
+const HERAUSFORDERER_STURM_TEMPO := 1.7   # Anlauf: so viel schneller als sein Lauftempo …
+const HERAUSFORDERER_STURM_NAH := 1.4     # … bis er so nah ist (Felder) …
+const HERAUSFORDERER_STURM_ANLAUF := 3.0  # … oder so lange
+const HERAUSFORDERER_STURM_ANSAGE := 0.8  # der Kreis am Boden so lange vor dem Schlag
+const HERAUSFORDERER_STURM_RADIUS := 1.6  # Treffbereich (Felder)
+const HERAUSFORDERER_STURM_SPRUNG := 0.9  # so hoch gesprungen geht der Schlag ins Leere
+const HERAUSFORDERER_ENDE_LUPE_SEK := 1.0  # geht er zu Boden: so lange Zeitlupe
+## Vergeltung (Punkt 6): er kopiert Brakks meistgenutzte Waffe bzw. den am längsten aktiven Ring
+const HERAUSFORDERER_VERGELTUNG_ERSTE := 12.0     # so lange nach der Ankunft das erste Mal …
+const HERAUSFORDERER_VERGELTUNG_ABKLING := 25.0   # … dann alle so viele Sekunden (von Beginn zu Beginn) …
+const HERAUSFORDERER_VERGELTUNG_SEK := 10.0       # … für so lange
+const HERAUSFORDERER_VERGELTUNG_TAFEL_SEK := 2.5
+const HERAUSFORDERER_DOPPEL_ANSAGE := 0.55        # Pistolen: Ankündigung, dann …
+const HERAUSFORDERER_DOPPEL_PAARE := 3            # … so viele Doppelschüsse (zusammen höchstens ein Treffer) …
+const HERAUSFORDERER_DOPPEL_TAKT := 0.28          # … in diesem Abstand (Sekunden wie in brakk_geschosse) …
+const HERAUSFORDERER_DOPPEL_VERSATZ := 0.2        # … so weit links und rechts (Felder)
+const HERAUSFORDERER_STRAHL_ANSAGE := 0.9         # Ladestrahl: so lange die Ziellinie …
+const HERAUSFORDERER_STRAHL_BREITE := 0.3         # … halbe Breite des Strahls (Felder); die Lichtsäule nimmt Brakks Werte
+## … und die Ringe
+const HERAUSFORDERER_RING_GLUT := 1.3             # Glutstrahlring: Schaden je Treffer
+const HERAUSFORDERER_RING_MARKE_SEK := 3.0        # Zielring: so lange markiert …
+const HERAUSFORDERER_RING_MARKE_MAL := 1.25       # … der nächste Treffer so viel stärker
+const HERAUSFORDERER_RING_TAKT_FENSTER := 0.7     # Taktring: Anteil der verwundbaren Fenster
+const HERAUSFORDERER_RING_WALL_SCHUTZ := 0.8      # Wallring: so viel Schaden kommt bei ihm an
+const HERAUSFORDERER_RING_SPRUNG_WEIT := 2.5      # Sprungring: so weit springt die Kugel (Felder)
+const HERAUSFORDERER_RING_BRAND_SEK := 2.0        # Brandring: so lange brennt es …
+const HERAUSFORDERER_RING_BRAND_ANTEIL := 0.125   # … zusammen etwa ein halber Treffer, wenn man stehen bleibt
+const HERAUSFORDERER_RING_GEL_SEK := 1.5          # Gelring: so lange gebremst …
+const HERAUSFORDERER_RING_GEL_TEMPO := 0.55       # … auf so viel Lauftempo
 ## 20.11.: Schritt 6c – Ausweichen (Classic und Rogue). Schüsse auf Brakk sind echte Geschosse (brakk_geschosse.gd); die
 ## 2D-Logik für alle anderen Figuren bleibt. Tempo in Feldern je Sekunde Echtzeit (Brakk läuft 3), Radien in Feldern.
 const BRAKK_AUSWEICH_SCHADEN := {   # Schaden je Treffer auf Brakk – die Trefferquote sinkt, darum mehr (Paul 20.11.)
@@ -1922,6 +1982,10 @@ const BRAKK_GESCHOSS := {
 	"laser": {"tempo": 14.0, "radius": 0.06, "dicke": 9.0},     # Technogunner
 	"sph": {"tempo": 11.0, "radius": 0.08, "dicke": 11.0},      # Battlesphäre (Classic)
 	"plasma": {"tempo": 4.5, "radius": 0.22, "dicke": 30.0, "einschlag": 0.6, "brand_sek": 2.0, "brand_anteil": 0.2},
+	# 26.11. (Paul): Herausforderer – aus 8 Feldern mindestens 0,9 s unterwegs (Salve 0,94 s, Kugel 1,6 s)
+	"hf_salve": {"tempo": 8.5, "radius": 0.12, "dicke": 15.0},
+	"hf_kugel": {"tempo": 5.0, "radius": 0.34, "dicke": 42.0, "einschlag": 1.5, "brand_sek": 0.0, "brand_anteil": 0.0},
+	"hf_doppel": {"tempo": 8.5, "radius": 0.12, "dicke": 12.0},   # Vergeltung mit Brakks Pistolen
 }
 const BRAKK_RUMPF := 0.18              # Brakks Trefferbereich (Radius in Feldern) – kleiner als sein Bild
 const BRAKK_STREUUNG := 0.27           # seitliche Streuung des Zielpunkts (Felder, gleichverteilt ±) – stehend etwa 90 % Treffer

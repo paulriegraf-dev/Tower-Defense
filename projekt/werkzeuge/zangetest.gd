@@ -65,6 +65,8 @@ func _process(_delta: float) -> bool:
 		return false
 	var k: Kommandant = spiel.kommandant
 	k.leben = k.max_leben
+	if o.taktik != null:
+		o.taktik.erzwingen = "zange"   # 26.11.: seit den Angriffstaktiken ist die Zange eine von vier (sonst zufällig)
 	if not gesetzt:
 		gesetzt = true
 		var karte: Karte = spiel.karte

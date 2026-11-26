@@ -52,7 +52,7 @@ static func spiele(baum: SceneTree, art: String) -> void:
 		(strom as AudioStreamMP3).loop = true   # Rückfall, falls die Marke einmal verpasst wird
 		(strom as AudioStreamMP3).loop_offset = float(e.get("start", 0.0))
 	var s := _spieler(baum)
-	var ziel: float = float(e["db"]) + prozent_db(Werte.musik)
+	var ziel: float = float(e["db"]) + prozent_db(Werte.musik) + _duell_db
 	var tw := baum.create_tween()
 	tw.set_process_mode(Tween.TWEEN_PROCESS_IDLE)
 	tw.set_ignore_time_scale(true)
@@ -71,4 +71,12 @@ static func spiele(baum: SceneTree, art: String) -> void:
 static func lautstaerke(baum: SceneTree) -> void:
 	var s := baum.root.get_node_or_null("Musik") as AudioStreamPlayer
 	if s != null and STUECKE.has(_aktuell):
-		s.volume_db = float(STUECKE[_aktuell]["db"]) + prozent_db(Werte.musik)
+		s.volume_db = float(STUECKE[_aktuell]["db"]) + prozent_db(Werte.musik) + _duell_db
+
+
+## 26.11. (Paul): Befehl 24 – Herausforderung: die Musik wird dünner.
+static var _duell_db := 0.0
+
+static func duell(baum: SceneTree, an: bool) -> void:
+	_duell_db = Werte.HERAUSFORDERER_MUSIK_DB if an else 0.0
+	lautstaerke(baum)

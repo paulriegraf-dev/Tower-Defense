@@ -89,6 +89,19 @@ func zeile_bei(p: Vector2) -> int:
 	return -1
 
 
+## 26.11.: die Zeilen zum Herausforderer: je [Name, Ausgang, Erklärung]; ohne Duell „nicht gestellt“.
+static func herausforderer_zeilen(ergebnisse: Array) -> Array:
+	var aus: Array = []
+	for e: Array in ergebnisse:
+		if str(e[1]) == "gesiegt":
+			aus.append([str(e[0]), "hat gesiegt", "Er trat allein gegen dich an – und du bist gefallen. Er wird befördert."])
+		else:
+			aus.append([str(e[0]), "vertrieben", "Er trat allein gegen dich an, und du hast ihn zu Boden gebracht."])
+	if aus.is_empty():
+		aus.append(["", "nicht gestellt", "In diesem Lauf kam kein Herausforderer – er tritt zu Minute 9 und 14 an."])
+	return aus
+
+
 ## 25.11. (Paul): Was eine Zeile bei „Eliten dieses Laufs“ bedeutet: [Überschrift, Erklärung].
 static func erklaerung(zeile: Array) -> Array:
 	var wer := str(zeile[0])
@@ -157,7 +170,7 @@ func _male_tod(d: Dictionary) -> void:
 	Stil.schreibe_mittig(self, Vector2(mx, y), str(bericht.get("kopf", "GEFALLEN")), Stil.NORMAL, Stil.TEXT_BLASS)
 	y += 22.0
 	var namenlos := bool(d.get("namenlos", false))
-	Stil.schreibe_mittig(self, Vector2(mx, y), "Erledigt von einem namenlosen %s …" % str(d.get("art_dativ", d.get("art", ""))) if namenlos else "ERLEDIGT VON", Stil.NORMAL if namenlos else Stil.GROSS, ROT_TOD)
+	Stil.schreibe_mittig(self, Vector2(mx, y), "Erledigt von einem namenlosen %s …" % str(d.get("art_dativ", d.get("art", ""))) if namenlos else ("IM DUELL ERLEDIGT VON" if bool(d.get("duell", false)) else "ERLEDIGT VON"), Stil.NORMAL if namenlos else Stil.GROSS, ROT_TOD)
 	y += 14.0 if namenlos else 22.0
 	if namenlos:
 		Stil.schreibe_mittig(self, Vector2(mx, y), "… der dafür befördert wird – ab jetzt heißt er", Stil.KLEIN, Stil.TEXT_BLASS)
@@ -303,6 +316,22 @@ static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool 
 		ci.draw_rect(Rect2(bx + 64.0, by - 2.0, bw - 88.0, 4.0), Color(1, 1, 1, 0.06))
 		ci.draw_rect(Rect2(bx + 64.0, by - 2.0, (bw - 88.0) * v / spitze, 4.0), Color(Stil.GOLD, 0.6))
 		by += 10.0
+	# 26.11. (Paul): der Herausforderer – über der Elitenliste, eine Zeile je Duell
+	if b.has("herausforderer") and not kompakt:
+		by += 6.0
+		for zeile: Array in herausforderer_zeilen(b["herausforderer"] as Array):
+			var farbe := Color("7fe0ff") if str(zeile[1]) == "vertrieben" else (Color("ff5a6e") if str(zeile[1]) == "hat gesiegt" else Color("8b95a3"))
+			Stil.schreibe(ci, Vector2(bx, by), "Herausforderer:", Stil.KLEIN, Stil.LEUCHT)
+			Stil.schreibe(ci, Vector2(bx + bw - Stil.breite(str(zeile[1]), Stil.KLEIN), by), str(zeile[1]), Stil.KLEIN, farbe)
+			var wer := str(zeile[0])
+			var platz := bw - 74.0 - Stil.breite(str(zeile[1]), Stil.KLEIN)
+			if wer != "" and Stil.breite(wer, Stil.KLEIN) > platz:
+				while wer.length() > 4 and Stil.breite(wer + "…", Stil.KLEIN) > platz:
+					wer = wer.left(-1)
+				wer += "…"
+			Stil.schreibe(ci, Vector2(bx + 66.0, by), wer, Stil.KLEIN, Stil.TEXT)
+			marken.append([Rect2(bx - 2.0, by - 5.0, bw + 4.0, 10.0), str(zeile[0]) if str(zeile[0]) != "" else "Herausforderer", str(zeile[2])])
+			by += 10.0
 	# 22.11. (Paul, Nemesis Teil 7): Befehl 24 – Feldbeförderungen dieses Laufs, vertriebene und ausgeschaltete Benannte
 	var nem: Array = b.get("nemesis", [])
 	if not nem.is_empty():

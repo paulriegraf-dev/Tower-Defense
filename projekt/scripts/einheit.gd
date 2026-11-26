@@ -397,6 +397,8 @@ func _physics_process(_takt: float) -> void:
 				if not ueber.is_empty():
 					ziel = ueber["ziel"]
 					_spiegel_punkt = ueber["spiegel"]
+			if ziel != null and spiel.order24 != null and spiel.order24.haelt_feuer(ziel):
+				ziel = null   # 26.11. (Paul): Befehl 24 – Herausforderung: am Boden schießt nur er auf Brakk
 			var drueckt: bool = (spiel.im_endkampf() or (spiel.order24 != null and spiel.order24.drueckt(self))) and karte.zelle_bei(position) != _marschziel and _marschziel != Karte.KEINE   # 22.11.: Nemesis-Taktik – im Gehen schießen
 			if ziel != null and drueckt and (ziel is Zonenbau or position.distance_to(ziel.position) > Werte.ENDKAMPF_ABSTAND * Werte.ZELLE):
 				# Letzte Runde: im Gehen schießen und weiter auf das eigene Feld in der Zone vorrücken – stehen bleibt nur,

@@ -53,3 +53,23 @@ if b24:
         wall = sum(1 for p in lage if p[3]) / max(1, len(lage)) if lage else 0
         rest = {k: v for k, v in e.items() if k not in ("brakk", "t", "a")}
         print(f"{e['t']:>6} {e['a']:>6} {b.get('brakk_kills', ''):>5} {str(b.get('leben_min_prozent', '')) + ('%' if b else ''):>5} {wall:>5.0%}  {rest}")
+    # 26.11.: je Angriffstaktik der Jagdwellen – Kontakt, Schaden an Brakk und Verluste je Trupp
+    je = {}
+    for e in b24:
+        t = e.get("taktik")
+        if not t:
+            continue
+        s = je.setdefault(t, {"wellen": 0, "kontakt": [], "schaden": [], "verluste": []})
+        if e["a"] == "welle":
+            s["wellen"] += 1
+        elif e["a"] == "kontakt":
+            s["kontakt"].append(e.get("sekunden_bis_kontakt", 0))
+        elif e["a"] == "trupp_ende":
+            s["schaden"].append(e.get("schaden_an_brakk", 0))
+            s["verluste"].append(e.get("verluste", 0))
+    if je:
+        def schnitt(l):
+            return f"{sum(l) / len(l):.1f}" if l else "-"
+        print(f"\n{'Taktik':<12} {'Wellen':>6} {'Trupps':>6} {'s bis Kontakt':>13} {'Schaden/Trupp':>13} {'Verluste':>8}")
+        for t, s in je.items():
+            print(f"{t:<12} {s['wellen']:>6} {len(s['schaden']):>6} {schnitt(s['kontakt']):>13} {schnitt(s['schaden']):>13} {schnitt(s['verluste']):>8}")

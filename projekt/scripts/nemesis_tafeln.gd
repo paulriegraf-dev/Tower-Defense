@@ -6,7 +6,7 @@ extends RefCounted
 ## Zeiten in echten Sekunden (Order24 ruft weiter() mit der Echtzeit auf).
 
 const Stil := preload("res://scripts/ui/ui_stil.gd")
-const VORRANG := {"elite": 1, "wiedersehen": 1, "vertrieben": 2, "befoerderung": 3}
+const VORRANG := {"elite": 1, "wiedersehen": 1, "vertrieben": 2, "befoerderung": 3, "vergeltung": 3, "herausforderer": 4}
 const NEU_GEZEIGT := 1.0   # so jung darf die laufende Tafel sein, damit sie nach der wichtigeren wiederkommt
 const BREITE := 560.0
 

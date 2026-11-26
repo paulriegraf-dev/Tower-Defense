@@ -312,6 +312,18 @@ func kaufe(ring: String, spiel: Node) -> String:
 	return ""
 
 
+## 26.11. (Paul): Geschenkte Stufe vom Herausforderer – auch sie bringt beim Verkaufen kein Gold (zurück kommt nur
+## selbst Bezahltes).
+func schenke_stufe(ring: String, spiel: Node) -> String:
+	if ring_stufe(ring) <= 0:
+		return "Den Ring trägt Brakk nicht."
+	if ring_stufe(ring) >= RING_PREISE.size():
+		return "Schon die höchste Stufe."
+	ring_stufen[ring] = ring_stufe(ring) + 1
+	protokoll.ring("beute", ring, {"stufe": ring_stufe(ring), "preis": 0})
+	return ""
+
+
 ## 25.11. (Paul): Geschenkter neuer Ring (Befehl 24: Beute aus einer Fabrik). Er kostet nichts und bringt beim Verkaufen
 ## kein Gold; wer ihn aufwertet, bekommt nur die selbst bezahlten Stufen zurück. "" = geklappt, sonst der Grund.
 func schenke(ring: String, spiel: Node) -> String:

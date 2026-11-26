@@ -359,3 +359,70 @@ func _himmel(p: Vector2, lang: bool = false) -> String:
 	else:
 		w = "Süd" if d.y > 0.0 else "Nord"
 	return w + "en" if lang else w
+
+
+# ------------------------------------------------------------------ wie Brakk spielt (26.11., für den Herausforderer)
+
+var treffer_abstaende: Array = []   # Felder, aus denen Brakk getroffen hat (die letzten HERAUSFORDERER_MERKEN)
+var bewegungen := {"sprung": 0, "tumble": 0, "links": 0, "rechts": 0, "zurueck": 0, "vor": 0}
+
+
+## Brakk hat eine Truppe getroffen – aus welcher Entfernung?
+func treffer_abstand(e: Einheit) -> void:
+	var k: Kommandant = nem.spiel.kommandant
+	if k == null:
+		return
+	treffer_abstaende.append(e.position.distance_to(k.position) / Werte.ZELLE)
+	if treffer_abstaende.size() > Werte.HERAUSFORDERER_MERKEN:
+		treffer_abstaende.pop_front()
+
+
+## Sprung oder Tumble; `r` beim Tumble: Richtung zur Blickrichtung (x rechts, y vorwärts).
+func bewegung(art: String, r: Vector2 = Vector2.ZERO) -> void:
+	bewegungen[art] = int(bewegungen.get(art, 0)) + 1
+	if art == "tumble":
+		var wohin := "zurueck" if r.y < -0.5 else ("links" if r.x < -0.3 else ("rechts" if r.x > 0.3 else "vor"))
+		bewegungen[wohin] = int(bewegungen[wohin]) + 1
+
+
+## Die Kennwerte: Lieblingsabstand beim Schießen (Median), Sprünge und Tumble je Minute Kampf, Vorzugsrichtung beim
+## Ausweichen, die seltener genommene Seite und ob er auf den Wällen kämpft.
+func kennwerte() -> Dictionary:
+	var abstand := Werte.HERAUSFORDERER_ABSTAND_SONST
+	if treffer_abstaende.size() >= 5:
+		var s := treffer_abstaende.duplicate()
+		s.sort()
+		abstand = float(s[s.size() / 2])
+	var k: Kommandant = nem.spiel.kommandant
+	var zaehler: Dictionary = k.fortschritt.zaehler if k != null and k.fortschritt != null else {}
+	var kampf := float(zaehler.get("kampf_sek", 0.0))
+	var aktionen := int(bewegungen["sprung"]) + int(bewegungen["tumble"])
+	var je_min := 60.0 * aktionen / maxf(60.0, kampf if kampf > 0.0 else nem.o24.zeit)
+	var seite := ""
+	var meiste := 0
+	for w: String in ["links", "rechts", "zurueck"]:
+		if int(bewegungen[w]) > meiste:
+			meiste = int(bewegungen[w])
+			seite = w
+	return {"abstand": snappedf(clampf(abstand, 3.0, 11.0), 0.1), "je_min": snappedf(je_min, 0.1),
+		"takt": clampf(60.0 / maxf(0.1, je_min), Werte.HERAUSFORDERER_AKTION_TAKT.x, Werte.HERAUSFORDERER_AKTION_TAKT.y),
+		"sprung_anteil": float(bewegungen["sprung"]) / maxf(1.0, aktionen) if aktionen > 0 else 0.4,
+		"seite": seite, "selten": "rechts" if int(bewegungen["rechts"]) <= int(bewegungen["links"]) else "links",
+		"wall": float(zaehler.get("wall_sek", 0.0)) > Werte.HERAUSFORDERER_WALL_ANTEIL * maxf(30.0, kampf)}
+
+
+## Für die Karte: „hält 7 Felder Abstand · weicht am liebsten nach links aus“
+static func duell_text(p: Dictionary) -> String:
+	var d: Variant = p.get("duell", {})
+	if not (d is Dictionary) or (d as Dictionary).is_empty():
+		return ""
+	var w := d as Dictionary
+	var teile := PackedStringArray(["hält %d Felder Abstand" % roundi(float(w.get("abstand", 0.0)))])
+	var seite := str(w.get("seite", ""))
+	if seite != "":
+		teile.append("weicht am liebsten %s aus" % str({"links": "nach links", "rechts": "nach rechts", "zurueck": "nach hinten"}[seite]))
+	if float(w.get("je_min", 0.0)) > 0.0:
+		teile.append("%d Sprünge und Tumble je Minute" % roundi(float(w["je_min"])))
+	if bool(w.get("wall", false)):
+		teile.append("kämpft auf den Wällen")
+	return " · ".join(teile)

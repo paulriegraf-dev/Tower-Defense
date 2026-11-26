@@ -126,6 +126,8 @@ func weiter(dt: float) -> void:
 			_zust.erase(id)
 			continue
 		var e := o as Einheit
+		if e.has_meta("herausforderer") or (nem.o24.herausforderer != null and nem.o24.herausforderer.sperrt() and not e.in_stellung()):
+			continue   # 26.11.: er hat seine eigenen Angriffe; am Boden ruht in der Herausforderung alles andere
 		var p: Dictionary = nem._person_von[id]
 		var fs := von_person(p)
 		if fs.is_empty():
