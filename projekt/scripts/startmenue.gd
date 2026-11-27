@@ -251,6 +251,10 @@ func _baue() -> void:
 			]
 			if Profil.rogue_frei():
 				_eintraege.insert(2, ["Hangar", _hangar_oeffnen, "die Benannten des Technoclans, die dich jagen", Stil.TEXT])   # 25.11. (Paul): statt der Liste „Meistgesuchte“
+			if BrakkBossarena.frei():
+				_eintraege.insert(_eintraege.size() - 1, ["Bossarena", _zeige.bind("bossarena"), tr("Testmodus: ein Boss, direkt im Kampfplatz"), Stil.TEXT])   # G2 (27.11., Paul): nur mit Entwicklercode
+		"bossarena":
+			_eintraege = BrakkBossarena.menue(_baue, _bossarena_los, _zeige.bind("brakk"))   # G2: Inhalt in brakk_bossarena.gd
 		"rogue":
 			# 20.11. (Schritt 5b): Order 24 mit Standardwerten oder eine eigene Rogue-Karte aus dem Editor
 			_eintraege = [["Befehl 24 · Standardwerte", _rogue_los.bind(Werte.ORDER24_KARTE_NAME), _karten_text("szenario_order24"), LICHT]]
@@ -790,6 +794,12 @@ func _rogue_los(kname: String) -> void:
 	_starte(true, "normal", kname, "")
 
 
+## G2 (27.11., Paul): Bossarena – Befehl 24 auf der großen Karte, Order24 baut dann nur den Kampfplatz.
+func _bossarena_los() -> void:
+	BrakkBossarena.laeuft = true
+	_rogue_los(Werte.ORDER24_KARTE_NAME)
+
+
 ## Startet einen Modus. Gespielt wird auf der großen Karte (Paul 16.11.); nur aufgezeichnete Bauten (Phantom
 ## angreifen) bringen ihre eigene Kartengröße mit. Passt die Größe nicht, wird umgestellt und die Szene neu geladen –
 ## main.gd startet dann über naechster_start gleich in den Modus.
@@ -829,6 +839,10 @@ func _ready() -> void:
 		Anfuehrer.portraet(str(af["id"]))   # 21.11.: Porträts vorladen (sonst erscheint das Bild beim ersten Zeichnen weiß)
 	if not _welt.get_window().files_dropped.is_connected(_dateien_fallen):
 		_welt.get_window().files_dropped.connect(_dateien_fallen)   # 18.11.: Import eigener Karten
+	BrakkBossarena.laeuft = false   # G2: im Menü läuft keine Bossarena mehr
+	if BrakkBossarena.menue_seite != "":
+		_zeige(BrakkBossarena.menue_seite)   # G2: „Anderer Boss“
+		BrakkBossarena.menue_seite = ""
 	if _seite != "haupt":
 		return
 	_baue()
@@ -2190,7 +2204,7 @@ func _male_hauptzeile(ci: Control, i: int) -> void:
 ## Unterseite: Tafel links mit Titel; Zeilen ohne Kleinzeile, Werte rechtsbündig.
 const SEITEN_TITEL := {"spielen": "Spielen", "phantom": "Phantom-Modus", "einstellungen": "Einstellungen", "profil": "Dein Profil",
 	"grafik": "Grafik für dein Gerät", "herausforderung": "Herausforderungen", "sandbox": "Sandbox", "szenarien": "Szenarien",
-	"brakk": "Brakk-Modus", "rogue": "Befehl 24"}
+	"brakk": "Brakk-Modus", "rogue": "Befehl 24", "bossarena": "Bossarena"}
 
 ## Rechteck der Hologramm-Tafel einer Unterseite (nach der Zahl der Einträge).
 func _tafel_rect() -> Rect2:

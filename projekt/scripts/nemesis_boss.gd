@@ -110,9 +110,49 @@ func feld_ok(_z: Vector2i) -> bool:
 
 # ------------------------------------------------------------------ Angriffe
 
-## Gewichte der Angriffe (leer: Salve, Kugel, Sturm wie in Version 76).
+## Gewichte der Angriffe (leer: Salve, Kugel, Sturm wie in Version 76). G2: nur noch Rückfall, wenn kein Schritt der
+## Abfolge ausführbar ist.
 func gewichte(_abstand: float, _letzte: Array) -> Dictionary:
 	return {}
+
+
+## G2 (27.11., Paul): Feste Abfolge der Phase (läuft im Kreis, Start an zufälliger Stelle). Je Schritt:
+##   "a": Angriff, oder "wahl": [zwei Angriffe] (Zufall); "fenster": verwundbar danach (s); "bewegung": danach bis zum
+##   nächsten Angriff (s); optional "dann": gekoppelter Angriff gleich danach (mit "dann_sek"), "krone": vorher auf eine
+##   Wallkrone, "druck": Teil einer Druckphase (G2-3). Leer = Gewichte wie bisher.
+func abfolge(_phase2: bool) -> Array:
+	return []
+
+
+## G2: Schritte, die zu Beginn der Phase einmal vor der Abfolge laufen (z. B. die Zielmarkierung).
+func eroeffnung(_phase2: bool) -> Array:
+	return []
+
+
+## G2: Ist der Angriff jetzt ausführbar (Reichweite, einmalig schon genutzt)? Sonst kommt der nächste Schritt.
+func kann(_art: String, _abstand: float) -> bool:
+	return true
+
+
+## G2-3: Erzwingt seine Druckphase den Anker? Dann brennt der Boden im Platz, sicher ist nur eine Krone.
+func anker_zwang() -> bool:
+	return false
+
+
+## G2: Ein Angriff, der allem vorgeht ("" = keiner), z. B. Sonde 7s Sturzfeuer direkt nach dem Schrotstoß.
+func erzwungen() -> String:
+	return ""
+
+
+## G2: Ein Schritt der Abfolge (Kurzform für die Tabellen).
+static func s(art: Variant, fenster: float, bewegung: float, mehr: Dictionary = {}) -> Dictionary:
+	var d := {"fenster": fenster, "bewegung": bewegung}
+	if art is Array:
+		d["wahl"] = art
+	else:
+		d["a"] = str(art)
+	d.merge(mehr)
+	return d
 
 
 ## Vergeltung mit einem Ring, der an `art` hängt („salve“, „kugel“): welcher eigene Angriff trägt ihn ("" = keiner).

@@ -1,12 +1,59 @@
 """23.11.: Brakk-Mode-Run aus partien/partie-*.json auswerten (Block "brakk" je Runde, scripts/brakk_protokoll.gd).
 
     python werkzeuge/brakk_auswertung.py [partien/partie-….json]   (ohne Datei: die neueste)
+    python werkzeuge/brakk_auswertung.py --duelle                  (G2-6: nur die Duelle aller Partien, je Boss)
 
 Gibt je Runde eine Tabelle aus (Budget, Ringe, Schaden Brakk/Truppen/Türme, Kills, Leben-Minimum, Wall-Anteil,
 Ereignisse) und eine Karte, wo Brakk in der Kampfphase stand (Zahl = Sekunden auf dem Feld, # = auf dem Wall).
+G2-6 (27.11., Paul): In Befehl 24 dazu je Boss eine Tabelle der Duelle (Einträge „duell“ aus nemesis_herausforderer.gd).
 """
 import glob, json, os, sys
 from collections import Counter
+
+
+def duell_tabelle(duelle):
+    """Je Boss: Duelle, Ausgang, Dauer, Angriffe, Fenster genutzt, Druckphasen, Vergeltungen, Treffer auf Brakk je Art."""
+    if not duelle:
+        print("\nKeine Duelle.")
+        return
+    je = {}
+    for e in duelle:
+        je.setdefault(e.get("boss", "?"), []).append(e)
+
+    def schnitt(werte):
+        return f"{sum(werte) / len(werte):.1f}" if werte else "-"
+
+    print(f"\n{'Boss':<15} {'Duelle':>6} {'vertr.':>6} {'gesiegt':>7} {'Dauer':>6} {'Angriffe':>8} {'Fenster%':>8} {'Druck':>5} {'Vergelt.':>8}")
+    for boss, liste in je.items():
+        aus = Counter(e.get("ausgang", "") for e in liste)
+        print(f"{boss:<15} {len(liste):>6} {aus.get('vertrieben', 0):>6} {aus.get('gesiegt', 0):>7} "
+              f"{schnitt([e.get('dauer', 0) for e in liste]):>6} {schnitt([sum(e.get('angriffe', {}).values()) for e in liste]):>8} "
+              f"{schnitt([e.get('fenster_genutzt', 0) for e in liste]):>8} {schnitt([e.get('druckphasen', 0) for e in liste]):>5} "
+              f"{schnitt([e.get('vergeltungen', 0) for e in liste]):>8}")
+    for boss, liste in je.items():
+        angriffe = Counter()
+        treffer_n = Counter()
+        treffer_p = Counter()
+        for e in liste:
+            angriffe.update(e.get("angriffe", {}))
+            for art, t in e.get("treffer_je_art", {}).items():
+                treffer_n[art] += t.get("n", 0)
+                treffer_p[art] += t.get("prozent", 0)
+        print(f"  {boss}: Angriffe {dict(angriffe)}")
+        print(f"  {boss}: Treffer auf Brakk " + ", ".join(f"{a} {treffer_n[a]}× ({treffer_p[a]} % Leben)" for a in treffer_n))
+
+
+if len(sys.argv) > 1 and sys.argv[1] == "--duelle":
+    alle = []
+    for datei in sorted(glob.glob("partien/partie-*.json"), key=os.path.getmtime):
+        try:
+            daten = json.load(open(datei, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        alle += [e for e in daten.get("befehl24", []) if e.get("a") == "duell"]
+    print(f"Duelle aus allen Partien: {len(alle)}")
+    duell_tabelle(alle)
+    sys.exit(0)
 
 pfad = sys.argv[1] if len(sys.argv) > 1 else max(glob.glob("partien/partie-*.json"), key=os.path.getmtime)
 d = json.load(open(pfad, encoding="utf-8"))
@@ -73,3 +120,5 @@ if b24:
         print(f"\n{'Taktik':<12} {'Wellen':>6} {'Trupps':>6} {'s bis Kontakt':>13} {'Schaden/Trupp':>13} {'Verluste':>8}")
         for t, s in je.items():
             print(f"{t:<12} {s['wellen']:>6} {len(s['schaden']):>6} {schnitt(s['kontakt']):>13} {schnitt(s['schaden']):>13} {schnitt(s['verluste']):>8}")
+    # G2-6 (27.11.): die Duelle dieses Laufs je Boss
+    duell_tabelle([e for e in b24 if e["a"] == "duell"])

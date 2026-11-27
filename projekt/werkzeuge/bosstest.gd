@@ -181,7 +181,7 @@ func _folge(abstand: float, regel: Callable) -> void:
 
 ## Jeder Angriff dieses Laufs war mindestens 0,5 s angesagt.
 func _ansagen_pruefen() -> void:
-	var kurz := _eintraege("angriff").filter(func(x: Dictionary) -> bool: return float(x["angesagt"]) < 0.5)
+	var kurz := _eintraege("angriff").filter(func(x: Dictionary) -> bool: return float(x["angesagt"]) < (0.39 if str(x["art"]) in ["salve5", "sprint"] else 0.5))   # G2-4 (Paul): 5er- und Sprint-Salve 0,4 s
 	pruefe(kurz.is_empty() and not _eintraege("angriff").is_empty(), "%d Angriffe, jeder ≥ 0,5 s angesagt (zu kurz: %d)" % [_eintraege("angriff").size(), kurz.size()])
 
 
@@ -294,6 +294,9 @@ func _scharf_120() -> void:
 	var laser := float(je.get("laser", 0)) / maxf(1.0, float(summe))
 	print("     Angriffe je Art in 120 s: %s" % str(je))
 	var erwartet := float(erwartung[0]) / maxf(1.0, float(erwartung[1]))
+	if int(erwartung[1]) == 0:   # G2-2: feste Abfolge statt Gewichten – erwartet ist der Laser-Anteil der Tabelle
+		var tab: Array = h.typ.abfolge(h.wut)
+		erwartet = float(tab.filter(func(st: Dictionary) -> bool: return str(st.get("a", "")) == "laser").size()) / maxf(1.0, float(tab.size()))
 	pruefe(summe >= 10 and erwartet >= 0.25 and laser >= 0.15, "120-s-Duell: %d Angriffe, Laservisier erwartet %.0f %% (mindestens 25 %%), gezogen %.0f %%" % [summe, erwartet * 100.0, laser * 100.0])
 	pruefe(anker[0] >= 2 and anker[1] == 0 and h.kronen_ohne_angriff == ohne_vorher,
 		"120-s-Duell: %d Kronenwechsel (alle %.0f s möglich), keiner während eines Angriffs, keine Krone ohne Angriff verlassen" % [anker[0], Werte.BOSS_SNIPER_KRONE_SEK])
@@ -318,8 +321,8 @@ func _gunner() -> void:
 	var g := h.typ as NemesisBossGunner
 	var k: Kommandant = spiel.kommandant
 	var ego: EgoModus = spiel.ego
-	pruefe(is_equal_approx(g.abstand(10.0), 8.0) and g.wall_abkling() == INF and is_equal_approx(g.takt(5.0), Werte.HERAUSFORDERER_AKTION_TAKT.x), "Abstand ×0,8, Takt am unteren Ende, nie auf Wälle")
-	_folge(5.0, func(_letzte: Array, a: String) -> bool: return a in ["ringsalve", "anker", "minigun"])
+	pruefe(is_equal_approx(g.abstand(10.0), 8.0) and g.wall_abkling() == INF and is_equal_approx(g.takt(5.0), Werte.BOSS_GUNNER_AKTION_TAKT), "Abstand ×0,8, Takt %.1f s (G2-4), nie auf Wälle" % Werte.BOSS_GUNNER_AKTION_TAKT)
+	_folge(5.0, func(_letzte: Array, a: String) -> bool: return a in ["ringsalve", "anker", "minigun", "sprint"])   # G2-4: Sprint-Salve dazu
 	# Ringsalve: stehen bleiben trifft, darüber springen nicht
 	_stelle(Vector2i(2, -1), Vector2i(-2, -1))
 	h.beginne_angriff("ringsalve")
@@ -407,7 +410,7 @@ func _gunner() -> void:
 	pruefe(g.gewichte(5.0, []).has("salve5"), "Phase 2: 5er-Salven dazu")
 	h.beginne_angriff("salve5")
 	_lauf(1.5)
-	pruefe(_eintraege("salve5_schuss").size() == 5, "5er-Salve: %d Schüsse nach 0,5 s Ansage" % _eintraege("salve5_schuss").size())
+	pruefe(_eintraege("salve5_schuss").size() == 5, "5er-Salve: %d Schüsse nach %.1f s Ansage" % [_eintraege("salve5_schuss").size(), Werte.BOSS_GUNNER_SALVE5_ANSAGE])
 	_ansagen_pruefen()
 
 

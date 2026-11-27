@@ -61,6 +61,26 @@ var saeulen := 0                 # Brakks Lichtsäulen in diesem Lauf
 var sonde_vertrieben := false    # C3: Sonde 7 trat selbst an und wurde vertrieben (Bericht, Hangar)
 var sonde_erzwingen := false     # Prüfung: zu Minute 14 sicher Sonde 7
 var sonde_aus := false           # Prüfung: nie Sonde 7 (26.11.: herausforderertest wackelte an der Ziehung)
+## G2 (27.11., Paul): Bossarena und Zählung je Duell
+var ansage_sek := Werte.HERAUSFORDERER_ANSAGE_SEK   # so lange vor dem Auftritt meldet sich Sonde 7 (Bossarena: kürzer)
+var arena_person := {}           # Bossarena: diese Person tritt an (statt der Ziehung)
+var zaehlung := {}               # je Duell: {"boss", "name", "angriffe", "treffer": {Art: {"n", "schaden"}}, "boss_schaden",
+                                 #  "fenster_schaden", "vergeltungen", "druckphasen", "dauer", "ausgang"}
+## G2-2: feste Abfolge (NemesisBoss.abfolge)
+var _abf: Array = []             # Schritte der laufenden Phase …
+var _abf_i := 0                  # … der nächste …
+var _abf_wut := false            # … für welche Phase
+var _abf_vorn: Array = []        # Eröffnung: läuft einmal vor der Abfolge
+var schritt_jetzt := {}          # der Schritt des laufenden Angriffs ({} = Rückfall, Vergeltung oder Reaktion)
+var _nach_krone := ""            # Schritt mit „krone“: dieser Angriff, sobald er oben steht
+var abfolge_log: Array = []      # Prüfung: je {"i", "art", "bei", "druck"} (i = -1: Eröffnung)
+## G2-3: Druckphasen
+const DRUCK_UMRISS := Color("c46bff")
+var druck := false               # läuft gerade eine Druckphase?
+var _druck_seit := 0.0
+var bodenfeuer := {}             # Anker-Zwang: {"t", "zellen": {Feld: Sekunde, ab der es warnt}, "bild": {Feld: Node3D}}
+var bodenfeuer_schaden := 0.0    # Prüfung (Anteile eines Treffers)
+var _hoch_gesagt := false        # Sonde 7 kommentiert den ersten Anker-Zwang
 
 
 func einrichten(p_nem: Nemesis) -> void:
@@ -93,10 +113,10 @@ func ist_er(e: Variant) -> bool:
 func weiter(dt: float) -> void:
 	match zustand:
 		"ruhe":
-			if naechste < zeiten.size() and not o24.geheim and o24.zeit >= float(zeiten[naechste]) - Werte.HERAUSFORDERER_ANSAGE_SEK:
+			if naechste < zeiten.size() and not o24.geheim and o24.zeit >= float(zeiten[naechste]) - ansage_sek:
 				_ansagen()
 		"angesagt":
-			if not _aufbau_versucht and o24.zeit >= float(zeiten[naechste]) - Werte.HERAUSFORDERER_ANSAGE_SEK + Werte.KAMPFPLATZ_RAEUM_VERZUG:
+			if not _aufbau_versucht and o24.zeit >= float(zeiten[naechste]) - ansage_sek + Werte.KAMPFPLATZ_RAEUM_VERZUG:
 				_aufbau_versucht = true
 				kampfplatz.aufbauen(o24.karte.zelle_bei(kampfplatz._fuss()))
 			if o24.zeit >= float(zeiten[naechste]):
@@ -129,7 +149,9 @@ func sonde_zieht() -> bool:
 
 func _auftritt() -> void:
 	var p: Dictionary = {}
-	if sonde_zieht():
+	if not arena_person.is_empty():
+		p = arena_person   # G2: Bossarena
+	elif sonde_zieht():
 		protokoll.append({"was": "sonde_gezogen", "bei": o24.zeit})
 		p = Nemesis.sonde_person()   # C3: Sonde 7 selbst
 	else:
@@ -185,11 +207,18 @@ func _auftritt() -> void:
 	_wall_abkling = 4.0
 	zaehler = {"sprung": 0, "tumble": 0, "ausweichen": 0, "wall": 0}
 	angriffe_je_art = {}
+	zaehlung = {"boss": "sonde" if ist_sonde() else str(p["art"]), "name": Nemesis.voller_name(p), "angriffe": angriffe_je_art, "treffer": {},
+		"boss_schaden": 0.0, "fenster_schaden": 0.0, "vergeltungen": 0, "druckphasen": 0, "dauer": 0.0, "ausgang": ""}   # G2
 	kennwerte = nem.lernen.kennwerte()
 	_aktion_in = float(kennwerte["takt"])
 	angriff = {}
 	wut = false
 	_letzte.clear()
+	_abf = []   # G2-2
+	_abf_vorn = []
+	schritt_jetzt = {}
+	_nach_krone = ""
+	abfolge_log = []
 	_bis_angriff = Werte.HERAUSFORDERER_ERSTER_ANGRIFF
 	vergeltung = {}
 	_vergeltung_in = Werte.HERAUSFORDERER_VERGELTUNG_ERSTE
@@ -225,8 +254,15 @@ func ende(wie: String) -> void:
 	zustand = "ruhe"
 	protokoll.append({"was": "angriffe", "bei": o24.zeit, "je_art": angriffe_je_art.duplicate(), "kronen_ohne_angriff": kronen_ohne_angriff})   # F5
 	print("HERAUSFORDERER Angriffe je Art: %s" % str(angriffe_je_art))
+	if not zaehlung.is_empty():   # G2: Zählung abschließen (Bossarena-Tafel, Protokoll)
+		zaehlung["angriffe"] = angriffe_je_art.duplicate()
+		zaehlung["dauer"] = snappedf(seit, 0.1)
+		if str(zaehlung["ausgang"]) == "":
+			zaehlung["ausgang"] = wie
+		if o24.arena == null and spiel.has_method("befehl24_protokoll"):   # G2-6: im echten Lauf ins Partieprotokoll
+			spiel.befehl24_protokoll("duell", duell_protokoll())
 	naechste += 1
-	while naechste < zeiten.size() and float(zeiten[naechste]) - Werte.HERAUSFORDERER_ANSAGE_SEK <= o24.zeit:
+	while naechste < zeiten.size() and float(zeiten[naechste]) - ansage_sek <= o24.zeit:
 		naechste += 1   # dauerte das Duell über den nächsten Termin hinaus, fällt der aus
 	vorher = person
 	ergebnisse.append([Nemesis.voller_name(person), wie])
@@ -240,6 +276,7 @@ func ende(wie: String) -> void:
 	kampfplatz.aufloesen(einheit if wie == "vertrieben" and einheit != null and is_instance_valid(einheit) else null, "sofort" if wie == "gesiegt" else "bleibt")
 	_drohne_aus(1.0)
 	vergeltung_aus()
+	_druck_aus()   # G2-3
 	if typ != null:
 		typ.ende()   # C2: Stellungen, Bunker, Gel- und Brandflächen weg
 	marke_rest = 0.0
@@ -251,6 +288,50 @@ func ende(wie: String) -> void:
 	if wie == "vertrieben":
 		_besiegt()
 	einheit = null
+	if o24.arena != null:
+		o24.arena.duell_ende(wie)   # G2: Bossarena – Bergung abwarten, dann die Tafel
+
+
+## G2-6: Die Zählung des Duells fürs befehl24-Protokoll (Eintrag „duell“; werkzeuge/brakk_auswertung.py zeigt je Boss
+## eine Tabelle). Schaden in Prozent von Brakks Leben.
+func duell_protokoll() -> Dictionary:
+	var k: Kommandant = spiel.kommandant
+	var max_leben := k.max_leben if k != null else 1.0
+	var treffer := {}
+	for a: String in (zaehlung.get("treffer", {}) as Dictionary):
+		var e: Dictionary = zaehlung["treffer"][a]
+		treffer[a] = {"n": int(e["n"]), "prozent": roundi(100.0 * float(e["schaden"]) / maxf(1.0, max_leben))}
+	return {"boss": str(zaehlung.get("boss", "")), "name": str(zaehlung.get("name", "")), "dauer": float(zaehlung.get("dauer", 0.0)),
+		"angriffe": (zaehlung.get("angriffe", {}) as Dictionary).duplicate(), "treffer_je_art": treffer,
+		"fenster_genutzt": BrakkBossarena.fenster_prozent(zaehlung), "druckphasen": int(zaehlung.get("druckphasen", 0)),
+		"vergeltungen": int(zaehlung.get("vergeltungen", 0)), "ausgang": str(zaehlung.get("ausgang", ""))}
+
+
+## G2: Order24.BrakkZiel – einer seiner Treffer kam bei Brakk an (`menge` nach allen Faktoren). Gezählt je Angriffsart
+## (der laufende, sonst der letzte – Brand und Gel wirken nach); als Treffer zählt, was mindestens 10 % eines vollen hat.
+func zaehle_treffer(menge: float) -> void:
+	if zustand != "duell" or zaehlung.is_empty():
+		return
+	var art := str(angriff.get("art", "")) if not angriff.is_empty() else (str(_letzte.back()) if not _letzte.is_empty() else "sonst")
+	var t: Dictionary = zaehlung["treffer"]
+	var e: Dictionary = t.get(art, {"n": 0, "schaden": 0.0})
+	e["schaden"] = float(e["schaden"]) + menge
+	var nr := int(angriff.get("nr", -1))
+	if menge >= schaden() * 0.1:
+		e["n"] = int(e["n"]) + 1
+	elif nr >= 0 and nr != int(zaehlung.get("dauer_nr", -2)):
+		e["n"] = int(e["n"]) + 1   # Dauerschaden (Laser, Minigun): ein Treffer je Angriff
+		zaehlung["dauer_nr"] = nr
+	t[art] = e
+
+
+## G2: Order24.treffer – Brakk trifft ihn (`menge` kommt bei ihm an); im verwundbaren Fenster getrennt gezählt.
+func zaehle_boss_schaden(menge: float) -> void:
+	if zustand != "duell" or zaehlung.is_empty():
+		return
+	zaehlung["boss_schaden"] = float(zaehlung["boss_schaden"]) + menge
+	if str(angriff.get("teil", "")) == "fenster":
+		zaehlung["fenster_schaden"] = float(zaehlung["fenster_schaden"]) + menge
 
 
 ## Schaden eines seiner Treffer – fest, unabhängig von den Regeln für die Verteidigung (Brakks Wallring schützt weiter).
@@ -580,6 +661,10 @@ func schritt(dt: float) -> void:
 	_vergeltung_weiter(dt)
 	anvisiert = Vector2.INF
 	gebunden_rest = maxf(0.0, gebunden_rest - dt)
+	if druck:   # G2-3: lila Puls-Umriss
+		_druck_seit += dt
+		einheit.set_meta("nemesis_umriss", DRUCK_UMRISS.lerp(Color("4a2470"), 0.5 + 0.5 * sin(_druck_seit * 9.0)))
+	_bodenfeuer_weiter(dt, k)
 	typ.immer(dt, k)
 	if greift_an():
 		_angriff_weiter(dt, k)
@@ -591,7 +676,10 @@ func schritt(dt: float) -> void:
 		_bis_angriff -= dt
 		var d := einheit.position.distance_to(k.position) / Werte.ZELLE
 		if _bis_angriff <= 0.0 and d <= Werte.HERAUSFORDERER_ANGRIFF_WEITE and sieht(einheit.position, k.position):
-			beginne_angriff(naechster_angriff(d))
+			var art := naechster_angriff(d)
+			if art != "":
+				beginne_angriff(art)
+			# "" = G2-2: erst auf die Krone (der Angriff folgt oben)
 		else:
 			_bewegen(dt, k)
 	_aussehen(k)
@@ -629,7 +717,7 @@ func _bewegen(dt: float, k: Kommandant) -> void:
 		else:
 			tumble(seite)
 		return
-	_laufe(dt, k, typ.abstand(float(kennwerte.get("abstand", Werte.HERAUSFORDERER_ABSTAND_SONST))), tempo())
+	_laufe(dt, k, typ.abstand(float(kennwerte.get("abstand", Werte.HERAUSFORDERER_ABSTAND_SONST))) * (Werte.BOSS_DRUCK_ABSTAND_MAL if druck else 1.0), tempo())   # G2-3: in der Druckphase näher
 
 
 ## Auf Lieblingsabstand gehen: alle halbe Sekunde ein Feld mit Sicht in der Nähe wählen, dessen Abstand passt.
@@ -844,6 +932,8 @@ func greift_an() -> bool:
 ## Beginnt einen Angriff (auch für den Test).
 func beginne_angriff(art: String) -> void:
 	var k: Kommandant = spiel.kommandant
+	if not schritt_jetzt.is_empty() and art != str(schritt_jetzt.get("art", "")) and art != str(schritt_jetzt.get("dann", "")):
+		schritt_jetzt = {}   # G2-2: eine Reaktion (Schrotstoß) oder ein Test – nicht Teil der Abfolge
 	_aktion = {}
 	_weg.clear()
 	einheit.set_meta("hebt_ab", 0.0)
@@ -851,7 +941,8 @@ func beginne_angriff(art: String) -> void:
 	angriffe_je_art[art] = int(angriffe_je_art.get(art, 0)) + 1   # F5
 	if einheit.zustand == Einheit.Zustand.AUF_POSTEN:
 		_krone_angriffe += 1
-	angriff = {"art": art, "teil": "ansage", "t": 0.0, "um": 0.0, "angesagt": 0.0, "ziel": k.position, "richtung": (k.position - einheit.position).normalized()}
+	angriff = {"art": art, "teil": "ansage", "t": 0.0, "um": 0.0, "angesagt": 0.0, "ziel": k.position, "richtung": (k.position - einheit.position).normalized(),
+		"nr": _letzte.size()}   # G2: Nummer im Duell (Zählung)
 	if typ != null and typ.beginne(art):
 		return   # C2: ein Angriff des Bosstyps
 	match art:
@@ -921,14 +1012,29 @@ func _angriff_weiter(dt: float, k: Kommandant) -> void:
 			if t >= float(a["um"]):
 				protokoll.append({"was": "fenster_ende", "bei": o24.zeit, "dauer": t})
 				angriff = {}
-				_bis_angriff = randf_range(Werte.HERAUSFORDERER_BEWEGEN.x, Werte.HERAUSFORDERER_BEWEGEN.y)
+				_bis_angriff = float(schritt_jetzt["bewegung"]) if schritt_jetzt.has("bewegung") else randf_range(Werte.HERAUSFORDERER_BEWEGEN.x, Werte.HERAUSFORDERER_BEWEGEN.y)   # G2-2
 
 
 ## Nach dem Angriff steht er verwundbar da. C2: `mal` – der Bosstyp kann es kürzen (z. B. nach dem Sturm mit Gel).
 func fenster(mal: float = 1.0) -> void:
-	var dauer := randf_range(Werte.HERAUSFORDERER_FENSTER.x, Werte.HERAUSFORDERER_FENSTER.y) * (Werte.HERAUSFORDERER_WUT_FENSTER if wut else 1.0) \
-		* (Werte.HERAUSFORDERER_RING_TAKT_FENSTER if ring_kopie() == "feuerteam" else 1.0) * mal
-	protokoll.append({"was": "angriff", "bei": o24.zeit, "art": str(angriff["art"]), "angesagt": float(angriff["angesagt"]), "fenster": dauer, "wut": wut})
+	# G2-2: gekoppelter Angriff (Ankerwurf → Minigun, Markierung → Schubeinschlag) – gleich danach, ohne Fenster
+	if schritt_jetzt.has("dann") and not bool(schritt_jetzt.get("dann_lief", false)) and str(angriff.get("art", "")) != str(schritt_jetzt["dann"]):
+		schritt_jetzt["dann_lief"] = true
+		protokoll.append({"was": "angriff", "bei": o24.zeit, "art": str(angriff["art"]), "angesagt": float(angriff["angesagt"]), "fenster": 0.0, "wut": wut, "dann": str(schritt_jetzt["dann"])})
+		angriff = {}
+		beginne_angriff(str(schritt_jetzt["dann"]))
+		if schritt_jetzt.has("dann_sek"):
+			angriff["sek"] = float(schritt_jetzt["dann_sek"])
+		abfolge_log.append({"i": int(schritt_jetzt.get("i", -1)), "art": str(schritt_jetzt["dann"]), "bei": o24.zeit, "druck": bool(schritt_jetzt.get("druck", false)), "dann": true})
+		return
+	var dauer := randf_range(Werte.HERAUSFORDERER_FENSTER.x, Werte.HERAUSFORDERER_FENSTER.y) * (Werte.HERAUSFORDERER_WUT_FENSTER if wut else 1.0) * mal
+	if schritt_jetzt.has("fenster"):
+		dauer = float(schritt_jetzt["fenster"])   # G2-2: aus der Abfolge (Phase 2 steckt schon in der Tabelle)
+	dauer *= Werte.HERAUSFORDERER_RING_TAKT_FENSTER if ring_kopie() == "feuerteam" else 1.0
+	if bool(schritt_jetzt.get("druck_ende", false)):
+		_druck_aus()   # G2-3: die Belohnung – der Boden kühlt, er steht lange
+	protokoll.append({"was": "angriff", "bei": o24.zeit, "art": str(angriff["art"]), "angesagt": float(angriff["angesagt"]), "fenster": dauer, "wut": wut,
+		"druck": bool(schritt_jetzt.get("druck", false)), "druck_ende": bool(schritt_jetzt.get("druck_ende", false))})
 	angriff["teil"] = "fenster"
 	angriff["t"] = 0.0
 	angriff["um"] = dauer
@@ -1156,6 +1262,8 @@ func vergeltung_an(was: Dictionary) -> void:
 		"farbe": VERGELTUNG_UMRISS, "sek": Werte.HERAUSFORDERER_VERGELTUNG_TAFEL_SEK, "pause": 0.2})
 	Ton.spiele(spiel, "alert", -3.0)
 	protokoll.append({"was": "vergeltung", "bei": o24.zeit, "name": str(vergeltung["name"]), "art": str(vergeltung["art"]), "ring": ring_kopie()})
+	if not zaehlung.is_empty():
+		zaehlung["vergeltungen"] = int(zaehlung["vergeltungen"]) + 1   # G2
 
 
 func vergeltung_aus() -> void:
@@ -1174,10 +1282,194 @@ func naechster_angriff(abstand: float) -> String:
 	if not vergeltung.is_empty():
 		wunsch = (typ.ring_angriff(str(RING_ANGRIFF.get(ring_kopie(), ""))) if typ != null else str(RING_ANGRIFF.get(ring_kopie(), ""))) if str(vergeltung["art"]) == "ring" else str(WAFFEN_ANGRIFF[str(vergeltung["art"])])
 	if wunsch != "" and not (_letzte.size() >= 2 and str(_letzte[-1]) == wunsch and str(_letzte[-2]) == wunsch):
+		schritt_jetzt = {}
+		_druck_aus()   # G2-3: ein Angriff außerhalb der Abfolge beendet die Druckphase
 		return wunsch
+	if _nach_krone != "":   # G2-2: er steht (oder stand) auf der Krone – jetzt der Angriff des Schritts
+		var a := _nach_krone
+		_nach_krone = ""
+		return a
+	var zwang := typ.erzwungen() if typ != null else ""
+	if zwang != "":
+		schritt_jetzt = {}
+		_druck_aus()   # G2-3: ein Angriff außerhalb der Abfolge beendet die Druckphase
+		return zwang
+	var s := _abfolge_schritt(abstand)
+	if not s.is_empty():
+		if bool(s.get("krone", false)) and einheit.zustand != Einheit.Zustand.AUF_POSTEN and _aktion.is_empty() and _auf_den_wall(spiel.kommandant):
+			_nach_krone = str(s["art"])   # Kronenwechsel: erst hinauf, der Angriff folgt oben
+			_bis_angriff = 0.0
+			return ""
+		return str(s["art"])
+	schritt_jetzt = {}
+	_druck_aus()   # G2-3: ein Angriff außerhalb der Abfolge beendet die Druckphase
 	var gewichte: Dictionary = typ.gewichte(abstand, _letzte) if typ != null else {}
 	protokoll.append({"was": "wahl", "bei": o24.zeit, "gewichte": gewichte.duplicate(), "letzte": _letzte.slice(-2)})   # F5: für die Erwartung je Art
 	return waehle_angriff(abstand, _letzte, gewichte)
+
+
+## G2-2: Der nächste ausführbare Schritt der Abfolge ({} = keine Abfolge oder nichts ausführbar). Bei einem Phasenwechsel
+## beginnt die neue Tabelle an zufälliger Stelle, vorher läuft einmal ihre Eröffnung.
+func _abfolge_schritt(abstand: float) -> Dictionary:
+	var tabelle: Array = typ.abfolge(wut) if typ != null else []
+	if tabelle.is_empty():
+		return {}
+	if _abf.is_empty() or _abf_wut != wut:
+		_abf = tabelle
+		_abf_wut = wut
+		_abf_i = randi() % tabelle.size()
+		_abf_vorn = typ.eroeffnung(wut).duplicate()
+	while not _abf_vorn.is_empty():
+		var v: Dictionary = _abf_vorn.pop_front()
+		if typ.kann(str(v["a"]), abstand):
+			return _schritt_nehmen(v, -1, str(v["a"]))
+	for versuch in _abf.size():
+		var i := (_abf_i + versuch) % _abf.size()
+		var st: Dictionary = _abf[i]
+		var arten: Array = (st["wahl"] as Array).duplicate() if st.has("wahl") else [str(st["a"])]
+		arten.shuffle()   # Wahl: eine von zwei, die andere als Ersatz
+		for art: String in arten:
+			if typ.kann(art, abstand):
+				_abf_i = (i + 1) % _abf.size()
+				return _schritt_nehmen(st, i, art)
+	return {}
+
+
+func _schritt_nehmen(st: Dictionary, i: int, art: String) -> Dictionary:
+	schritt_jetzt = st.duplicate()
+	schritt_jetzt["art"] = art
+	schritt_jetzt["i"] = i
+	if schritt_jetzt.has("dann_fuer") and str(schritt_jetzt["dann_fuer"]) != art:
+		schritt_jetzt.erase("dann")   # die Kopplung gilt nur für eine der beiden Wahlen
+	if (st.get("fenster_je", {}) as Dictionary).has(art):
+		schritt_jetzt["fenster"] = float(st["fenster_je"][art])
+	if bool(st.get("druck", false)):   # G2-3: kurze Fenster, keine Bewegung; nach dem letzten Druck-Schritt die Belohnung
+		schritt_jetzt["fenster"] = Werte.BOSS_DRUCK_FENSTER
+		schritt_jetzt["bewegung"] = Werte.BOSS_DRUCK_BEWEGUNG
+		if i >= 0 and not bool((_abf[(i + 1) % _abf.size()] as Dictionary).get("druck", false)):
+			schritt_jetzt["fenster"] = Werte.BOSS_DRUCK_BELOHNUNG
+			schritt_jetzt["druck_ende"] = true
+		if not druck:
+			_druck_an()
+	elif druck:
+		_druck_aus()
+	abfolge_log.append({"i": i, "art": art, "bei": o24.zeit, "druck": bool(st.get("druck", false))})
+	return schritt_jetzt
+
+
+## G2-3: Eine Druckphase beginnt – lila Puls-Umriss, HUD „DRUCK“, beim Scharfschützen und bei Sonde 7 brennt der Boden.
+func _druck_an() -> void:
+	druck = true
+	_druck_seit = 0.0
+	if not zaehlung.is_empty():
+		zaehlung["druckphasen"] = int(zaehlung["druckphasen"]) + 1
+	protokoll.append({"was": "druck", "bei": o24.zeit})
+	Ton.spiele(spiel, "alert", -4.0)
+	if typ != null and typ.anker_zwang():
+		bodenfeuer_an()
+
+
+func _druck_aus() -> void:
+	if not druck:
+		return
+	druck = false
+	_bodenfeuer_aus()
+	if einheit != null and is_instance_valid(einheit):
+		einheit.set_meta("nemesis_umriss", VERGELTUNG_UMRISS if not vergeltung.is_empty() else Nemesis.umriss_farbe(person))
+	protokoll.append({"was": "druck_ende", "bei": o24.zeit})
+
+
+## G2-3: HUD-Zeile des Duells: „DRUCK“ zu Beginn einer Druckphase, „Boden brennt – hoch!“ beim Anker-Zwang, sonst die des Typs.
+func hud_zeile() -> String:
+	if druck and _druck_seit < Werte.BOSS_DRUCK_HUD_SEK:
+		return tr("DRUCK")
+	if not bodenfeuer.is_empty():
+		return tr("Boden brennt – hoch auf eine Krone!")
+	return typ.hud_zeile() if typ != null else ""
+
+
+## G2-3: Anker-Zwang – von Brakk aus warnt in BOSS_DRUCK_BODEN_AUSBREITUNG s jedes Bodenfeld im Platz (je
+## BOSS_DRUCK_BODEN_WARNUNG s rot), dann brennt es. Die Wälle (Kronen am Rand) bleiben frei.
+func bodenfeuer_an() -> void:
+	if not kampfplatz.aktiv():
+		return
+	_bodenfeuer_aus()
+	var karte: Karte = o24.karte
+	var von := karte.zelle_bei((spiel.kommandant as Kommandant).position)
+	var hb := BrakkKampfplatz._halb()
+	var zellen := {}
+	var weit := 1.0
+	for y in range(kampfplatz.mitte.y - hb.y, kampfplatz.mitte.y + hb.y):
+		for x in range(kampfplatz.mitte.x - hb.x, kampfplatz.mitte.x + hb.x):
+			var z := Vector2i(x, y)
+			if kampfplatz.im_innern(z) and karte.inhalt(z) != Karte.WALL:
+				zellen[z] = Vector2(z - von).length()
+				weit = maxf(weit, float(zellen[z]))
+	for z: Vector2i in zellen:
+		zellen[z] = float(zellen[z]) / weit * Werte.BOSS_DRUCK_BODEN_AUSBREITUNG
+	bodenfeuer = {"t": 0.0, "zellen": zellen, "bild": {}}
+	protokoll.append({"was": "bodenfeuer", "bei": o24.zeit, "felder": zellen.size()})
+	if not _hoch_gesagt:
+		_hoch_gesagt = true
+		spiel.melde(tr("Sonde 7: „Hoch mit dir, Kommandant.“"), 3.0)
+
+
+## Brennt das Feld gerade?
+func brennt(z: Vector2i) -> bool:
+	return not bodenfeuer.is_empty() and (bodenfeuer["zellen"] as Dictionary).has(z) \
+		and float(bodenfeuer["t"]) >= float(bodenfeuer["zellen"][z]) + Werte.BOSS_DRUCK_BODEN_WARNUNG
+
+
+func _bodenfeuer_weiter(dt: float, k: Kommandant) -> void:
+	if bodenfeuer.is_empty():
+		return
+	var t := float(bodenfeuer["t"]) + dt
+	bodenfeuer["t"] = t
+	var zellen: Dictionary = bodenfeuer["zellen"]
+	var bild: Dictionary = bodenfeuer["bild"]
+	var karte: Karte = o24.karte
+	for z: Vector2i in zellen:
+		var ab := float(zellen[z])
+		if t >= ab and not bild.has(z):
+			bild[z] = "warnt"
+			_treffbereich(karte.mitte(z), 0.5, Werte.BOSS_DRUCK_BODEN_WARNUNG)   # rot, wird kräftiger
+		elif t >= ab + Werte.BOSS_DRUCK_BODEN_WARNUNG and bild.get(z) is String and str(bild[z]) == "warnt":
+			var g := _glut(karte.mitte(z))
+			bild[z] = g if g != null else "brennt"
+	var ego: EgoModus = spiel.ego
+	var sprung := (ego.hoehe - ego._boden()) if ego != null else 0.0
+	if brennt(karte.zelle_bei(k.position)) and not k.oben and sprung <= Werte.BRAKK_SPRUNG_BODEN and k.unverwundbar <= 0.0:
+		var menge := Werte.BOSS_DRUCK_BODEN_JE_SEK * dt
+		bodenfeuer_schaden += menge
+		(spiel.brakk_geschosse as BrakkGeschosse)._treffe_brakk(schaden() * menge, "herausforderer", quelle(), k.position, false)
+	if t >= Werte.BOSS_DRUCK_BODEN_MAX:
+		_bodenfeuer_aus()
+
+
+func _bodenfeuer_aus() -> void:
+	if bodenfeuer.is_empty():
+		return
+	for n: Variant in (bodenfeuer["bild"] as Dictionary).values():
+		if n is Node and is_instance_valid(n):
+			(n as Node).queue_free()
+	bodenfeuer = {}
+
+
+## Ein brennendes Bodenfeld (orange Scheibe, bleibt bis zum Ende des Bodenfeuers).
+func _glut(pos: Vector2) -> Node3D:
+	var hd: HdAnsicht = spiel.hd
+	if hd == null:
+		return null
+	var scheibe := MeshInstance3D.new()
+	var form := CylinderMesh.new()
+	form.top_radius = 0.5
+	form.bottom_radius = 0.5
+	form.height = 0.02
+	scheibe.mesh = form
+	scheibe.material_override = o24._leucht(Color("ff7a2a"), 0.45)
+	hd.add_child(scheibe)
+	scheibe.position = Vector3(pos.x / Werte.ZELLE, 0.05, (pos.y - Werte.KARTE_OBEN) / Werte.ZELLE)
+	return scheibe
 
 
 ## Order24 (Brakks Stellvertreter): einer seiner Treffer landet. Gibt den Faktor auf den Schaden zurück und setzt, was

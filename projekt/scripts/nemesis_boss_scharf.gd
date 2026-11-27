@@ -50,6 +50,29 @@ func gewichte(abstand_felder: float, letzte: Array) -> Dictionary:
 	return g
 
 
+## G2-2 (27.11., Paul): P1 Salve (4 Wellen) · Laservisier · Kronenwechsel + Salve · Sturm · Laservisier · [Salve | Sturm].
+## P2: einmal die Zielmarkierung, dann dieselbe Folge mit Fenstern × 0,7 – das Laservisier darf zweimal hintereinander.
+func abfolge(phase2: bool) -> Array:
+	var f := Werte.BOSS_ABFOLGE_FENSTER * (Werte.BOSS_ABFOLGE_P2_FENSTER if phase2 else 1.0)
+	var b := Werte.BOSS_ABFOLGE_BEWEGUNG
+	# G2-3: Druck = Laservisier und Kronenwechsel + Salve (der Boden brennt, Brakk muss auf eine Krone)
+	if not phase2:
+		return [s("salve", f, b), s("laser", f, b, {"druck": true}), s("salve", f, b, {"krone": true, "druck": true}), s("sturm", f, b), s("laser", f, b), s(["salve", "sturm"], f, b)]
+	return [s("salve", f, b), s("laser", f, b), s("laser", f, b, {"druck": true}), s("salve", f, b, {"krone": true, "druck": true}), s("sturm", f, b), s(["salve", "sturm"], f, b)]
+
+
+func anker_zwang() -> bool:
+	return true
+
+
+func eroeffnung(phase2: bool) -> Array:
+	return [s("zielmarkierung", Werte.BOSS_ABFOLGE_FENSTER * Werte.BOSS_ABFOLGE_P2_FENSTER, Werte.BOSS_ABFOLGE_BEWEGUNG)] if phase2 else []
+
+
+func kann(art: String, _abstand: float) -> bool:
+	return art != "zielmarkierung" or not marke_gesetzt
+
+
 ## Ringe für Salve (Durchschlag, Wirbel) wirken auf seine Salve in Wellen; eine Kugel hat er nicht.
 func ring_angriff(art: String) -> String:
 	return art if art == "salve" else ""

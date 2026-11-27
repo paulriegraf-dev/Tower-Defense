@@ -1386,7 +1386,7 @@ static func _tat_aus_chronik(p: Dictionary) -> String:
 
 
 static func _datei_lesen() -> Dictionary:
-	if not FileAccess.file_exists(datei):
+	if BrakkBossarena.aktiv() or not FileAccess.file_exists(datei):   # G2: die Bossarena liest nichts
 		return {}
 	var f := FileAccess.open(datei, FileAccess.READ)
 	if f == null:
@@ -1425,7 +1425,7 @@ func laden() -> void:
 
 ## Liste schreiben (Benannte, ohne die Laufdaten). Im Balance-Labor nie.
 func speichern() -> void:
-	if Labor.aktiv:
+	if Labor.aktiv or BrakkBossarena.aktiv():   # G2: die Bossarena schreibt nichts
 		return
 	var liste: Array = []
 	for p: Dictionary in benannte():

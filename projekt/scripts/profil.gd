@@ -227,6 +227,7 @@ const CODES := {
 	"allesfrei": "alle Anführer frei",
 	"erfolge": "alle Erfolge",
 	"befehl24": "Befehl 24 frei",   # 20.11.
+	"bossarena": "Bossarena im Brakk-Modus",   # G2 (27.11., Paul): Testmodus
 }
 const PER_CODE := "Code"
 

@@ -104,6 +104,43 @@ func gewichte(abstand_felder: float, _letzte: Array) -> Dictionary:
 	return g
 
 
+## G2-2 (27.11., Paul): P1 Markierung → Schubeinschlag (gekoppelt) · Sturzfeuer · Markierung → Sturzfeuer · Schubeinschlag ·
+## [Sturzfeuer | Schubeinschlag]. P2: einmal der Heil-Impuls, dann Scheuchfeld · Sturzfeuer (sechs Schüsse) ·
+## Markierung → Schubeinschlag · Verstärkungsruf (letzte Position, nur einmal).
+func abfolge(phase2: bool) -> Array:
+	var f := Werte.BOSS_ABFOLGE_FENSTER * (Werte.BOSS_ABFOLGE_P2_FENSTER if phase2 else 1.0)
+	var b := Werte.BOSS_ABFOLGE_BEWEGUNG
+	# G2-3: Druck = Sturzfeuer, dann Markierung → … (der Boden brennt, Brakk muss auf eine Krone)
+	if not phase2:
+		return [s("mg", f, b, {"dann": "schub"}), s("sturz", f, b, {"druck": true}), s("mg", f, b, {"dann": "sturz", "druck": true}), s("schub", f, b), s(["sturz", "schub"], f, b)]
+	return [s("scheuch", f, b), s("sturz", f, b, {"druck": true}), s("mg", f, b, {"dann": "schub", "druck": true}), s("ruf", f, b)]
+
+
+func anker_zwang() -> bool:
+	return true
+
+
+func eroeffnung(phase2: bool) -> Array:
+	return [s("heil", Werte.BOSS_ABFOLGE_FENSTER * Werte.BOSS_ABFOLGE_P2_FENSTER, Werte.BOSS_ABFOLGE_BEWEGUNG)] if phase2 else []
+
+
+func kann(art: String, _abstand: float) -> bool:
+	match art:
+		"ruf":
+			return phase2 and not ruf_genutzt and _p2_angriffe >= Werte.BOSS_SONDE_RUF_NACH   # immer der letzte der Reihe
+		"heil":
+			return phase2 and not heil_genutzt
+		"scheuch":
+			return phase2 and _scheuch.is_empty()
+	return true
+
+
+func erzwungen() -> String:
+	if _danach_sturz:
+		return "sturz"
+	return "ruf" if kann("ruf", 0.0) else ""   # nach BOSS_SONDE_RUF_NACH Angriffen in Phase 2, wo die Abfolge auch steht
+
+
 func ring_angriff(_art: String) -> String:
 	return ""
 

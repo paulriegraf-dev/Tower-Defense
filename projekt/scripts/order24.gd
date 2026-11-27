@@ -265,6 +265,7 @@ var _hatte_pilot := false
 var _schnellstart := false       # Besatzung der Fabriken steht gleich zu Beginn
 var kills := 0
 var verrat_ueberspringen := false   # Test: ohne Verrat-Sequenz
+var arena: BrakkBossarena = null   # G2 (27.11., Paul): Bossarena – nur der Kampfplatz, kein Lauf
 var weiter := false                # 20.11. (Paul): nach dem Classic-Sieg weitergespielt – die eigene Verteidigung ist der Gegner
 static var test_werte := {}       # Tests: überschreiben das Regelpaket (main lädt die Karte beim Start neu)
 var verrat: Verrat24 = null       # 20.11.: läuft gerade die Verrat-Sequenz?
@@ -323,6 +324,10 @@ func einrichten(p_spiel: Node) -> void:
 			werte[k] = (o as Dictionary)[k]
 	for k: String in test_werte:
 		werte[k] = test_werte[k]
+	if BrakkBossarena.aktiv():
+		for k: String in BrakkBossarena.REGELN:
+			werte[k] = BrakkBossarena.REGELN[k]   # G2: Bossarena – nichts läuft von selbst
+		verrat_ueberspringen = true
 	# keine Myriaden-Bauten außer dem HQ (Schleudern und Laser zielen sonst auf den Technoclan)
 	for b: Zonenbau in spiel.zonenbauten.duplicate():
 		if b.art != "hq":
@@ -357,6 +362,10 @@ func einrichten(p_spiel: Node) -> void:
 	herausforderer = NemesisHerausforderer.new()
 	add_child(herausforderer)
 	herausforderer.einrichten(nemesis)
+	if BrakkBossarena.aktiv():
+		arena = BrakkBossarena.new()   # G2
+		add_child(arena)
+		arena.einrichten(self)
 
 
 func _karte_aufbauen() -> void:
@@ -391,6 +400,9 @@ func _karte_aufbauen() -> void:
 		if bool(w("gebiete")):
 			var form := BrakkGebiete.formation(wahl)   # E3/E4: _b24-Plan mit Zufluchten
 			spiel._setze_stand({"waelle": form["waelle"], "fabriken": [], "batterien": []})   # G: samt den Erdwall-Ringen der Zufluchten
+			if BrakkBossarena.aktiv():
+				_arena_karte()   # G2: nur die Wälle
+				return
 			zuflucht = BrakkZuflucht.new(self, form["zufluchten"])
 		else:
 			stellungen = spiel.formation_aufbauen(wahl, 0, 0, 0)   # 20.11.: Fabriken und Stellungen setzt Order24 (Lager)
@@ -456,6 +468,18 @@ func _karte_aufbauen() -> void:
 		rueckseite[z] = _rueck_feld(z)
 		routen[z] = _streifenweg(z)
 	print("ORDER24 Fabriken %d (im Schild %d) · Stellungen %d · Türme %d (Heiltürme %d) · Batterie %s" % [spiel.fabriken.size(), innen, _zaehle_ausbau(Karte.STELLUNG), _zaehle_ausbau(Karte.TURM), karte.turm_art.values().count("heil"), str(b_feld)])
+
+
+## G2 (27.11., Paul): Bossarena – die Wälle der großen Karte stehen, sonst nichts (keine Fabriken, Batterie, Lager, Türme,
+## Zufluchten). Der Schild ums HQ bleibt als Kulisse.
+func _arena_karte() -> void:
+	schild_mitten = [karte.mitte(karte.basis) + Vector2(0, -Werte.ZELLE * 0.5)]
+	for z: Vector2i in karte.feld:
+		karte.fest[z] = true
+	karte.cp_aktiv = false
+	karte.cp_route = false
+	karte.aktualisiere_pfad()
+	print("ORDER24 Bossarena: nur Wälle (%d)" % karte.feld.size())
 
 
 ## 25.11. (Paul): Welche Stufe-3-Fähigkeiten eine Truppenart in Befehl 24 haben darf (ohne OHNE_FAEHIGKEIT).
@@ -1555,6 +1579,7 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			menge *= herausforderer.schutz_faktor()   # 26.11.: Vergeltung mit dem Wallring
 			if herausforderer.typ != null:
 				menge = herausforderer.typ.vor_treffer(menge)   # C3: Sonde 7 – Heil-Impuls brechen, geborgen statt gefallen
+			herausforderer.zaehle_boss_schaden(menge)   # G2: Zählung (Fenster genutzt)
 		var war_stellung := e.in_stellung()
 		var kg_ort := ("s:%s" % str(e.posten_zelle)) if war_stellung else ("f:%s" % str(e.fabrik_zelle))
 		var elite := bool(e.daten.get("elite", false))
@@ -3773,8 +3798,8 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 	if zuflucht != null and zuflucht.hud_zeile() != "":
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), zuflucht.hud_zeile(), 18, BrakkZuflucht.KREUZ)   # E4
 		y += 22.0
-	if herausforderer != null and herausforderer.typ != null and herausforderer.zustand == "duell" and herausforderer.typ.hud_zeile() != "":
-		Stil.schreibe_mittig(bild, Vector2(m.x, y), herausforderer.typ.hud_zeile(), 18, Color("9dff8a"))   # C2: z. B. im Gel
+	if herausforderer != null and herausforderer.typ != null and herausforderer.zustand == "duell" and herausforderer.hud_zeile() != "":
+		Stil.schreibe_mittig(bild, Vector2(m.x, y), herausforderer.hud_zeile(), 18, NemesisHerausforderer.DRUCK_UMRISS if herausforderer.druck else Color("9dff8a"))   # C2: z. B. im Gel; G2-3: DRUCK, Boden brennt
 		y += 22.0
 	if herausforderer != null and herausforderer.gel_rest > 0.0:
 		Stil.schreibe_mittig(bild, Vector2(m.x, y), "Gebremst – Vergeltung mit dem Gelring", 16, Color("c9a2ff"))
@@ -4094,6 +4119,9 @@ func _ende(sieg: bool) -> void:
 	vorbei = true
 	sabo = {}
 	herausforderer.brakk_faellt()   # 26.11.: stand er noch, hat er das Duell gewonnen
+	if arena != null:
+		arena.brakk_gefallen()   # G2: Bossarena – keine Wertung, kein Bericht, nichts gespeichert
+		return
 	for t: Dictionary in trupps:
 		taktik.ende(t)   # 26.11.: Bilanz der Trupps, die noch stehen
 	nemesis.lauf_ende()   # 22.11.: Rang +1 für die, die Brakk hart zugesetzt oder ohne Bergung überstanden haben
@@ -4201,6 +4229,8 @@ class BrakkZiel extends Gegner:
 				if o24.herausforderer != null:
 					anteil *= o24.herausforderer.treffer_mal(menge)   # Vergeltung mit einem Ring
 			o24.schaden_an_brakk[quelle] = float(o24.schaden_an_brakk.get(quelle, 0.0)) + menge * anteil
+			if quelle.begins_with("herausforderer"):
+				o24.herausforderer.zaehle_treffer(menge * anteil)   # G2: Zählung je Angriffsart
 			o24.gebiet_zaehlen("schaden", menge * anteil)   # E: je Gebiet
 			var vor := k.leben
 			k.nimm_schaden(menge * anteil)
