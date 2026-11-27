@@ -673,9 +673,9 @@ func immer(_dt: float, _k: Kommandant) -> void:
 	_krone_pflegen(_dt, _k)   # I-5
 	var ego: EgoModus = spiel.ego
 	_minigun_ring(_k, _dt)   # I-4
-	if ego == null or ego._saeule_ziel == Vector2.INF or ego._saeule_ziel == _saeule_ziel or h.saeulen < Werte.BOSS_GUNNER_SAEULE_AB:
+	if ego == null or ego.saeule._saeule_ziel == Vector2.INF or ego.saeule._saeule_ziel == _saeule_ziel or h.saeulen < Werte.BOSS_GUNNER_SAEULE_AB:
 		return
-	_saeule_ziel = ego._saeule_ziel
+	_saeule_ziel = ego.saeule._saeule_ziel
 	var e := h.einheit
 	if e.position.distance_to(_saeule_ziel) > (EgoModus.SAEULE_RADIUS + 1.0) * Werte.ZELLE or randf() >= Werte.BOSS_GUNNER_SAEULE_CHANCE:
 		return

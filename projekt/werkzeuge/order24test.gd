@@ -66,7 +66,7 @@ func _process(delta: float) -> bool:
 			o.werte["ueberleben_sek"] = int(args[1])   # Order24 liest das Regelpaket schon beim Aufbau
 		if args.size() > 2:
 			o.werte["jagd_start"] = int(args[2])
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false   # headless klickt niemand „Los“
 		return false

@@ -132,7 +132,7 @@ func _process(delta: float) -> void:
 		return
 	_r_pruefen(echt)
 	if not o24.laeuft:
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false   # keine Einsatz-Tafel – gleich los
 		return

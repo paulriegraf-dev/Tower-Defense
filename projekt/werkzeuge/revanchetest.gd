@@ -51,7 +51,7 @@ func _los() -> void:
 	pruefe(spiel.phantom_partie.starte_verteidigung(gegner), "Verteidigung gestartet gegen %s" % gegner.get_file())
 	for nr in 3:
 		spiel.leben = 0
-		spiel._zeige_niederlage("", 0, 0)
+		spiel.schlussbild.zeige_niederlage("", 0, 0)
 		if nr == 2:
 			break
 		pruefe(_knopf_text(0) == "Revanche gegen %s" % name, "Knopf %d: %s" % [nr + 1, _knopf_text(0)])

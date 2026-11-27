@@ -568,10 +568,10 @@ func _brakk_versetzen(p: Vector2, beam: bool) -> void:
 	k.zustand = Einheit.Zustand.BODEN
 	if ego != null:
 		ego._tumble = -1.0
-		ego._absprung = -1.0
+		ego.lichtwerk._absprung = -1.0
 		ego._flug = Vector2.ZERO
-		if ego._anker >= 0.0:
-			ego._anker = 1000.0   # endet im nächsten Bild
+		if ego.lichtwerk._anker >= 0.0:
+			ego.lichtwerk._anker = 1000.0   # endet im nächsten Bild
 		ego.hoehe = 0.0
 		ego.steig = 0.0
 		ego._setze_fuss(p)

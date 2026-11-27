@@ -37,7 +37,7 @@ func _process(_delta: float) -> bool:
 		0:
 			if warte < 30 or spiel.get("ego") == null or spiel.kommandant == null:
 				return false
-			var tafel: Variant = spiel.ego.get("_briefing")
+			var tafel: Variant = spiel.ego.anzeige.get("_briefing")
 			if tafel != null:
 				(tafel as Control).visible = false
 			# kleine Verteidigung: zwei Fabriken mit Wällen davor

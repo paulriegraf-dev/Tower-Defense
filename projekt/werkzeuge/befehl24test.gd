@@ -61,7 +61,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if not o.laeuft:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false   # headless klickt niemand „Los“
 		return false
@@ -433,7 +433,7 @@ func _phasen_lauf(k: Kommandant, karte: Karte) -> void:
 					ziel.nimm_schaden(99999.0)
 					spiel.schadensquelle = ""
 				else:
-					o._tc_hq_treffer(99999.0)
+					o.ueberlaeufer._tc_hq_treffer(99999.0)
 	# Brakk springt weit weg (Brakks Tempo verunsichert die KI)
 	if t >= _sprung and t > 22.0 and not o.geheim:
 		_sprung = t + 9.0

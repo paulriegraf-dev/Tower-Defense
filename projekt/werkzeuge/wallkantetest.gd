@@ -74,8 +74,8 @@ func _process(_delta: float) -> bool:
 		if ego == null:
 			return false
 		karte = spiel.karte
-		if ego._briefing != null:
-			ego._briefing.visible = false
+		if ego.anzeige._briefing != null:
+			ego.anzeige._briefing.visible = false
 		ego.brakk.fortschritt.stufe = 10
 		print("Brakk bereit, Mauerhöhe H=%.2f" % ego.hd.H)
 	ego.brakk.leben = ego.brakk.max_leben

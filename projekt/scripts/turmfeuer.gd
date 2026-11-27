@@ -1,7 +1,7 @@
 class_name Turmfeuer
 extends Node
 ## Feuer der Türme (27.11., Knoten-Umbau Schritt 3 – vorher in main.gd): Geschütz, Lanze, Frost, Funk (Optik), Heilturm,
-## Truppenturm mit Werkschutz, Magnete und Batterien. Regeln unverändert. Kindknoten von main.gd (`spiel.turmfeuer`),
+## Truppenturm mit Werkschutz, Magnete, Batterien und PliPlop 3cK. Regeln unverändert. Kindknoten von main.gd (`spiel.turmfeuer`),
 ## main ruft je Takt `tick`, `magnete`, `batterien`. Karte, Effekte, Figuren, Gegner- und Einheitenlisten sind dieselben
 ## Objekte wie in main (werden dort nie neu zugewiesen); Schadensquelle/Schütze/Herkunft bleiben in main, weil
 ## Einheiten, Gegner und Schadensliste sie lesen.
@@ -166,7 +166,7 @@ func tick(delta: float) -> void:
 			_truppenturm(z, delta)   # 20.11. (Nachtrag) / 21.11.: Besatzung schießt aus dem Turm, Ausfall nur zum Checkpoint
 			continue
 		if art_name == "pliplop":
-			spiel._pliplop_turm(z, delta)   # 20.11. (Paul): PliPlop 3cK (Irrtürmer)
+			_pliplop_turm(z, delta)   # 20.11. (Paul): PliPlop 3cK (Irrtürmer)
 			continue
 		var art: Dictionary = Werte.TURMARTEN[art_name]
 		spiel.schadensquelle = "turm:" + art_name
@@ -431,3 +431,117 @@ func _batterie_einschlag(z: Vector2i, von: Vector2, punkt: Vector2, radius: floa
 
 
 ## Schaden an allen Gegnern im Umkreis, mit einem kurzen Ring als Zeichen.
+
+
+# ------------------------------------------------------------------ 20.11. (Paul): PliPlop 3cK als Turm (Irrtürmer)
+# 27.11. (Knoten-Umbau Paket B): aus main.gd hierher.
+
+var _pp_nagel: Dictionary = {}   # Turm -> [Gegner, Treffer in Folge] (Nagler)
+
+
+## Stufe 1 -> 2 wählt den Pfad, Stufe 3 und 4 verstärken ihn.
+func werte_pliplop_auf(z: Vector2i, pfad: String) -> bool:
+	var stufe := int(karte.turm_stufe.get(z, 1))
+	if stufe >= 4:
+		return false
+	if stufe == 1 and not Werte.PLIPLOP_TURM.has(pfad):
+		return false
+	var preis: int = Werte.kosten_pliplop_stufen()[stufe - 1]
+	if spiel.budget < preis:
+		spiel.melde("Nicht genug Budget.")
+		return false
+	spiel._merke_bezahlt(z, "stufen", preis)
+	spiel.budget -= preis
+	karte.turm_stufe[z] = stufe + 1
+	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
+	if stufe == 1:
+		karte.turm_faehigkeit[z] = pfad
+		eintrag["faehigkeit"] = pfad
+	Auftraege.zaehle(spiel.auftrag, "upgrade")
+	var p: Dictionary = Werte.PLIPLOP_TURM[str(karte.turm_faehigkeit[z])]
+	spiel.melde("PliPlop 3cK Stufe %d – %s: %s" % [stufe + 1, p["name"], p["stufen"][stufe - 1]["text"]], 5.0)
+	spiel._notiere(eintrag)
+	karte.queue_redraw()
+	return true
+
+
+func _pliplop_turm(z: Vector2i, delta: float) -> void:
+	var rest: float = abkling.get(z, 0.0) - delta * float(spiel.turm_takt(z))
+	if rest > 0.0:
+		abkling[z] = rest
+		return
+	var pfad := str(karte.turm_faehigkeit.get(z, ""))
+	var stufe := int(karte.turm_stufe.get(z, 1))
+	var werte: Dictionary = Werte.PLIPLOP_TURM[pfad]["stufen"][clampi(stufe - 2, 0, 2)] if Werte.PLIPLOP_TURM.has(pfad) else {}
+	spiel.schadensquelle = "turm:pliplop"
+	spiel.schuetze = null
+	spiel.schadensobjekt = z
+	var weite := float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
+	var von := karte.mitte(z) + Vector2(0, -12)
+	spiel.schuss_herkunft = von
+	var schaden := float(karte.turm_wert(z, "schaden"))
+	var farbe := Color(Werte.TURMARTEN["pliplop"]["farbe"])
+	var ziel: Gegner = spiel.gegner_in_reichweite(von, weite, false, z)
+	if ziel == null:
+		abkling[z] = 0.0
+		return
+	rest = float(karte.turm_wert(z, "abklingzeit"))
+	if turmbilder.has(z):
+		(turmbilder[z] as TurmBild).feuert(ziel.position)
+	match pfad:
+		"flak":
+			var radius := float(werte["radius"]) * Werte.ZELLE
+			Ton.am_ort(spiel, "tc-heavy", von)
+			spiel.schuss(von, ziel.position, farbe)
+			spiel.flaechenschaden(ziel.position, radius, schaden, Color("ffb070"))
+			if werte.has("nachbrand"):
+				spiel.lege_brand(ziel.position, radius * 0.8, schaden * float(werte["nachbrand"]))
+		"schockwelle":
+			Ton.am_ort(spiel, "tc-arc", von)
+			effekte.welle(karte.mitte(z), weite, Color("9be37b"), "funk", 0.6)
+			for g in gegner.duplicate():
+				if not is_instance_valid(g) or spiel._geschuetzt(g) or von.distance_to(g.position) > weite or not karte.sicht_von_wall(z, von, g.position):
+					continue
+				g.markiert = maxf(g.markiert, float(werte["mark_sek"]))
+				g.markier_faktor = Werte.MARKIERUNG_FAKTOR
+				g.markiert_brakk = false
+				if werte.has("bremse"):
+					g.frost_tempo = 0.6 if g.gefroren <= 0.0 else minf(g.frost_tempo, 0.6)
+					g.gefroren = maxf(g.gefroren, float(werte["bremse"]))
+				if bool(g.daten.get("fernkampf", false)) or BrakkFortschritt.gross(g):
+					continue
+				_pp_stoss(g, von, float(werte["stoss"]) * Werte.ZELLE)
+		"nagler":
+			var n := 0
+			var alt: Array = _pp_nagel.get(z, [])
+			if alt.size() == 2 and alt[0] == ziel:
+				n = int(alt[1])
+			var bonus := minf(float(werte["hoechst"]), float(werte["je_treffer"]) * n)
+			_pp_nagel[z] = [ziel, n + 1]
+			Ton.am_ort(spiel, "tc-heavy", von)
+			effekte.leuchtschuss(von, 18.0, ziel.position, 14.0, Color("ff8ad8"), 0.08 + von.distance_to(ziel.position) / 4200.0, 7.0 + 4.0 * bonus)
+			ziel.nimm_schaden(schaden * (1.0 + bonus))
+		_:
+			Ton.am_ort(spiel, "tc-heavy", von)
+			spiel.schuss(von, ziel.position, farbe)
+			ziel.nimm_schaden(schaden)
+	abkling[z] = rest
+
+
+## Schockwelle: Gegner vom Turm wegstoßen, höchstens bis vor ein Hindernis.
+func _pp_stoss(g: Gegner, von: Vector2, weite: float) -> void:
+	var richtung := (g.position - von).normalized()
+	if richtung == Vector2.ZERO:
+		richtung = Vector2.LEFT
+	var ziel := g.position
+	var s := 0.0
+	while s < weite:
+		s = minf(weite, s + 4.0)
+		var neu := g.position + richtung * s
+		if not karte.ist_begehbar(karte.zelle_bei(neu)):
+			break
+		ziel = neu
+	if ziel != g.position:
+		effekte.strahl(g.position, ziel, Color("9be37b"), 2.0)
+		g.position = ziel
+		g.plane_neu()

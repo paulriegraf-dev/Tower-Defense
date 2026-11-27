@@ -76,7 +76,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if not o.laeuft:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false
 		return false
@@ -305,7 +305,7 @@ func _cp_schritt(k: Kommandant) -> void:
 		22:
 			if _seit() >= 1.5:
 				o.ego_taste(spiel.ego, "F", false)
-				pruefe(not karte.cp_feind[0] and float(o._cp_brakk[0]) == 0.0, "[F] nach 1,5 s losgelassen: zurück auf 0")
+				pruefe(not karte.cp_feind[0] and float(o.ueberlaeufer._cp_brakk[0]) == 0.0, "[F] nach 1,5 s losgelassen: zurück auf 0")
 				o.ego_taste(spiel.ego, "F", true)
 				_weiter()
 		23:
@@ -314,7 +314,7 @@ func _cp_schritt(k: Kommandant) -> void:
 				pruefe(not karte.cp_feind[0], "nach 2,8 s noch nicht eingenommen")
 			if _seit() >= 3.3:
 				pruefe(karte.cp_feind[0], "nach 3 s [F] Checkpoint für die Myriaden (orange)")
-				pruefe(not o._cp_f, "[F] gilt danach als losgelassen")
+				pruefe(not o.ueberlaeufer._cp_f, "[F] gilt danach als losgelassen")
 				o.ego_taste(spiel.ego, "F", false)
 				_weiter()
 		24:

@@ -252,7 +252,7 @@ func ziel(e: Einheit, t: Dictionary) -> Vector2i:
 				return Karte.KEINE
 			var punkt: Vector2i = a["punkt"]
 			var blick := (o24.karte.mitte(t["zuletzt"] as Vector2i) - o24.karte.mitte(punkt))
-			return o24._faecher_feld(e, t, punkt, -blick.normalized() if blick.length() > 1.0 else Vector2.RIGHT, 1.0)   # verteilt, mit dem Rücken zur Deckung
+			return o24.zangenwerk._faecher_feld(e, t, punkt, -blick.normalized() if blick.length() > 1.0 else Vector2.RIGHT, 1.0)   # verteilt, mit dem Rücken zur Deckung
 	return Karte.KEINE
 
 

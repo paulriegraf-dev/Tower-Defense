@@ -65,9 +65,9 @@ func _ende() -> void:
 ## Welt-Mittelpunkt der Ringe (Torus) der Form als 2D-Punkte.
 func _form_punkte() -> Array[Vector2]:
 	var aus: Array[Vector2] = []
-	for k in ego._saeule_form.get_children():
+	for k in ego.saeule._saeule_form.get_children():
 		if k is MeshInstance3D and (k as MeshInstance3D).mesh is TorusMesh:
-			aus.append(ego._zu2d(ego._saeule_form.transform * (k as Node3D).position))
+			aus.append(ego._zu2d(ego.saeule._saeule_form.transform * (k as Node3D).position))
 	return aus
 
 
@@ -95,55 +95,55 @@ func _pruefe_alles() -> void:
 	var p := Vector2(600.0, 700.0)
 	for richtung: Vector2 in [Vector2.RIGHT, Vector2.UP, Vector2.from_angle(0.7), Vector2.from_angle(-2.3)]:
 		for ring in ["durchschuss", "feuerteam"]:
-			ego._saeule_ring = ring
-			ego._saeule_farbe = Color.WHITE
-			ego._baue_saeule_form()
-			ego._saeule_form_setze(p, richtung, 1.0)
-			ego._einschlaege.clear()
-			ego._saeule_blick = richtung
-			ego._saeule_ausloesen(p)
-			_passt(ego._einschlaege.duplicate(), _form_punkte(), "%s, Richtung %.0f°" % [ring, rad_to_deg(richtung.angle())])
+			ego.saeule._saeule_ring = ring
+			ego.saeule._saeule_farbe = Color.WHITE
+			ego.saeule._baue_saeule_form()
+			ego.saeule._saeule_form_setze(p, richtung, 1.0)
+			ego.saeule._einschlaege.clear()
+			ego.saeule._saeule_blick = richtung
+			ego.saeule._saeule_ausloesen(p)
+			_passt(ego.saeule._einschlaege.duplicate(), _form_punkte(), "%s, Richtung %.0f°" % [ring, rad_to_deg(richtung.angle())])
 	# Feuerteam: erster Einschlag liegt in Blickrichtung (0°), die anderen 120° / 240° daneben
-	var pk: Array = ego.saeule_punkte("feuerteam", Vector2.ZERO, Vector2.RIGHT)
+	var pk: Array = ego.saeule.saeule_punkte("feuerteam", Vector2.ZERO, Vector2.RIGHT)
 	for i in 3:
 		var soll := Vector2.RIGHT.rotated(TAU * float(i) / 3.0) * Werte.ZELLE * 0.8
 		pruefe((pk[i][1] as Vector2).distance_to(soll) < 0.01, "Feuerteam %d: %d°" % [i, 120 * i])
-	pruefe(ego.saeule_punkte("feuerteam", p, Vector2.UP) == ego.saeule_punkte("feuerteam", p, Vector2.UP), "Feuerteam: ohne Zufall")
+	pruefe(ego.saeule.saeule_punkte("feuerteam", p, Vector2.UP) == ego.saeule.saeule_punkte("feuerteam", p, Vector2.UP), "Feuerteam: ohne Zufall")
 	# Durchschlagring: Pfeil zeigt in Wirkrichtung (Spitze vor dem letzten Einschlag)
-	ego._saeule_ring = "durchschuss"
-	ego._baue_saeule_form()
+	ego.saeule._saeule_ring = "durchschuss"
+	ego.saeule._baue_saeule_form()
 	var richtung := Vector2.from_angle(1.1)
-	ego._saeule_form_setze(p, richtung, 1.0)
+	ego.saeule._saeule_form_setze(p, richtung, 1.0)
 	var pfeil: MeshInstance3D = null
-	for k in ego._saeule_form.get_children():
+	for k in ego.saeule._saeule_form.get_children():
 		if k is MeshInstance3D and (k as MeshInstance3D).mesh is CylinderMesh:
 			pfeil = k
 	pruefe(pfeil != null, "Durchschlagring: Pfeil vorhanden")
 	if pfeil != null:
-		var w := ego._zu2d(ego._saeule_form.transform * pfeil.position)
+		var w := ego._zu2d(ego.saeule._saeule_form.transform * pfeil.position)
 		pruefe(((w - p) / Werte.ZELLE).distance_to(richtung * 3.25) < TOL, "Durchschlagring: Pfeil in Wirkrichtung")
 	# Radien der übrigen Formen
 	for t: Array in [["brandfeld", 1.3, true], ["plasmagel", 1.2, false], ["abpraller", 0.0, false]]:
-		ego._saeule_ring = t[0]
-		ego._baue_saeule_form()
-		var n := ego._saeule_form.get_child_count()
+		ego.saeule._saeule_ring = t[0]
+		ego.saeule._baue_saeule_form()
+		var n := ego.saeule._saeule_form.get_child_count()
 		pruefe(n > 0, "%s: Form vorhanden (%d Teile)" % [t[0], n])
 		if t[0] == "brandfeld":
 			var ok := true
-			for k in ego._saeule_form.get_children():
+			for k in ego.saeule._saeule_form.get_children():
 				var d := Vector2((k as Node3D).position.x, (k as Node3D).position.z).length()
 				ok = ok and absf(d - EgoModus.SAEULE_RADIUS * float(t[1])) < TOL
 			pruefe(ok, "brandfeld: Strichring in Brandfeldgröße (r × 1,3)")
 		elif t[0] == "plasmagel":
-			var tor := (ego._saeule_form.get_child(0) as MeshInstance3D).mesh as TorusMesh
+			var tor := (ego.saeule._saeule_form.get_child(0) as MeshInstance3D).mesh as TorusMesh
 			pruefe(absf(tor.outer_radius - EgoModus.SAEULE_RADIUS * 1.2) < TOL, "plasmagel: Ring in Gelgröße (r × 1,2)")
 		else:
-			var tor2 := (ego._saeule_form.get_child(0) as MeshInstance3D).mesh as TorusMesh
+			var tor2 := (ego.saeule._saeule_form.get_child(0) as MeshInstance3D).mesh as TorusMesh
 			pruefe(absf(tor2.outer_radius - 4.0) < TOL, "abpraller: Ring mit 4 Feldern Umkreis")
 	# Richtung beim Bestätigen wird übernommen
-	ego._saeule_ring = "durchschuss"
-	ego._saeule_zielt = true
-	ego._saeule_ziel = Vector2.INF
-	ego._saeule_bestaetigen(ego._fuss2d() + Vector2(Werte.ZELLE * 2.0, 0.0), Vector2.from_angle(2.0))
-	pruefe(ego._saeule_ziel != Vector2.INF and ego._saeule_blick.distance_to(Vector2.from_angle(2.0)) < 0.001, "Bestätigen übernimmt die gedrehte Richtung")
-	ego._saeule_ziel = Vector2.INF
+	ego.saeule._saeule_ring = "durchschuss"
+	ego.saeule._saeule_zielt = true
+	ego.saeule._saeule_ziel = Vector2.INF
+	ego.saeule._saeule_bestaetigen(ego._fuss2d() + Vector2(Werte.ZELLE * 2.0, 0.0), Vector2.from_angle(2.0))
+	pruefe(ego.saeule._saeule_ziel != Vector2.INF and ego.saeule._saeule_blick.distance_to(Vector2.from_angle(2.0)) < 0.001, "Bestätigen übernimmt die gedrehte Richtung")
+	ego.saeule._saeule_ziel = Vector2.INF

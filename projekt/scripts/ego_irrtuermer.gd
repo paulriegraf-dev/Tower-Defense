@@ -204,7 +204,7 @@ func _ueberladen_spell(wo: Vector2, turm: Vector2i, sek: float, bis: int) -> voi
 	var w := spell_w("ueberladen", "truppenschild")
 	if w > 0.0:
 		var ende := Time.get_ticks_msec() + 8000
-		for e: Einheit in ego._truppen_um(wo, 2.0):
+		for e: Einheit in ego.ringwerk._truppen_um(wo, 2.0):
 			e.ring_schild = e.max_leben * w / 100.0
 			e.ring_schild_bis = ende
 			ego.spiel.effekte.welle(e.position, Werte.ZELLE * 0.55, hand_farbe(), "heil", 0.8)

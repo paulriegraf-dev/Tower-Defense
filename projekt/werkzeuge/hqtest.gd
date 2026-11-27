@@ -48,8 +48,8 @@ func _process(_delta: float) -> bool:
 		ego = spiel.ego
 		if ego == null:
 			return false
-		if ego._briefing != null:
-			ego._briefing.visible = false
+		if ego.anzeige._briefing != null:
+			ego.anzeige._briefing.visible = false
 		t0 = Time.get_ticks_msec()
 	match art:
 		"einbruch":

@@ -86,7 +86,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if not o.laeuft:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false
 		return false
@@ -827,7 +827,7 @@ func _punkt7_besiegt() -> void:
 	if not b.is_empty():
 		var vorher: int = spiel.budget
 		k.position = b["pos"]
-		o._beute_pflegen(k)
+		o.beutewerk._beute_pflegen(k)
 		pruefe(k.fortschritt.ring_stufe(str(b["ring"])) == 1 and o.beute_boden.is_empty(), "aufgehoben: neuer Ring, Stufe 1")
 		k.fortschritt.verkaufe(str(b["ring"]), spiel)
 		pruefe(spiel.budget == vorher, "kein Gold beim Verkaufen (%d → %d)" % [vorher, spiel.budget])
@@ -842,7 +842,7 @@ func _punkt7_besiegt() -> void:
 	var s: Dictionary = o.beute_boden.back()
 	pruefe(bool(s["stufe"]) and f.ringe.has(str(s["ring"])), "5 Ringe an 5 Fingern: eine Stufe für %s" % str(s["ring"]))
 	k.position = s["pos"]
-	o._beute_pflegen(k)
+	o.beutewerk._beute_pflegen(k)
 	pruefe(f.ring_stufe(str(s["ring"])) == 2 and f.ringe.size() == 5, "aufgehoben: jetzt Stufe 2")
 	merk["plan"] = o.plan_zeit()
 	merk["wellen"] = o.wellen
@@ -1281,25 +1281,25 @@ func _f2_q_e() -> void:
 			pruefe(grund != "" and o.ladungen == 1 and o.zuender.is_empty(), "F2: Rand-Wall nicht sprengbar („%s“)" % grund)
 			k.fortschritt.alle_frei = true
 			_f2_zielen(q_wand, kp._frei_innen(kp.mitte + Vector2i(h.x - 4, 2)), spiel.hd.H * 0.95)
-			ego._anker_rest = 0.0
-			ego._anker_start()
+			ego.lichtwerk._anker_rest = 0.0
+			ego.lichtwerk._anker_start()
 			merk["f2"] = 1
 		1:
 			if t > 0.6:
-				ego._anker_start()   # zweites [Q]: zieht hinauf
+				ego.lichtwerk._anker_start()   # zweites [Q]: zieht hinauf
 				merk["f2"] = 2
 		2:
 			if t > 3.5:
 				pruefe(k.oben and k.posten_zelle == q_wand, "F2: [Q] Lichtanker zieht Brakk auf die Krone eines Rand-Walls (%s, oben %s)" % [str(k.posten_zelle), str(k.oben)])
 				_f2_zielen(e_wand, kp._frei_innen(kp.mitte + Vector2i(h.x - 4, -3)), spiel.hd.H * 0.5)
 				k.e_rest = 0.0
-				ego._versuche_klettern(false)   # [E]: Treppe an den Rand-Wall
+				ego.lichtwerk._versuche_klettern(false)   # [E]: Treppe an den Rand-Wall
 				merk["f2"] = 3
 		3:
 			if t > 4.0:
-				if ego._treppe_fuss2d != Vector2.INF:
-					ego._setze_fuss(ego._treppe_fuss2d)
-				ego._versuche_klettern(false)   # [E] am Fuß der Treppe: hinauf
+				if ego.lichtwerk._treppe_fuss2d != Vector2.INF:
+					ego._setze_fuss(ego.lichtwerk._treppe_fuss2d)
+				ego.lichtwerk._versuche_klettern(false)   # [E] am Fuß der Treppe: hinauf
 				merk["f2"] = 4
 		4:
 			if t > 7.0:

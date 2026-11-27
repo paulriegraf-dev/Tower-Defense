@@ -47,7 +47,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if not o.laeuft:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false
 		return false
@@ -59,8 +59,8 @@ func _process(_delta: float) -> bool:
 		0:
 			pruefe(o.flucht_sperre(), "nach dem Verrat: Fluchtsperre an (Phase %s)" % o.phase())
 			for t: String in ["Q", "E", "R"]:
-				var anker_vorher: float = ego._anker
-				pruefe(ego._aktion(t, true) and ego._anker == anker_vorher and ego._klettern < 0.0, "[%s] in der Flucht abgefangen" % t)
+				var anker_vorher: float = ego.lichtwerk._anker
+				pruefe(ego._aktion(t, true) and ego.lichtwerk._anker == anker_vorher and ego._klettern < 0.0, "[%s] in der Flucht abgefangen" % t)
 				ego._aktion(t, false)
 			pruefe(not ego._aktion("shift", true) or ego._tumble >= 0.0 or ego._tumble_rest > 0.0, "Tumble [Shift] geht weiter")
 			ego._aktion("shift", false)

@@ -675,14 +675,40 @@ Die Browserfassung liegt im Nachbarordner `td-web` (GitHub Pages, Repo `paulrieg
 
 ## Dateien
 - `scripts/main.gd` Ablauf, Eingabe, Anzeige
-- Knoten-Umbau (27.11.): Teile von `main.gd` ziehen in eigene Kindknoten um, ohne Regeländerung; Zugriff über `spiel.<knoten>.*`.
-- `scripts/phantom_partie.gd` (`phantom_partie`) Phantom-Modus. In `main.gd` bleiben `phantom_modus`, der Startmenü-Anschluss und `_setze_stand`.
-- `scripts/partie_start.gd` (`partie_start`) Spielbeginn: Startlage, Alarmstart/Formation, vorgebaute Szenario-Bauten, Einführungsfenster, „Trupp unterwegs“
 - `scripts/karte.gd` Raster, Wegsuche, Zeichnen
 - `scripts/einheit.gd`, `scripts/gegner.gd` Verhalten der Figuren
 - `scripts/figur.gd` Animation aus den Terrain-Conquester-Blättern
 - `scripts/zonenbau.gd` HQ und Schleudern in der Zone des Gegners
 - `assets/sprites/` Kopien aus Terrain-Conquester (Technogunner und Scharfschütze alt, Hund, Battlesphäre)
+
+### Knoten-Umbau (27.11.)
+Reiner Code-Umzug aus `main.gd`, `ego_modus.gd` und `order24.gd` in Teil-Dateien: keine Regel, kein Wert, kein Text geändert. `spiel` ist `main.gd`, `ego` die Ego-Sicht, `o24` Befehl 24. In `main.gd` sind außerdem `_physics_process` und `_unhandled_input` in Teilfunktionen zerlegt (Reihenfolge unverändert).
+
+| Datei (`scripts/`) | Zugriff | Inhalt |
+|---|---|---|
+| `phantom_partie.gd` | `spiel.phantom_partie` | Phantom-Modus: Verteidigen, Angreifen, Ersatz-Phantome, „Geknackt“, Schlussbild des Angriffs. In `main.gd` bleiben `phantom_modus`, der Startmenü-Anschluss und `_setze_stand`. |
+| `partie_start.gd` | `spiel.partie_start` | Spielbeginn: Startlage, Alarmstart/Formation, vorgebaute Szenario-Bauten, Einführungsfenster, „Trupp unterwegs“ |
+| `turmfeuer.gd` | `spiel.turmfeuer` | Feuer der Türme: Geschütz, Lanze, Frost, Funk (Optik), Heilturm, Truppenturm/Werkschutz, Magnete, Batterien, PliPlop 3cK. Zustand: `.abkling`, `.werkschutz`, `.schock_takt`, `.nachschuss`, `.funk_welle` |
+| `schlussbild.gd` | `spiel.schlussbild` | Endtafeln Sieg/Niederlage, altes Schlussbild, Export des Phantom-Protokolls, Revanche. `_neustart`, `_zum_menue`, die Anzeige-Knoten und Farben `_F_*` bleiben in `main.gd`. |
+| `mg_stellung.gd` | `spiel.mg_stellung` | MG-Stellung mit Ausbau. `main.gd` leitet `mg_werte`, `mg_reichweite`, `mg_feuer`, `mg_huelsen_punkte` weiter. |
+| `energieschild.gd` | `spiel.energieschild` | Energieschild der Batterie. Die Schilde selbst (`schilde`, `_schild_fuer`, `_schild_start`) bleiben in `main.gd`; `waehle_schildfeld`, `setze_schild`, `schild_bei`, `schade_schild` leiten weiter. |
+| `wurf_schleuder.gd` | `spiel.wurf_schleuder` | Wurf-Schleuder: Werfen, Landung, Sturmziel, Auslöser, Wurfziel im Phantom-Angriff. Die Warteschlange (`_wurf_schlange`, `_wurf_aktiv`, `_im_flug`) bleibt in `main.gd`; `wurf_standorte`, `waehle_wurfziel` leiten weiter. |
+| `brakk_saeule.gd` | `ego.saeule` | Lichtsäule [X] und Zeitlupe [V]. Zahlen (`SAEULE_*`, `ZEITLUPE_*`) bleiben in `ego_modus.gd`. |
+| `brakk_ringe.gd` | `ego.ringwerk` | Ringe, Lichtterminal, Ringfelder [C], Zeitlupe je Ring, Ringklinge. In `ego_modus.gd` bleiben `_ring_farbe`, `_zaehle`, `_male_ring`, `_hud_aus`. |
+| `brakk_licht.gd` | `ego.lichtwerk` | Lichttreppe, Brücke, Anker, Schwingen, Doppelsprung, Absprung. Konstanten und Bewegungszustand (`_lauf`, `_flug`, `_luft_schritt`) bleiben in `ego_modus.gd`. |
+| `brakk_anzeige.gd` | `ego.anzeige` | Waffen, Fadenkreuz, Minikarte, Fähigkeiten-Leiste, Einsatz-Tafel mit Einflug, Werte-Fenster. Konstanten, `ring_kurz`, Mündung und Mündungsblitz bleiben in `ego_modus.gd`. |
+| `befehl24_beute.gd` | `o24.beutewerk` | Beute aus zerstörten Fabriken, Sabotage und Einnahme, Kopfgeld und Prämie. `beute_legen`, `gold` u. a. bleiben in `order24.gd`. |
+| `befehl24_zange.gd` | `o24.zangenwerk` | Zange der Jagdtrupps. Die Feldhelfer (`_erreichbar_nahe`, `_freies_feld_bei`, `_freies_feld_nahe`, `_truppen`) und `startfeld` bleiben in `order24.gd`. |
+| `befehl24_ueberlaeufer.gd` | `o24.ueberlaeufer` | Überläufer-Verlauf: Myriaden-HQ, Checkpoints, Angriff aufs Technoclan-HQ, Lichtmenü. Von außen genutzter Zustand (`myr_fabriken`, `tc_hq_leben`, `gegner_am_ziel` …) bleibt in `order24.gd`. |
+
+Die `main.gd`-Teile sind Kindknoten (angelegt in `main._ready`), die Brakk- und Befehl-24-Teile `RefCounted` wie `EgoKit`, angelegt in `EgoModus._init` bzw. `Order24._init` (so auch in Tests ohne `starten()` da).
+
+Regeln:
+- Konstanten bleiben in der Quelldatei (`EgoModus.SAEULE_*`, `Order24.MYR_RING` usw.), ebenso statische Funktionen und alles Öffentliche, das andere Dateien direkt aufrufen. Behält `main.gd` eine Funktion für fremde Bereiche, ist sie eine einzeilige Weiterleitung.
+- Zugriff auf Umgezogenes über den Teil, z. B. `ego.saeule._saeule_ziel` statt `ego._saeule_ziel`. **Auch Zugriffe als Text mitziehen** (`get("…")`, `set`, `has_method`): Sie melden keinen Fehler, sondern liefern `null` – so startete Befehl 24 nach 7d trotz offener Einsatz-Tafel (`ego.get("_briefing")`, jetzt `ego.anzeige.get("_briefing")`).
+- In den Teilen: `main.gd` hat keinen `class_name`, `spiel` ist nur `Node` → Werte aus `spiel.…` ausdrücklich typisieren. Teile, die keine Knoten sind, rufen Knoten-Funktionen über ihren Besitzer auf (`ego.get_process_delta_time()`, `o24.add_child(…)`).
+- `ringe` ist die Ringliste von `BrakkFortschritt`; der Ego-Teil für die Ringe heißt `ringwerk`.
+- Neue Logik eines Themas kommt in seine Teil-Datei, nicht zurück in `main.gd`, `ego_modus.gd` oder `order24.gd`.
 
 ## Formationen
 

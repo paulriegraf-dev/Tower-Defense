@@ -133,10 +133,10 @@ func _pruefe_alles() -> void:
 				var c := ecke + Vector2i(dx, dy)
 				if spiel.baue(c, Karte.FABRIK, true):
 					zs.append(c)
-		pruefe(ego._feld_fabriken(ecke).size() == zs.size() and zs.size() >= 2, "Ringfeld: %d Fabriken im Feld" % zs.size())
+		pruefe(ego.ringwerk._feld_fabriken(ecke).size() == zs.size() and zs.size() >= 2, "Ringfeld: %d Fabriken im Feld" % zs.size())
 		var vorher := zs.size()
 		spiel.brakk_abbauen(zs[0])
-		pruefe(ego._feld_fabriken(ecke).size() == vorher - 1, "Ringfeld: nach dem Abbauen %d/4 (vorher %d)" % [ego._feld_fabriken(ecke).size(), vorher])
+		pruefe(ego.ringwerk._feld_fabriken(ecke).size() == vorher - 1, "Ringfeld: nach dem Abbauen %d/4 (vorher %d)" % [ego.ringwerk._feld_fabriken(ecke).size(), vorher])
 		pruefe(not spiel.fabriken.has(zs[0]), "abgebaute Fabrik liefert nichts mehr (nicht in spiel.fabriken)")
 		for c: Vector2i in zs:
 			spiel.reisse_ab(c)

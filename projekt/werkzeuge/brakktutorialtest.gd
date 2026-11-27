@@ -166,7 +166,7 @@ func _partie_tutorial() -> void:
 		phase = "einflug"
 		return
 	if phase == "einflug":
-		if ego._einflug >= 0.0 or ego._briefing_offen():
+		if ego.anzeige._einflug >= 0.0 or ego.anzeige._briefing_offen():
 			return
 		phase = "schritte"
 		schritt_alt = -1
@@ -274,9 +274,9 @@ func _handle(i: int) -> void:
 		if not brakk.oben:
 			return
 		schau(mitte3(tut._wall_b[1], spiel.hd.H + EgoModus.AUGE))   # waagrecht nach Westen
-		if takt % 60 == 5 and ego._bruecke == null:
+		if takt % 60 == 5 and ego.lichtwerk._bruecke == null:
 			ego._aktion("E", true)
-		if ego._bruecke != null and ego._bruecke_aufbau < 0.0:
+		if ego.lichtwerk._bruecke != null and ego.lichtwerk._bruecke_aufbau < 0.0:
 			taste(KEY_W, true)
 	elif text.begins_with("Hinunter"):
 		taste(KEY_W, false)
@@ -309,10 +309,10 @@ func _handle(i: int) -> void:
 		var g := erstes_ziel()
 		if g != null:
 			schau(Vector3(g3(g).x, 0.0, g3(g).z))
-		if takt % 40 == 5 and not ego._saeule_zielt:
+		if takt % 40 == 5 and not ego.saeule._saeule_zielt:
 			ego._aktion("X", true)
-		elif takt % 40 == 15 and ego._saeule_zielt:
-			ego._saeule_bestaetigen()
+		elif takt % 40 == 15 and ego.saeule._saeule_zielt:
+			ego.saeule._saeule_bestaetigen()
 	elif text.begins_with("V ist"):
 		if takt % 40 == 5:
 			ego._aktion("V", true)
@@ -350,8 +350,8 @@ func _handle(i: int) -> void:
 			taste(KEY_Z, false)
 	elif text.begins_with("Deine Ringe kaufst"):
 		if takt == 1:
-			if ego._haken >= 0.0:
-				ego._haken_los()   # der Anker aus dem Parkour hängt noch – das Seil zöge Brakk zurück
+			if ego.lichtwerk._haken >= 0.0:
+				ego.lichtwerk._haken_los()   # der Anker aus dem Parkour hängt noch – das Seil zöge Brakk zurück
 			# nächstes begehbares Feld an der Basis (die Basis ist größer als ein Feld)
 			var beste := INF
 			for dy in range(-3, 4):
@@ -362,37 +362,37 @@ func _handle(i: int) -> void:
 						beste = d
 						brakk.position = spiel.karte.mitte(c)
 		elif takt % 30 == 5:
-			if ego._haken >= 0.0:
-				ego._haken_los()   # der Anker aus dem Parkour hängt sonst noch
+			if ego.lichtwerk._haken >= 0.0:
+				ego.lichtwerk._haken_los()   # der Anker aus dem Parkour hängt sonst noch
 			if spiel._fabrikmenue.visible:
 				spiel._schliesse_fabrikmenue()
 			ego.nick = 1.0   # in den Himmel: kein Gebäude im Blick, [F] öffnet das Terminal
 			if takt % 60 == 35:
-				print("    Terminal: Brakk %s oben=%s Basis %s am_terminal=%s Gebäude im Blick %s" % [tut._brakk_zelle(), brakk.oben, spiel.karte.basis, ego._am_terminal(), ego.gebaeude_im_blick()])
+				print("    Terminal: Brakk %s oben=%s Basis %s am_terminal=%s Gebäude im Blick %s" % [tut._brakk_zelle(), brakk.oben, spiel.karte.basis, ego.ringwerk._am_terminal(), ego.gebaeude_im_blick()])
 			taste(KEY_F, true)
 			taste(KEY_F, false)
 	elif text.begins_with("Links deine Finger"):
 		if takt == 2:
-			ego._kaufe("laser")
+			ego.ringwerk._kaufe("laser")
 		elif takt == 4:
-			ego._kaufe("brandfeld")
+			ego.ringwerk._kaufe("brandfeld")
 	elif text.begins_with("Gut. Schließ"):
 		if takt == 2:
 			taste(KEY_F, true)
 			taste(KEY_F, false)
 	elif text.begins_with("Alle getragenen"):
 		if takt == 2:
-			ego._ring_waehlen(1)
+			ego.ringwerk._ring_waehlen(1)
 	elif text.begins_with("Taste C"):
 		var fz: Vector2i = tut._neueste_fabrik()
 		if takt == 1 and fz != Karte.KEINE:
 			brakk.position = spiel.karte.mitte(fz + Vector2i(2, 0)) if spiel.karte.ist_begehbar(fz + Vector2i(2, 0)) else brakk.position
 		if fz != Karte.KEINE:
 			schau(mitte3(fz, 0.0))
-		if takt % 30 == 5 and not ego._feld_zielt:
+		if takt % 30 == 5 and not ego.ringwerk._feld_zielt:
 			ego._aktion("C", true)
-		elif takt % 30 == 15 and ego._feld_zielt:
-			ego._feld_bestaetigen()
+		elif takt % 30 == 15 and ego.ringwerk._feld_zielt:
+			ego.ringwerk._feld_bestaetigen()
 	elif text.begins_with("Zeit für eine Probewelle"):
 		if takt == 2:
 			taste(KEY_ENTER, true)

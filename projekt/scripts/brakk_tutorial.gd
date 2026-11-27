@@ -111,8 +111,8 @@ func _starte() -> void:
 	spiel._protokoll["brakk_tutorial"] = true
 	spiel.budget = UEBUNG_BUDGET
 	var ego: EgoModus = spiel.ego
-	if ego != null and ego._briefing_offen():
-		ego._briefing_los()   # Einsatz-Tafel weg, Einflug in Brakks Augen
+	if ego != null and ego.anzeige._briefing_offen():
+		ego.anzeige._briefing_los()   # Einsatz-Tafel weg, Einflug in Brakks Augen
 	var f := _f()
 	if f != null:
 		f.alle_frei = true      # alle Fähigkeiten, unabhängig von der Stufe

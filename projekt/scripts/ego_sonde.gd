@@ -992,7 +992,7 @@ func male_leisten(g: Vector2) -> void:
 	bild.draw_rect(ab.grow(2.0), Color(0.04, 0.05, 0.08, 0.75))
 	bild.draw_rect(Rect2(ab.position + Vector2(0, ab.size.y * (1.0 - voll)), Vector2(ab.size.x, ab.size.y * voll)), SONDE_FARBE if not luftschlag_an() else Stil.GOLD)
 	Stil.schreibe(bild, Vector2(ab.end.x + 6.0, ab.get_center().y), "Akku", 13, Stil.TEXT_BLASS)
-	ego._ringleiste(g)
+	ego.ringwerk._ringleiste(g)
 
 
 func werte_zeilen() -> Dictionary:

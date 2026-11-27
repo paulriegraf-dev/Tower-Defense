@@ -208,7 +208,7 @@ func _ziehen(f: int, p: Vector2, rel: Vector2) -> bool:
 		if not bool(k["gezogen"]) and p.distance_to(k["start"]) > ZIEH_AB:
 			k["gezogen"] = true
 			if str(k["id"]) == "saeule":
-				ego._saeule_x()   # Marke folgt dem Fadenkreuz
+				ego.saeule._saeule_x()   # Marke folgt dem Fadenkreuz
 		if bool(k["gezogen"]):
 			_drehe(rel, BLICK_FEIN)
 		return true
@@ -239,7 +239,7 @@ func _los(f: int, p: Vector2) -> bool:
 	if bool(k["gezogen"]):
 		if abbruch:
 			if id == "saeule":
-				ego._saeule_abbrechen()
+				ego.saeule._saeule_abbrechen()
 			Ton.spiele(spiel, "ui-klick", -8.0)
 		else:
 			_ausloesen(id)
@@ -269,7 +269,7 @@ func _sichtbar(id: String) -> bool:
 		"aktion":
 			return _aktion_text() != ""
 		"weg":
-			return spiel.werkzeug != Karte.FREI or ego._feld_zielt
+			return spiel.werkzeug != Karte.FREI or ego.ringwerk._feld_zielt
 		"bauliste":
 			return not spiel._hud.schadensliste.visible and (spiel.phase == 0 or spiel.werkzeug != Karte.FREI or bau_offen)   # 19.11.: nicht über der Schadensliste
 	return true
@@ -284,13 +284,13 @@ func _knopf_bei(p: Vector2) -> String:
 
 
 func _aktion_text() -> String:
-	if ego._feld_zielt:
+	if ego.ringwerk._feld_zielt:
 		return "Setzen"   # 19.11.: Ringfeld bestätigen
 	if spiel.werkzeug != Karte.FREI:
 		return "Bauen"
 	if ego.gebaeude_im_blick() != Karte.KEINE:
 		return "Truppe" if spiel.brakk_modus else "Ausbauen"   # 19.11.: im Brakk-Mode gibt es nur die Truppenwahl
-	if ego._am_terminal():
+	if ego.ringwerk._am_terminal():
 		return "Ringe"
 	return ""
 
@@ -330,25 +330,25 @@ func _tippen(id: String) -> void:
 			ego._tumble_start()
 		"zeitlupe":
 			if spiel.brakk_modus:
-				ego._zeitlupe_start()
+				ego.saeule._zeitlupe_start()
 		"ulti":
 			if ego.brakk.fortschritt != null:
-				ego._ulti()
+				ego.anzeige._ulti()
 		"ring":
-			ego._ring_waehlen(1)
+			ego.ringwerk._ring_waehlen(1)
 		"feld":
-			ego._wirf_feld()
+			ego.ringwerk._wirf_feld()
 		"aktion":
 			_aktion()
 		"weg":
-			if ego._feld_zielt:
-				ego._feld_abbrechen()
+			if ego.ringwerk._feld_zielt:
+				ego.ringwerk._feld_abbrechen()
 			else:
 				spiel.werkzeug = Karte.FREI
 		"treppe":
 			_e_ausloesen()
 		"anker":
-			ego._anker_start()
+			ego.lichtwerk._anker_start()
 		"saeule":
 			_saeule_tippen()
 
@@ -361,17 +361,17 @@ func _ausloesen(id: String) -> void:
 		"treppe":
 			_e_ausloesen()
 		"anker":
-			ego._anker_start()
+			ego.lichtwerk._anker_start()
 		"saeule":
-			if ego._saeule_zielt:
-				ego._saeule_bestaetigen()
+			if ego.saeule._saeule_zielt:
+				ego.saeule._saeule_bestaetigen()
 		_:
 			_tippen(id)
 
 
 func _aktion() -> void:
-	if ego._feld_zielt:
-		ego._feld_bestaetigen()
+	if ego.ringwerk._feld_zielt:
+		ego.ringwerk._feld_bestaetigen()
 		return
 	if spiel.werkzeug != Karte.FREI:
 		var z: Vector2i = spiel.karte.zelle_bei(ego.ziel_welt())
@@ -383,8 +383,8 @@ func _aktion() -> void:
 	var g := ego.gebaeude_im_blick()
 	if g != Karte.KEINE:
 		spiel._oeffne_fabrikmenue(g)
-	elif ego._am_terminal():
-		ego._terminal_auf()
+	elif ego.ringwerk._am_terminal():
+		ego.ringwerk._terminal_auf()
 
 
 ## [E] wie am PC: unten Treppe hinauf, oben Brücke (Blick auf einen anderen Wall) oder hinunter.
@@ -392,21 +392,21 @@ func _e_ausloesen() -> void:
 	if ego._klettern >= 0.0:
 		return
 	if ego.brakk.oben:
-		if not ego._versuche_bruecke():
-			ego._versuche_absteigen(true)
+		if not ego.lichtwerk._versuche_bruecke():
+			ego.lichtwerk._versuche_absteigen(true)
 	else:
-		ego._versuche_klettern(true)
+		ego.lichtwerk._versuche_klettern(true)
 
 
 ## Lichtsäule antippen: dort, wo das Fadenkreuz den Boden trifft (zu weit: Meldung, kein Hängenbleiben im Zielen).
 func _saeule_tippen() -> void:
-	if not ego._darf("saeule") or ego._saeule_ziel != Vector2.INF:
+	if not ego._darf("saeule") or ego.saeule._saeule_ziel != Vector2.INF:
 		return
-	ego._saeule_x()
-	if ego._saeule_zielt:
-		ego._saeule_bestaetigen()
-		if ego._saeule_zielt:
-			ego._saeule_abbrechen()
+	ego.saeule._saeule_x()
+	if ego.saeule._saeule_zielt:
+		ego.saeule._saeule_bestaetigen()
+		if ego.saeule._saeule_zielt:
+			ego.saeule._saeule_abbrechen()
 
 
 func _process(delta: float) -> void:
@@ -416,8 +416,8 @@ func _process(delta: float) -> void:
 		_stick_aus = Vector2.ZERO
 		_stick_mitte = STICK_RUHE
 		_blick_finger = -1
-		if not _knopf.is_empty() and ego._saeule_zielt:
-			ego._saeule_abbrechen()
+		if not _knopf.is_empty() and ego.saeule._saeule_zielt:
+			ego.saeule._saeule_abbrechen()
 		_knopf.clear()
 		return
 	if spiel.phase != 0 and spiel.werkzeug == Karte.FREI:
@@ -460,7 +460,7 @@ func male(ci: Control) -> void:
 ## 19.11. (Paul): Bauen am Handy deutlicher – unter dem Fadenkreuz steht, was der Knopf „Bauen“ jetzt tut: grün „Erdwall
 ## hier bauen“ oder rot, warum nicht (Stellungen rasten dabei auf den nächsten passenden Wall ein).
 func _male_bau_hinweis(ci: Control) -> void:
-	if spiel.werkzeug == Karte.FREI or ego._feld_zielt:
+	if spiel.werkzeug == Karte.FREI or ego.ringwerk._feld_zielt:
 		return
 	var p := ego.ziel_welt()
 	var text := ""
@@ -516,21 +516,21 @@ func _male_vorschau(ci: Control, id: String) -> void:
 	match id:
 		"treppe":
 			if ego.brakk.oben:
-				var b := ego._bruecke_ziel()
+				var b := ego.lichtwerk._bruecke_ziel()
 				if not b.is_empty():
 					ziel = ego._zu3d(b[2], ego.hd.H)
 					name = "Lichtbrücke"
 				else:
 					name = "Hinunter"
 			else:
-				var t := ego._treppe_ziel()
+				var t := ego.lichtwerk._treppe_ziel()
 				if not t.is_empty():
 					ziel = ego._zu3d(spiel.karte.mitte(t[0]), ego.hd.H)
 					name = "Lichttreppe"
 				else:
 					fehlt = "Auf einen Erdwall zielen (bis %d Felder)" % int(EgoModus.TREPPE_WEITE)
 		"anker":
-			var a := [ego._haken_p, Karte.KEINE] if ego._haken >= 0.0 else ego._anker_ziel()   # 19.11.: hängt er, zeigt der Knopf zum Haken
+			var a := [ego.lichtwerk._haken_p, Karte.KEINE] if ego.lichtwerk._haken >= 0.0 else ego.lichtwerk._anker_ziel()   # 19.11.: hängt er, zeigt der Knopf zum Haken
 			if not a.is_empty():
 				ziel = a[0]
 				name = "Lichtanker"
@@ -581,15 +581,15 @@ func _zustand(id: String) -> Array:
 		"tumble":
 			return [ego._tumble_rest / EgoModus.TUMBLE_ABKLING, f == null or f.frei("tumble")]
 		"anker":
-			return [ego._anker_rest / EgoModus.ANKER_ABKLING, f == null or f.frei("anker")]
+			return [ego.lichtwerk._anker_rest / EgoModus.ANKER_ABKLING, f == null or f.frei("anker")]
 		"saeule":
-			return [ego._saeule_rest / EgoModus.SAEULE_ABKLING, f == null or f.frei("saeule")]
+			return [ego.saeule._saeule_rest / EgoModus.SAEULE_ABKLING, f == null or f.frei("saeule")]
 		"zeitlupe":
-			return [ego._zeitlupe_rest / EgoModus.ZEITLUPE_ABKLING, f == null or f.frei("zeitlupe")]
+			return [ego.saeule._zeitlupe_rest / EgoModus.ZEITLUPE_ABKLING, f == null or f.frei("zeitlupe")]
 		"ulti":
-			return [ego._ulti_rest(), f == null or f.frei("ulti")]
+			return [ego.anzeige._ulti_rest(), f == null or f.frei("ulti")]
 		"treppe":
-			var cd := ego._bruecke_cd / EgoModus.BRUECKE_ABKLING if ego.brakk.oben else ego.brakk.e_rest / maxf(1.0, float(ego.brakk.daten["kletter_abklingzeit"]))
+			var cd := ego.lichtwerk._bruecke_cd / EgoModus.BRUECKE_ABKLING if ego.brakk.oben else ego.brakk.e_rest / maxf(1.0, float(ego.brakk.daten["kletter_abklingzeit"]))
 			return [cd, true]
 	return [0.0, true]
 
@@ -633,8 +633,8 @@ func _male_knopf(ci: Control, k: Array) -> void:
 	var px := 8.0 if r >= 55.0 else (6.0 if r >= 40.0 else 5.0)
 	var sym := m - Vector2(0, 2)
 	if glyphe != "":
-		ego._glyphe(glyphe, sym + Vector2(2, 3), px, Color(0, 0, 0, 0.75))
-		ego._glyphe(glyphe, sym, px, farbe.lightened(0.15) if bereit else farbe)
+		ego.anzeige._glyphe(glyphe, sym + Vector2(2, 3), px, Color(0, 0, 0, 0.75))
+		ego.anzeige._glyphe(glyphe, sym, px, farbe.lightened(0.15) if bereit else farbe)
 	elif id == "ring":
 		var f := ego.brakk.fortschritt
 		ego._male_ring(ci, m, 17.0, f.ringe[clampi(f.gewaehlt, 0, f.ringe.size() - 1)])
@@ -644,13 +644,13 @@ func _male_knopf(ci: Control, k: Array) -> void:
 	if id == "aktion":
 		_text(ci, m, _aktion_text(), 20, Color.WHITE)
 	elif id == "weg":
-		_text(ci, m, "Abbruch" if ego._feld_zielt else "Weglegen", 16, Color.WHITE)
+		_text(ci, m, "Abbruch" if ego.ringwerk._feld_zielt else "Weglegen", 16, Color.WHITE)
 	elif id == "feld" or id == "bauliste" or id == "sprung":
 		_text(ci, m, str(k[4]), 18, Color.WHITE)
 	elif not offen:
 		_text(ci, m + Vector2(0, r + 14.0), "ab St.%d" % int(BrakkFortschritt.AB[id]), 16, Color(0.75, 0.78, 0.84))
 	else:
-		_text(ci, m + Vector2(0, r + 14.0), ("Ziehen" if id == "anker" and ego._haken >= 0.0 else str(k[4])) if not (id == "treppe" and ego.brakk.oben) else ("Brücke" if not ego._bruecke_ziel().is_empty() else "Hinunter"), 16, Color.WHITE)
+		_text(ci, m + Vector2(0, r + 14.0), ("Ziehen" if id == "anker" and ego.lichtwerk._haken >= 0.0 else str(k[4])) if not (id == "treppe" and ego.brakk.oben) else ("Brücke" if not ego.lichtwerk._bruecke_ziel().is_empty() else "Hinunter"), 16, Color.WHITE)
 
 
 ## Text mit dunklem Schatten – auf hellem Gras und Himmel lesbar.
@@ -666,11 +666,11 @@ func _sek_rest(id: String) -> float:
 		"tumble":
 			return ego._tumble_rest
 		"anker":
-			return ego._anker_rest
+			return ego.lichtwerk._anker_rest
 		"saeule":
-			return ego._saeule_rest
+			return ego.saeule._saeule_rest
 		"zeitlupe":
-			return ego._zeitlupe_rest
+			return ego.saeule._zeitlupe_rest
 		"treppe":
-			return ego._bruecke_cd if ego.brakk.oben else ego.brakk.e_rest
+			return ego.lichtwerk._bruecke_cd if ego.brakk.oben else ego.brakk.e_rest
 	return 0.0

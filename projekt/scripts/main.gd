@@ -15,6 +15,10 @@ var welle: int = 1
 var sandbox := false                # Übergangsmenü: 5000 Budget, alle Bauwerke ab Runde 1
 var _menue: Startmenue
 var tutorial: Tutorial = null       # läuft gerade das Tutorial (Sonde 7)? Fragt beim Start des normalen Spiels
+var schlussbild: Schlussbild        # 27.11.: Schlussbild, Endtafeln, Export, Revanche (scripts/schlussbild.gd)
+var wurf_schleuder: WurfSchleuder            # 27.11.: Wurf-Schleuder der Myriaden (scripts/wurf_schleuder.gd)
+var energieschild: Energieschild    # 27.11.: Energieschild der Batterie (scripts/energieschild.gd)
+var mg_stellung: MgStellung        # 27.11.: MG-Stellung (scripts/mg_stellung.gd)
 var turmfeuer: Turmfeuer            # 27.11.: Feuer der Türme, Magnete, Batterien (scripts/turmfeuer.gd)
 var partie_start: PartieStart       # 27.11.: Aufbau zu Spielbeginn (scripts/partie_start.gd)
 var phantom_partie: PhantomPartie   # 27.11.: Phantom-Modus – Zustand und Ablauf (scripts/phantom_partie.gd)
@@ -91,11 +95,6 @@ var _durchgang := 0                 # letzte Runde: der wievielte Durchgang der 
 var _wurf_nahe := Vector2.INF       # der nächste Wurf landet hier in der Nähe (Zange am Belagerungsturm)
 var _abgesetzt: Dictionary = {}     # Belagerungsturm -> so viele Myr-Drohnen hat er schon abgesetzt
 var _wurf_aktiv: Array = []         # der Trupp, der gerade fliegt (Rest)
-var _wurf_takt := 0.0
-var _wurf_bau: Zonenbau
-var _wurf_landung := Karte.KEINE
-var _wurf_ziel := 0
-var _wurf_trupp: Array = []
 var _wurf_sofort := false           # ein Belagerungsturm hat angedockt: der nächste Wurf fliegt sofort ...
 var _wurf_meiden := Vector2.INF     # ... und weit weg von ihm
 var variante := 0                   # ab Werte.WELLEN_VARIANTEN_AB: welche der zwei Wellen-Varianten kommt
@@ -187,6 +186,18 @@ func _ready() -> void:
 	turmfeuer = Turmfeuer.new()   # 27.11.: Turmfeuer als eigener Knoten
 	turmfeuer.richte_ein(self)
 	add_child(turmfeuer)
+	mg_stellung = MgStellung.new()   # 27.11.: MG-Stellung als eigener Knoten
+	mg_stellung.richte_ein(self)
+	add_child(mg_stellung)
+	energieschild = Energieschild.new()   # 27.11.: Energieschild als eigener Knoten
+	energieschild.richte_ein(self)
+	add_child(energieschild)
+	wurf_schleuder = WurfSchleuder.new()   # 27.11.: Würfe als eigener Knoten
+	wurf_schleuder.richte_ein(self)
+	add_child(wurf_schleuder)
+	schlussbild = Schlussbild.new()   # 27.11.: Schlussbild als eigener Knoten
+	schlussbild.spiel = self
+	add_child(schlussbild)
 	Engine.time_scale = Werte.SPIELTEMPO
 	_aktualisiere_zone()
 	karte.cp_aktiv = Werte.plan_runde(welle) >= Werte.CHECKPOINTS_AB_WELLE
@@ -384,7 +395,7 @@ func _setze_stand(stand: Dictionary) -> void:
 		if int(b.get("stufe", 0)) > 0:
 			karte.fabrik_stufe[z] = int(b["stufe"])
 		if b.has("schild") and (b["schild"] as Array).size() >= 4:   # alte Aufnahmen (ein Schildfeld) fallen weg
-			_lege_schild(z, Vector2i(int(b["schild"][0]), int(b["schild"][1])), Vector2i(int(b["schild"][2]), int(b["schild"][3])))
+			energieschild.lege_schild(z, Vector2i(int(b["schild"][0]), int(b["schild"][1])), Vector2i(int(b["schild"][2]), int(b["schild"][3])))
 	karte.repariere_alles()
 	karte.aktualisiere_pfad()
 
@@ -822,46 +833,6 @@ func _online_hinweis_text(text: String) -> void:
 
 # ------------------------------------------------------------ Schlussbild
 
-## Schlussbild mit Knöpfen: Neustart, Startmenü und – nach einem Sieg im normalen Spiel – der Wechsel in den Angriffsmodus.
-func _zeige_ende(text: String, schrift: int = 36, mit_angriff: bool = false) -> void:
-	phase = Phase.ENDE
-	_ende_text.add_theme_font_size_override("font_size", schrift)
-	_ende_text.text = text
-	for k in _ende_knoepfe.get_children():
-		k.queue_free()
-	_ende_knopf("Nochmal angreifen" if phantom_modus == "angriff" else "Neustart", _neustart)
-	_ende_knopf("Startmenü", _zum_menue)
-	if mit_angriff:
-		var b := _ende_knopf("⚔  In die Offensive", _frage_angriff)
-		b.custom_minimum_size = Vector2(330, 64)
-		b.add_theme_font_size_override("font_size", 24)
-		b.add_theme_color_override("font_color", Color("ffe9a8"))
-		var kasten := StyleBoxFlat.new()
-		kasten.bg_color = Color("5a1f1f")
-		kasten.border_color = Color("ffb347")
-		kasten.set_border_width_all(3)
-		kasten.set_corner_radius_all(6)
-		var hell: StyleBoxFlat = kasten.duplicate()
-		hell.bg_color = Color("7d2a2a")
-		b.add_theme_stylebox_override("normal", kasten)
-		b.add_theme_stylebox_override("hover", hell)
-		b.add_theme_stylebox_override("pressed", hell)
-		# langsames Pulsieren, damit die Option ins Auge fällt
-		var puls := create_tween().set_loops()
-		puls.tween_property(b, "modulate", Color(1.25, 1.15, 1.0), 0.8)
-		puls.tween_property(b, "modulate", Color(1, 1, 1), 0.8)
-	# Zweite Reihe: das Phantom-Protokoll dieses Laufs zum Weitergeben
-	for k in _export_knoepfe.get_children():
-		k.queue_free()
-	if _export_text != "":
-		var b1 := _ende_knopf("⬆  Phantom-Protokoll hochladen", _export_datei, _export_knoepfe)
-		b1.custom_minimum_size = Vector2(340, 44)
-		b1.add_theme_font_size_override("font_size", 17)
-		b1.add_theme_color_override("font_color", Color("ffe9a8"))
-	_export_hinweis.text = ("Wird online hochgeladen …" if Online.aktiv() else "Dein Lauf als Datei: herunterladen und an Paul schicken – dann wird er zum Phantom für andere Spieler.") if _export_text != "" else ""
-	_ende.visible = true
-
-
 const _F_LEUCHT := Color("7fe0ff")
 const _F_TEXT := Color("e6edf3")
 const _F_GOLD := Color("ffd34d")
@@ -870,168 +841,10 @@ const _F_KUPFER := Color("e08a4f")
 const _F_KUPFER_HELL := Color("ffb070")
 
 
-## Endtafel zeigen (18.11.): Spiel steht, das alte Schlussbild bleibt verborgen.
-func _zeige_tafel(conf: Dictionary) -> void:
-	phase = Phase.ENDE
-	_ende.visible = false
-	_tafel.gesperrt = func() -> bool: return _bestaetigung.visible
-	_tafel.zeige(conf)
-
-
-## Kasten „Phantom-Protokoll“ für die Endtafel: Hinweis zum Hochladen (ändert sich, sobald online fertig) und Knopf.
-func _protokoll_kasten(titel: String, sonst: String) -> Dictionary:
-	_export_hinweis.text = ("Wird online hochgeladen …" if Online.aktiv() else "Dein Lauf als Datei: herunterladen und an Paul schicken – dann wird er zum Phantom für andere Spieler.") if _export_text != "" else sonst
-	var k := {"titel": titel, "farbe": _F_LEUCHT, "text_fn": func() -> String: return _export_hinweis.text}
-	if _export_text != "":
-		k["knopf"] = ["Hochladen", _export_datei]
-	return k
-
-
 var _phantom_neu := false   # 21.11.: dieser Sieg hat den Phantom-Modus freigeschaltet
 
-
-## 18.11.: Siegbildschirm statt Text auf schwarzem Grund.
-func _zeige_sieg(info: Dictionary, mit_angriff: bool) -> void:
-	var k: Array = []
-	if mit_angriff:
-		k.append(["In die Offensive", _frage_angriff, _F_KUPFER_HELL])
-	if phantom_modus == "verteidigung":
-		k.append_array(_revanche_knoepfe(_F_LEUCHT))   # 25.11.: „Neustart“ hieße hier dasselbe Phantom
-	else:
-		k.append(["Neustart", _neustart, _F_LEUCHT])
-		k.append(["Startmenü", _zum_menue, _F_TEXT])
-	var conf := {
-		"kicker": ("RUNDE %d  ·  GEGENANGRIFF" % int(info["welle"])) if Werte.ziel() == "gegenangriff" else ("RUNDE %d  ·  %s" % [int(info["welle"]), Werte.ziel_name(Werte.ziel()).to_upper()]), "titel": "SIEG", "titel_farbe": _F_GOLD, "rahmen": _F_GOLD,
-		"untertitel": "Das HQ der Myriaden ist zerstört." if Werte.ziel() == "gegenangriff" else "Alle Runden überstanden – die Basis steht.", "effekt": "funken",   # 18.11.: Spielziel
-		"kacheln": [
-			{"name": "RUNDEN", "zahl": info["welle"], "max": info["welle"], "farbe": _F_LEUCHT},
-			{"name": "LEBEN", "zahl": info["leben"], "max": info["max_leben"], "farbe": _F_ROT, "symbol": "herz"},
-			{"name": "BESIEGT", "zahl": info["besiegt"], "farbe": _F_KUPFER},
-			{"name": "KAMPFZEIT", "zahl": info["sekunden"], "zeit": true, "farbe": _F_TEXT}],
-		"kaesten": [_protokoll_kasten("DEIN BAU IST JETZT EIN PHANTOM", "")] if info["phantom"] else [],
-		"zeilen": [str(info["wertung"])] if str(info["wertung"]) != "" else [],
-		"knoepfe": k,
-	}
-	if _phantom_neu:
-		(conf["zeilen"] as Array).append("Phantom-Modus freigeschaltet")   # 21.11. (Paul)
-	if patt:   # 25.11.
-		conf["titel"] = tr("RUNDE 20 GEHALTEN")
-		conf["untertitel"] = tr("%d Sekunden lang hat sich nichts mehr bewegt.") % int(Phantom.PATT_SEK)
-		(conf["zeilen"] as Array).push_front(tr("Patt – Verteidigung hat gehalten"))
-	if phantom_modus == "verteidigung":
-		var elo := _elo_platz("verteidigung")
-		if not elo.is_empty():
-			conf["elo"] = elo
-	elif info["phantom"] and not bool(Profil.einstellung("pe_comic", false)):
-		# 23.11. (Einführung B): beim ersten Phantom-Bau ein Mini-Comic – was jetzt mit dem Bau geschieht
-		Profil.setze_einstellung("pe_comic", true)
-		conf["comic"] = [["wall", "Dein Bau", _F_LEUCHT], ["panzer", "Andere greifen an", _F_KUPFER_HELL], ["buch", "Bericht für dich", _F_GOLD]]
-	_zeige_tafel(conf)
-
-
-## Sprüche der Myriaden und Tipps von Sonde 7 zur Niederlage, je nach dem Gegnertyp, der am häufigsten durchkam.
-const _SPRUECHE := {
-	"hund": ["Wuff. Das heißt auf Myriadisch: Danke für die offene Tür.", "Die Hunde lassen ausrichten: Eure Basis riecht jetzt nach uns."],
-	"fahne": ["Unsere Fahne weht jetzt über eurer Basis. Steht ihr ausgezeichnet.", "Wir waren einfach schneller. Die Fahne hat's gemacht."],
-	"sphaere": ["Battlesphären melden: Ziel erreicht. Euer Kaffee war leider kalt.", "Wir haben aus sicherer Entfernung zugesehen. Sehr unterhaltsam."],
-	"sprenger": ["Eure Mauern waren wirklich hübsch. Waren.", "Kleiner Knall, große Wirkung. Danke fürs Zusammenstehen."],
-	"schild": ["Von vorn, wie immer. Ihr hättet es mal von der Seite versuchen sollen.", "Klopf, klopf. Wer ist da? Ein Schild. Ein sehr großer Schild."],
-	"schwarm": ["Erst waren wir einer. Dann drei. Dann waren wir überall.", "Ihr habt den Schwarmgeist besiegt. Seine Drohnen fanden das lustig."],
-	"enterer": ["Erst waren wir einer. Dann drei. Dann waren wir überall.", "Myr-Drohnen sind klein. Aber sie sind viele. Und sie haben Hunger."],
-	"belagerung": ["Danke für die schönen Wälle. Wir haben angedockt und es uns gemütlich gemacht.", "Ein Turm, ein Plan, eine offene Basis."],
-	"rauch": ["Habt ihr uns gesehen? Nein? Genau das war der Plan.", "Ein bisschen Nebel, und schon zielt keiner mehr."],
-	"sani": ["Wir sind zäher, als ihr dachtet. Unser Sanitäter auch.", "Jeder Kratzer geheilt. Jeder Durchbruch geschafft."],
-}
-const _SPRUCH_SONST := "Die Myriaden danken für eure Gastfreundschaft. Bis zur nächsten Partie!"
-const _TIPPS := {
-	"hund": "Rudel kommen schnell und in Massen: Plasmawerfer treffen die ganze Gruppe, ein Lanzenturm im langen Gang trifft alle in der Linie.",
-	"fahne": "Fahnenträger zuerst ausschalten: Fällt die Fahne, wird der Trupp wieder langsam. Ein Frostturm bremst den ganzen Sturm.",
-	"sphaere": "Battlesphären schießen auf Stellungen: Scharfschützen oder eine Batterie holen sie aus der Distanz.",
-	"sprenger": "Sprenger stehen 1,7 s still, bevor es knallt: Scharfschützen an die Abkürzungen. Panzerung fängt die erste Sprengung ab.",
-	"schild": "Schildträger halten nur von vorn: Knickt der Weg an deinen Schützen vorbei ab, trifft alles von der Seite voll.",
-	"schwarm": "Schwarmgeister zerfallen in drei Drohnen: Flächenschaden hinter der Stelle, wo sie fallen, etwa ein Brandfeld.",
-	"enterer": "Myr-Drohnen laufen auf Wällen: ein Heilturm mit Instandsetzung und Bodentruppen in der Nähe der Türme helfen.",
-	"belagerung": "Belagerungstürme docken am ersten Wall an: Dort lohnen Schwere Munition oder eine Lanze.",
-	"rauch": "Gegen Rauch: Peilsender am Funkturm oder Scharfschützen ab Stufe 2 (Klarsicht). Türme schießen sowieso weiter.",
-	"sani": "Sanitäter heilen alle um sich: Mit Zielmarkierung oder Durchschuss fällt er zuerst.",
-}
-const _TIPP_SONST := "Ein Blick in die Schadensliste [Tab] zeigt, welche Fabrik kaum getroffen hat. Dort lohnt sich ein Umbau."
-
-
-## 18.11.: Niederlage – mit Augenzwinkern: abgefangener Funkspruch der Myriaden und ein Tipp von Sonde 7.
-func _zeige_niederlage(vw: String, rekord_vorher: int, besiegt: int) -> void:
-	var meiste := ""
-	for typ: String in _durch_typen:
-		if meiste == "" or int(_durch_typen[typ]) > int(_durch_typen[meiste]):
-			meiste = typ
-	var sprueche: Array = _SPRUECHE.get(meiste, [_SPRUCH_SONST])
-	var spruch: String = sprueche[randi() % sprueche.size()]
-	if endkampf:
-		spruch = "So nah an unserem HQ. Wir haben gezittert. Kurz."
-	var sek := 0.0
-	for r: Dictionary in _protokoll.get("runden", []):
-		sek += float((r.get("ergebnis", {}) as Dictionary).get("sekunden", 0.0))
-	var durch := {"name": "MEISTE DURCH", "text": "–", "farbe": _F_KUPFER}
-	if meiste != "":
-		durch["text"] = "%s ×%d" % [str(Werte.GEGNER[meiste]["kurz"]), int(_durch_typen[meiste])]
-	var zeilen: Array = []
-	if welle > rekord_vorher and rekord_vorher > 0:
-		zeilen.append("Neuer Rekord: Runde %d (vorher %d)" % [welle, rekord_vorher])
-	if vw != "":
-		zeilen.append(vw)
-	var untertitel := ["Die Myriaden sind durch.", "Das war knapp. Also, für die Myriaden nicht.", "Die Basis macht jetzt eine kurze Pause.", "Zurück auf Anfang – diesmal mit Plan."]
-	if not Profil.phantom_frei() and phantom_modus == "" and welle >= 10 and not brakk_modus and not sandbox and herausforderung == "" and Werte.ist_hauptkarte():
-		zeilen.append("Hältst du Runde 20, wird dein Bau zum Phantom für andere.")   # 23.11. (Einführung A)
-	var tafel_conf := {
-		"kicker": ("RUNDE %d · ENDLOS" % welle) if Werte.ziel() == "endlos" else ("RUNDE %d VON %d" % [welle, Werte.LETZTE_RUNDE]), "titel": "BASIS GEFALLEN" if leben <= 0 else "CHECKPOINTS VERLOREN", "titel_farbe": _F_ROT, "rahmen": _F_ROT,
-		"untertitel": untertitel[randi() % untertitel.size()], "effekt": "asche", "glitch": true, "wackeln": true,
-		"kacheln": [
-			{"name": "ERREICHT", "zahl": welle, "max": Werte.LETZTE_RUNDE, "farbe": _F_ROT} if Werte.ziel() != "endlos" else {"name": "ERREICHT", "zahl": welle, "farbe": _F_ROT},
-			{"name": "BESIEGT", "zahl": besiegt, "farbe": _F_KUPFER},
-			durch,
-			{"name": "KAMPFZEIT", "zahl": sek, "zeit": true, "farbe": _F_TEXT}],
-		"kaesten": [
-			{"titel": "ABGEFANGENER FUNKSPRUCH DER MYRIADEN", "farbe": _F_KUPFER, "text": "„%s“" % spruch, "tippen": true},
-			{"titel": "SONDE 7 RÄT", "farbe": _F_LEUCHT, "text": str(_TIPPS.get(meiste, _TIPP_SONST))}],
-		"zeilen": zeilen,
-		"knoepfe": _revanche_knoepfe(_F_LEUCHT) if phantom_modus == "verteidigung" else [["Revanche!", _neustart, _F_LEUCHT], ["Startmenü", _zum_menue, _F_TEXT]],
-	}
-	if phantom_modus == "verteidigung":
-		var elo := _elo_platz("verteidigung")
-		if not elo.is_empty():
-			tafel_conf["elo"] = elo
-	_zeige_tafel(tafel_conf)
-
-
-## Merkt sich die Datei dieser Partie fürs Schlussbild (Herunterladen im Browser).
-func _merke_export(daten: Dictionary, art: String) -> void:
-	_export_text = JSON.stringify(daten, "\t")
-	_export_name = "%s-%s.json" % [art, Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "-")]
-
-
-func _export_datei() -> void:
-	if OS.has_feature("web"):
-		JavaScriptBridge.download_buffer(_export_text.to_utf8_buffer(), _export_name, "application/json")
-		_export_hinweis.text = "Heruntergeladen: %s – diese Datei an Paul schicken." % _export_name
-	else:
-		# Am PC liegt die Datei schon im Ordner „Phantom Dateien“: den Ordner zeigen
-		var art := "angriff" if _export_name.begins_with("angriff") else "verteidigung"
-		for o: String in Phantom.ordner(art):
-			if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(o)):
-				OS.shell_open(ProjectSettings.globalize_path(o))
-				_export_hinweis.text = "Die Datei liegt im geöffneten Ordner."
-				return
-
-
-func _ende_knopf(text: String, aktion: Callable, eltern: Control = null) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(230, 52)
-	b.add_theme_font_size_override("font_size", 20)
-	b.pressed.connect(aktion)
-	(eltern if eltern != null else _ende_knoepfe).add_child(b)
-	return b
+# 27.11. (Knoten-Umbau Schritt 4): Schlussbild, Endtafeln (Sieg, Niederlage), Export und Revanche wohnen in
+# scripts/schlussbild.gd (`schlussbild`). Farben _F_* bleiben hier (nutzen auch Phantom-Partie und HUD-Teile).
 
 
 ## Neustart ohne Umweg über das Menü. Die Partie ist da schon gespeichert (partien/, nach einem Sieg auch als Phantom).
@@ -1044,7 +857,7 @@ func _neustart() -> void:
 	if not sandbox and phantom_modus != "angriff":
 		loesche_zwischenstand()   # 18.11.
 	if phantom_modus != "":
-		naechster_start = _revanche_start()   # 25.11.: dasselbe Phantom noch einmal ("" = verbraucht, dann ins Menü)
+		naechster_start = schlussbild.revanche_start()   # 25.11.: dasselbe Phantom noch einmal ("" = verbraucht, dann ins Menü)
 	else:
 		naechster_start = "brakk" if brakk_modus and Werte.modus() != "rogue" else "normal"   # 18.11.: Neustart bleibt im Brakk-Mode; 20.11. (Paul): Rogue bleibt Rogue (über das Regelpaket der Karte)
 	Ladebild.lade(get_tree())   # 17.11.: Ladebild statt eingefrorenem Bild
@@ -1053,38 +866,6 @@ func _neustart() -> void:
 # ------------------------------------------------------------ Revanche (25.11.)
 
 var _gegner_name := ""   # Phantom-Modus: Besitzer des Phantoms, mit dem dieser Lauf begann
-
-
-func _revanche_pfad() -> String:
-	return phantom_partie.phantom_pfad if phantom_modus == "angriff" else phantom_partie.angriff_pfad
-
-
-## Knöpfe der Endtafel: Revanche gegen dasselbe Phantom und Startmenü; verbraucht steht die Revanche grau dahinter.
-func _revanche_knoepfe(farbe: Color) -> Array:
-	var menue := ["Startmenü", _zum_menue, _F_TEXT]
-	if not Phantom.revanche_frei(_revanche_pfad()):
-		return [menue, [tr("Revanche verbraucht"), func(): pass, Color("6b7380")]]
-	var name := _gegner_name if _gegner_name != "" and _gegner_name != "?" else "Phantom"
-	return [[tr("Revanche gegen %s") % name, _neustart, farbe], menue]
-
-
-## Merkt die Revanche vor: dasselbe Phantom, beim Angriff mit derselben Ersatz-Reihenfolge, soweit sie bekannt ist.
-func _revanche_start() -> String:
-	var pfad := _revanche_pfad()
-	if pfad == "" or not Phantom.revanche_frei(pfad):
-		return ""
-	Phantom.revanche_zaehlen(pfad)
-	if phantom_modus != "angriff":
-		return "verteidigt:" + pfad
-	# erst die Verteidigungen, die schon dran waren (in ihrer Reihenfolge), dann die noch wartenden
-	var folge: Array = []
-	var bekannt: Array = phantom_partie.angriff_log.map(func(r: Dictionary) -> String: return str(r.get("gegen_pfad", "")))
-	bekannt.append(phantom_partie.aktiv_pfad)
-	for p: String in bekannt + phantom_partie.ersatz:
-		if p != "" and p != pfad and not folge.has(p):
-			folge.append(p)
-	Online.ersatz_pfade = folge
-	return "angriff:" + pfad
 
 
 ## Knopf oben rechts: Partie abbrechen. Der erste Klick fragt nach, der zweite (innerhalb weniger Sekunden) geht ins Hauptmenü.
@@ -1903,7 +1684,7 @@ func _process(delta: float) -> void:
 	if _hud == null or not _hud.pausiert():
 		_patt_tick(minf(delta / maxf(Engine.time_scale, 0.01), 0.5))   # 25.11.: Echtzeit; ein Hänger zählt höchstens 0,5 s
 	_aktualisiere_hud(delta)
-	_pflege_schilde()
+	energieschild.pflege()
 	# 22.11.: Brakk-Mode – doppelt so lange Schritte, und ein langsames Bild holt höchstens BRAKK_MAX_SCHRITTE nach
 	Werte.sim_mal = Werte.BRAKK_SIM_MAL if brakk_modus else 1
 	Engine.max_physics_steps_per_frame = Werte.BRAKK_MAX_SCHRITTE if brakk_modus else 8
@@ -1920,10 +1701,33 @@ func _physics_process(_takt: float) -> void:
 	schuss_herkunft = Vector2.INF
 	schadensquelle = ""
 	schuetze = null
-	_pflege_schilde()
+	energieschild.pflege()
 	_kampf_tick += 1
 	_abstand_halten(delta)
 
+	_spawn_tick(delta)
+	wurf_schleuder.tick(delta)
+	_cp_log()
+	_ausfaelle_tick(delta)
+	_fabriken_tick(delta)
+
+	_kampf_sek += delta
+	_braende_wirken(delta)
+	turmfeuer.tick(delta)
+	mg_stellung.huelsen_wirken(delta)   # 20.11. (Paul): MG-Stellung, Hülsenregen
+	_mg_besetzt_zeigen()
+	turmfeuer.magnete(delta)
+	turmfeuer.batterien(delta)
+	_checkpoints_halten(delta)
+	_minen_pruefen()
+
+	_sprengziele_zeigen()
+	_welle_zu_ende(delta)
+
+
+## 27.11. (Knoten-Umbau Schritt 5): Teile von _physics_process – gleiche Reihenfolge wie vorher.
+## Gegner aus der Wellenschlange: Trupp für Trupp an derselben Stelle, Staffel und Pausen nach Plan.
+func _spawn_tick(delta: float) -> void:
 	if endkampf and _schlange.is_empty():
 		# letzte Runde: nach kurzer Pause beginnt dieselbe Reihe Trupps von vorn
 		_lade_durchgang()
@@ -1982,12 +1786,19 @@ func _physics_process(_takt: float) -> void:
 					_spawn_in = maxf(_spawn_in * BRAKK_PAUSE_MAL, 0.4)   # 18.11. (Paul): Brakk-Mode – kürzere Pausen
 			else:
 				_spawn_in += _welle["abstand"]
-	_wurf_tick(delta)
+
+
+## Testausgabe der Checkpoint-Lage (nur mit TD_CP_LOG).
+func _cp_log() -> void:
 	if OS.get_environment("TD_CP_LOG") != "" and welle == int(OS.get_environment("TD_CP_LOG")) and Engine.get_process_frames() % 240 == 0:
 		var zeilen := []
 		for e in einheiten:
 			zeilen.append("%s%s@%s->%s%s" % [e.daten["name"].substr(0, 4), ["Z", "P", "B", "I"][e.zustand], karte.zelle_bei(e.position), e._marschziel, "*" if ist_einnehmer(e) else ""])
 		print("CP t=%.0f feind=%s ruhig=%s gegner=%d | %s" % [_kampf_sek, karte.cp_feind, karte.checkpoints.map(func(c): return ist_ruhig(karte.mitte(c), Werte.CHECKPOINT_RUHE * Werte.ZELLE)), gegner.size(), " ".join(zeilen)])
+
+
+## Zerschossene Bauten: nach ihrer Ausfallzeit wieder instand.
+func _ausfaelle_tick(delta: float) -> void:
 	for z: Vector2i in _ausfall_zeit.keys():
 		_ausfall_zeit[z] = float(_ausfall_zeit[z]) - delta
 		if _ausfall_zeit[z] <= 0.0 or not karte.ausgefallen.has(z):
@@ -1995,6 +1806,9 @@ func _physics_process(_takt: float) -> void:
 			if karte.ausgefallen.has(z):
 				repariere(z, true)
 
+
+## Fabriken produzieren Truppen.
+func _fabriken_tick(delta: float) -> void:
 	for z: Vector2i in fabriken:
 		var f: Dictionary = fabriken[z]
 		if karte.ausgefallen.has(z):
@@ -2021,23 +1835,18 @@ func _physics_process(_takt: float) -> void:
 			einheiten.append(e)
 			(f["einheiten"] as Array).append(e)
 
-	_kampf_sek += delta
-	_braende_wirken(delta)
-	turmfeuer.tick(delta)
-	_mg_huelsen_wirken(delta)   # 20.11. (Paul): MG-Stellung, Hülsenregen
-	_mg_besetzt_zeigen()
-	turmfeuer.magnete(delta)
-	turmfeuer.batterien(delta)
-	_checkpoints_halten(delta)
-	_minen_pruefen()
 
-	# Sprenger sichtbar machen: ihr Ziel blinkt während der Runde
+## Sprenger sichtbar machen: ihr Ziel blinkt während der Runde.
+func _sprengziele_zeigen() -> void:
 	var ziele: Array[Vector2i] = []
 	for g in gegner:
 		if g.rolle == "sprenger" and g.sprengt() != Karte.KEINE:
 			ziele.append(g.sprengt())
 	karte.sprengziele_aktiv = ziele
 
+
+## Kein Gegner mehr da: Nachspiel für den Checkpoint, dann ist die Welle geschafft.
+func _welle_zu_ende(delta: float) -> void:
 	if not endkampf and _schlange.is_empty() and _wurf_schlange.is_empty() and _wurf_aktiv.is_empty() and gegner.is_empty() and _im_flug == 0 and phase == Phase.KAMPF:
 		# Kein Gegner mehr da: Die zugeteilte Truppe bekommt noch etwas Zeit, einen verlorenen Checkpoint zurückzuholen.
 		if _nachspiel < Werte.NACHSPIEL_MAX and _truppe_kann_checkpoint_holen():
@@ -2051,6 +1860,17 @@ func _physics_process(_takt: float) -> void:
 				zeilen.append("%s%s@%s->%s%s L%d" % [e.daten["name"].substr(0, 4), ["Z", "P", "B", "I"][e.zustand], karte.zelle_bei(e.position), e._marschziel, "*" if ist_einnehmer(e) else "", e.leben])
 			print("ENDE R%d nachspiel=%.1f feind=%s kann=%s | %s" % [welle, _nachspiel, karte.cp_feind, _truppe_kann_checkpoint_holen(), " ".join(zeilen)])
 		_welle_geschafft()
+
+
+## 27.11. (Knoten-Umbau Paket C): Würfe wohnen in scripts/wurf_schleuder.gd (`wurf_schleuder`). Diese zwei
+## Weiterleitungen bleiben, weil das Laufband sie über `spiel` aufruft.
+func wurf_standorte() -> Array:
+	return wurf_schleuder.standorte()
+
+
+func waehle_wurfziel(trupp: Dictionary) -> void:
+	wurf_schleuder.waehle_ziel(trupp)
+
 
 
 ## Gibt es einen vom Gegner gehaltenen Checkpoint, zu dem eine freie Bodentruppe einen Weg hat?
@@ -2652,7 +2472,7 @@ func starte_welle(erzwingen: bool = false) -> void:
 	_reparaturen.clear()
 	_wurf_nahe = Vector2.INF
 	if (phantom_modus != "" or Werte.KARTE_WELLEN.has(welle)) and not (_welle["wurf"] as Array).is_empty():
-		_sorge_fuer_wurf_schleuder()   # 18.11.: auch für eigene Wellen eines Szenarios
+		wurf_schleuder.sorge_fuer_schleuder()   # 18.11.: auch für eigene Wellen eines Szenarios
 	_lade_durchgang()
 	_wurf_aktiv = []
 	_wurf_sofort = false
@@ -2673,66 +2493,6 @@ func starte_welle(erzwingen: bool = false) -> void:
 	for z: Vector2i in fabriken:
 		fabriken[z]["timer"] = Werte.PRODUKTION_SEK - 0.5   # erste Einheit kommt sofort
 	Ton.spiele(self, "alert")
-
-
-## Phantom-Modus: Der Plan enthält einen Wurf, aber die Wurf-Schleuder steht noch nicht (vor Runde 10) – dann kommt sie jetzt.
-func _sorge_fuer_wurf_schleuder() -> void:
-	for b in zonenbauten:
-		if b.art == "wurf":
-			return
-	for nr in Werte.ZONENBAUTEN.size():
-		var s: Dictionary = Werte.ZONENBAUTEN[nr]
-		if s["art"] == "wurf" and not _zone_gebaut.has(nr):
-			_zone_gebaut[nr] = true
-			_neuer_zonenbau("wurf", s["zelle"])
-			return
-
-
-## Felder, von denen aus geworfen wird: die Wurf-Schleudern, die stehen – sonst der Platz, an dem die erste entsteht.
-func wurf_standorte() -> Array:
-	var felder: Array = []
-	for b in zonenbauten:
-		if b.art == "wurf":
-			felder.append(b.zelle)
-	if felder.is_empty():
-		for s: Dictionary in Werte.ZONENBAUTEN:
-			if s["art"] == "wurf":
-				felder.append(s["zelle"])
-				break
-	return felder
-
-
-## Angriff: Der nächste Linksklick auf die Karte setzt das Landefeld dieses Wurf-Trupps.
-func waehle_wurfziel(trupp: Dictionary) -> void:
-	if szenario_editor != null:
-		melde("Im Szenario sucht die Wurf-Schleuder ihr Ziel selbst.", 4.0)   # 18.11.
-		return
-	_wurfziel_fuer = trupp
-	_laufband.visible = false
-	melde("Wurfziel: Klick auf ein freies Feld im orangen Kreis. Rechtsklick oder [Esc] bricht ab.", 8.0)
-
-
-func _setze_wurfziel(z: Vector2i) -> void:
-	var nah := false
-	for s: Vector2i in wurf_standorte():
-		if Vector2(z - s).length() <= float(Werte.WURF["weit"]):
-			nah = true
-	# Im Nebel verrät das Ziel nichts: Steht dort etwas, landen die Geworfenen daneben.
-	if not karte.in_karte(z) or z.x < Werte.ZONE_SPALTEN or karte.ist_basis(z) or (nebel.offen(z) and not karte.ist_frei(z)):
-		melde("Dort kann nichts landen: Das Feld muss frei sein und außerhalb deiner Zone liegen.", 4.0)
-		return
-	if not nah:
-		melde("Zu weit: Die Wurf-Schleuder reicht nur bis zum orangen Kreis.", 4.0)
-		return
-	_wurfziel_fuer["ziel"] = [z.x, z.y]
-	_wurfziel_fuer.erase("wenn")
-	_beende_wurfziel()
-
-
-func _beende_wurfziel() -> void:
-	_wurfziel_fuer = {}
-	_laufband.visible = true
-	_laufband._neu()
 
 
 ## 25.11. (Paul, N7): Faktor auf die Pausen im Gegenangriff – wächst je Durchgang um ENDKAMPF_PAUSE_ZUWACHS
@@ -3525,7 +3285,7 @@ func _gewonnen() -> void:
 		var vpfad := "" if daten.is_empty() else Phantom.speichere("verteidigung", daten)
 		als_phantom = vpfad != ""
 		if als_phantom:
-			_merke_export(daten, "verteidigung")
+			schlussbild.merke_export(daten, "verteidigung")
 			Profil.phantom_erstellt()
 			erfolg("spiegelbild")   # 18.11.
 			_verteidigung_online.call_deferred(vpfad, daten)
@@ -3544,7 +3304,7 @@ func _gewonnen() -> void:
 			Profil.setze_einstellung("rogue_frei", true)   # 20.11. (Paul): Classic gewonnen – Rogue ist frei …
 			ego._sieg_bericht["weiter"] = Werte.anfuehrer == "brakk"   # … und Brakk kann gleich weiterspielen (Befehl 24)
 		return
-	_zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
+	schlussbild.zeige_sieg({"welle": welle, "leben": leben, "max_leben": Werte.START_LEBEN, "besiegt": besiegt,
 		"sekunden": sek, "phantom": als_phantom, "wertung": vw}, als_phantom)
 
 
@@ -4183,141 +3943,16 @@ func _neuer_gegner(typ: String, zelle: Vector2i, erstes_ziel: int) -> Gegner:
 	return g
 
 
-## Wurf-Schleuder: Trupps zu vier fliegen über die Mauer. Die nächste bereite Schleuder wirft den nächsten Trupp;
-## alle vier landen an derselben Stelle und bleiben als Trupp zusammen.
-func _wurf_tick(delta: float) -> void:
-	var schleudern: Array = []
-	for b in zonenbauten:
-		if b.art == "wurf":
-			schleudern.append(b)
-	if schleudern.is_empty():
-		# keine Wurf-Schleuder (mehr): die restlichen Wurf-Trupps laufen zu Fuß
-		for eintrag: Dictionary in _wurf_schlange:
-			_schlange.append(eintrag["typen"])
-			_pausen.append(0.0)
-		_wurf_schlange = []
-		if not _wurf_aktiv.is_empty():
-			_schlange.append(_wurf_aktiv)
-			_pausen.append(0.0)
-			_wurf_aktiv = []
-		return
-	if _wurf_aktiv.is_empty():
-		if _wurf_schlange.is_empty():
-			return
-		# Würfe, die auf einen Belagerungsturm warten, obwohl keiner mehr kommt: normal werfen
-		var turm_kommt := false
-		for typen: Array in _schlange:
-			if typen.has("belagerung"):
-				turm_kommt = true
-		for g in gegner:
-			if g.rolle == "belagerung" and not g.vorstoss:   # 25.11. (N6): wer vorrückt, dockt nicht mehr an
-				turm_kommt = true
-		# der nächste Wurf, der dran ist: sein Auslöser ist erfüllt und genug Lauf-Trupps sind unterwegs
-		var dran := -1
-		for i in _wurf_schlange.size():
-			var e: Dictionary = _wurf_schlange[i]
-			if e["wenn"] != "" and not turm_kommt:
-				e["wenn"] = ""
-			if e["wenn"] == "" and (int(e["nach"]) <= _trupp_nr or _schlange.is_empty()) and _kampf_sek - _durchgang_sek >= float(e.get("zeit", 0.0)):
-				dran = i
-				break
-		if dran < 0:
-			return
-		var eilt: bool = _wurf_schlange[dran].get("eilt", false)
-		if not eilt and not _welle.get("wurf_frei", false) and _kampf_sek < float(Werte.WURF["wartet"]) and not endkampf:
-			return   # sie hält sich zurück, bis die eigenen Truppen vorgerückt sind
-		_wurf_bau = null
-		for b: Zonenbau in schleudern:
-			if b.wurfbereit() or (eilt and _wurf_bau == null):
-				_wurf_bau = b
-				if b.wurfbereit():
-					break
-		if _wurf_bau == null:
-			return
-		var eintrag: Dictionary = _wurf_schlange[dran]
-		var ziel := {}
-		if eintrag.has("ziel"):
-			# Der Angreifer hat das Feld gewählt; steht dort inzwischen etwas, landen sie daneben.
-			var gewollt := Vector2i(int(eintrag["ziel"][0]), int(eintrag["ziel"][1]))
-			var feld := gewollt if karte.ist_frei(gewollt) else karte.freier_nachbar(gewollt)
-			if feld != Karte.KEINE:
-				ziel = {"z": feld, "mauer": 0.0}
-		elif eintrag.has("nahe"):
-			var feld := karte.freies_feld_nahe(eintrag["nahe"])
-			if feld != Karte.KEINE:
-				ziel = {"z": feld, "mauer": 0.0}
-		elif eintrag.has("meiden"):
-			ziel = karte.wurf_landefeld(_wurf_bau.zelle, eintrag["meiden"], Werte.WURF_BELAGERUNG_ABSTAND)
-		if ziel.is_empty():
-			ziel = karte.wurf_landefeld(_wurf_bau.zelle)
-		if ziel.is_empty():
-			return
-		_wurf_landung = ziel["z"]
-		# Geworfene stürmen den nächsten Checkpoint, den der Gegner noch nicht hält – nicht die Basis.
-		_wurf_ziel = karte.sturmziel_ab(_wurf_landung)
-		_wurf_bau.hat_geworfen()
-		_wurf_schlange.remove_at(dran)
-		_wurf_aktiv = eintrag["typen"]
-		if OS.get_environment("TD_WURF_LOG") != "":
-			print("WURF R%d t=%.1f  %s -> %s  %s  %s" % [welle, _kampf_sek, _wurf_bau.zelle, _wurf_landung, _wurf_aktiv, "nahe Turm" if eintrag.has("nahe") else ("Zange" if eintrag.has("meiden") else "")])
-		_wurf_trupp = []
-		_wurf_takt = 0.0
-		var dauer: float = Werte.WURF["flugzeit"] + Werte.WURF["abstand"] * _wurf_aktiv.size() + 0.5
-		effekte.warnung(karte.mitte(_wurf_landung), dauer)
-	if not is_instance_valid(_wurf_bau):
-		_schlange.append(_wurf_aktiv)   # Schleuder mitten im Wurf zerstört: der Rest läuft
-		_pausen.append(0.0)
-		_wurf_aktiv = []
-		return
-	_wurf_takt -= delta
-	if _wurf_takt > 0.0:
-		return
-	_wurf_takt = Werte.WURF["abstand"]
-	var typ: String = _wurf_aktiv.pop_front()
-	_im_flug += 1
-	_wurf_bau.ruck()
-	Ton.am_ort(self, "myr-launch", _wurf_bau.position)
-	effekte.wurf(_wurf_bau.position + Vector2(0, -30), karte.mitte(_wurf_landung), Werte.WURF["flugzeit"], _hund_landet.bind(_wurf_landung, _wurf_ziel, _wurf_trupp, typ), "einheit", typ)
-
-
 ## Ein Belagerungsturm hat angedockt: Sieht der Plan dafür einen Wurf vor, fliegt er sofort – weit weg vom Turm (Zange).
 func belagerung_dockt(g: Gegner) -> void:
-	_loese_wurf_aus("dock", {"meiden": g.position})
+	wurf_schleuder.loese_aus("dock", {"meiden": g.position})
 
 
 ## Ein Belagerungsturm hat eine Myr-Drohne abgesetzt. Bei der zweiten fliegt – falls geplant – ein Wurf auf die Verteidiger am Turm.
 func turmtruppe_abgesetzt(turm: Gegner) -> void:
 	_abgesetzt[turm] = int(_abgesetzt.get(turm, 0)) + 1
 	if _abgesetzt[turm] == 2:
-		_loese_wurf_aus("drohnen", {"nahe": turm.position})
-
-
-func _loese_wurf_aus(wenn: String, zusatz: Dictionary) -> void:
-	for i in _wurf_schlange.size():
-		var e: Dictionary = _wurf_schlange[i]
-		if e["wenn"] == wenn:
-			e["wenn"] = ""
-			e["nach"] = 0
-			e["eilt"] = true
-			e.merge(zusatz)
-			_wurf_schlange.remove_at(i)
-			_wurf_schlange.push_front(e)
-			return
-
-
-func _hund_landet(zelle: Vector2i, erstes_ziel: int, rudel: Array, typ: String = "hund") -> void:
-	Ton.am_ort(self, "hit-thud", karte.mitte(zelle))
-	_im_flug -= 1
-	# Wurde inzwischen dort gebaut? Dann daneben landen.
-	var feld := zelle if karte.ist_frei(zelle) else karte.freier_nachbar(zelle)
-	if feld != Karte.KEINE:
-		var g := _neuer_gegner(typ, feld, erstes_ziel)
-		g.geworfen = true
-		g.aufrappeln()   # 16.11.: landet geduckt und richtet sich auf
-		if OS.get_environment("TD_WURF_LOG") != "":
-			print("LANDUNG R%d t=%.1f  %s auf %s, Ziel: %s" % [welle, _kampf_sek, typ, feld, "Basis" if erstes_ziel >= karte.checkpoints.size() else "Checkpoint %d" % (erstes_ziel + 1)])
-		g.trupp = rudel
-		rudel.append(g)
+		wurf_schleuder.loese_aus("drohnen", {"nahe": turm.position})
 
 
 ## Eine Stein-Schleuder zieht auf einen anderen freien Platz in der Zone um.
@@ -4483,7 +4118,7 @@ func _verloren() -> void:
 	for n: int in _profil_kills.values():
 		besiegt += n
 	var vw := _partie_ins_profil(false)
-	_zeige_niederlage(vw, rekord, besiegt)
+	schlussbild.zeige_niederlage(vw, rekord, besiegt)
 	if phantom_modus == "verteidigung":
 		_verteidigung_online.call_deferred("", {})
 
@@ -5089,7 +4724,7 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	if ausbau_moeglich() and karte.ausbau.get(z, Karte.FREI) == Karte.TURM:
 		return werte_turm_auf(z, faehigkeit)
 	if karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG and Werte.mg_stellung():
-		return werte_mg_auf(z, faehigkeit)   # 20.11. (Paul): MG-Stellung (Sonde 7)
+		return mg_stellung.werte_auf(z, faehigkeit)   # 20.11. (Paul): MG-Stellung (Sonde 7)
 	if not ausbau_moeglich() or not fabriken.has(z):
 		return false
 	if karte.paar.has(z):
@@ -5140,7 +4775,7 @@ func werte_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 ## Turm aufwerten: Stufe 2 fest, Stufe 3 mit einer Fähigkeit aus Werte.TURM_STUFE_3.
 func werte_turm_auf(z: Vector2i, faehigkeit: String = "") -> bool:
 	if karte.turm_art.get(z, "") == "pliplop":
-		return _werte_pliplop_auf(z, faehigkeit)   # 20.11. (Paul): PliPlop 3cK
+		return turmfeuer.werte_pliplop_auf(z, faehigkeit)   # 20.11. (Paul): PliPlop 3cK
 	var stufe := int(karte.turm_stufe.get(z, 1))
 	if stufe >= Werte.turm_max_stufe():   # 19.11.: höchste Turmstufe je Anführer (Brakk: 3)
 		return false
@@ -5204,138 +4839,22 @@ func batterie_reichweite(b: Vector2i) -> float:
 
 # ------------------------------------------------------------ Energieschild
 
-## Energieschild (16.11. neu): ein Strahl, gerade von einem Erdwall zum nächsten gezogen. Je länger, desto weniger hält er aus.
-## Danach ziehen (oder zwei Erdwälle nacheinander anklicken) setzt den Schild der Batterie, zu der die Pilotenfabrik `pz` gehört.
+## Energieschild (16.11.): wohnt seit 27.11. (Knoten-Umbau Paket B) in scripts/energieschild.gd (`energieschild`).
+## Diese Weiterleitungen bleiben, weil Fabrikmenü, Bot-API, Replay und Gegner sie über `spiel` aufrufen.
 func waehle_schildfeld(pz: Vector2i) -> void:
-	if phase != Phase.BAU or not karte.paar.has(pz) or int(fabriken[pz].get("stufe", 0)) < 3:
-		return
-	_schild_fuer = karte.paar[pz]
-	_schild_start = Karte.KEINE
-	werkzeug = Karte.FREI
-	_schliesse_fabrikmenue()
-	melde("Energieschild: Von einem Erdwall gerade zum nächsten ziehen. Je länger, desto schwächer. [Esc] bricht ab.", 6.0)
+	energieschild.waehle_schildfeld(pz)
 
 
-## Felder zwischen zwei Erdwällen in einer Reihe oder Spalte (ohne die Wälle selbst).
-func schild_felder(a: Vector2i, e: Vector2i) -> Array:
-	var felder: Array = []
-	if a == e or (a.x != e.x and a.y != e.y):
-		return felder
-	var schritt := Vector2i(signi(e.x - a.x), signi(e.y - a.y))
-	var z := a + schritt
-	while z != e:
-		felder.append(z)
-		z += schritt
-	return felder
-
-
-## Prüft einen Schild von `a` nach `e`. Gibt "" zurück, wenn er so stehen darf, sonst den Grund.
-func schild_grund(a: Vector2i, e: Vector2i) -> String:
-	if not _ist_erdwall(a) or not _ist_erdwall(e):
-		return "Der Schild spannt sich von Erdwall zu Erdwall."
-	if a.x != e.x and a.y != e.y:
-		return "Nur gerade: in einer Reihe oder Spalte."
-	var felder := schild_felder(a, e)
-	if felder.is_empty():
-		return "Zwischen den Erdwällen muss mindestens ein Feld frei sein."
-	for z: Vector2i in felder:
-		if karte.inhalt(z) == Karte.WALL:
-			return "Nur bis zum nächsten Erdwall."
-		if karte.inhalt(z) != Karte.FREI or not karte.ist_frei(z):
-			return "Dazwischen muss alles frei sein."
-		if z.x < Werte.ZONE_SPALTEN:
-			return "Nicht in der gegnerischen Zone."
-	return ""
-
-
-func _ist_erdwall(z: Vector2i) -> bool:
-	return karte.inhalt(z) == Karte.WALL
-
-
-## Setzt den Schild der Batterie `b` von Erdwall `a` nach Erdwall `e`. Gibt "" zurück, wenn es geklappt hat, sonst den Grund.
 func setze_schild(b: Vector2i, a: Vector2i, e: Vector2i) -> String:
-	if batterie_stufe(b) < 3:
-		return "Diese Batterie hat keinen Energieschild."
-	var grund := schild_grund(a, e)
-	if grund != "":
-		return grund
-	var felder := schild_felder(a, e)
-	for anderer: Vector2i in schilde:
-		if anderer != b:
-			for z: Vector2i in felder:
-				if (schilde[anderer]["felder"] as Array).has(z):
-					return "Dort steht schon ein Schild."
-	_lege_schild(b, a, e)
-	_notiere({"a": "schild", "x": a.x, "y": a.y, "x2": e.x, "y2": e.y, "bx": b.x, "by": b.y})
-	return ""
+	return energieschild.setze(b, a, e)
 
 
-func _lege_schild(b: Vector2i, a: Vector2i, e: Vector2i) -> void:
-	var felder := schild_felder(a, e)
-	var voll := Werte.schild_leben(felder.size())
-	schilde[b] = {"a": a, "e": e, "felder": felder, "leben": voll, "max": voll}
-
-
-func _schild_aktiv(b: Vector2i) -> bool:
-	if not schilde.has(b) or karte.inhalt(b) != Karte.BATTERIE:
-		return false
-	var s: Dictionary = schilde[b]
-	return s["leben"] > 0.0 and not karte.ausgefallen.has(b) and _schild_steht(s) \
-		and batterie_stufe(b) >= 3 and karte.besatzung_drin(b) >= int(Werte.BATTERIE["plaetze"])
-
-
-## Stehen beide Erdwälle noch und ist dazwischen alles frei?
-func _schild_steht(s: Dictionary) -> bool:
-	if not _ist_erdwall(s["a"]) or not _ist_erdwall(s["e"]):
-		return false
-	for z: Vector2i in s["felder"]:
-		if karte.inhalt(z) != Karte.FREI:
-			return false
-	return true
-
-
-## Steht ein Gegner an dieser Stelle vor einem aktiven Schild? Gibt die Batterie zurück (oder Karte.KEINE).
 func schild_bei(punkt: Vector2) -> Vector2i:
-	for b: Vector2i in schilde:
-		if _schild_aktiv(b):
-			for z: Vector2i in schilde[b]["felder"]:
-				if karte.mitte(z).distance_to(punkt) <= Werte.ZELLE * 0.62:
-					return b
-	return Karte.KEINE
+	return energieschild.bei(punkt)
 
 
 func schade_schild(b: Vector2i, menge: float) -> void:
-	if not schilde.has(b):
-		return
-	objekt_zaehle(b, "abgefangen", minf(menge, maxf(float(schilde[b]["leben"]), 0.0)))
-	schilde[b]["leben"] = float(schilde[b]["leben"]) - menge
-	if schilde[b]["leben"] <= 0.0:
-		melde("Ein Energieschild ist zusammengebrochen – er lädt sich bis zur nächsten Runde wieder auf.", 4.0)
-
-
-func _pflege_schilde() -> void:
-	var liste: Array = []
-	for b: Vector2i in schilde.keys():
-		if karte.inhalt(b) != Karte.BATTERIE:
-			schilde.erase(b)
-			continue
-		if phase == Phase.BAU:
-			schilde[b]["leben"] = schilde[b]["max"]
-		var s: Dictionary = schilde[b]
-		# In der Bauphase als Vorschau zeigen, in der Welle nur, solange er wirklich steht
-		var aktiv := _schild_aktiv(b) if phase == Phase.KAMPF else _schild_steht(s)
-		liste.append([karte.mitte(s["a"]), karte.mitte(s["e"]), clampf(float(s["leben"]) / float(s["max"]), 0.0, 1.0), aktiv, float(s["max"])])
-	effekte.schilde = liste
-	# Vorschau beim Ziehen: vom ersten Erdwall bis zum Feld unter der Maus
-	effekte.schild_vorschau = []
-	if _schild_fuer != Karte.KEINE:
-		var unter := karte.zelle_bei(maus_welt())
-		if _schild_start != Karte.KEINE:
-			var ok := schild_grund(_schild_start, unter) == ""
-			var n := schild_felder(_schild_start, unter).size()
-			effekte.schild_vorschau = [karte.mitte(_schild_start), karte.mitte(unter), ok, Werte.schild_leben(n) if ok else 0.0]
-		elif _ist_erdwall(unter):
-			effekte.schild_vorschau = [karte.mitte(unter), karte.mitte(unter), true, 0.0]
+	energieschild.schade(b, menge)
 
 
 ## Darf `typ` gerade während der Welle gebaut werden? Sonst nur Stellungen; in der letzten Runde alles außer Erdwällen.
@@ -5503,80 +5022,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _menue != null:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_1:
-				waehle(Karte.FABRIK)
-			KEY_2:
-				waehle(Karte.WALL)
-			KEY_3:
-				waehle(Karte.STELLUNG)
-			KEY_4:
-				waehle(Karte.TURM)
-			KEY_5:
-				waehle(Karte.BATTERIE)
-			KEY_6:
-				waehle(Karte.TOR)
-			KEY_7:
-				waehle(Karte.PANZER)
-			KEY_8:
-				waehle(Karte.KOMMANDANT)
-			KEY_9:
-				if Werte.pliplop():
-					waehle_turm("pliplop")   # 21.11. (Paul): Irrtürmer
-			KEY_0:
-				if Werte.truppenturm():
-					waehle_turm("truppen")
-			KEY_Q:
-				if kommandant != null:
-					_kommandant_meldung(kommandant.taste_q(maus_welt()))
-			KEY_E:
-				if kommandant != null:
-					_kommandant_meldung(kommandant.taste_e(maus_welt()))
-			KEY_R:
-				if kommandant != null:
-					_kommandant_meldung(stelle_klonmaschine(karte.zelle_bei(maus_welt())))
-			KEY_G:
-				_ego_umschalten()
-			KEY_SPACE:
-				starte_welle()
-			KEY_L:
-				if phantom_modus == "angriff" and phase == Phase.BAU and _wurfziel_fuer.is_empty():
-					_laufband.visible = not _laufband.visible
-			KEY_H:
-				_lexikon.visible = false
-				_nachschlag.umschalten()
-			KEY_I:
-				_nachschlag.visible = false
-				_lexikon.umschalten()
-			KEY_T:
-				_paar_richtung = (_paar_richtung + 1) % PAAR_RICHTUNGEN.size()   # Pilotenfabrik der Batterie drehen
-			KEY_ESCAPE:
-				# nichts gewählt, nichts offen: Esc öffnet das Pausenmenü (16.11.)
-				var war_leer := werkzeug == Karte.FREI and not _lexikon.visible and not _nachschlag.visible \
-					and not _fabrikmenue.visible and not kommandant_gewaehlt() and _wurfziel_fuer.is_empty() \
-					and not _bestaetigung.visible and _schild_fuer == Karte.KEINE and phase != Phase.ENDE
-				if war_leer:
-					_hud.pause_an()
-					return
-				if kommandant_gewaehlt():
-					_waehle_aus(Vector2(-9999, -9999), Karte.KEINE)   # Brakk loslassen
-				if _nachschlag.visible:
-					_nachschlag.umschalten()
-				_lexikon.visible = false
-				_schliesse_fabrikmenue()
-				werkzeug = Karte.FREI
-				_schild_fuer = Karte.KEINE
-				_schild_start = Karte.KEINE
-				_bestaetigung.visible = false
-				if not _wurfziel_fuer.is_empty():
-					_beende_wurfziel()
-			KEY_P:
-				if OS.has_feature("web"):
-					_hud.pause_an()   # 21.11.: Web – Esc gehört dem Browser (Vollbild, Mausfang), [P] öffnet das Pausenmenü
-			KEY_F:
-				_tempo_umschalten()
-			KEY_B:
-				_hud.klappe()   # Bauleiste ein-/ausklappen
+		_taste_gedrueckt((event as InputEventKey).keycode)
 		return
 
 	var z := karte.zelle_bei(maus_welt())
@@ -5597,79 +5043,154 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _wurfziel_fuer.is_empty():
 		if event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				_setze_wurfziel(z)
+				wurf_schleuder.setze_ziel(z)
 			elif event.button_index == MOUSE_BUTTON_RIGHT:
-				_beende_wurfziel()
+				wurf_schleuder.beende_ziel()
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			if _schild_fuer != Karte.KEINE:
-				_schild_klick(z)
-			elif werkzeug != Karte.FREI:
-				baue(z, werkzeug)
-				_wall_letzte = z if werkzeug == Karte.WALL else Karte.KEINE
-			elif not _waehle_aus(maus_welt(), z):
-				if hd != null and not (fabriken.has(z) or karte.inhalt(z) == Karte.BATTERIE or karte.inhalt(z) == Karte.GENERATOR):
-					var hinter := hd.bau_unter_maus()   # Fabrik hinter einer Mauer: ihr Bild zählt
-					if hinter != Karte.KEINE:
-						z = hinter
-				if (fabriken.has(z) or karte.inhalt(z) == Karte.BATTERIE or karte.inhalt(z) == Karte.GENERATOR) and phase != Phase.ENDE:
-					_oeffne_fabrikmenue(z)
-					if fabriken.has(z) and str(fabriken[z]["typ"]) != "pilot" and phantom_modus != "angriff":
-						_zieh_von = z   # Maustaste gedrückt halten und auf eine Stellung ziehen = zuweisen
-				else:
-					_schliesse_fabrikmenue()
-			elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM or karte.inhalt(z) == Karte.GENERATOR \
-					or (Werte.mg_stellung() and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG)) and phase != Phase.ENDE:   # 21.11. (Paul): auch die MG-Stellung – ihr Fenster ging sonst sofort wieder zu
-				_oeffne_fabrikmenue(z)   # Batterie, Turm oder Generator angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
-			else:
-				_schliesse_fabrikmenue()
+			_linksklick(z)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if not _rechtsklick_abriss(z):
 				werkzeug = Karte.FREI
 	elif event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _schild_fuer != Karte.KEINE:
 		if _schild_start != Karte.KEINE and z != _schild_start:
-			_schild_klick(z)   # gezogen und losgelassen
+			energieschild.klick(z)   # gezogen und losgelassen
 	elif event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _zieh_von != Karte.KEINE:
-		var von := _zieh_von
-		_zieh_von = Karte.KEINE
-		karte.zuweis_zug = Vector2.INF
-		karte.zuweis_einrast = Karte.KEINE
-		if z != von and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG:
-			schalte_zuweisung(von, z)
-		if not _fabrikmenue.visible:
-			_oeffne_fabrikmenue(von)
+		_zuweisung_loslassen(z)
 	elif event is InputEventMouseMotion:
-		if _zieh_von != Karte.KEINE and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			karte.zuweis_zug = maus_welt() if z != _zieh_von else Vector2.INF
-			if karte.zuweis_zug != Vector2.INF and _fabrikmenue.visible:
-				_fabrikmenue.visible = false   # 16.11.: beim Pfeilziehen die Tafel ausblenden, beim Loslassen kommt sie wieder
-			karte.zuweis_einrast = z if karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG else Karte.KEINE   # über einer Stellung rastet der Pfeil ein
-			karte.queue_redraw()
-		# Mit gedrückter Maustaste Wälle "malen" bzw. wieder wegwischen
-		if werkzeug == Karte.WALL and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			_ziehe_waelle(karte.zelle_bei(maus_welt(true)))
-		elif event.button_mask & MOUSE_BUTTON_MASK_RIGHT and karte.inhalt(z) == Karte.WALL and karte.ausbau.get(z, Karte.FREI) != Karte.TURM:
-			reisse_ab(z)   # Wegwischen trifft keine Türme: die brauchen den bewussten Doppelklick
+		_maus_bewegt(event as InputEventMouseMotion, z)
 
 
-## Energieschild ziehen: erster Klick (oder Drücken) wählt den Start-Erdwall, Loslassen oder zweiter Klick das Ende.
-func _schild_klick(z: Vector2i) -> void:
-	if _schild_start == Karte.KEINE or z == _schild_start:
-		if _ist_erdwall(z):
-			_schild_start = z
+## 27.11. (Knoten-Umbau Schritt 5): Teile von _unhandled_input – Verhalten unverändert.
+## Tastenkürzel im Spiel (F11, Editor und Menü sind vorher schon abgefangen).
+func _taste_gedrueckt(code: Key) -> void:
+	match code:
+		KEY_1:
+			waehle(Karte.FABRIK)
+		KEY_2:
+			waehle(Karte.WALL)
+		KEY_3:
+			waehle(Karte.STELLUNG)
+		KEY_4:
+			waehle(Karte.TURM)
+		KEY_5:
+			waehle(Karte.BATTERIE)
+		KEY_6:
+			waehle(Karte.TOR)
+		KEY_7:
+			waehle(Karte.PANZER)
+		KEY_8:
+			waehle(Karte.KOMMANDANT)
+		KEY_9:
+			if Werte.pliplop():
+				waehle_turm("pliplop")   # 21.11. (Paul): Irrtürmer
+		KEY_0:
+			if Werte.truppenturm():
+				waehle_turm("truppen")
+		KEY_Q:
+			if kommandant != null:
+				_kommandant_meldung(kommandant.taste_q(maus_welt()))
+		KEY_E:
+			if kommandant != null:
+				_kommandant_meldung(kommandant.taste_e(maus_welt()))
+		KEY_R:
+			if kommandant != null:
+				_kommandant_meldung(stelle_klonmaschine(karte.zelle_bei(maus_welt())))
+		KEY_G:
+			_ego_umschalten()
+		KEY_SPACE:
+			starte_welle()
+		KEY_L:
+			if phantom_modus == "angriff" and phase == Phase.BAU and _wurfziel_fuer.is_empty():
+				_laufband.visible = not _laufband.visible
+		KEY_H:
+			_lexikon.visible = false
+			_nachschlag.umschalten()
+		KEY_I:
+			_nachschlag.visible = false
+			_lexikon.umschalten()
+		KEY_T:
+			_paar_richtung = (_paar_richtung + 1) % PAAR_RICHTUNGEN.size()   # Pilotenfabrik der Batterie drehen
+		KEY_ESCAPE:
+			# nichts gewählt, nichts offen: Esc öffnet das Pausenmenü (16.11.)
+			var war_leer := werkzeug == Karte.FREI and not _lexikon.visible and not _nachschlag.visible \
+				and not _fabrikmenue.visible and not kommandant_gewaehlt() and _wurfziel_fuer.is_empty() \
+				and not _bestaetigung.visible and _schild_fuer == Karte.KEINE and phase != Phase.ENDE
+			if war_leer:
+				_hud.pause_an()
+				return
+			if kommandant_gewaehlt():
+				_waehle_aus(Vector2(-9999, -9999), Karte.KEINE)   # Brakk loslassen
+			if _nachschlag.visible:
+				_nachschlag.umschalten()
+			_lexikon.visible = false
+			_schliesse_fabrikmenue()
+			werkzeug = Karte.FREI
+			_schild_fuer = Karte.KEINE
+			_schild_start = Karte.KEINE
+			_bestaetigung.visible = false
+			if not _wurfziel_fuer.is_empty():
+				wurf_schleuder.beende_ziel()
+		KEY_P:
+			if OS.has_feature("web"):
+				_hud.pause_an()   # 21.11.: Web – Esc gehört dem Browser (Vollbild, Mausfang), [P] öffnet das Pausenmenü
+		KEY_F:
+			_tempo_umschalten()
+		KEY_B:
+			_hud.klappe()   # Bauleiste ein-/ausklappen
+
+
+## Linksklick ohne Basis-/Wurfziel-Modus: Schild ziehen, bauen, auswählen oder ein Bau-Menü öffnen.
+func _linksklick(z: Vector2i) -> void:
+	if _schild_fuer != Karte.KEINE:
+		energieschild.klick(z)
+	elif werkzeug != Karte.FREI:
+		baue(z, werkzeug)
+		_wall_letzte = z if werkzeug == Karte.WALL else Karte.KEINE
+	elif not _waehle_aus(maus_welt(), z):
+		if hd != null and not (fabriken.has(z) or karte.inhalt(z) == Karte.BATTERIE or karte.inhalt(z) == Karte.GENERATOR):
+			var hinter := hd.bau_unter_maus()   # Fabrik hinter einer Mauer: ihr Bild zählt
+			if hinter != Karte.KEINE:
+				z = hinter
+		if (fabriken.has(z) or karte.inhalt(z) == Karte.BATTERIE or karte.inhalt(z) == Karte.GENERATOR) and phase != Phase.ENDE:
+			_oeffne_fabrikmenue(z)
+			if fabriken.has(z) and str(fabriken[z]["typ"]) != "pilot" and phantom_modus != "angriff":
+				_zieh_von = z   # Maustaste gedrückt halten und auf eine Stellung ziehen = zuweisen
 		else:
-			melde("Der Schild beginnt an einem Erdwall.")
-		return
-	var grund := setze_schild(_schild_fuer, _schild_start, z)
-	if grund == "":
-		var leben: float = schilde[_schild_fuer]["max"]
-		_schild_fuer = Karte.KEINE
-		_schild_start = Karte.KEINE
-		melde("Energieschild gespannt: hält %d Schaden aus." % roundi(leben), 4.0)
+			_schliesse_fabrikmenue()
+	elif (karte.inhalt(z) == Karte.BATTERIE or karte.ausbau.get(z, Karte.FREI) == Karte.TURM or karte.inhalt(z) == Karte.GENERATOR \
+			or (Werte.mg_stellung() and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG)) and phase != Phase.ENDE:   # 21.11. (Paul): auch die MG-Stellung – ihr Fenster ging sonst sofort wieder zu
+		_oeffne_fabrikmenue(z)   # Batterie, Turm oder Generator angeklickt: Reichweite zeigen und Ausbau-Menü öffnen
 	else:
-		melde(grund)
-		_schild_start = z if _ist_erdwall(z) else Karte.KEINE
+		_schliesse_fabrikmenue()
+
+
+## Maustaste nach dem Ziehen von einer Fabrik losgelassen: Zuweisung auf die Stellung darunter.
+func _zuweisung_loslassen(z: Vector2i) -> void:
+	var von := _zieh_von
+	_zieh_von = Karte.KEINE
+	karte.zuweis_zug = Vector2.INF
+	karte.zuweis_einrast = Karte.KEINE
+	if z != von and karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG:
+		schalte_zuweisung(von, z)
+	if not _fabrikmenue.visible:
+		_oeffne_fabrikmenue(von)
+
+
+## Maus bewegt: Zuweisungspfeil nachziehen, Wälle malen oder mit rechts wegwischen.
+func _maus_bewegt(event: InputEventMouseMotion, z: Vector2i) -> void:
+	if _zieh_von != Karte.KEINE and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		karte.zuweis_zug = maus_welt() if z != _zieh_von else Vector2.INF
+		if karte.zuweis_zug != Vector2.INF and _fabrikmenue.visible:
+			_fabrikmenue.visible = false   # 16.11.: beim Pfeilziehen die Tafel ausblenden, beim Loslassen kommt sie wieder
+		karte.zuweis_einrast = z if karte.ausbau.get(z, Karte.FREI) == Karte.STELLUNG else Karte.KEINE   # über einer Stellung rastet der Pfeil ein
+		karte.queue_redraw()
+	# Mit gedrückter Maustaste Wälle "malen" bzw. wieder wegwischen
+	if werkzeug == Karte.WALL and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		_ziehe_waelle(karte.zelle_bei(maus_welt(true)))
+	elif event.button_mask & MOUSE_BUTTON_MASK_RIGHT and karte.inhalt(z) == Karte.WALL and karte.ausbau.get(z, Karte.FREI) != Karte.TURM:
+		reisse_ab(z)   # Wegwischen trifft keine Türme: die brauchen den bewussten Doppelklick
 
 
 ## Wall-Ziehen: alle Felder vom letzten bis zum aktuellen Feld bauen, damit schnelle Mausbewegungen keine Lücken lassen.
@@ -5775,11 +5296,11 @@ func _aktualisiere_hud(delta: float) -> void:
 func hinweis_text(unter_maus: int = Karte.FREI) -> Array:
 	if _schild_fuer != Karte.KEINE and _schild_start != Karte.KEINE:
 		var unter := karte.zelle_bei(maus_welt())
-		var grund := schild_grund(_schild_start, unter)
+		var grund := energieschild.schild_grund(_schild_start, unter)
 		if unter != _schild_start:
 			if grund != "":
 				return [grund, true]
-			var n := schild_felder(_schild_start, unter).size()
+			var n := energieschild.schild_felder(_schild_start, unter).size()
 			return ["Energieschild: %d %s · hält %d Schaden aus" % [n, "Feld" if n == 1 else "Felder", roundi(Werte.schild_leben(n))], false]
 	if _meldung_zeit > 0.0:
 		return [_meldung, false]
@@ -5944,351 +5465,20 @@ func _knopf(eltern: Control, x: float, breite: float, aktion: Callable, umschalt
 
 
 # ------------------------------------------------------------------ 20.11. (Paul): MG-Stellung ausbaubar (Sonde 7)
-# Das Nest schießt mit seinen eigenen Werten (Werte.MG_NEST, MG_AUSBAU, MG_SONDER); die Truppe darin ist nur Besatzung.
-
-var _mg_schuesse := {}        # Nest -> Schusszähler (Leuchtspur)
-var _mg_ladung := {}          # Nest -> Spielzeit des letzten Ladeschusses
-var _mg_huelsen: Array = []   # [Position, Restzeit, Nest] – Hülsenregen
-
+# 27.11. (Knoten-Umbau Paket B): wohnt in scripts/mg_stellung.gd (`mg_stellung`); PliPlop 3cK in scripts/turmfeuer.gd.
+# Diese vier Weiterleitungen bleiben, weil Einheit, Fabrikmenü und Effekte sie über `spiel` aufrufen.
 
 func mg_werte(z: Vector2i) -> Dictionary:
-	var wahl: Array = karte.mg_wahl.get(z, [])
-	return Werte.mg_werte(int(karte.mg_stufe.get(z, 0)), wahl)
+	return mg_stellung.werte(z)
 
 
 func mg_reichweite(z: Vector2i) -> float:
-	var w := mg_werte(z)
-	return maxf(0.5, float(w["reichweite"]) + (Werte.WACHPOSTEN_BONUS if karte.ist_wachposten(z) else 0.0) + karte.anhoehe_bonus(z) + Werte.mod("truppen_reichweite"))
+	return mg_stellung.reichweite(z)
 
 
-## Kühlkreislauf: MG-Nester in der Nähe eines Nests mit Kühlkreislauf feuern schneller (Faktor ≥ 1).
-func _mg_takt(z: Vector2i) -> float:
-	var f := 1.0
-	var s: Dictionary = Werte.MG_SONDER["takt+lafette"]["kuehlkreislauf"]
-	for n: Vector2i in karte.mg_stufe:
-		if n == z or int(karte.mg_stufe[n]) < 3 or karte.ausbau.get(n, Karte.FREI) != Karte.STELLUNG:
-			continue
-		var w: Array = karte.mg_wahl.get(n, [])
-		if w.size() < 3 or str(w[2]) != "kuehlkreislauf" or Vector2(n - z).length() > 1.5:
-			continue
-		var bonus := float(s["nachbar"]) * (float(s["funk"]) if funk_faktor(n) < 1.0 else 1.0)
-		f = maxf(f, 1.0 + bonus)
-	return f
-
-
-## Ein Schuss des MG-Nests auf `z` mit der Truppe `e` als Besatzung. Rückgabe: Pause bis zum nächsten Schuss (0 = kein Schuss).
 func mg_feuer(e: Einheit, ziel: Node2D, z: Vector2i) -> float:
-	if not is_instance_valid(ziel):
-		return 0.0
-	var w := mg_werte(z)
-	var sonder := str(w["sonder"])
-	var s: Dictionary = w["s"]
-	var g_ziel: Gegner = ziel as Gegner
-	if im_rauch(e.position) and sonder != "ausguck" and not peilung(z) and not (g_ziel != null and g_ziel.markiert > 0.0):
-		return 0.0   # im Rauch sieht das Nest nichts – außer mit Ausguck oder Peilsender
-	var pause := float(w["abklingzeit"]) / _mg_takt(z) * funk_faktor(z)
-	if e.sturm_bis > 0.0:
-		pause *= float(Werte.KOMMANDANT["sturm_feuer"])
-	var farbe := Color(Werte.MG_NEST["farbe"])
-	var von := e.position + Vector2(14 * (-1 if ziel.position.x < e.position.x else 1), -10)
-	schadensquelle = "fabrik:%d,%d" % [e.fabrik_zelle.x, e.fabrik_zelle.y]
-	schuetze = e
-	schuss_herkunft = e.position
-	var schaden := float(w["schaden"]) * Werte.mod_faktor("truppen_schaden")
-	Ton.am_ort(self, Ton.fuer_truppe(e.daten), e.position)
-	if brakk_geschosse != null and brakk_geschosse.ist_brakk(ziel):
-		brakk_geschosse.schiesse("laser", von, 0.45, schaden, "technogunner", schadensquelle)
-		return pause
-	if g_ziel == null:
-		schuss(von, ziel.position, farbe)
-		ziel.call("nimm_schaden", schaden)
-		return pause
-	if sonder == "ausguck" and BrakkFortschritt.gross(g_ziel):
-		schaden *= float(s["gross"])
-	# Railgun-Lauf: durch alle in einer Linie, einmal an einem Erdwall abgeprallt
-	if sonder == "railgun":
-		_mg_railgun(z, von, g_ziel.position, mg_reichweite(z) * Werte.ZELLE, schaden, farbe, float(s["breite"]) * Werte.ZELLE)
-		return pause
-	schuss(von, g_ziel.position + Vector2(0, 4), farbe)
-	var vorher := g_ziel.leben
-	g_ziel.nimm_schaden(schaden)
-	objekt_zaehle(z, "schaden", minf(schaden, maxf(0.0, vorher)))
-	var ort := g_ziel.position
-	var getoetet := g_ziel._tot or g_ziel.leben <= 0.0
-	if getoetet:
-		objekt_zaehle(z, "kills", 1.0)
-	# Streuung: Splitter an alle rund ums Ziel
-	var splitter := float(w["splitter"]) * Werte.ZELLE
-	if splitter > 0.0:
-		for g in gegner.duplicate():
-			if not is_instance_valid(g) or g == g_ziel or _geschuetzt(g) or g.position.distance_to(ort) > splitter:
-				continue
-			g.nimm_schaden(schaden * float(w["splitter_anteil"]))
-			if sonder == "sperrfeuer":
-				g.frost_tempo = minf(g.frost_tempo, float(s["bremse_tempo"])) if g.gefroren > 0.0 else float(s["bremse_tempo"])
-				g.gefroren = maxf(g.gefroren, float(s["bremse_sek"]))
-	if sonder == "sperrfeuer" and not getoetet and is_instance_valid(g_ziel):
-		g_ziel.frost_tempo = minf(g_ziel.frost_tempo, float(s["bremse_tempo"])) if g_ziel.gefroren > 0.0 else float(s["bremse_tempo"])
-		g_ziel.gefroren = maxf(g_ziel.gefroren, float(s["bremse_sek"]))
-	match sonder:
-		"huelsenregen":
-			var eigene := _mg_huelsen.filter(func(h: Array) -> bool: return h[2] == z).size()
-			if Zufall.f() < float(s["chance"]) and eigene < int(s["hoechst"]):
-				var p := ort + Vector2(Zufall.von_bis(-0.25, 0.25), Zufall.von_bis(-0.2, 0.2)) * Werte.ZELLE
-				_mg_huelsen.append([p, float(s["sek"]), z])
-				effekte.flaeche(p, Werte.ZELLE * 0.18, Color("ffd34d"))
-		"leuchtspur":
-			var n := int(_mg_schuesse.get(z, 0)) + 1
-			_mg_schuesse[z] = n
-			if n % int(s["jeder"]) == 0 and not getoetet and is_instance_valid(g_ziel):
-				strahl(von, ort, Color(1.0, 0.85, 0.3), 2.0)
-				g_ziel.markiert = Werte.MARKIERUNG_SEK
-				g_ziel.markier_faktor = Werte.MARKIERUNG_FAKTOR
-				g_ziel.markiert_brakk = false
-		"splittergurt":
-			if getoetet:
-				flaechenschaden(ort, float(s["radius"]) * Werte.ZELLE, schaden * float(s["anteil"]), farbe)
-		"ladeschuss":
-			if spielzeit() - float(_mg_ladung.get(z, -100.0)) >= float(s["sek"]):
-				var dicht := _mg_dichteste(e.position, mg_reichweite(z) * Werte.ZELLE, float(s["radius"]) * Werte.ZELLE)
-				if dicht != null:
-					_mg_ladung[z] = spielzeit()
-					var punkt := dicht.position
-					effekte.batterie_schuss(von, punkt, float(s["radius"]) * Werte.ZELLE)
-					get_tree().create_timer(Effekte.BOLZEN_FLUG, false, true).timeout.connect(
-						func() -> void: flaechenschaden(punkt, float(s["radius"]) * Werte.ZELLE, schaden * float(s["mal"]), Color("9be37b")))
-	return pause
+	return mg_stellung.feuer(e, ziel, z)
 
 
-## Mitte der dichtesten Gegnergruppe in Reichweite (ohne Sichtprüfung: der Mörser geht über die Mauer).
-func _mg_dichteste(von: Vector2, weite: float, radius: float) -> Gegner:
-	var bestes: Gegner = null
-	var meiste := 0
-	for g in gegner:
-		if _geschuetzt(g) or von.distance_to(g.position) > weite:
-			continue
-		var n := 0
-		for h in gegner:
-			if g.position.distance_to(h.position) <= radius:
-				n += 1
-		if n > meiste:
-			meiste = n
-			bestes = g
-	return bestes
-
-
-## Railgun-Lauf: gerade Linie bis zur Reichweite; trifft sie vorher einen Erdwall (nicht den eigenen), prallt sie einmal ab.
-func _mg_railgun(z: Vector2i, von: Vector2, ziel: Vector2, weite: float, schaden: float, farbe: Color, breite: float) -> void:
-	var richtung := (ziel - von).normalized()
-	var start := von
-	var rest := weite
-	var getroffen: Array = []
-	for abschnitt in 2:
-		var ende := start + richtung * rest
-		var schritt := 4.0
-		var s := 0.0
-		var prall := false
-		var alt_zelle := karte.zelle_bei(start)
-		while s < rest:
-			s = minf(rest, s + schritt)
-			var p := start + richtung * s
-			var zelle := karte.zelle_bei(p)
-			if zelle != alt_zelle and zelle != z and karte.inhalt(zelle) == Karte.WALL and s > Werte.ZELLE * 0.6:
-				ende = p - richtung * schritt
-				var d := zelle - alt_zelle
-				if d.x != 0:
-					richtung.x = -richtung.x
-				if d.y != 0:
-					richtung.y = -richtung.y
-				prall = abschnitt == 0
-				break
-			alt_zelle = zelle
-		strahl(start, ende, farbe, 3.0)
-		for g in gegner.duplicate():
-			if not is_instance_valid(g) or _geschuetzt(g) or getroffen.has(g):
-				continue
-			var nah := Geometry2D.get_closest_point_to_segment(g.position, start, ende)
-			if nah.distance_to(g.position) <= breite:
-				getroffen.append(g)
-				var vorher: float = g.leben
-				g.nimm_schaden(schaden)
-				objekt_zaehle(z, "schaden", minf(schaden, maxf(0.0, vorher)))
-				if g._tot:
-					objekt_zaehle(z, "kills", 1.0)
-		rest -= start.distance_to(ende)
-		start = ende
-		if not prall or rest <= Werte.ZELLE * 0.3:
-			break
-
-
-## Hülsenregen: wer über liegende Hülsen läuft, rutscht aus (einmal je Hülse).
-func _mg_huelsen_wirken(delta: float) -> void:
-	if _mg_huelsen.is_empty():
-		return
-	var s: Dictionary = Werte.MG_SONDER["takt+streuung"]["huelsenregen"]
-	var weg: Array = []
-	for h: Array in _mg_huelsen:
-		h[1] = float(h[1]) - delta
-		if float(h[1]) <= 0.0:
-			weg.append(h)
-			continue
-		for g in gegner:
-			if is_instance_valid(g) and not g._tot and g.eingefroren <= 0.0 and g.position.distance_to(h[0]) <= Werte.ZELLE * 0.22 \
-					and not bool(g.daten.get("flug", false)) and not BrakkFortschritt.gross(g):
-				g.eingefroren = float(s["stolpern"])
-				weg.append(h)
-				effekte.fx("treffer_c", h[0], 0.35, false)
-				break
-	for h: Array in weg:
-		_mg_huelsen.erase(h)
-
-
-## Die Hülsen liegen als kleine goldene Punkte am Boden (in der Karte gezeichnet).
 func mg_huelsen_punkte() -> Array:
-	var aus: Array = []
-	for h: Array in _mg_huelsen:
-		aus.append(h[0])
-	return aus
-
-
-## MG-Nest ausbauen: Stufe 1 und 2 je eine von zwei Richtungen, Stufe 3 eine Sonderform.
-func werte_mg_auf(z: Vector2i, wahl: String) -> bool:
-	if not ausbau_moeglich() or not Werte.mg_stellung() or karte.ausbau.get(z, Karte.FREI) != Karte.STELLUNG:
-		return false
-	wahl = wahl.get_slice("|", wahl.get_slice_count("|") - 1)   # Protokoll/Replay: die ganze Kette, gültig ist die letzte Wahl
-	var stufe := int(karte.mg_stufe.get(z, 0))
-	if stufe >= 3:
-		return false
-	var alt: Array = karte.mg_wahl.get(z, [])
-	var moeglich: Dictionary = Werte.MG_AUSBAU[stufe] if stufe < 2 else Werte.mg_sonder_wahl(alt)
-	if not moeglich.has(wahl):
-		return false
-	var preis: int = Werte.KOSTEN_MG_STUFE[stufe]
-	if budget < preis:
-		melde("Nicht genug Budget.")
-		return false
-	_merke_bezahlt(z, "stufen", preis)
-	budget -= preis
-	var neu: Array = alt.duplicate()
-	neu.append(wahl)
-	karte.mg_wahl[z] = neu
-	karte.mg_stufe[z] = stufe + 1
-	# Im Protokoll wie ein Turm-Upgrade: Stufe + 1 und die Wahlen als Kette (so liest es auch Phantom._stand)
-	_notiere({"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 2, "faehigkeit": "|".join(PackedStringArray(neu))})
-	Auftraege.zaehle(auftrag, "upgrade")
-	melde("MG-Stellung Stufe %d – %s: %s" % [stufe + 1, moeglich[wahl]["name"], moeglich[wahl]["text"]], 5.0)
-	karte.queue_redraw()
-	return true
-
-
-# ------------------------------------------------------------------ 20.11. (Paul): PliPlop 3cK als Turm (Irrtürmer)
-
-var _pp_nagel := {}   # Turm -> [Gegner, Treffer in Folge] (Nagler)
-
-
-## Stufe 1 -> 2 wählt den Pfad, Stufe 3 und 4 verstärken ihn.
-func _werte_pliplop_auf(z: Vector2i, pfad: String) -> bool:
-	var stufe := int(karte.turm_stufe.get(z, 1))
-	if stufe >= 4:
-		return false
-	if stufe == 1 and not Werte.PLIPLOP_TURM.has(pfad):
-		return false
-	var preis: int = Werte.kosten_pliplop_stufen()[stufe - 1]
-	if budget < preis:
-		melde("Nicht genug Budget.")
-		return false
-	_merke_bezahlt(z, "stufen", preis)
-	budget -= preis
-	karte.turm_stufe[z] = stufe + 1
-	var eintrag := {"a": "upgrade", "x": z.x, "y": z.y, "stufe": stufe + 1}
-	if stufe == 1:
-		karte.turm_faehigkeit[z] = pfad
-		eintrag["faehigkeit"] = pfad
-	Auftraege.zaehle(auftrag, "upgrade")
-	var p: Dictionary = Werte.PLIPLOP_TURM[str(karte.turm_faehigkeit[z])]
-	melde("PliPlop 3cK Stufe %d – %s: %s" % [stufe + 1, p["name"], p["stufen"][stufe - 1]["text"]], 5.0)
-	_notiere(eintrag)
-	karte.queue_redraw()
-	return true
-
-
-func _pliplop_turm(z: Vector2i, delta: float) -> void:
-	var rest: float = turmfeuer.abkling.get(z, 0.0) - delta * turm_takt(z)
-	if rest > 0.0:
-		turmfeuer.abkling[z] = rest
-		return
-	var pfad := str(karte.turm_faehigkeit.get(z, ""))
-	var stufe := int(karte.turm_stufe.get(z, 1))
-	var werte: Dictionary = Werte.PLIPLOP_TURM[pfad]["stufen"][clampi(stufe - 2, 0, 2)] if Werte.PLIPLOP_TURM.has(pfad) else {}
-	schadensquelle = "turm:pliplop"
-	schuetze = null
-	schadensobjekt = z
-	var weite := float(karte.turm_wert(z, "reichweite")) * Werte.ZELLE
-	var von := karte.mitte(z) + Vector2(0, -12)
-	schuss_herkunft = von
-	var schaden := float(karte.turm_wert(z, "schaden"))
-	var farbe := Color(Werte.TURMARTEN["pliplop"]["farbe"])
-	var ziel := gegner_in_reichweite(von, weite, false, z)
-	if ziel == null:
-		turmfeuer.abkling[z] = 0.0
-		return
-	rest = float(karte.turm_wert(z, "abklingzeit"))
-	if turmbilder.has(z):
-		(turmbilder[z] as TurmBild).feuert(ziel.position)
-	match pfad:
-		"flak":
-			var radius := float(werte["radius"]) * Werte.ZELLE
-			Ton.am_ort(self, "tc-heavy", von)
-			schuss(von, ziel.position, farbe)
-			flaechenschaden(ziel.position, radius, schaden, Color("ffb070"))
-			if werte.has("nachbrand"):
-				lege_brand(ziel.position, radius * 0.8, schaden * float(werte["nachbrand"]))
-		"schockwelle":
-			Ton.am_ort(self, "tc-arc", von)
-			effekte.welle(karte.mitte(z), weite, Color("9be37b"), "funk", 0.6)
-			for g in gegner.duplicate():
-				if not is_instance_valid(g) or _geschuetzt(g) or von.distance_to(g.position) > weite or not karte.sicht_von_wall(z, von, g.position):
-					continue
-				g.markiert = maxf(g.markiert, float(werte["mark_sek"]))
-				g.markier_faktor = Werte.MARKIERUNG_FAKTOR
-				g.markiert_brakk = false
-				if werte.has("bremse"):
-					g.frost_tempo = 0.6 if g.gefroren <= 0.0 else minf(g.frost_tempo, 0.6)
-					g.gefroren = maxf(g.gefroren, float(werte["bremse"]))
-				if bool(g.daten.get("fernkampf", false)) or BrakkFortschritt.gross(g):
-					continue
-				_pp_stoss(g, von, float(werte["stoss"]) * Werte.ZELLE)
-		"nagler":
-			var n := 0
-			var alt: Array = _pp_nagel.get(z, [])
-			if alt.size() == 2 and alt[0] == ziel:
-				n = int(alt[1])
-			var bonus := minf(float(werte["hoechst"]), float(werte["je_treffer"]) * n)
-			_pp_nagel[z] = [ziel, n + 1]
-			Ton.am_ort(self, "tc-heavy", von)
-			effekte.leuchtschuss(von, 18.0, ziel.position, 14.0, Color("ff8ad8"), 0.08 + von.distance_to(ziel.position) / 4200.0, 7.0 + 4.0 * bonus)
-			ziel.nimm_schaden(schaden * (1.0 + bonus))
-		_:
-			Ton.am_ort(self, "tc-heavy", von)
-			schuss(von, ziel.position, farbe)
-			ziel.nimm_schaden(schaden)
-	turmfeuer.abkling[z] = rest
-
-
-## Schockwelle: Gegner vom Turm wegstoßen, höchstens bis vor ein Hindernis.
-func _pp_stoss(g: Gegner, von: Vector2, weite: float) -> void:
-	var richtung := (g.position - von).normalized()
-	if richtung == Vector2.ZERO:
-		richtung = Vector2.LEFT
-	var ziel := g.position
-	var s := 0.0
-	while s < weite:
-		s = minf(weite, s + 4.0)
-		var neu := g.position + richtung * s
-		if not karte.ist_begehbar(karte.zelle_bei(neu)):
-			break
-		ziel = neu
-	if ziel != g.position:
-		effekte.strahl(g.position, ziel, Color("9be37b"), 2.0)
-		g.position = ziel
-		g.plane_neu()
+	return mg_stellung.huelsen_punkte()

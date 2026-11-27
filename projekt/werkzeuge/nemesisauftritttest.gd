@@ -65,7 +65,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if not o.laeuft and schritt < 7:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false
 		return false

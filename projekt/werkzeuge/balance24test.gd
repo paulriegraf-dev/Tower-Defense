@@ -65,7 +65,7 @@ func _process(_delta: float) -> bool:
 	var ego: EgoModus = spiel.ego
 	if not o.laeuft:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = ego.get("_briefing") if ego != null else null
+		var tafel: Variant = ego.anzeige.get("_briefing") if ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false
 		return false
@@ -351,7 +351,7 @@ func _beute(_ego: EgoModus, k: Kommandant) -> void:
 	var budget := int(spiel.budget)
 	var n := f.ringe.size()
 	k.position = o.beute_boden[0]["pos"]
-	o._beute_pflegen(k)
+	o.beutewerk._beute_pflegen(k)
 	pruefe(f.ring_stufe(ring) == 1 and f.ringe.size() == n + 1 and int(spiel.budget) == budget and o.beute_boden.is_empty(), "6 aufgehoben: %s Stufe %d, Budget unverändert (%d)" % [ring, f.ring_stufe(ring), int(spiel.budget)])
 	# 25.11. (Paul): kein Verkaufserlös – nur selbst bezahlte Stufen kommen zurück
 	budget = int(spiel.budget)
@@ -391,7 +391,7 @@ func _beute(_ego: EgoModus, k: Kommandant) -> void:
 	k.position = o.beute_boden[0]["pos"]
 	n = f.ringe.size()
 	budget = int(spiel.budget)
-	o._beute_pflegen(k)
+	o.beutewerk._beute_pflegen(k)
 	pruefe(o.beute_boden.size() == 1 and f.ringe.size() == n and f.ring_stufe(liegt) == 0 and int(spiel.budget) == budget, "6 alle %d Finger belegt: Ring bleibt liegen" % f.finger())
 	# dieselbe Art am Terminal gekauft: der liegende Ring wechselt, keine Stufe
 	var merk_ringe: Array = f.ringe.duplicate()
@@ -399,7 +399,7 @@ func _beute(_ego: EgoModus, k: Kommandant) -> void:
 	f.ringe.append(liegt)
 	f.ring_stufen[liegt] = 1
 	k.position = stand
-	o._beute_pflegen(k)
+	o.beutewerk._beute_pflegen(k)
 	pruefe(o.beute_boden.size() == 1 and str(o.beute_boden[0]["ring"]) != liegt and f.ring_stufe(liegt) == 1, "6 Art vorher gekauft: liegender Ring wechselt zu „%s“, keine Stufe" % str(o.beute_boden[0]["ring"]))
 	# alle Arten: Gold
 	for r: String in BrakkFortschritt.RINGE:
@@ -409,7 +409,7 @@ func _beute(_ego: EgoModus, k: Kommandant) -> void:
 	budget = int(spiel.budget)
 	k.position = o.beute_boden[0]["pos"]
 	var leer := str(o.beute_boden[0]["ring"]) == ""
-	o._beute_pflegen(k)
+	o.beutewerk._beute_pflegen(k)
 	pruefe(leer and int(spiel.budget) == budget + roundi(int(o.wf("praemie_fabrik") * 0.5) * o.wf("gold_faktor")), "6 alle Arten: stattdessen Gold (+%d)" % (int(spiel.budget) - budget))
 	f.ringe.assign(merk_ringe)
 	f.ring_stufen = merk_stufen

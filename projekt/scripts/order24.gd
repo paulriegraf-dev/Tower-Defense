@@ -197,6 +197,9 @@ var bekannt := Karte.KEINE       # Brakks letzter bekannter Ort …
 var bekannt_zeit := -99.0        # … und wann
 var wellen := 0
 var _naechste_welle := 0.0
+var beutewerk: BefehlBeute   # 27.11. (Knoten-Umbau 7e): Beute aus zerstörten Fabriken (scripts/befehl24_beute.gd)
+var zangenwerk: BefehlZange   # 27.11. (Knoten-Umbau 7e): Zange der Jagdtrupps (scripts/befehl24_zange.gd)
+var ueberlaeufer: BefehlUeberlaeufer   # 27.11. (Knoten-Umbau 7e): Überläufer – geheimer Verlauf (scripts/befehl24_ueberlaeufer.gd)
 var taktik: BrakkJagdtaktik = null   # 26.11.: Angriffstaktiken der Jagdwellen
 var schildwache: BrakkSchildwache = null   # 26.11. (Paul): Streife und Ausfall der Schildbesatzung
 var zuflucht: BrakkZuflucht = null    # E4 (26.11., Paul): Zufluchtsorte der großen Karte (nur mit Regel gebiete)
@@ -281,6 +284,13 @@ var markiert_bis := -1.0          # 22.11. (Nemesis Teil 3): bis hier kennen all
 var _zange := {}                 # 23.11.: {"ziel": Vector2i, "erst_bereit": float, "los": bool}
 var _ohne_sicht := {}            # 23.11.: Einheit-ID -> Zeit, seit der sie am Ziel nichts sieht
 var _schussfeld := {}            # 23.11.: Einheit-ID -> {"z", "bis"}
+
+
+## 27.11. (Knoten-Umbau 7e): Teile von Befehl 24, angelegt bevor das Spiel startet (auch für Tests ohne starten()).
+func _init() -> void:
+	beutewerk = BefehlBeute.new(self)
+	zangenwerk = BefehlZange.new(self)
+	ueberlaeufer = BefehlUeberlaeufer.new(self)
 
 
 ## 22.11. (Nemesis Teil 4): Brakk tut etwas, das sich die Benannten abschauen können (Tumble, Klonmaschine …).
@@ -1088,7 +1098,7 @@ func _bereit(echt: float) -> bool:
 	_warte += echt
 	if spiel.ego == null:
 		return _warte >= 1.0
-	var tafel: Variant = spiel.ego.get("_briefing")
+	var tafel: Variant = spiel.ego.anzeige.get("_briefing")
 	return _warte >= 0.5 and (tafel == null or not (tafel as Control).visible)
 
 
@@ -1238,7 +1248,7 @@ func _process(delta: float) -> void:
 	if in_deckung:
 		deckung_sek += echt
 	_ladungen_pflegen(k, echt)
-	_beute_pflegen(k)
+	beutewerk._beute_pflegen(k)
 	tafeln.weiter(echt)
 	herausforderer.weiter(echt)
 	var gesperrt := herausforderer.sperrt()
@@ -1265,9 +1275,9 @@ func _process(delta: float) -> void:
 		_ende(true)
 	# 20.11. (Paul): hält Brakk das Myriaden-HQ bis geheim_ab, beginnt der geheime Verlauf
 	if not geheim and wf("geheim_ab") > 0.0 and plan_zeit() >= wf("geheim_ab") and not hq_eingenommen and not herausforderer.laeuft():
-		_geheim_starten()
+		ueberlaeufer._geheim_starten()
 	if geheim:
-		_geheim_pflegen(k, echt)
+		ueberlaeufer._geheim_pflegen(k, echt)
 
 
 ## Brakk kommt nicht in den Schild des HQ (am Rand wird er hinausgeschoben).
@@ -1290,7 +1300,6 @@ func restzeit() -> float:
 ## 20.11.: Uhr oben – endlos (ueberleben_sek 0) zählt sie die überstandene Zeit hoch, sonst herunter.
 func uhr_sek() -> float:
 	return zeit if wf("ueberleben_sek") <= 0.0 else restzeit()
-
 
 
 # ------------------------------------------------------------------ Truppen der Fabriken (20.11.)
@@ -1596,17 +1605,17 @@ func treffer(t: TechnoZiel, menge: float) -> void:
 			sabotage["truppen"] = int(sabotage["truppen"]) + 1
 			kills += 1
 			gebiet_zaehlen("kills", 1.0)   # E: wo Brakk stand
-			_kopfgeld(kg_ort, 3 if elite else 1)   # 20.11. (Paul): Elite bringt dreifaches Kopfgeld
+			beutewerk._kopfgeld(kg_ort, 3 if elite else 1)   # 20.11. (Paul): Elite bringt dreifaches Kopfgeld
 			var kk: Kommandant = spiel.kommandant
 			if kk != null and kk.fortschritt != null and int(w("xp_kill")) > 0:
 				kk.fortschritt.gib(int(w("xp_kill")) * (3 if elite else 1), kk)   # 20.11. (Paul): mehr Erfahrung je Kill
 			if war_stellung and int(w("praemie_stellung")) > 0:
-				_praemie("stellungen", int(w("praemie_stellung")), "Stellung geleert")
+				beutewerk._praemie("stellungen", int(w("praemie_stellung")), "Stellung geleert")
 			elif war_stellung:
 				sabotage["stellungen"] = int(sabotage["stellungen"]) + 1
 		return
 	if t.art == "hq":
-		_tc_hq_treffer(menge * BAU_SCHADEN)
+		ueberlaeufer._tc_hq_treffer(menge * BAU_SCHADEN)
 		t.leben = tc_hq_leben
 		return
 	var z := t.zelle
@@ -1648,12 +1657,14 @@ func fabrik_treffer(z: Vector2i, schaden: float) -> void:
 	truemmer.append(z)
 	if Werte.grafik_neu:
 		spiel.effekte.fx("g_tod", karte.mitte(z) + Vector2(0, 16), 1.0)
-	_praemie("fabriken", int(w("praemie_fabrik")), "Fabrik zerstört", int(w("xp_fabrik")))
+	beutewerk._praemie("fabriken", int(w("praemie_fabrik")), "Fabrik zerstört", int(w("xp_fabrik")))
 	beute_legen(z)
 	print("ORDER24 Fabrik %s zerstört bei %.0f s" % [str(z), zeit])
 
 
 # ------------------------------------------------------------------ Beute aus zerstörten Fabriken (25.11., Paul)
+# 27.11. (Knoten-Umbau 7e): wohnt in scripts/befehl24_beute.gd (`beutewerk`).
+# Hier bleiben, weil Kits, Touch, Lexikon oder Tests sie direkt nutzen:
 
 ## Ringarten, die als Beute infrage kommen: Brakk trägt sie nicht, und sie liegt noch nirgends.
 func beute_arten() -> Array:
@@ -1679,132 +1690,9 @@ func beute_legen_herausforderer(pos: Vector2) -> void:
 	if not karte.ist_frei(karte.zelle_bei(pos)):
 		ort = karte.mitte(_freies_feld_bei(pos, karte.zelle_bei(spiel.kommandant.position)))
 	var b := {"pos": ort, "ring": "", "knoten": null, "hinweis": -99.0, "herausforderer": true, "stufe": false}
-	_beute_waehlen(b)
+	beutewerk._beute_waehlen(b)
 	beute_boden.append(b)
 	Ton.spiele(spiel, "alert", -4.0)
-
-
-func _beute_waehlen(b: Dictionary) -> void:
-	var f: BrakkFortschritt = spiel.kommandant.fortschritt if spiel.kommandant != null else null
-	b["stufe"] = false
-	b["ring"] = ""
-	if f == null:
-		return
-	var arten := beute_arten()
-	if f.ringe.size() >= BrakkFortschritt.FINGER_AB.size() or arten.is_empty():
-		var hoeher: Array = f.ringe.filter(func(r: String) -> bool: return f.ring_stufe(r) < BrakkFortschritt.RING_PREISE.size())
-		if not hoeher.is_empty():
-			b["ring"] = str(hoeher.pick_random())
-			b["stufe"] = true
-		return
-	b["ring"] = str(arten.pick_random())
-
-
-## Aufheben durch Drüberlaufen. Ohne freien Finger bleibt der Ring liegen.
-func _beute_pflegen(k: Kommandant) -> void:
-	var f := k.fortschritt
-	for b: Dictionary in beute_boden.duplicate():
-		var ring := str(b["ring"])
-		if bool(b.get("herausforderer", false)) and f != null and ((bool(b["stufe"]) and (ring == "" or f.ring_stufe(ring) == 0 or f.ring_stufe(ring) >= BrakkFortschritt.RING_PREISE.size())) or (not bool(b["stufe"]) and ring != "" and (f.ring_stufe(ring) > 0 or f.ringe.size() >= BrakkFortschritt.FINGER_AB.size()))):
-			_beute_waehlen(b)   # am Terminal verändert: neu bestimmen
-			ring = str(b["ring"])
-			_beute_bild_weg(b)
-		elif not bool(b.get("herausforderer", false)) and ring != "" and f != null and f.ring_stufe(ring) > 0:
-			# inzwischen am Terminal gekauft: eine andere neue Art (sonst gäbe das Aufheben eine Stufe)
-			b["ring"] = ""
-			var arten := beute_arten()
-			ring = str(arten.pick_random()) if not arten.is_empty() else ""
-			b["ring"] = ring
-			_beute_bild_weg(b)
-		if k.gefallen or k.position.distance_to(b["pos"] as Vector2) > BEUTE_NAH * Werte.ZELLE:
-			continue
-		if ring == "":
-			var geborgen := gold(int(wf("praemie_fabrik") * BEUTE_GOLD_ANTEIL))   # F4: gold_faktor
-			spiel.budget += geborgen
-			sabotage["geld"] = int(sabotage["geld"]) + geborgen
-			spiel.melde("Gold geborgen: +%d" % geborgen, 3.0)
-		elif bool(b.get("stufe", false)):
-			if f == null or f.schenke_stufe(ring, spiel) != "":
-				continue
-			spiel.melde("Ring geborgen: %s – jetzt Stufe %d" % [str((BrakkFortschritt.RINGE[ring] as Dictionary).get("name", ring)), f.ring_stufe(ring)], 4.0)
-		else:
-			if f == null:
-				continue
-			if f.ringe.size() >= f.finger():
-				if zeit - float(b["hinweis"]) > 4.0:
-					b["hinweis"] = zeit
-					spiel.melde("Kein Finger frei – der Ring bleibt liegen.", 2.5)
-				continue
-			if f.schenke(ring, spiel) != "":
-				continue
-			spiel.melde("Ring geborgen: %s" % str((BrakkFortschritt.RINGE[ring] as Dictionary).get("name", ring)), 4.0)
-		Ton.spiele(spiel, "tc-arc", -2.0)
-		_beute_bild_weg(b)
-		beute_boden.erase(b)
-
-
-func _beute_bild_weg(b: Dictionary) -> void:
-	if b["knoten"] != null and is_instance_valid(b["knoten"]):
-		(b["knoten"] as Node).queue_free()
-	b["knoten"] = null
-
-
-## 25.11. (Paul): Eine sabotierte Fabrik sieht man an: Rauchsäule aus dem Dach, die Leuchtleiste am Sockel ist aus
-## (abgedunkelt ist ihr Bild schon durch HdAnsicht, ein laufendes Förderband hat es nicht) – bis zur Reparatur.
-func _sabotage_3d(hd: HdAnsicht) -> void:
-	var t := float(Time.get_ticks_msec()) / 1000.0
-	for z: Vector2i in _rauch3d.keys():
-		if not lahm.has(z) or not fabrik_hp.has(z):
-			(_rauch3d[z] as Node).queue_free()
-			_rauch3d.erase(z)
-	for z: Vector2i in lahm:
-		if not fabrik_hp.has(z):
-			continue
-		if not _rauch3d.has(z):
-			var kn := Node3D.new()
-			hd.add_child(kn)
-			kn.position = Vector3(float(z.x) + 0.5, 0.0, float(z.y) + 0.5)
-			_kasten3d(kn, Vector3(0.6, 0.036, 0.018), Color("14161b"), Vector3(0, 0.065, 0.468))   # über der Leuchtleiste (_fabrik_block)
-			for i in 9:
-				var m := MeshInstance3D.new()
-				var kugel := SphereMesh.new()
-				kugel.radius = 0.24
-				kugel.height = 0.48
-				kugel.radial_segments = 10
-				kugel.rings = 5
-				m.mesh = kugel
-				m.material_override = _leucht(Color("7a7a86"), 0.9)
-				m.name = "Qualm%d" % i
-				kn.add_child(m)
-			_rauch3d[z] = kn
-		for i in 9:
-			var q := (_rauch3d[z] as Node3D).get_node("Qualm%d" % i) as MeshInstance3D
-			var a := fmod(t * 0.3 + float(i) / 9.0, 1.0)
-			q.position = Vector3(0.12 + 0.35 * a + 0.07 * sin(t * 1.7 + float(i) * 2.1), 1.15 + 2.1 * a, 0.0)
-			q.scale = Vector3.ONE * (0.45 + 0.9 * a)
-			(q.material_override as StandardMaterial3D).albedo_color.a = 0.9 * (1.0 - 0.8 * a)
-
-
-## 26.11. (Paul): Einnahme-Ring über dem Myriaden-HQ – Billboard in Technoclan-Lila, füllt sich im Uhrzeigersinn
-## (von oben). Das Bild wird nur neu gemalt, wenn sich der Prozentwert ändert.
-func _einnahme_3d(hd: HdAnsicht) -> void:
-	var zeigen := einnahme_sichtbar()
-	if _ring3d == null:
-		if not zeigen:
-			return
-		_ring3d = Sprite3D.new()
-		_ring3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_ring3d.shaded = false
-		_ring3d.no_depth_test = true   # auch hinter dem HQ-Dach sichtbar
-		_ring3d.pixel_size = 0.9 / float(RING_BILD)   # knapp ein Feld groß (1,6 verdeckte von nah die Phasenzeile)
-		var p := karte.mitte(Werte.ANGRIFFS_ZELLE)
-		_ring3d.position = Vector3(p.x / Werte.ZELLE, VORSTOSS_RING_HOEHE, (p.y - Werte.KARTE_OBEN) / Werte.ZELLE)
-		hd.add_child(_ring3d)
-	_ring3d.visible = zeigen
-	var pz := floori(100.0 * vorstoss_anteil)
-	if zeigen and pz != _ring_prozent:
-		_ring_prozent = pz
-		_ring3d.texture = ImageTexture.create_from_image(ring_bild(vorstoss_anteil))
 
 
 const RING_BILD := 64   # Kantenlänge des Ringbilds in Pixeln
@@ -1826,95 +1714,19 @@ static func ring_bild(anteil: float) -> Image:
 	return img
 
 
-## Darstellung: Lichtsäule und Bodenscheibe in der Ringfarbe, darüber schwebt der Ring (Gold: ein goldener Würfel).
-func _beute_3d(hd: HdAnsicht) -> void:
-	var t := float(Time.get_ticks_msec()) / 1000.0
-	for b: Dictionary in beute_boden:
-		var ring := str(b["ring"])
-		var farbe: Color = BEUTE_GOLD_FARBE if ring == "" else Einheit.ABZEICHEN.get(ring, BEUTE_GOLD_FARBE)
-		if b["knoten"] == null:
-			var kn := Node3D.new()
-			hd.add_child(kn)
-			var p: Vector2 = b["pos"]
-			kn.position = Vector3(p.x / Werte.ZELLE, 0.0, (p.y - Werte.KARTE_OBEN) / Werte.ZELLE)
-			for teil: Array in [[0.12, 3.0, 0.4, 1.5], [0.28, 3.0, 0.16, 1.5], [0.45, 0.03, 0.55, 0.3]]:
-				var m := MeshInstance3D.new()
-				var zyl := CylinderMesh.new()
-				zyl.top_radius = float(teil[0])
-				zyl.bottom_radius = float(teil[0])
-				zyl.height = float(teil[1])
-				m.mesh = zyl
-				m.material_override = _leucht(farbe, float(teil[2]))
-				m.position = Vector3(0, float(teil[3]), 0)
-				kn.add_child(m)
-			var oben: Node3D
-			if ring == "":
-				oben = _kasten3d(kn, Vector3(0.28, 0.28, 0.28), farbe, Vector3(0, 0.75, 0))
-			else:
-				var s := Sprite3D.new()
-				s.texture = RingBilder.bild(ring, farbe)
-				s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-				s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-				s.shaded = false
-				s.pixel_size = 0.55 / 16.0
-				kn.add_child(s)
-				oben = s
-			oben.name = "Oben"
-			b["knoten"] = kn
-		var schwebt := (b["knoten"] as Node3D).get_node("Oben") as Node3D
-		schwebt.position.y = 0.75 + 0.09 * sin(t * 3.0)
-		if ring == "":
-			schwebt.rotation.y = t * 1.8
-
-
-var _kopfgeld_merk := {}   # Ort ("s:<Stellung>" / "f:<Fabrik>") -> [Kills in Folge, Zeit des letzten Kills]
-
-## 20.11. (Paul): Kopfgeld je Kill. An derselben Stellung (am Boden: Truppen derselben Fabrik) sinkt es je kill_stufe Kills
-## um 1; nach kill_frist Sekunden ohne Kill dort ist es wieder voll.
-func _kopfgeld(ort: String, mal: int = 1) -> void:
-	var voll := int(w("praemie_kill"))
-	if voll <= 0:
-		return
-	var m: Array = _kopfgeld_merk.get(ort, [0, -999.0])
-	var n := int(m[0]) if zeit - float(m[1]) < wf("kill_frist") else 0
-	if ort.begins_with("f:"):
-		n = 0   # 20.11. (Paul): Truppen am Boden bringen immer das volle Kopfgeld – nur Stellungen nutzen sich ab
-	var betrag := gold(maxi(0, voll - int(n / maxf(1.0, wf("kill_stufe")))) * mal)   # F4: gold_faktor
-	_kopfgeld_merk[ort] = [n + 1, zeit]
-	if betrag > 0:
-		sabotage["geld"] = int(sabotage["geld"]) + betrag
-		spiel.budget += betrag   # ohne Meldung: sie würde wichtigere Zeilen verdrängen – das Budget oben zählt mit
-
-
 ## F4 (26.11., Paul): Gold-Einkommen × gold_faktor. Der Rest hinter dem Komma wird mitgeführt – so stimmt auch die
 ## Summe vieler kleiner Kopfgelder (7 × 0,8 gibt abwechselnd 5 und 6). `gold_roh`: was es ohne Faktor gewesen wäre.
 var gold_roh := 0
-var _gold_rest := 0.0
+
 
 func gold(betrag: int) -> int:
 	if betrag <= 0:
 		return betrag
 	gold_roh += betrag
-	var g := float(betrag) * wf("gold_faktor") + _gold_rest
+	var g := float(betrag) * wf("gold_faktor") + beutewerk._gold_rest
 	var ganz := floori(g + 0.0001)
-	_gold_rest = g - float(ganz)
+	beutewerk._gold_rest = g - float(ganz)
 	return ganz
-
-
-func _praemie(was: String, betrag: int, text: String, xp: int = 0) -> void:
-	betrag = gold(betrag)   # F4 (26.11., Paul): gold_faktor
-	sabotage[was] = int(sabotage[was]) + 1
-	sabotage["geld"] = int(sabotage["geld"]) + betrag
-	spiel.budget += betrag
-	var k: Kommandant = spiel.kommandant
-	if xp > 0 and k != null and k.fortschritt != null:
-		k.fortschritt.gib(xp, k)   # 20.11. (Paul): eher Erfahrung als Geld
-	var teile: PackedStringArray = []
-	if betrag > 0:
-		teile.append("+%d" % betrag)
-	if xp > 0:
-		teile.append("+%d Erfahrung" % xp)
-	spiel.melde(text + (": " + " · ".join(teile) if not teile.is_empty() else ""), 2.0)
 
 
 ## Flächenschaden von Brakk (Druckwelle, Lichtsäule …) trifft auch die Stellvertreter.
@@ -2058,7 +1870,7 @@ func sprengen(z: Vector2i) -> void:
 	_explosion3d(z)
 	if spiel.ego != null:
 		spiel.ego.set("_trauma", minf(1.0, float(spiel.ego.get("_trauma")) + 0.35))
-	_praemie("waelle", int(w("praemie_wall")), "Erdwall gesprengt")
+	beutewerk._praemie("waelle", int(w("praemie_wall")), "Erdwall gesprengt")
 	print("ORDER24 Erdwall %s gesprengt bei %.0f s" % [str(z), zeit])
 
 
@@ -2127,7 +1939,7 @@ func sabotieren(z: Vector2i) -> void:
 	karte.fortschritt.erase(z)
 	lahm[z] = wf("sabotage_lahm")
 	pilot_auftraege.append({"z": z, "ab": zeit + wf("pilot_verzug")})
-	_praemie("sabotiert", int(w("praemie_sabotage")), ("Fabrik sabotiert (%d s lahm)" % int(w("sabotage_lahm")) if wf("sabotage_lahm") > 0.0 else "Fabrik sabotiert – lahm, bis ein Pilot sie repariert"), int(w("xp_sabotage")))
+	beutewerk._praemie("sabotiert", int(w("praemie_sabotage")), ("Fabrik sabotiert (%d s lahm)" % int(w("sabotage_lahm")) if wf("sabotage_lahm") > 0.0 else "Fabrik sabotiert – lahm, bis ein Pilot sie repariert"), int(w("xp_sabotage")))
 	if spiel.get("_einblendung") != null:
 		spiel._einblendung.banner("FABRIK LAHMGELEGT", "%s: kein Nachschub" % lager_name(z), Color("ffb03a"))   # 25.11. (Paul)
 	Ton.spiele(spiel, "tc-arc", -4.0)
@@ -2391,7 +2203,7 @@ func phase_text() -> String:
 
 ## 26.11. (Paul): Einnahme des Myriaden-HQ läuft (Ring über dem HQ und „HQ 45 %“ in der Phasenzeile) – bis voll oder 0.
 func einnahme_sichtbar() -> bool:
-	return vorstoss_anteil > 0.0 and vorstoss_anteil < 1.0 and not hq_eingenommen and not myr_hq_besetzt
+	return vorstoss_anteil > 0.0 and vorstoss_anteil < 1.0 and not hq_eingenommen and not ueberlaeufer.myr_hq_besetzt
 
 
 func _phase_name() -> String:
@@ -2410,7 +2222,7 @@ func _phase_name() -> String:
 ## in der Jagd bis zur nächsten Welle aus dem Schild, im Überläufer-Verlauf bis zur nächsten Myriaden-Welle.
 func balken_anteil() -> float:
 	if geheim:
-		return clampf(_myr_uhr / maxf(1.0, wf("myr_takt")), 0.0, 1.0)
+		return clampf(ueberlaeufer._myr_uhr / maxf(1.0, wf("myr_takt")), 0.0, 1.0)
 	if not jagd:
 		return clampf(plan_zeit() / maxf(1.0, wf("jagd_start")), 0.0, 1.0)
 	var takt := maxf(1.0, welle_takt_jetzt())
@@ -2519,7 +2331,7 @@ func _jagd_eroeffnen(k: Kommandant) -> void:
 		_neuer_trupp(gewaehlt.slice(i, i + n), "jagd")
 		i += n
 	print("ORDER24 Jagd bei %.0f s: %d Jäger in %d Trupps, %d bleiben in den Nestern" % [zeit, gewaehlt.size(), trupps.size(), alle.size() - gewaehlt.size()])
-	_wege_loggen()
+	zangenwerk._wege_loggen()
 
 
 ## 23.11.: In Trupps zu trupp_min..trupp_max teilen (der Rest geht im letzten Trupp mit, wenn er sonst zu klein wäre).
@@ -2541,7 +2353,7 @@ func _neuer_trupp(mitglieder: Array, modus: String) -> Dictionary:
 	trupps.append(t)
 	for e: Variant in mitglieder:
 		jaeger[(e as Node).get_instance_id()] = trupps.size() - 1
-		_losschicken(e as Einheit)
+		zangenwerk._losschicken(e as Einheit)
 	return t
 
 
@@ -2656,7 +2468,7 @@ func _trupps_lenken(k: Kommandant) -> void:
 			t.erase("zu")
 		elif sieht and erster != null and erster.position.distance_to(k.position) <= ZANGE_NAH * Werte.ZELLE:
 			t["zu"] = true   # 23.11.: so nah dran – nicht mehr auf die anderen warten
-	_zange_pflegen(k)
+	zangenwerk._zange_pflegen(k)
 
 
 ## Ziel eines Jägers je nach Modus des Trupps: auffächern auf den letzten bekannten Ort (einer direkt, zwei über die Flanken),
@@ -2681,205 +2493,12 @@ func _trupp_ziel(e: Einheit, t: Dictionary) -> Vector2i:
 		var tz := taktik.ziel(e, t)   # 26.11.: Feuerschutz, Hinterhalt
 		if tz != Karte.KEINE:
 			return tz
-	return _jagd_ziel(e, t)
+	return zangenwerk._jagd_ziel(e, t)
 
 
 # ------------------------------------------------------------------ Zange (23.11.)
-
-## Jäger im Modus „jagd“: erst über den eigenen Anmarschweg zum Anmarschpunkt, dort warten, bis die Zange zuschlägt;
-## dann aufgefächert auf Brakks letzten Ort – und wer dort nichts sieht, sucht sich ein Schussfeld.
-func _jagd_ziel(e: Einheit, t: Dictionary) -> Vector2i:
-	var ziel: Vector2i = t.get("ziel_ok", t["zuletzt"])
-	var id := e.get_instance_id()
-	var hier := karte.zelle_bei(e.position)
-	var a: Dictionary = t.get("anflug", {})
-	if not a.is_empty() and not bool(t.get("zu", false)):
-		_ohne_sicht.erase(id)
-		_schussfeld.erase(id)
-		if not bool(a.get("zw_ok", false)):
-			var zw: Vector2i = a["zwischen"]
-			if zw == Karte.KEINE or (t.get("mitte", e.position) as Vector2).distance_to(karte.mitte(zw)) <= 1.5 * Werte.ZELLE:
-				a["zw_ok"] = true
-			else:
-				return zw
-		return _faecher_feld(e, t, a["punkt"], (karte.mitte(a["punkt"]) - karte.mitte(ziel)).normalized(), 0.8)
-	# Zuschlagen: Schussfeld (D) geht vor, sonst der eigene Platz im Halbkreis (C)
-	var sf: Dictionary = _schussfeld.get(id, {})
-	if not sf.is_empty():
-		if zeit < float(sf["bis"]) and hier != (sf["z"] as Vector2i):
-			return sf["z"]
-		_schussfeld.erase(id)
-	var richtung := ((t.get("mitte", e.position) as Vector2) - karte.mitte(ziel))
-	var platz := _faecher_feld(e, t, ziel, richtung.normalized() if richtung.length() > 1.0 else Vector2.RIGHT, FAECHER_RADIUS)
-	var punkt := karte.mitte(t["zuletzt"] as Vector2i)
-	if e.position.distance_to(karte.mitte(platz)) <= 1.2 * Werte.ZELLE and not karte.sicht_frei(e.position, punkt):
-		var seit := float(_ohne_sicht.get(id, zeit))
-		_ohne_sicht[id] = seit
-		if zeit - seit >= SCHUSSFELD_SEK:
-			_ohne_sicht.erase(id)
-			var sz := _schussfeld_suchen(hier, punkt, float(e.daten["reichweite"]))
-			if sz != Karte.KEINE:
-				_schussfeld[id] = {"z": sz, "bis": zeit + 6.0}
-				return sz
-	else:
-		_ohne_sicht.erase(id)
-	return platz
-
-
-## Platz des Mitglieds im Halbkreis um `mitte` (zur Seite `richtung`), `radius` Felder weit; erreichbar, sonst `mitte`.
-func _faecher_feld(e: Einheit, t: Dictionary, mitte: Vector2i, richtung: Vector2, radius: float) -> Vector2i:
-	var glieder: Array = t["mitglieder"]
-	var n := glieder.size()
-	var nr := maxi(0, glieder.find(e))
-	if n <= 1:
-		return mitte
-	var winkel := lerpf(-1.2, 1.2, float(nr) / float(n - 1))   # gut ±70°
-	var p := karte.mitte(mitte) + richtung.rotated(winkel) * radius * Werte.ZELLE
-	var z := _freies_feld_bei(p, mitte)
-	if z == mitte or karte.einheiten_weg(karte.zelle_bei(e.position), z).is_empty():
-		return mitte
-	return z
-
-
-## Nächstes erreichbare Feld (bis SCHUSSFELD_WEITE) mit freier Sicht auf `punkt` und in Reichweite.
-func _schussfeld_suchen(von: Vector2i, punkt: Vector2, reichweite: float) -> Vector2i:
-	var bestes := Karte.KEINE
-	var beste := INF
-	for dy in range(-SCHUSSFELD_WEITE, SCHUSSFELD_WEITE + 1):
-		for dx in range(-SCHUSSFELD_WEITE, SCHUSSFELD_WEITE + 1):
-			var z := von + Vector2i(dx, dy)
-			if not karte.in_karte(z) or z.x < Werte.ZONE_SPALTEN or not karte.ist_begehbar(z) or not karte.ist_frei(z):
-				continue
-			var m := karte.mitte(z)
-			if m.distance_to(punkt) > maxf(2.0, reichweite) * Werte.ZELLE or not karte.sicht_frei(m, punkt):
-				continue
-			var d := float(absi(dx) + absi(dy))
-			if d < beste and not karte.einheiten_weg(von, z).is_empty():
-				beste = d
-				bestes = z
-	return bestes
-
-
-## Einmal je Bild: Anmarschpunkte verteilen, Bereitschaft prüfen, gemeinsam zuschlagen.
-func _zange_pflegen(k: Kommandant) -> void:
-	var jagende: Array = trupps.filter(func(x: Dictionary) -> bool: return str(x["modus"]) == "jagd" and not (x["mitglieder"] as Array).is_empty() and str(x.get("taktik", "")) in ["", "zange"])   # 26.11.: Sturm, Feuerschutz, Hinterhalt gehen eigene Wege
-	if jagende.is_empty():
-		_zange = {}
-		return
-	var ziel: Vector2i = bekannt
-	if ziel == Karte.KEINE or zeit - bekannt_zeit > wf("ortung_takt"):
-		for t: Dictionary in jagende:
-			if str(t.get("taktik", "")) == "zange":
-				ziel = t["zuletzt"]   # 26.11.: niemand sieht ihn – die Zange zielt auf die Funkortung
-				break
-	if ziel == Karte.KEINE:
-		return
-	if _zange.is_empty() or Vector2(ziel - (_zange["ziel"] as Vector2i)).length() > ZANGE_NEU:
-		_zange = {"ziel": ziel, "erst_bereit": -1.0, "los": false}
-		for t: Dictionary in jagende:
-			t.erase("anflug")
-	if bool(_zange["los"]) and zeit - float(_zange.get("los_t", zeit)) > 10.0:
-		_zange["los"] = false   # Nachschub: die nächsten Trupps setzen wieder eine eigene Zange an
-		_zange["erst_bereit"] = -1.0
-	var ziel_p := karte.mitte(ziel)
-	var belegt: Array[Vector2i] = []   # Felder der schon geplanten Anmarschwege
-	var seiten: Array[float] = []
-	for t: Dictionary in jagende:
-		if t.has("anflug"):
-			seiten.append(float((t["anflug"] as Dictionary)["winkel"]))
-			belegt.append_array((t["anflug"] as Dictionary).get("weg", []) as Array)
-	for t: Dictionary in jagende:
-		if bool(t.get("zu", false)) or t.has("anflug"):
-			continue
-		var mitte: Vector2 = t.get("mitte", ziel_p)
-		if bool(_zange["los"]) or mitte.distance_to(ziel_p) <= ZANGE_AB * Werte.ZELLE:
-			t["zu"] = true   # schon nah dran oder die Zange läuft schon: direkt angreifen
-			continue
-		var start := startfeld(((t["mitglieder"] as Array)[0] as Node2D).position)   # 26.11.: frisch aus der Fabrik: ab ihrem Ausgang
-		var a := _anflug_planen(start, ziel, (mitte - ziel_p).angle(), seiten, belegt)
-		if a.is_empty():
-			t["zu"] = true
-			continue
-		t["anflug"] = a
-		seiten.append(float(a["winkel"]))
-		belegt.append_array(a["weg"] as Array)
-	# Bereit, wer an seinem Anmarschpunkt steht. Alle bereit – oder die ersten warten schon ZANGE_WARTE – dann los.
-	var alle := true
-	var irgendwer := false
-	for t: Dictionary in jagende:
-		if not t.has("anflug") or bool(t.get("zu", false)):
-			continue
-		var a: Dictionary = t["anflug"]
-		if zeit - float(a.get("seit", zeit)) >= ZANGE_MAX_SEK:
-			t["zu"] = true   # zu lange unterwegs: nicht mehr warten
-			continue
-		var bereit := (t.get("mitte", Vector2.INF) as Vector2).distance_to(karte.mitte(a["punkt"])) <= 1.8 * Werte.ZELLE
-		if bereit:
-			irgendwer = true
-		else:
-			alle = false
-	if irgendwer and float(_zange["erst_bereit"]) < 0.0:
-		_zange["erst_bereit"] = zeit
-	if irgendwer and (alle or zeit - float(_zange["erst_bereit"]) >= ZANGE_WARTE) and not bool(_zange["los"]):
-		_zange["los"] = true
-		_zange["los_t"] = zeit
-		var n := 0
-		for t: Dictionary in jagende:
-			if t.has("anflug") and not bool(t.get("zu", false)):
-				t["zu"] = true
-				n += 1
-		if n >= 2:
-			spiel.melde("Sonde 7: „Zange steht. Zugriff!“", 3.0)
-		if spiel.has_method("befehl24_protokoll"):
-			spiel.befehl24_protokoll("zange", {"trupps": n, "warten": snappedf(zeit - float(_zange["erst_bereit"]), 0.1)})
-
-
-## Anmarschpunkt auf einer eigenen Seite (möglichst weit weg von den Seiten der anderen Trupps) und ein Zwischenpunkt auf
-## einem Weg, der die Felder der anderen meidet. {} = kein erreichbarer Punkt.
-func _anflug_planen(start: Vector2i, ziel: Vector2i, grund: float, seiten: Array[float], belegt: Array[Vector2i]) -> Dictionary:
-	var kandidaten: Array = []
-	for i in 8:
-		var wkl := grund + TAU * float(i) / 8.0
-		var abstand := PI
-		for s: float in seiten:
-			abstand = minf(abstand, absf(angle_difference(wkl, s)))
-		# Wertung: weit weg von den anderen Seiten zählt viel, nahe der eigenen Herkunft ein wenig (kurzer Anmarsch)
-		kandidaten.append([abstand * 2.0 - absf(angle_difference(wkl, grund)) * 0.4 if not seiten.is_empty() else -absf(angle_difference(wkl, grund)), wkl])
-	kandidaten.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
-	var direkt := karte.einheiten_weg(start, _erreichbar_nahe(ziel, start)).size()
-	var grenze := maxf(float(direkt) * ZANGE_UMWEG, float(direkt + 12)) if direkt > 0 else INF
-	var ersatz := {}
-	for k: Array in kandidaten:
-		var wkl: float = k[1]
-		var p := karte.mitte(ziel) + Vector2.from_angle(wkl) * float(ZANGE_ABSTAND) * Werte.ZELLE
-		var punkt := _freies_feld_bei(p, Karte.KEINE)
-		if punkt == Karte.KEINE:
-			continue
-		var weg := _weg_mit_strafe(start, punkt, belegt)
-		if weg.is_empty():
-			continue
-		var zw: Vector2i = weg[int(weg.size() * 0.55)] if weg.size() >= 6 else Karte.KEINE
-		var plan := {"punkt": punkt, "winkel": wkl, "zwischen": zw, "zw_ok": false, "weg": weg, "seit": zeit}
-		if float(weg.size()) <= grenze:
-			return plan
-		if ersatz.is_empty():
-			ersatz = plan   # zu weiter Umweg: nur, wenn keine Seite näher liegt
-	return ersatz
-
-
-## Weg für Truppen, auf dem schon geplante Felder anderer Trupps teurer sind (danach wieder zurückgesetzt).
-func _weg_mit_strafe(von: Vector2i, nach: Vector2i, belegt: Array[Vector2i]) -> Array[Vector2i]:
-	var astar: AStarGrid2D = karte._astar_einheiten
-	var gesetzt: Array[Vector2i] = []
-	for z: Vector2i in belegt:
-		if astar.is_in_boundsv(z) and not astar.is_point_solid(z) and astar.get_point_weight_scale(z) == 1.0:
-			astar.set_point_weight_scale(z, WEG_STRAFE)
-			gesetzt.append(z)
-	var weg := karte.einheiten_weg(von, nach)
-	for z: Vector2i in gesetzt:
-		astar.set_point_weight_scale(z, 1.0)
-	return weg
-
+# 27.11. (Knoten-Umbau 7e): wohnt in scripts/befehl24_zange.gd (`zangenwerk`).
+# Hier bleiben, weil Kits, Touch, Lexikon oder Tests sie direkt nutzen:
 
 ## 26.11.: Feld, von dem aus eine Truppe ihren Weg sucht – steht sie noch in der Fabrik (nicht begehbar), deren Ausgang.
 func startfeld(p: Vector2) -> Vector2i:
@@ -2931,43 +2550,12 @@ func _truppen() -> Array:
 	return aus
 
 
-func _losschicken(e: Einheit) -> void:
-	if e.posten_zelle != Karte.KEINE:
-		if karte.posten.get(e.posten_zelle) == e:
-			karte.posten.erase(e.posten_zelle)
-		e.posten_zelle = Karte.KEINE
-	e.zustand = Einheit.Zustand.BODEN
-	e._punkte.clear()
-	e._plan_in = 0.0
-
-
 func _freies_feld_nahe(um: Vector2i, r: int) -> Vector2i:
 	for versuch in 12:
 		var z := um + Vector2i(randi_range(-r, r), randi_range(-r, r))
 		if karte.in_karte(z) and z.x >= Werte.ZONE_SPALTEN and karte.ist_begehbar(z) and karte.ist_frei(z):
 			return z
 	return um
-
-
-## Prüfung: Weg jedes Trupps zum letzten bekannten Ort und die Tore/Lücken darauf ins Protokoll.
-func _wege_loggen() -> void:
-	log_wege.clear()
-	for i in trupps.size():
-		var t: Dictionary = trupps[i]
-		var m: Array = t["mitglieder"]
-		if m.is_empty() or not is_instance_valid(m[0]):
-			log_wege.append([])
-			continue
-		var weg := karte.einheiten_weg(karte.zelle_bei((m[0] as Node2D).position), t["zuletzt"] as Vector2i)
-		log_wege.append(weg)
-		var luecken: Array[Vector2i] = []
-		for z: Vector2i in weg:
-			var quer := (karte.inhalt(z + Vector2i(1, 0)) == Karte.WALL and karte.inhalt(z - Vector2i(1, 0)) == Karte.WALL) or (karte.inhalt(z + Vector2i(0, 1)) == Karte.WALL and karte.inhalt(z - Vector2i(0, 1)) == Karte.WALL)
-			if karte.ist_tor(z) or quer:
-				luecken.append(z)
-		print("JAGD Trupp %d: %d Jäger · Ziel %s · Weg %d Felder · Tore/Lücken %s" % [i + 1, m.size(), str(t["zuletzt"]), weg.size(), str(luecken)])
-
-
 
 
 # ------------------------------------------------------------------ Eskalation (20.11., Paul)
@@ -3095,7 +2683,7 @@ func _vorstoss_waehlen() -> void:
 
 
 func _vorstoss(echt: float) -> void:
-	if myr_hq_besetzt:
+	if ueberlaeufer.myr_hq_besetzt:
 		return
 	var hq: Vector2 = karte.mitte(Werte.ANGRIFFS_ZELLE)
 	var da := 0
@@ -3108,7 +2696,7 @@ func _vorstoss(echt: float) -> void:
 	if da > 0:
 		if not _brakk_ahnt:
 			_brakk_ahnt = true   # 20.11. (Paul): Brakk merkt, dass am Myriaden-HQ etwas vorgeht
-			funken([["BRAKK", "Moment … was treiben die da am Myriaden-HQ?", ""], ["BRAKK", "Nehmen die es ein, ist meine letzte Zuflucht weg. Das lasse ich nicht zu.", ""]])
+			ueberlaeufer.funken([["BRAKK", "Moment … was treiben die da am Myriaden-HQ?", ""], ["BRAKK", "Nehmen die es ein, ist meine letzte Zuflucht weg. Das lasse ich nicht zu.", ""]])
 			print("ORDER24 Brakk ahnt den Vorstoß bei %.0f s" % zeit)
 		var tempo := 1.0 / maxf(1.0, wf("vorstoss_sek"))
 		var k: Kommandant = spiel.kommandant
@@ -3120,7 +2708,7 @@ func _vorstoss(echt: float) -> void:
 			spiel.melde(tr("Sonde 7: „Sie nehmen dein HQ. Beweg dich.“"), 4.0)
 		if vorstoss_anteil >= 1.0:
 			if geheim:
-				myr_hq_besetzt = true   # im Überläufer-Verlauf: kein zweiter Schild, Brakk kann es zurückholen
+				ueberlaeufer.myr_hq_besetzt = true   # im Überläufer-Verlauf: kein zweiter Schild, Brakk kann es zurückholen
 				spiel.melde("Der Technoclan hat das Myriaden-HQ besetzt – die Fabriken stehen still. Stell dich hin und hol es zurück!", 6.0)
 			else:
 				_zweites_hq()
@@ -3242,14 +2830,14 @@ func _medkits_pflegen(k: Kommandant, echt: float) -> void:
 			Ton.spiele(spiel, "ui-klick")
 	if not _terminal_erklaert and k.position.distance_to(hq_mitte()) <= 3.5 * Werte.ZELLE:
 		_terminal_erklaert = true   # 20.11. (Paul): Ankunft an der Zuflucht
-		funken([
+		ueberlaeufer.funken([
 			["BRAKK", "Das Lichtterminal im Myriaden-HQ läuft noch – gerade so. Mit Gold hole ich mir hier Ringe: [F] am HQ.", ""],
 			["BRAKK", "Und der Heilturm daneben hat auch noch nicht den Geist aufgegeben. Hier kann ich kurz durchatmen.", ""],
 		])
 	# 20.11. (Paul): Heilturm – heilt Brakk im Umkreis, solange kein Technoclan in der Nähe ist
 	heilt = false
-	if heilturm != Karte.KEINE and not hq_eingenommen and not myr_hq_besetzt and k.leben < k.max_leben:
-		if k.position.distance_to(karte.mitte(heilturm)) <= wf("heilturm_radius") * Werte.ZELLE and not _technoclan_nah(k.position, 3.0):
+	if heilturm != Karte.KEINE and not hq_eingenommen and not ueberlaeufer.myr_hq_besetzt and k.leben < k.max_leben:
+		if k.position.distance_to(karte.mitte(heilturm)) <= wf("heilturm_radius") * Werte.ZELLE and not ueberlaeufer._technoclan_nah(k.position, 3.0):
 			k.leben = minf(k.max_leben, k.leben + k.max_leben * wf("heilturm_prozent") / 100.0 * echt)
 			heilt = true
 
@@ -3257,7 +2845,7 @@ func _medkits_pflegen(k: Kommandant, echt: float) -> void:
 ## Ringterminal: steht Brakk darauf, öffnet [F] das Lichtterminal (Ringe kaufen und aufwerten) – auch im Kampf.
 ## Nach dem Fall des Myriaden-HQ liegt es im zweiten Schild.
 func am_terminal(fuss: Vector2) -> bool:
-	if hq_eingenommen or myr_hq_besetzt:
+	if hq_eingenommen or ueberlaeufer.myr_hq_besetzt:
 		return false
 	return fuss.distance_to(hq_mitte()) <= 2.5 * Werte.ZELLE   # 20.11. (Paul): am Myriaden-HQ selbst
 
@@ -3269,18 +2857,13 @@ func hq_mitte() -> Vector2:
 	return karte.mitte(Werte.ANGRIFFS_ZELLE)
 
 
-
-
 # ------------------------------------------------------------------ Überläufer – geheimer Verlauf (20.11., Paul)
-## Hält Brakk das Myriaden-HQ bis geheim_ab (der Vorstoß darauf ist nicht angesagt – Brakk ahnt es nur), meldet Sonde 7,
-## dass er übergelaufen ist. Dann baut er mit [1] Myriaden-Fabriken in der Zone des HQ (eine Sorte, myr_fabrik_preis) und
-## wirft mit [C] Ringfelder darüber: Der Ring bestimmt die Einheit (MYR_RING), ihr Preis die Zahl je Zyklus. Je
-## Wellenzyklus kostet die Produktion myr_kosten_anteil % der Einheiten. Alle myr_takt Sekunden
-## laufen die Myriaden los – über die Checkpoints zur Technoclan-Basis. Hält Brakk beide Checkpoints geheim_cp_sek lang,
-## fällt der Schild des Technoclan-HQ; Brakks Waffen und Myriaden an der Basis zerstören es → geheimes Ende.
-## Das Myriaden-HQ kann weiter fallen (die Fabriken stehen dann still) und von Brakk zurückerobert werden.
+# 27.11. (Knoten-Umbau 7e): wohnt in scripts/befehl24_ueberlaeufer.gd (`ueberlaeufer`).
+# Hier bleiben, weil Kits, Touch, Lexikon oder Tests sie direkt nutzen:
 
 const MYR_TYPEN: Array[String] = ["hund", "sphaere", "schild", "sprenger", "rauch", "sani", "fahne"]
+
+
 ## 20.11. (Paul): Welche Myriaden-Einheit eine Fabrik im Feld des Rings baut. Wie viele je Zyklus, folgt aus dem Preis der
 ## Einheit (Phantom.PREISE): myr_wert 60 → 6 Hunde, aber nur alle drei Zyklen ein Belagerungsturm.
 const MYR_RING := {
@@ -3294,132 +2877,30 @@ const MYR_RING := {
 	"abpraller": "schwarm",      # Sprungring: Schwarmgeist
 	"laser": "belagerung",       # Glutstrahlring: Belagerungsturm
 }
+
+
 const MYR_FARBE := Color("ff7ad9")
+
+
 const LICHT_MENUE := Color("6ee6ff")
+
+
 var myr_fabriken := {}            # Zonenfeld -> {"typ": String, "knoten": Node3D}
-var myr_hq_besetzt := false
-var _myr_rueck := 0.0
-var _myr_uhr := 0.0
-var cp_gehalten := 0.0
+
+
 var hq_schild_aus := false
+
+
 var tc_hq_leben := 0.0
+
+
 var geheim_sieg := false
-var _cp_brakk: Array[float] = [0.0, 0.0]
-var _cp_f := false                # 26.11. (Paul): [F] am Checkpoint gehalten
+
+
 const CP_HALTEN_SEK := 3.0        # 26.11. (Paul): so lange [F] am Checkpoint halten
+
+
 const CP_FARBE := Color("ff9a3d") # Orange wie die Myriaden-Flagge am Checkpoint
-var _cp_takt := 0.0
-
-
-func geheim_text() -> String:
-	if myr_hq_besetzt:
-		return "Myriaden-HQ besetzt – zurückerobern!"
-	if hq_schild_aus:
-		return "Technoclan-HQ %d %%" % roundi(100.0 * tc_hq_leben / maxf(1.0, wf("geheim_hq_leben")))
-	var n := karte.cp_feind.count(true)
-	return "Checkpoints %d/%d%s" % [n, karte.cp_feind.size(), " · Schild fällt in %d s" % ceili(wf("geheim_cp_sek") - cp_gehalten) if n == karte.cp_feind.size() and n > 0 else ""]
-
-
-## Funkspruch im Spiel (Steuerung bleibt frei): Zeilen wie in der Verrat-Sequenz.
-func funken(zeilen: Array, danach: Callable = Callable()) -> void:
-	if spiel.ego == null:
-		if danach.is_valid():
-			danach.call()
-		return
-	if funk != null:
-		funk.queue_free()
-	funk = Verrat24.new()
-	funk.zeilen = zeilen
-	funk.sperrt = false
-	add_child(funk)
-	funk.fertig.connect(func() -> void:
-		if funk != null:
-			funk.queue_free()
-		funk = null
-		if danach.is_valid():
-			danach.call())
-
-
-func _geheim_starten() -> void:
-	geheim = true
-	karte.cp_aktiv = true
-	karte.cp_route = true
-	for i in karte.cp_feind.size():
-		karte.cp_feind[i] = false
-	karte.aktualisiere_pfad()
-	tc_hq_leben = wf("geheim_hq_leben")
-	_myr_uhr = 0.0
-	spiel._einblendung.banner("ÜBERLÄUFER", "Brakk führt jetzt die Myriaden", MYR_FARBE)
-	Ton.spiele(spiel, "alert")
-	# 20.11. (Paul): Der Schwarm meldet sich – Brakk versteht, was möglich ist; danach das Lichtmenü mit dem Neuen
-	funken([
-		["MYRIADEN-SCHWARM", "1110000 100 010010 1000 1011101010110 01 001", ""],
-		["MYRIADEN-SCHWARM", "0110 1 0011100 10 111 · 1000110 0 1101", ""],
-		["BRAKK", "Ich verstehe kein Wort – und doch alles. Der Feind meines Feindes …", ""],
-		["BRAKK", "Gut. Ihr habt mich zum Verräter erklärt, Rat. Dann kämpfe ich eben mit denen, die ihr fürchtet.", ""],
-		["SONDE 7 · FUNK", "An alle Einheiten: Kommandant Brakk hat sich mit dem Schwarm verbündet. Vernichten.", ""],
-	], func() -> void: _lichtmenue_bis = zeit + 25.0)
-	print("ORDER24 Überläufer bei %.0f s" % zeit)
-
-
-func _geheim_pflegen(k: Kommandant, echt: float) -> void:
-	# Wellenzyklus der Myriaden
-	_myr_uhr += echt
-	if _myr_uhr >= wf("myr_takt"):
-		_myr_uhr = 0.0
-		spiel.budget += gold(int(w("geheim_einkommen")))   # F4: gold_faktor
-		if not myr_hq_besetzt:
-			_myr_welle()
-	# Brakk nimmt Checkpoints ein (er gehört jetzt zu den Myriaden) – 26.11. (Paul): [F] am Checkpoint CP_HALTEN_SEK halten
-	if _cp_f and cp_vor_brakk(k) < 0:
-		_cp_f = false   # weggegangen
-	for i in karte.checkpoints.size():
-		var cp: Vector2i = karte.checkpoints[i]
-		if karte.cp_feind[i]:
-			_cp_brakk[i] = 0.0
-			continue
-		if _cp_f and karte.zelle_bei(k.position).distance_to(cp) <= 1.0 and not _technoclan_nah(karte.mitte(cp), 2.0):
-			_cp_brakk[i] += echt
-			if _cp_brakk[i] >= CP_HALTEN_SEK:
-				_cp_brakk[i] = 0.0
-				_cp_f = false
-				spiel.checkpoint_erreicht(i)   # wird orange und wirkt wie ein Myriaden-Checkpoint im Normalspiel
-				spiel._einblendung.banner(tr("CHECKPOINT %d") % (i + 1), tr("Checkpoint für die Myriaden"), CP_FARBE)
-		else:
-			_cp_brakk[i] = 0.0 if not _cp_f else maxf(0.0, _cp_brakk[i] - echt)
-	# Der Technoclan holt verlorene Checkpoints zurück: die nächsten Truppen am Boden laufen hin
-	_cp_takt -= echt
-	if _cp_takt <= 0.0:
-		_cp_takt = 3.0
-		for i in karte.checkpoints.size():
-			if karte.cp_feind[i]:
-				_rueckholer(karte.checkpoints[i])
-	# Beide gehalten → Schild fällt; verliert Brakk beide wieder, kommt er zurück
-	var n := karte.cp_feind.count(true)
-	if n == karte.cp_feind.size() and n > 0:
-		cp_gehalten += echt
-		if cp_gehalten >= wf("geheim_cp_sek") and not hq_schild_aus:
-			hq_schild_aus = true
-			spiel._einblendung.banner("SCHILD GEFALLEN", "Das Technoclan-HQ ist verwundbar", MYR_FARBE)
-			Ton.spiele(spiel, "alert")
-			print("ORDER24 Schild des Technoclan-HQ gefallen bei %.0f s" % zeit)
-	else:
-		cp_gehalten = maxf(0.0, cp_gehalten - echt)
-		if n == 0 and hq_schild_aus:
-			hq_schild_aus = false
-			spiel.melde("Der Technoclan hat beide Checkpoints zurück – der Schild steht wieder.", 4.0)
-	# Besetztes Myriaden-HQ zurückerobern
-	if myr_hq_besetzt:
-		var hq := karte.mitte(Werte.ANGRIFFS_ZELLE)
-		if k.position.distance_to(hq) <= 2.0 * Werte.ZELLE and not _technoclan_nah(hq, 3.0):
-			_myr_rueck += echt
-			if _myr_rueck >= wf("myr_rueck_sek"):
-				myr_hq_besetzt = false
-				_myr_rueck = 0.0
-				vorstoss_anteil = 0.0
-				spiel.melde("Myriaden-HQ zurückerobert – die Fabriken laufen wieder.", 4.0)
-		else:
-			_myr_rueck = maxf(0.0, _myr_rueck - echt)
 
 
 ## 26.11. (Paul): Checkpoint, den Brakk im Überläufer-Verlauf gerade mit [F] einnehmen kann (-1 = keiner in 1 Feld).
@@ -3438,48 +2919,6 @@ func kein_gegner_ziel(e: Einheit) -> bool:
 	return geheim and e == spiel.kommandant
 
 
-func _technoclan_nah(p: Vector2, felder: float) -> bool:
-	for e in _truppen():
-		if (e as Node2D).position.distance_to(p) <= felder * Werte.ZELLE:
-			return true
-	return false
-
-
-## Bis zu drei Truppen am Boden (keine Verteidiger der Basis) laufen zu einem verlorenen Checkpoint.
-func _rueckholer(cp: Vector2i) -> void:
-	var p := karte.mitte(cp)
-	var liste: Array = _truppen().filter(func(x: Variant) -> bool: return (x as Einheit).zustand == Einheit.Zustand.BODEN and not _ist_innen(x as Einheit) and x != pilot and not eskorte.has(x))
-	liste.sort_custom(func(a: Node2D, b: Node2D) -> bool: return a.position.distance_squared_to(p) < b.position.distance_squared_to(p))
-	for e: Variant in liste.slice(0, 3):
-		alarm[(e as Node).get_instance_id()] = {"ziel": cp, "bis": zeit + 15.0}
-
-
-## 20.11. (Paul): Ring, in dessen Feld die Myriaden-Fabrik `z` steht ("" = keins; das zuletzt gesetzte Feld gewinnt).
-func myr_ring(z: Vector2i) -> String:
-	var k: Kommandant = spiel.kommandant
-	if k == null or k.fortschritt == null:
-		return ""
-	var ring := ""
-	for r: String in k.fortschritt.felder:
-		if BrakkFortschritt.im_feld(z, k.fortschritt.felder[r] as Vector2i):
-			ring = r
-	return ring
-
-
-## Was die Fabrik `z` gerade baut: die Einheit des Rings, ohne Feld Hunde.
-func myr_typ(z: Vector2i) -> String:
-	return str(MYR_RING.get(myr_ring(z), "hund"))
-
-
-## Wert, den die Fabrik `z` je Zyklus verbaut: myr_wert, ohne Ringfeld nur ein Teil, je Ringstufe mehr.
-func myr_wert_von(z: Vector2i) -> float:
-	var ring := myr_ring(z)
-	if ring == "":
-		return wf("myr_wert") * wf("myr_ohne_ring") / 100.0
-	var st: int = spiel.kommandant.fortschritt.ring_stufe(ring)
-	return wf("myr_wert") * (1.0 + wf("myr_ring_stufe") / 100.0 * float(maxi(0, st - 1)))
-
-
 ## Kurz für Anzeigen: „6 Hunde je Zyklus“ bzw. „1 Belagerungsturm alle 3 Zyklen“.
 func myr_takt_text(typ: String, wert: float) -> String:
 	var preis := float(maxi(1, Phantom.preis(typ)))
@@ -3488,36 +2927,6 @@ func myr_takt_text(typ: String, wert: float) -> String:
 	if je >= 0.95:
 		return "%s × %s je Zyklus" % [str(snappedf(je, 0.1)).trim_suffix(".0").replace(".", ","), name]
 	return "1 %s alle %s Zyklen" % [name, str(snappedf(1.0 / je, 0.1)).trim_suffix(".0").replace(".", ",")]
-
-
-## Ein Wellenzyklus: jede Myriaden-Fabrik bekommt ihren Wert gutgeschrieben und schickt so viele Einheiten los, wie das
-## Guthaben hergibt (der Rest bleibt stehen) – so zählt ein Fahnenträger nicht wie ein Hund. Die Produktion kostet Gold.
-func _myr_welle() -> void:
-	var los := 0
-	for z: Vector2i in myr_fabriken:
-		var fab: Dictionary = myr_fabriken[z]
-		var typ := myr_typ(z)
-		if str(fab.get("typ", "")) != typ:
-			fab["typ"] = typ
-			fab["guthaben"] = 0.0   # umgestellt: von vorn
-		var preis := maxi(1, Phantom.preis(typ))
-		fab["guthaben"] = float(fab.get("guthaben", 0.0)) + myr_wert_von(z)
-		var n := int(floorf(float(fab["guthaben"]) / float(preis) + 0.001))
-		if n <= 0:
-			continue
-		var kosten := roundi(float(n * preis) * wf("myr_kosten_anteil") / 100.0)
-		if spiel.budget < kosten:
-			spiel.melde("Zu wenig Gold für die Myriaden-Fabrik (%s): %d nötig." % [str(Werte.GEGNER[typ]["name"]), kosten], 3.0)
-			fab["guthaben"] = minf(float(fab["guthaben"]), float(preis))   # nicht endlos ansparen
-			continue
-		spiel.budget -= kosten
-		fab["guthaben"] = float(fab["guthaben"]) - float(n * preis)
-		for i in n:
-			var g: Gegner = spiel._neuer_gegner(typ, z, 0)
-			g.position += Vector2(randf_range(-8, 8), randf_range(-8, 8))
-		los += n
-	if los > 0:
-		print("ORDER24 Myriaden-Welle bei %.0f s: %d Einheiten" % [zeit, los])
 
 
 ## [1] im Überläufer-Verlauf: Myriaden-Fabrik auf dem Feld unter dem Fadenkreuz bauen (nur in der Zone am HQ).
@@ -3532,13 +2941,9 @@ func ego_zahl(ego: EgoModus, taste: int) -> bool:
 	return true
 
 
-func myr_preis(_typ: String = "") -> int:
-	return int(w("myr_fabrik_preis"))   # 20.11. (Paul): eine Fabrik, ein Preis
-
-
 ## Baut eine Myriaden-Fabrik; gibt den Grund zurück, wenn es nicht geht ("" = gebaut).
 func myr_bauen(typ: String, z: Vector2i, fuss: Vector2) -> String:
-	if myr_hq_besetzt:
+	if ueberlaeufer.myr_hq_besetzt:
 		return "Das Myriaden-HQ ist besetzt – erst zurückerobern."
 	if not karte.in_karte(z) or z.x >= Werte.ZONE_SPALTEN:
 		return "Myriaden-Fabriken nur in der Zone am Myriaden-HQ (ganz links)."
@@ -3546,14 +2951,14 @@ func myr_bauen(typ: String, z: Vector2i, fuss: Vector2) -> String:
 		return "Hier ist kein Platz."
 	if karte.mitte(z).distance_to(fuss) > 7.0 * Werte.ZELLE:
 		return "Zu weit weg – geh näher heran."
-	var preis := myr_preis(typ)
+	var preis := ueberlaeufer.myr_preis(typ)
 	if spiel.budget < preis:
 		return "Zu wenig Gold: %d nötig." % preis
 	spiel.budget -= preis
-	typ = myr_typ(z)
+	typ = ueberlaeufer.myr_typ(z)
 	myr_fabriken[z] = {"typ": typ, "knoten": null, "guthaben": 0.0, "gezeigt": ""}
 	Ton.spiele(spiel, "ui-klick")
-	spiel.melde("Myriaden-Fabrik gebaut (−%d): %s.%s" % [preis, myr_takt_text(typ, myr_wert_von(z)), "" if myr_ring(z) != "" else " Mit [C] ein Ringfeld darüber werfen, dann baut sie die Einheit des Rings."], 4.0)
+	spiel.melde("Myriaden-Fabrik gebaut (−%d): %s.%s" % [preis, myr_takt_text(typ, ueberlaeufer.myr_wert_von(z)), "" if ueberlaeufer.myr_ring(z) != "" else " Mit [C] ein Ringfeld darüber werfen, dann baut sie die Einheit des Rings."], 4.0)
 	print("ORDER24 Myriaden-Fabrik %s bei %s" % [typ, str(z)])
 	return ""
 
@@ -3566,54 +2971,8 @@ func gegner_am_ziel(g: Gegner) -> bool:
 	spiel.gegner.erase(g)
 	g.queue_free()
 	if hq_schild_aus:
-		_tc_hq_treffer(float(maxi(20, Phantom.preis(g.typ))) * 3.0)
+		ueberlaeufer._tc_hq_treffer(float(maxi(20, Phantom.preis(g.typ))) * 3.0)
 	return true
-
-
-func _tc_hq_treffer(menge: float) -> void:
-	if not hq_schild_aus or vorbei:
-		return
-	tc_hq_leben -= menge
-	if tc_hq_leben <= 0.0:
-		tc_hq_leben = 0.0
-		geheim_sieg = true
-		spiel.erfolg("ueberlaeufer")   # 20.11. (Paul): Erfolg – geheimes Ende
-		print("ORDER24 Technoclan-HQ zerstört bei %.0f s – geheimes Ende" % zeit)
-		_ende(true)
-
-
-## Kasten in Myriaden-Farbe mit dem Bild der Einheit darüber (Platzhalter).
-func _myr_3d(hd: HdAnsicht) -> void:
-	for z: Vector2i in myr_fabriken:
-		var f: Dictionary = myr_fabriken[z]
-		var typ_jetzt := myr_typ(z)
-		if f["knoten"] != null and str(f.get("gezeigt", typ_jetzt)) == typ_jetzt:
-			continue
-		if f["knoten"] != null:
-			# 20.11. (Paul): das Ringfeld hat die Fabrik umgestellt – Platzhalter mit der neuen Einheit
-			_knoten3d.erase(f["knoten"])
-			(f["knoten"] as Node3D).queue_free()
-		f["gezeigt"] = typ_jetzt
-		var ring_jetzt := myr_ring(z)
-		var kn := Node3D.new()
-		hd.add_child(kn)
-		kn.position = Vector3(float(z.x) + 0.5, 0.0, float(z.y) + 0.5)
-		_kasten3d(kn, Vector3(0.85, 0.6, 0.85), Color("5a2350"), Vector3(0, 0.3, 0))
-		_kasten3d(kn, Vector3(0.6, 0.12, 0.6), Einheit.ABZEICHEN.get(ring_jetzt, MYR_FARBE) if ring_jetzt != "" else MYR_FARBE, Vector3(0, 0.66, 0))   # Deckel in Ringfarbe
-		var d: Dictionary = Werte.grafik_daten(Werte.GEGNER[typ_jetzt])
-		if d.has("blatt") and d.has("zelle"):
-			var bild := AtlasTexture.new()
-			bild.atlas = load(str(d["blatt"]))
-			bild.region = Rect2(0, 0, float(d["zelle"]), float(d["zelle"]))
-			var s := Sprite3D.new()
-			s.texture = bild
-			s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-			s.pixel_size = 0.7 / float(d["zelle"])
-			s.position = Vector3(0, 1.25, 0)
-			kn.add_child(s)
-		f["knoten"] = kn
-		_knoten3d.append(kn)
 
 
 # ------------------------------------------------------------------ Ego-Sicht: Tasten und Anzeige (20.11.)
@@ -3650,11 +3009,11 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 			return true
 		"F":
 			if geheim and gedrueckt and cp_vor_brakk(spiel.kommandant) >= 0:
-				_cp_f = true   # 26.11. (Paul): Checkpoint für die Myriaden einnehmen
+				ueberlaeufer._cp_f = true   # 26.11. (Paul): Checkpoint für die Myriaden einnehmen
 				return true
-			if not gedrueckt and _cp_f:
-				_cp_f = false
-				_cp_brakk.fill(0.0)   # losgelassen: von vorn
+			if not gedrueckt and ueberlaeufer._cp_f:
+				ueberlaeufer._cp_f = false
+				ueberlaeufer._cp_brakk.fill(0.0)   # losgelassen: von vorn
 				return true
 			if gedrueckt:
 				return sabotage_start()
@@ -3667,7 +3026,7 @@ func ego_taste(ego: EgoModus, taste: String, gedrueckt: bool) -> bool:
 ## 20.11. (Paul): Überläufer – kleines Lichtmenü, das nach dem Schwarm-Funk zeigt, was jetzt neu geht (25 s).
 func _male_lichtmenue(bild: Control, g: Vector2, Stil: GDScript) -> void:
 	var zeilen: Array = [
-		["[1]", "Myriaden-Fabrik bauen (%d) – nur in der Zone am Myriaden-HQ" % myr_preis()],
+		["[1]", "Myriaden-Fabrik bauen (%d) – nur in der Zone am Myriaden-HQ" % ueberlaeufer.myr_preis()],
 		["[C]", "Ringfeld werfen – der Ring bestimmt, welche Myriaden die Fabrik schickt"],
 		["W", "alle %d s zieht eine Welle über die Checkpoints zur Technoclan-Basis" % int(w("myr_takt"))],
 		["CP", "[F] am Checkpoint halten, dann beide %d s halten – der Schild des Technoclan-HQ fällt" % int(w("geheim_cp_sek"))],
@@ -3716,7 +3075,7 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 		# 20.11.: Überläufer – Bauliste der Myriaden-Fabriken links
 		var by := roundf(g.y * 0.3)
 		Stil.schreibe(bild, Vector2(24, by), "MYRIADEN · Zone links", 14, MYR_FARBE)
-		Stil.schreibe(bild, Vector2(24, by + 18.0), "[1] Fabrik  %d   (%d stehen)" % [myr_preis(), myr_fabriken.size()], 14, Stil.TEXT if spiel.budget >= myr_preis() else Stil.TEXT_BLASS)
+		Stil.schreibe(bild, Vector2(24, by + 18.0), "[1] Fabrik  %d   (%d stehen)" % [ueberlaeufer.myr_preis(), myr_fabriken.size()], 14, Stil.TEXT if spiel.budget >= ueberlaeufer.myr_preis() else Stil.TEXT_BLASS)
 		Stil.schreibe(bild, Vector2(24, by + 35.0), "[C] Ringfeld: der Ring bestimmt die Einheit", 14, Stil.TEXT_BLASS)
 		var zeile := 0
 		var kf: BrakkFortschritt = spiel.kommandant.fortschritt if spiel.kommandant != null else null
@@ -3836,13 +3195,13 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 		y += 24.0
 	elif cp_vor_brakk(k) >= 0:   # 26.11. (Paul): Überläufer – Checkpoint mit [F] einnehmen
 		var i := cp_vor_brakk(k)
-		if _technoclan_nah(karte.mitte(karte.checkpoints[i]), 2.0):
+		if ueberlaeufer._technoclan_nah(karte.mitte(karte.checkpoints[i]), 2.0):
 			Stil.schreibe_mittig(bild, Vector2(m.x, y), tr("Technoclan am Checkpoint – erst freikämpfen"), 16, Color("ff9a3d"))
 			y += 20.0
-		elif _cp_f:
+		elif ueberlaeufer._cp_f:
 			var r := Rect2(m.x - 120.0, y - 8.0, 240.0, 16.0)
 			bild.draw_rect(r, Color(0.04, 0.05, 0.08, 0.8))
-			bild.draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(float(_cp_brakk[i]) / CP_HALTEN_SEK, 0.0, 1.0), r.size.y)), Color(CP_FARBE, 0.85))
+			bild.draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(float(ueberlaeufer._cp_brakk[i]) / CP_HALTEN_SEK, 0.0, 1.0), r.size.y)), Color(CP_FARBE, 0.85))
 			bild.draw_rect(r, CP_FARBE, false, 1.5)
 			Stil.schreibe_mittig(bild, r.get_center() + Vector2(0, -1), tr("Checkpoint – [F] halten"), 14, Color.WHITE)
 			y += 24.0
@@ -3953,7 +3312,7 @@ func _3d_pflegen() -> void:
 	if not _schild3d.is_empty():
 		(_schild3d[0] as Node3D).scale = Vector3.ONE * maxf(0.001, schild_auf)   # 20.11.: Verrat – der Schild schließt sich
 		(_schild3d[0] as Node3D).visible = not hq_schild_aus
-	_myr_3d(hd)
+	ueberlaeufer._myr_3d(hd)
 	# 20.11. (Paul): Heilturm am Myriaden-HQ – der echte Heilturm am Boden, pulsiert beim Heilen
 	if heilturm != Karte.KEINE:
 		if _heil3d == null:
@@ -3970,7 +3329,7 @@ func _3d_pflegen() -> void:
 			s.position = Vector3(0, (64.0 - 61.0 + 32.0 - 3.0) * s.pixel_size, 0)   # Fußpunkt (Pixel 61) auf den Boden
 			_heil3d.add_child(s)
 			_knoten3d.append(_heil3d)
-		_heil3d.visible = not hq_eingenommen and not myr_hq_besetzt
+		_heil3d.visible = not hq_eingenommen and not ueberlaeufer.myr_hq_besetzt
 		var sp := _heil3d.get_child(0) as Sprite3D
 		if sp != null:
 			sp.modulate = Color(0.75, 1.0, 0.8).lerp(Color.WHITE, 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 120.0)) if heilt else Color.WHITE   # pulsiert beim Heilen
@@ -4011,9 +3370,9 @@ func _3d_pflegen() -> void:
 		var z: Vector2i = truemmer[_truemmer3d.size()]
 		_truemmer3d.append(_kasten3d(hd, Vector3(0.9, 0.25, 0.8), Color("3a3440"), Vector3(float(z.x) + 0.5, 0.12, float(z.y) + 0.5)))
 	_fabrik_balken_pflegen(hd)
-	_beute_3d(hd)
-	_sabotage_3d(hd)
-	_einnahme_3d(hd)
+	beutewerk._beute_3d(hd)
+	beutewerk._sabotage_3d(hd)
+	beutewerk._einnahme_3d(hd)
 	for z: Vector2i in kern_aus:
 		if not _qualm3d.has(z):
 			_qualm3d[z] = _kasten3d(hd, Vector3(0.5, 0.5, 0.5), Color("50505a"), Vector3(float(z.x) + 0.5, hoch + 1.0, float(z.y) + 0.5))

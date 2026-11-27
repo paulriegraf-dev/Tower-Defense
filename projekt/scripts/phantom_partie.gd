@@ -281,7 +281,7 @@ func _zeige_geknackt(neu: Dictionary) -> void:
 	for e: Dictionary in probe:
 		genommen += int(e["leben_genommen"])
 	var gegner_name := str(neu.get("spieler", "das Ersatz-Phantom"))
-	spiel._zeige_tafel({
+	spiel.schlussbild.zeige_tafel({
 		"kicker": "PHANTOM-ANGRIFF  ·  RUNDE %d" % spiel.welle, "titel": "GEKNACKT!", "titel_farbe": spiel._F_KUPFER_HELL, "rahmen": spiel._F_KUPFER_HELL,
 		"untertitel": "Die Verteidigung von %s ist gefallen." % str(phantom.get("spieler", "?")), "effekt": "kupfer", "wackeln": true,
 		"kacheln": [
@@ -362,7 +362,7 @@ func angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 	}
 	var pfad := Phantom.speichere("angriff", daten) if vollstaendig else ""
 	if vollstaendig:
-		spiel._merke_export(daten, "angriff")
+		spiel.schlussbild.merke_export(daten, "angriff")
 		Profil.angriff_ende(int(wertung["gesamt"]), geknackt + (1 if grund == "durchbruch" else 0))
 	if geknackt + (1 if grund == "durchbruch" else 0) > 0:
 		spiel.erfolg("einbrecher")   # 18.11.
@@ -402,12 +402,12 @@ func angriff_ende(grund: String, runde_gebucht: bool = false) -> void:
 			{"name": "LEBEN GENOMMEN", "zahl": genommen, "farbe": spiel._F_ROT, "symbol": "herz"},
 			{"name": "GEKNACKT", "zahl": geknackt_gesamt, "farbe": spiel._F_KUPFER},
 			{"name": "BUDGET", "zahl": punkte, "farbe": spiel._F_TEXT, "symbol": "muenze"}],
-		"kaesten": [spiel._protokoll_kasten("DEIN ANGRIFF IST JETZT EIN PHANTOM", "Andere Spieler verteidigen ab jetzt gegen deine Wellen.")] if pfad != "" else [],
+		"kaesten": [spiel.schlussbild.protokoll_kasten("DEIN ANGRIFF IST JETZT EIN PHANTOM", "Andere Spieler verteidigen ab jetzt gegen deine Wellen.")] if pfad != "" else [],
 		"zeilen": zeilen,
-		"knoepfe": spiel._revanche_knoepfe(spiel._F_KUPFER_HELL),
+		"knoepfe": spiel.schlussbild.revanche_knoepfe(spiel._F_KUPFER_HELL),
 	}
 	if pfad != "":
 		var elo: Dictionary = spiel._elo_platz("angriff")   # 23.11. (Einführung F): Elo-Änderung zählt auf der Tafel
 		if not elo.is_empty():
 			tafel_conf["elo"] = elo
-	spiel._zeige_tafel(tafel_conf)
+	spiel.schlussbild.zeige_tafel(tafel_conf)

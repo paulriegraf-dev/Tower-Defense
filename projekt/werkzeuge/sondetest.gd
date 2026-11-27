@@ -80,8 +80,8 @@ func _process(_delta: float) -> bool:
 			return false
 		kit = ego.kit
 		karte = spiel.karte
-		if ego._briefing != null:
-			ego._briefing.visible = false
+		if ego.anzeige._briefing != null:
+			ego.anzeige._briefing.visible = false
 		ego.brakk.fortschritt.stufe = 10   # alle Waffen frei
 		t0 = Time.get_ticks_msec()
 		print("Sonde 7 bereit, Mauerhöhe H=%.2f, Schwebehöhe %.2f" % [ego.hd.H, float(Werte.SONDE7["schweben"]["hoehe"])])

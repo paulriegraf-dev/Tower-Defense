@@ -76,7 +76,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if not o.laeuft:
 		o.verrat_ueberspringen = true
-		var tafel: Variant = spiel.ego.get("_briefing") if spiel.ego != null else null
+		var tafel: Variant = spiel.ego.anzeige.get("_briefing") if spiel.ego != null else null
 		if tafel != null and (tafel as Control).visible:
 			(tafel as Control).visible = false
 		return false
@@ -390,9 +390,9 @@ func _gunner() -> void:
 		var vor := _eintraege("saeule_ausweichen").size()
 		for i in n:
 			_stelle(Vector2i(4, -1), Vector2i(-3, -1))
-			ego._saeule_ziel = h.einheit.position + Vector2(randf_range(-8.0, 8.0), randf_range(-8.0, 8.0))
+			ego.saeule._saeule_ziel = h.einheit.position + Vector2(randf_range(-8.0, 8.0), randf_range(-8.0, 8.0))
 			_lauf(0.6)
-		ego._saeule_ziel = Vector2.INF
+		ego.saeule._saeule_ziel = Vector2.INF
 		return _eintraege("saeule_ausweichen").size() - vor
 	h.saeulen = 2
 	var frueh: int = ausweichen.call(10)
