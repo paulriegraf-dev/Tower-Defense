@@ -78,6 +78,8 @@ func _process(_delta: float) -> bool:
 	if schritt == 0:
 		if h.zustand == "duell" and h.einzug.is_empty() and h.kampfplatz.zu():
 			h._vergeltung_in = 9999.0
+			if teil != "klon" and h.klon != null:
+				h.klon.gezogen = false   # 27.11.: eine zufällige Klonmaschine (25 %) schoss sonst in die Messungen
 			t0 = o.zeit
 			schritt = 1
 		elif o.zeit > 40.0:
@@ -307,9 +309,9 @@ func _teil_salve() -> bool:
 	_sv_brakk += Vector2(0, _sv_richtung) * EgoModus.TEMPO * Werte.ZELLE * dt
 	_brakk_setzen_px(_sv_brakk)
 	# neue Geschosse: Richtung gegen die angesagte Linie
-	var letzte := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "faecher")
+	var letzte := h.protokoll.slice(int(_sv.get("proto_ab", h.protokoll.size()))).filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "faecher")   # 27.11.: nur Wellen der Test-Salven
 	for g: Dictionary in bg.geschosse:
-		if g.has("gruppe") and not g.has("_gesehen"):
+		if g.has("gruppe") and _sv.has("gruppe_ab") and int(g["gruppe"]) > int(_sv["gruppe_ab"]) and not g.has("_gesehen"):   # 27.11.: nur die Test-Salven
 			g["_gesehen"] = true
 			_sv["geschosse"] = int(_sv["geschosse"]) + 1
 			var best := 180.0
@@ -332,6 +334,10 @@ func _teil_salve() -> bool:
 				return _fertig()
 			if int(_sv["n"]) == 0:
 				_sv["treffer_vor"] = bg.getroffen
+				(h.typ as NemesisBossScharf)._wellen.clear()   # 27.11.: eine Salve des Bosses von vor dem Test läuft nicht weiter …
+				h.angriff = {}
+				_sv["gruppe_ab"] = h._salven   # … und ihre Geschosse zählen nicht
+				_sv["proto_ab"] = h.protokoll.size()
 			_boss_setzen(kp.mitte + Vector2i(-6, 0), false)
 			h.angriff = {}
 			_sv_richtung = 1.0 if int(_sv["n"]) % 2 == 0 else -1.0

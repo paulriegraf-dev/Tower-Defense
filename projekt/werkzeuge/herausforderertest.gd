@@ -943,6 +943,7 @@ func _schritte_echt() -> bool:
 		2:
 			if _seit() > 12.0:
 				pruefe(o.wellen == int(merk["wellen"]) and o.plan_pause > 11.0, "12 s Duell ohne Welle, der Fahrplan stand %.1f s" % o.plan_pause)
+				_brakk_weg_vom_boss()   # 27.11.: sonst hebt er den Ring sofort auf (Jagdanker oder Sturm brachten ihn direkt an den Boss)
 				h.einheit.nimm_schaden(9999999.0)
 				_weiter()
 		3:
@@ -1305,3 +1306,29 @@ func _f2_q_e() -> void:
 				pruefe(k.oben and k.posten_zelle == e_wand, "F2: [E] Lichttreppe an einen Rand-Wall, Brakk steht oben (%s)" % str(k.posten_zelle))
 				_f2_zielen(e_wand, kp._frei_innen(kp.mitte), 0.5)   # wieder hinunter, mitten in den Platz
 				merk["f2"] = 5
+
+
+## 27.11.: Brakk auf das freie Feld im Kampfplatz, das am weitesten vom Herausforderer weg liegt (der Ring soll liegen bleiben).
+func _brakk_weg_vom_boss() -> void:
+	var h := o.herausforderer
+	var kp := h.kampfplatz
+	if not kp.aktiv() or h.einheit == null or not is_instance_valid(h.einheit):
+		return
+	var hb := BrakkKampfplatz._halb()
+	var beste := Vector2.INF
+	var weit := -1.0
+	for y in range(kp.mitte.y - hb.y, kp.mitte.y + hb.y):
+		for x in range(kp.mitte.x - hb.x, kp.mitte.x + hb.x):
+			var z := Vector2i(x, y)
+			if kp.im_innern(z) and o.karte.ist_begehbar(z) and o.karte.ist_frei(z):
+				var p := o.karte.mitte(z)
+				var d := p.distance_to(h.einheit.position)
+				if d > weit:
+					weit = d
+					beste = p
+	if beste != Vector2.INF:
+		var k: Kommandant = spiel.kommandant
+		k.oben = false
+		spiel.ego._setze_fuss(beste)
+		spiel.ego.hoehe = 0.0
+		k.position = beste

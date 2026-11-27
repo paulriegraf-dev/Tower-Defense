@@ -132,8 +132,7 @@ func _process(_delta: float) -> bool:
 				pruefe(false, "kein Duell nach 40 s")
 				return _fertig()
 		2:
-			if not gefallen:
-				k.leben = k.max_leben
+			k.leben = k.max_leben   # er hält durch – auch im Modus „gefallen“ erst nach den 25 s (27.11.: der Technogunner traf ihn vorher um, die Tafel hielt den Test an)
 			if lang:
 				_lang_beobachten()
 				if o.zeit - duell_t >= 60.0 and not h.wut:
