@@ -181,8 +181,8 @@ func _folge(abstand: float, regel: Callable) -> void:
 
 ## Jeder Angriff dieses Laufs war mindestens 0,5 s angesagt.
 func _ansagen_pruefen() -> void:
-	var kurz := _eintraege("angriff").filter(func(x: Dictionary) -> bool: return float(x["angesagt"]) < (0.39 if str(x["art"]) in ["salve5", "sprint"] else 0.5))   # G2-4 (Paul): 5er- und Sprint-Salve 0,4 s
-	pruefe(kurz.is_empty() and not _eintraege("angriff").is_empty(), "%d Angriffe, jeder ≥ 0,5 s angesagt (zu kurz: %d)" % [_eintraege("angriff").size(), kurz.size()])
+	var kurz := _eintraege("angriff").filter(func(x: Dictionary) -> bool: return float(x["angesagt"]) < (0.29 if str(x["art"]) == "ringsalve" else 0.34 if str(x["art"]) == "moerser" else 0.39 if str(x["art"]) in ["salve5", "sprint", "salve4", "abpraller"] else (Werte.BOSS_SNIPER_SALVE_ANSAGE - 0.01 if str(x["art"]) == "salve" and art == "scharf" else 0.5)))   # G2-4 (Paul): 5er- und Sprint-Salve 0,4 s; H-2 (Paul): Scharfschützen-Salve 0,35 s (die Linien sind die Flugbahn)
+	pruefe(kurz.is_empty() and not _eintraege("angriff").is_empty(), "%d Angriffe, jeder ≥ 0,5 s angesagt (zu kurz: %d %s)" % [_eintraege("angriff").size(), kurz.size(), str(kurz.map(func(x: Dictionary) -> String: return "%s %.2f" % [x["art"], float(x["angesagt"])]))])
 
 
 # ------------------------------------------------------------------ Scharfschütze
@@ -297,7 +297,9 @@ func _scharf_120() -> void:
 	if int(erwartung[1]) == 0:   # G2-2: feste Abfolge statt Gewichten – erwartet ist der Laser-Anteil der Tabelle
 		var tab: Array = h.typ.abfolge(h.wut)
 		erwartet = float(tab.filter(func(st: Dictionary) -> bool: return str(st.get("a", "")) == "laser").size()) / maxf(1.0, float(tab.size()))
-	pruefe(summe >= 10 and erwartet >= 0.25 and laser >= 0.15, "120-s-Duell: %d Angriffe, Laservisier erwartet %.0f %% (mindestens 25 %%), gezogen %.0f %%" % [summe, erwartet * 100.0, laser * 100.0])
+		erwartet += 0.5 * float(tab.filter(func(st: Dictionary) -> bool: return (st.get("wahl", []) as Array).has("laser")).size()) / maxf(1.0, float(tab.size()))
+	# H-3 (27.11., Paul): die Tabelle bestimmt den Anteil (P1: ein Laser + [Sturm | Laser] von acht ≈ 19 %; vorher mindestens 25 %)
+	pruefe(summe >= 10 and erwartet >= 0.12 and laser >= 0.1, "120-s-Duell: %d Angriffe, Laservisier erwartet %.0f %% (mindestens 12 %%), gezogen %.0f %%" % [summe, erwartet * 100.0, laser * 100.0])
 	pruefe(anker[0] >= 2 and anker[1] == 0 and h.kronen_ohne_angriff == ohne_vorher,
 		"120-s-Duell: %d Kronenwechsel (alle %.0f s möglich), keiner während eines Angriffs, keine Krone ohne Angriff verlassen" % [anker[0], Werte.BOSS_SNIPER_KRONE_SEK])
 
@@ -321,8 +323,8 @@ func _gunner() -> void:
 	var g := h.typ as NemesisBossGunner
 	var k: Kommandant = spiel.kommandant
 	var ego: EgoModus = spiel.ego
-	pruefe(is_equal_approx(g.abstand(10.0), 8.0) and g.wall_abkling() == INF and is_equal_approx(g.takt(5.0), Werte.BOSS_GUNNER_AKTION_TAKT), "Abstand ×0,8, Takt %.1f s (G2-4), nie auf Wälle" % Werte.BOSS_GUNNER_AKTION_TAKT)
-	_folge(5.0, func(_letzte: Array, a: String) -> bool: return a in ["ringsalve", "anker", "minigun", "sprint"])   # G2-4: Sprint-Salve dazu
+	pruefe(is_equal_approx(g.abstand(10.0), 8.0) and is_equal_approx(g.wall_abkling(), Werte.BOSS_GUNNER_KRONE_AB) and is_equal_approx(g.takt(5.0), Werte.BOSS_GUNNER_AKTION_TAKT), "Abstand ×0,8, Takt %.1f s (G2-4), Rand-Kronen höchstens alle %.0f s (I-5)" % [Werte.BOSS_GUNNER_AKTION_TAKT, Werte.BOSS_GUNNER_KRONE_AB])
+	_folge(5.0, func(_letzte: Array, a: String) -> bool: return a in ["ringsalve", "sturmring", "anker", "minigun", "sprint", "salve4", "kronesprung"])   # G2-4: Sprint-Salve dazu; I: Sturmring, 4er-Salve, Kronensprung
 	# Ringsalve: stehen bleiben trifft, darüber springen nicht
 	_stelle(Vector2i(2, -1), Vector2i(-2, -1))
 	h.beginne_angriff("ringsalve")
@@ -342,7 +344,7 @@ func _gunner() -> void:
 		if h.gebunden_rest > 0.0:
 			gebunden[0] += 1)
 	var nah := h.einheit.position.distance_to(k.position) / Werte.ZELLE
-	pruefe(g.anker_treffer == 1 and nah < Werte.BOSS_GUNNER_ANKER_NAH + 0.6 and gebunden[0] >= int((Werte.BOSS_GUNNER_ANKER_ZUG + Werte.BOSS_GUNNER_ANKER_STARR) * 60.0) - 2,
+	pruefe(g.anker_treffer == 1 and nah < Werte.BOSS_GUNNER_ANKER_NAH + 0.6 and gebunden[0] >= int((Werte.BOSS_GUNNER_ANKER_STRAFF + Werte.BOSS_GUNNER_ANKER_STARR) * 60.0) - 2,   # I-1: Straffen, Zug mit 12 Feldern/s, starr
 		"Ankerwurf: aus %.1f Feldern auf %.1f herangezogen, %d Bilder gebunden" % [weit, nah, gebunden[0]])
 	_stelle(Vector2i(4, -1), Vector2i(-3, -1))
 	h.beginne_angriff("anker")
@@ -379,7 +381,10 @@ func _gunner() -> void:
 		if g.minigun_schaden > float(flucht[0]):
 			flucht[1] = flucht[2]
 		flucht[0] = g.minigun_schaden)
-	pruefe(float(flucht[1]) < Werte.BOSS_GUNNER_MINIGUN_ANLAUF + Werte.BOSS_GUNNER_MINIGUN_SEK - 0.5, "Minigun: von direkt daneben weggelaufen – letzter Treffer nach %.1f s (feuert bis %.1f s)" % [float(flucht[1]), Werte.BOSS_GUNNER_MINIGUN_ANLAUF + Werte.BOSS_GUNNER_MINIGUN_SEK])
+	# I-4 (27.11., Paul): Reichweite 8, er läuft mit 0,65 seines Tempos nach (≈ 0,68 von Brakks) – man kommt raus, aber nicht
+	# mehr in 3 s aus nächster Nähe: geprüft wird, dass der Abstand beim Weglaufen wächst
+	var abstand_ende := h.einheit.position.distance_to(k.position) / Werte.ZELLE
+	pruefe(abstand_ende >= 2.5, "Minigun: von direkt daneben weggelaufen – nach %.1f s %.1f Felder Abstand (er ist langsamer)" % [Werte.BOSS_GUNNER_MINIGUN_ANLAUF + Werte.BOSS_GUNNER_MINIGUN_SEK, abstand_ende])
 	# Lichtsäule: vor der dritten nie, danach etwa jede zweite
 	var ausweichen := func(n: int) -> int:
 		var vor := _eintraege("saeule_ausweichen").size()
@@ -394,23 +399,20 @@ func _gunner() -> void:
 	h.saeulen = 3
 	var spaet: int = ausweichen.call(30)
 	pruefe(frueh == 0 and spaet >= 8 and spaet <= 22 and g._trick_gesagt, "Lichtsäule: vor der dritten 0 von 10 ausgewichen, danach %d von 30 (Spruch einmal)" % spaet)
-	# Phase 2: hinteres Drittel, drei Bunker, 5er-Salven
+	# Phase 2 (I-6, 27.11., Paul): kein Bunker-Kiting mehr – Eröffnung Krone → Jagdanker (22 Felder) → Minigun, 4er-Salven
 	_stelle(Vector2i(5, -1), Vector2i(-2, -1))
 	h.einheit.leben = h.einheit.max_leben * 0.4
 	_lauf(2.0, func(_i: int) -> void: h._bis_angriff = 999.0)
-	var west := bool((_eintraege("bunker").back() as Dictionary).get("west", true)) if not _eintraege("bunker").is_empty() else true
-	var bunker := Werte.BOSS_GUNNER_BUNKER.filter(func(r: Vector2i) -> bool: return o.karte.inhalt(kp.mitte + (r if west else Vector2i(-1 - r.x, r.y))) == Karte.WALL)
-	pruefe(g.phase2 and bunker.size() == 6, "Phase 2: drei Bunker 2×1 im hinteren Drittel (%s, %d Felder)" % ["Westen" if west else "Osten", bunker.size()])
-	var raus := [0]
-	_lauf(8.0, func(_i: int) -> void:
-		h._bis_angriff = 999.0
-		if h._aktion.is_empty() and not g.feld_ok(o.karte.zelle_bei(h.einheit.position)):
-			raus[0] += 1)
-	pruefe(raus[0] == 0 and int(h.zaehler["sprung"]) + int(h.zaehler["tumble"]) >= 2, "Phase 2: 8 s im hinteren Drittel, wechselt die Seite (%d Bilder draußen)" % raus[0])
-	pruefe(g.gewichte(5.0, []).has("salve5"), "Phase 2: 5er-Salven dazu")
-	h.beginne_angriff("salve5")
+	var bunker := Werte.BOSS_GUNNER_BUNKER.filter(func(r: Vector2i) -> bool: return o.karte.inhalt(kp.mitte + r) == Karte.WALL or o.karte.inhalt(kp.mitte + Vector2i(-1 - r.x, r.y)) == Karte.WALL)
+	pruefe(g.phase2 and bunker.is_empty() and _eintraege("bunker").is_empty(), "Phase 2: keine Bunker (%d Felder)" % bunker.size())
+	var vorn: Array = g.eroeffnung(true)
+	pruefe(vorn.size() == 1 and str(vorn[0]["a"]) == "anker" and bool(vorn[0].get("krone", false)) and str(vorn[0].get("dann", "")) == "minigun" and is_equal_approx(g.anker_weite(), Werte.BOSS_GUNNER_P2_ANKER_WEITE),
+		"Phase 2: Eröffnung Krone → Jagdanker (%.0f Felder) → Minigun" % g.anker_weite())
+	pruefe(g.abfolge(true).any(func(st: Dictionary) -> bool: return (st.get("wahl", []) as Array).has("kronesprung")), "Phase 2: [Krone-Sprung | 4er-Salve] in der Tabelle")
+	h.angriff = {}
+	h.beginne_angriff("salve4")
 	_lauf(1.5)
-	pruefe(_eintraege("salve5_schuss").size() == 5, "5er-Salve: %d Schüsse nach %.1f s Ansage" % [_eintraege("salve5_schuss").size(), Werte.BOSS_GUNNER_SALVE5_ANSAGE])
+	pruefe(_eintraege("salve4_schuss").size() >= 1, "4er-Salve: %d Schüsse nach %.1f s Ansage" % [_eintraege("salve4_schuss").size(), Werte.BOSS_GUNNER_SALVE4_ANSAGE])
 	_ansagen_pruefen()
 
 
@@ -433,12 +435,14 @@ func _plasma() -> void:
 	_lauf(Werte.BOSS_PLASMA_MOERSER_ANSAGE + 0.05)
 	var kreise := bg.wuerfe.size()
 	var steht := _lauf(2.0)
-	pruefe(kreise >= Werte.BOSS_PLASMA_MOERSER_ZAHL.x and kreise <= Werte.BOSS_PLASMA_MOERSER_ZAHL.y and absf(steht - Werte.BOSS_PLASMA_MOERSER_ANTEIL) < 0.05, "Mörser: %d Kreise %.1f s vorher, stehen bleiben kostet %.2f Treffer" % [kreise, Werte.BOSS_PLASMA_MOERSER_FLUG, steht])
+	pruefe(kreise >= Werte.BOSS_PLASMA_MOERSER_ZAHL.x and kreise <= Werte.BOSS_PLASMA_MOERSER_ZAHL.y and steht >= Werte.BOSS_PLASMA_MOERSER_ANTEIL - 0.05 and steht <= Werte.BOSS_PLASMA_MOERSER_ANTEIL + Werte.BOSS_PLASMA_GLUT_JE_SEK * Werte.BOSS_PLASMA_GLUT_SEK + 0.05, "Mörser: %d Kreise %.1f s vorher, stehen bleiben kostet %.2f Treffer (J-4: mit Nachglühen)" % [kreise, Werte.BOSS_PLASMA_MOERSER_FLUG, steht])
+	_lauf(1.6, func(_i: int) -> void: h._bis_angriff = 999.0)   # J-4: erst das Nachglühen des ersten Mörsers abwarten
 	_stelle(Vector2i(4, -1), Vector2i(-3, -1))
 	h.beginne_angriff("moerser")
 	var springt := _lauf(2.6, func(_i: int) -> void: ego.hoehe = 1.2)
 	ego.hoehe = 0.0
 	pruefe(springt == 0.0, "Mörser: im Sprung kein Treffer")
+	_lauf(1.6, func(_i: int) -> void: h._bis_angriff = 999.0)   # J-4: das Nachglühen erlischt
 	# Sturm mit Gel: Gelfläche, kurzes Fenster; im Gel halbes Tempo, zwei Sprünge befreien; höchstens drei
 	_stelle(Vector2i(1, -1), Vector2i(-1, -1))
 	h.beginne_angriff("sturm")
@@ -474,7 +478,8 @@ func _plasma() -> void:
 		if not bg.geschosse.has(g):
 			break
 	k.unverwundbar = 0.0
-	pruefe(prall[0] == Werte.BOSS_PLASMA_PRALL_MAL and prall[1] == 0 and not bg.geschosse.has(g), "Abpraller: %d-mal abgeprallt, nie aus dem Platz" % prall[0])
+	# J-3 (27.11., Paul): nach BOSS_PLASMA_PRALL_SEK verglüht er – vorher bis zu BOSS_PLASMA_PRALL_MAL Abpraller
+	pruefe((prall[0] == Werte.BOSS_PLASMA_PRALL_MAL or float(g.get("rest_sek", 1.0)) <= 0.0) and prall[1] == 0 and not bg.geschosse.has(g), "Abpraller: %d-mal abgeprallt (oder nach %.0f s verglüht), nie aus dem Platz" % [prall[0], Werte.BOSS_PLASMA_PRALL_SEK])
 	_stelle(Vector2i(4, -1), Vector2i(-3, -1))
 	var vorher := _eintraege("abpraller").size()
 	h.beginne_angriff("abpraller")

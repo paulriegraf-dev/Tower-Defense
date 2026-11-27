@@ -9,6 +9,7 @@ extends Node
 ##    Erscheinungsmusik), das Duell auch – mit Vergeltung, Bergung und Ring.
 ##  - Danach die Tafel „Nochmal / Anderer Boss / Zurück“ mit der Zählung des Herausforderers (NemesisHerausforderer.zaehlung).
 ##  - [R] gehalten (NEUSTART_HALTEN s) startet dasselbe Setup sofort neu – kurz gedrückt bleibt [R] Brakks Ulti.
+##  - H-10: [F2] im Duell öffnet die Werte-Tafel (brakk_bosswerte.gd).
 ##  - nemesis.json wird weder gelesen noch geschrieben, das Partieprotokoll bleibt aus, Erfolge gibt es keine
 ##    (die Verrat-Sequenz entfällt). Der Boss ist ein frischer Benannter Rang 3 mit zufälligem Namen bzw. Sonde 7.
 
@@ -28,7 +29,7 @@ const REGELN := {"gebiete": true, "fabriken_innen": 0, "geheim_ab": 0, "welle_ta
 
 static var laeuft := false              # true: der nächste Start von Befehl 24 ist die Bossarena
 static var wahl := {"boss": "scharfschuetze", "stufe": 6, "ringe": "standard", "frei": [["laser", 1], ["markierung", 1], ["feuerteam", 1]],
-	"ladungen": 1, "phase2": false}
+	"ladungen": 1, "phase2": false, "klon": false}
 static var menue_seite := ""            # „Anderer Boss“: das Startmenü öffnet gleich diese Seite
 static var letzte := {}                 # Zählung des letzten Duells (Prüfung)
 
@@ -41,11 +42,17 @@ var _t := 0.0
 var _r_halten := 0.0
 var _ebene: CanvasLayer = null
 var _tafel: EndTafel = null
+var werte_tafel: BrakkBosswerte = null   # H-10: [F2] Werte-Tafel
 
 
 ## Im Menü sichtbar? Nur mit Entwicklercode.
 static func frei() -> bool:
 	return Profil.hat_code("bossarena") or Profil.hat_code("allesfrei")
+
+
+## H-10: Ist die Werte-Tafel offen? (Brakk nimmt dann keine Eingaben)
+func werte_offen() -> bool:
+	return werte_tafel != null and werte_tafel.offen
 
 
 ## Läuft gerade (bzw. startet gleich) die Bossarena?
@@ -73,7 +80,7 @@ static func menue(neu_malen: Callable, los: Callable, zurueck: Callable) -> Arra
 	const TEXT := Color("e6e0d2")
 	const BLASS := Color("8d8698")
 	var schalte := func(feld: String, liste: Array) -> void:
-		wahl[feld] = liste[(liste.find(wahl[feld]) + 1) % liste.size()]
+		wahl[feld] = liste[(liste.find(wahl.get(feld, liste[0])) + 1) % liste.size()]
 		neu_malen.call()
 	var aus: Array = [
 		[_tx("Duell starten"), los, _tx("Große Karte, Niemandsland, nur der Kampfplatz – kein Lauf, nichts wird gespeichert."), Color("7fe0ff")],
@@ -96,6 +103,7 @@ static func menue(neu_malen: Callable, los: Callable, zurueck: Callable) -> Arra
 			aus.append(["  " + _tx("Stufe Ring %d") % (i + 1) + ": %d" % int(paar[1]), stufe_weiter, "", TEXT])
 	aus.append([_tx("Sprengladungen") + ": %d" % int(wahl["ladungen"]), schalte.bind("ladungen", [0, 1, 2, 3]), "", TEXT])
 	aus.append([_tx("Phase-2-Start") + ": " + (_tx("an") if bool(wahl["phase2"]) else _tx("aus")), schalte.bind("phase2", [false, true]), _tx("an: der Boss beginnt mit 49 % Leben"), TEXT])
+	aus.append([_tx("Klon erzwingen") + ": " + (_tx("an") if bool(wahl.get("klon", false)) else _tx("aus")), schalte.bind("klon", [false, true]), _tx("an: die Klonmaschine kommt sicher (sonst 25 % je Duell, nicht bei Sonde 7)"), TEXT])   # H-8
 	aus.append([_tx("Zurück"), zurueck, "", BLASS])
 	return aus
 
@@ -110,6 +118,10 @@ func einrichten(p_o24: Order24) -> void:
 	spiel = o24.spiel
 	h = o24.herausforderer
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	o24.nemesis.nur_arena = true   # 27.11. (Paul): „nicht den Hangar verdrängen“ – beim Verlassen ist `laeuft` schon aus, speichern() schrieb sonst nur den Arena-Boss
+	BrakkBosswerte.laden()   # H-10: Order24.einrichten setzte alles auf Standard – jetzt die Änderungen der Arena
+	werte_tafel = BrakkBosswerte.new(self)
+	add_child(werte_tafel)
 
 
 func _process(delta: float) -> void:
@@ -209,6 +221,8 @@ func brakk_gefallen() -> void:
 func _tafel_zeigen() -> void:
 	if schritt == "tafel":
 		return
+	if werte_offen():
+		werte_tafel.umschalten()
 	schritt = "tafel"
 	if letzte.is_empty():
 		letzte = h.zaehlung.duplicate(true)
@@ -240,7 +254,16 @@ func tafel_inhalt(z: Dictionary, art: String) -> Dictionary:
 	var tt := PackedStringArray()
 	for a: String in treffer:
 		var e: Dictionary = treffer[a]
-		tt.append("%s %d× (%d %%)" % [a, int(e.get("n", 0)), roundi(100.0 * float(e.get("schaden", 0.0)) / maxf(1.0, max_leben))])
+		tt.append("%s %d× (%d %%)" % [tr(str(ART_TEXT.get(a, a))), int(e.get("n", 0)), roundi(100.0 * float(e.get("schaden", 0.0)) / maxf(1.0, max_leben))])
+	var zeilen := [tr("Druckphasen: %d") % int(z.get("druckphasen", 0)) + " · " + tr("Doppelstürme: %d") % int(z.get("doppelstuerme", 0)),
+		tr("Bodenmarkierung: %d %% der Zeit (Ziel < 25 %%)") % int(z.get("boden_anteil", 0)) + " · " + tr("Abstand außerhalb der Stürme: Ø %.1f Felder (Ziel ≥ 8)") % abstand_mittel(z),
+		tr("Schaden im Fenster: %d %%") % fenster_prozent(z)]   # H-11
+	if z.has("gel_zeit"):   # J-7: Plasmawerfer
+		zeilen.append(tr("Im Gel %.1f s · Brakk auf Kronen %.1f s · Wallsprenger %d · im Mittel %.1f Gele") % [float(z["gel_zeit"]), float(z.get("brakk_krone_zeit", 0.0)),
+			int(z.get("wallsprenger", 0)), float(z.get("gele_mittel", 0.0))])
+	if z.has("anker_treffer"):   # I-8: Technogunner
+		zeilen.append(tr("Jagdanker: %d getroffen, %d gerissen · Minigun in Reichweite %.1f s · Kronen %d (%.1f s oben)") % [int(z["anker_treffer"]),
+			int(z.get("anker_gerissen", 0)), float(z.get("minigun_drin", 0.0)), int(z.get("kronen", 0)), float(z.get("krone_zeit", 0.0))])
 	return {
 		"kicker": tr("BOSSARENA") + " · " + str(BOSS_TEXT.get(art, art)),
 		"titel": tr("VERTRIEBEN") if vertrieben else (tr("NEUSTART") if ausgang == "neustart" else tr("BRAKK GEFALLEN")),
@@ -249,17 +272,35 @@ func tafel_inhalt(z: Dictionary, art: String) -> Dictionary:
 		"kacheln": [
 			{"name": tr("Dauer"), "zahl": roundi(float(z.get("dauer", 0.0))), "zeit": true},
 			{"name": tr("Angriffe"), "zahl": summe},
-			{"name": tr("Fenster genutzt"), "text": "%d %%" % fenster_prozent(z)},
+			{"name": tr("Fenster genutzt"), "text": "%d %%" % fenster_zeit_prozent(z)},   # H-11: Anteil der verwundbaren Zeit mit Treffern
 			{"name": tr("Vergeltungen"), "zahl": int(z.get("vergeltungen", 0))},
 		],
 		"kaesten": [
 			{"titel": tr("Angriffe je Art"), "farbe": Color("ffd27a"), "text": " · ".join(teile) if not teile.is_empty() else "–"},
 			{"titel": tr("Treffer auf Brakk"), "farbe": Color("ff6a5a"), "text": " · ".join(tt) if not tt.is_empty() else tr("keine")},
 		],
-		"zeilen": [tr("Druckphasen: %d") % int(z.get("druckphasen", 0))],
+		"zeilen": zeilen,
 		"knoepfe": [[tr("Nochmal"), neu_starten, Color("ffd27a")], [tr("Anderer Boss"), _anderer_boss, Color("7fe0ff")], [tr("Zurück"), _zurueck, Color("a79fb3")]],
 		"esc": _zurueck,
 	}
+
+
+## H-11 (27.11., Paul): Anteil der verwundbaren Zeit, in der Brakk den Boss traf (Prozent, je Fenster mit mindestens einem Treffer).
+static func fenster_zeit_prozent(z: Dictionary) -> int:
+	var zeit := float(z.get("fenster_zeit", 0.0))
+	return roundi(100.0 * float(z.get("fenster_getroffen_zeit", 0.0)) / zeit) if zeit > 0.0 else 0
+
+
+## H-11: mittlerer Abstand des Bosses außerhalb der Stürme (Felder; Ziel beim Scharfschützen ≥ 8).
+static func abstand_mittel(z: Dictionary) -> float:
+	var zeit := float(z.get("abstand_zeit", 0.0))
+	return snappedf(float(z.get("abstand_summe", 0.0)) / zeit, 0.1) if zeit > 0.0 else 0.0
+
+
+## H-11: lesbare Namen der Angriffsarten in der Zählung.
+const ART_TEXT := {"salve": "Salve", "sturm": "Sturm", "laser": "Laser", "reihe": "Reihenwelle", "saeule": "Lichtsäule", "stellung": "Stellungen",
+	"klon": "Klon", "zielmarkierung": "Zielmarkierung", "anker": "Jagdanker-Zug", "ring": "Ring", "salve4": "4er-Salve", "minigun": "Minigun",
+	"sturmring": "Sturmring", "moerser": "Mörser", "glut": "Nachglühen", "wallsprenger": "Wallsprenger", "abpraller": "Abpraller", "brand": "Brand"}
 
 
 ## Anteil des Schadens am Boss, der in seinen verwundbaren Fenstern ankam (Prozent).

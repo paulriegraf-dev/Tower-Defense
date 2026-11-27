@@ -12,6 +12,10 @@ var h: NemesisHerausforderer
 var o24: Order24
 var spiel: Node
 var bg: BrakkGeschosse
+var _rw: Node3D = null              # H-6/I-4: Reichweitenring (reichweite_ring) …
+var _rw_stoff: StandardMaterial3D = null
+var _rw_flaeche: MeshInstance3D = null
+var _rw_weite := 0.0
 
 
 static func fuer(art: String, p_h: NemesisHerausforderer) -> NemesisBoss:
@@ -139,6 +143,65 @@ func anker_zwang() -> bool:
 	return false
 
 
+## H-6 (27.11., Paul): Legt der Angriff eine Markierung auf den Boden – so lange (s), -1 = keine? Nie zwei zugleich:
+## ein Angriff mit Bodeneffekt wartet, bis der Boden frei ist.
+func boden_sek(art: String) -> float:
+	match art:
+		"salve":
+			return Werte.HERAUSFORDERER_SALVE_ANSAGE + 0.3
+		"kugel":
+			return Werte.HERAUSFORDERER_KUGEL_ANSAGE + 2.0
+		"sturm":
+			return Werte.HERAUSFORDERER_STURM_ANLAUF + Werte.HERAUSFORDERER_STURM_ANSAGE   # beim Kreis neu gesetzt
+	return -1.0   # H-7: die Säule der Vergeltung belegt den Boden selbst (Besitzer „saeule“)
+
+
+## I-1 (27.11., Paul): Ersetzt der Typ den Schritt nach dem Abstand (Felder)? [Angriff, gekoppelter Angriff danach oder ""].
+func ersatz(art: String, _abstand: float) -> Array:
+	return [art, ""]
+
+
+## I-5 (27.11., Paul): Darf die fällige Vergeltung (Säule) jetzt beginnen?
+func vergeltung_ok() -> bool:
+	return true
+
+
+## I-8 (27.11., Paul): Zählung des Bosstyps (wird ins Duell übernommen: Tafel, Protokoll „duell“).
+func zaehlung_extra() -> Dictionary:
+	return {}
+
+
+## H-7 (27.11., Paul): Wohin die Lichtsäule der Vergeltung fällt – auf Brakks vorausberechnete Position.
+func saeule_ziel(_k: Kommandant) -> Vector2:
+	return h.vorhersage(Werte.BOSS_SAEULE_ANSAGE, Werte.BOSS_SAEULE_VORHALT_MAX)
+
+
+## H-7: Die Säule steht – übernimmt der Typ (true), z. B. mit einem Angriff gleich danach? Sonst kommt sein Fenster.
+func nach_saeule(_k: Kommandant) -> bool:
+	return false
+
+
+## H-7: Wegsperre (Technogunner, Plasmawerfer): die Säule zwischen Brakk und seiner Fluchtrichtung – vor ihn in
+## Laufrichtung (steht er, auf der vom Boss abgewandten Seite).
+func _saeule_wegsperre(k: Kommandant) -> Vector2:
+	var r := h.brakk_v.normalized() if h.brakk_v.length() > 0.5 * Werte.ZELLE else (k.position - h.einheit.position).normalized()
+	var p := k.position + r * (EgoModus.SAEULE_RADIUS + Werte.BOSS_SAEULE_SPERRE) * Werte.ZELLE
+	if h.kampfplatz.aktiv():
+		var rand := Vector2.ONE * 1.5 * Werte.ZELLE
+		p = p.clamp(h.kampfplatz.rechteck.position + rand, h.kampfplatz.rechteck.end - rand)   # im Platz
+	return p
+
+
+## H-4 (27.11., Paul): In der Druckphase hält er Brakks Lieblingsabstand × so viel.
+func druck_abstand_mal() -> float:
+	return Werte.BOSS_DRUCK_ABSTAND_MAL
+
+
+## H-6: Ist er für den Angriff bereit (`wartet`: so lange wartet der Schritt schon)? Sonst bewegt er sich weiter.
+func bereit(_art: String, _abstand: float, _wartet: float) -> bool:
+	return true
+
+
 ## G2: Ein Angriff, der allem vorgeht ("" = keiner), z. B. Sonde 7s Sturzfeuer direkt nach dem Schrotstoß.
 func erzwungen() -> String:
 	return ""
@@ -231,9 +294,59 @@ func _treffe(anteil: float, von: Vector2, blitz: bool = true) -> void:
 	bg._treffe_brakk(h.schaden() * anteil, "herausforderer", h.quelle(), von, blitz)
 
 
+## H-6/I-4 (27.11., Paul): Reichweitenring am Boden um ihn (Radius `weite` Felder): dünn gestrichelt, sobald der Angriff der
+## nächste Schritt ist; `breit`: breit und pulsierend; `gefuellt`: zusätzlich rot gefüllt. zeigen = false blendet ihn aus.
+func reichweite_ring(zeigen: bool, weite: float, breit: bool, gefuellt: bool) -> void:
+	if not zeigen or spiel.hd == null or h.einheit == null or not is_instance_valid(h.einheit):
+		if _rw != null and is_instance_valid(_rw):
+			_rw.visible = false
+		return
+	if _rw == null or not is_instance_valid(_rw) or not is_equal_approx(_rw_weite, weite):
+		reichweite_weg()
+		_rw_weite = weite
+		_rw = Node3D.new()
+		_rw_stoff = o24._leucht(Color("ff3b3b"), 0.5)
+		var n := 40
+		for i in n:
+			var strich := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(TAU * weite / n * 0.55, 0.02, 0.06)
+			strich.mesh = box
+			strich.material_override = _rw_stoff
+			var w := TAU * (i + 0.5) / n
+			strich.position = Vector3(cos(w), 0.0, sin(w)) * weite
+			strich.rotation.y = -w - PI / 2.0
+			_rw.add_child(strich)
+		_rw_flaeche = MeshInstance3D.new()
+		var form := CylinderMesh.new()
+		form.top_radius = weite
+		form.bottom_radius = weite
+		form.height = 0.01
+		_rw_flaeche.mesh = form
+		_rw_flaeche.material_override = o24._leucht(Color("ff2a2a"), 0.16)
+		_rw_flaeche.position.y = -0.01
+		_rw.add_child(_rw_flaeche)
+		spiel.hd.add_child(_rw)
+	var puls := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) / 90.0)
+	_rw.visible = true
+	_rw.position = bg._zu3d(h.einheit.position, h.markierung_h())
+	var dicke := (2.6 + 0.8 * puls) if breit else 1.0
+	for c: Node in _rw.get_children():
+		if c != _rw_flaeche:
+			(c as Node3D).scale = Vector3(1.0, 1.0, dicke)
+	_rw_stoff.albedo_color.a = (0.6 + 0.35 * puls) if breit else 0.35
+	_rw_flaeche.visible = gefuellt
+
+
+func reichweite_weg() -> void:
+	if _rw != null and is_instance_valid(_rw):
+		_rw.queue_free()
+	_rw = null
+
+
 ## Ein Ring am Boden um `mitte` (Felder), so lange `echt` Sekunden.
 func _ring(mitte: Vector2, radius: float, farbe: Color, echt: float) -> void:
-	bg._ring(bg._zu3d(mitte, 0.05), radius, farbe, _bg(echt))
+	bg._ring(bg._zu3d(mitte, h.markierung_h()), radius, farbe, _bg(echt))   # H-5: auf der Fläche, auf der Brakk steht
 
 
 func _protokoll(was: String, mehr: Dictionary = {}) -> void:

@@ -359,6 +359,8 @@ func einrichten(p_spiel: Node) -> void:
 	nemesis.einrichten(self)
 	taktik = BrakkJagdtaktik.new(self)
 	schildwache = BrakkSchildwache.new(self)
+	Werte.boss_standard()   # H-10: Standard merken (vor jeder Änderung) …
+	Werte.boss_zuruecksetzen()   # … und im echten Lauf immer die Standardwerte (die Bossarena lädt danach ihre)
 	herausforderer = NemesisHerausforderer.new()
 	add_child(herausforderer)
 	herausforderer.einrichten(nemesis)
@@ -1138,7 +1140,7 @@ func _verrat_beginnen() -> void:
 
 ## Steuerung gesperrt, solange die Sequenz läuft (ego_modus._frei).
 func sperrt_steuerung() -> bool:
-	return verrat != null
+	return verrat != null or (arena != null and arena.werte_offen())   # H-10: Werte-Tafel der Bossarena offen
 
 
 func _verrat_ereignis(was: String) -> void:
@@ -3787,11 +3789,22 @@ func hud(bild: Control, g: Vector2, ego: EgoModus) -> void:
 		var zu := herausforderer.anvisiert - ego._fuss2d()
 		var w := Vector2(-sin(ego.gier), -cos(ego.gier)).angle_to(zu)
 		var puls := Color(Color("ff3b3b"), 0.75 + 0.25 * sin(float(Time.get_ticks_msec()) / 60.0))
-		Stil.schreibe_mittig(bild, Vector2(m.x, y + 4.0), tr("ANVISIERT"), 26, puls)
+		Stil.schreibe_mittig(bild, Vector2(m.x, y + 4.0), herausforderer.anvisiert_text if herausforderer.anvisiert_text != "" else tr("ANVISIERT"), 26, puls)
 		var p := Vector2(m.x, y + 40.0)
 		var spitze := Vector2(0, -16).rotated(w)
 		bild.draw_colored_polygon(PackedVector2Array([p + spitze, p + spitze.rotated(2.5) * 0.7, p + spitze.rotated(-2.5) * 0.7]), puls)
 		y += 62.0
+		if herausforderer.anvisiert_balken >= 0.0:
+			# H-6 (27.11., Paul): Balken (Zielen füllt sich, Strahl läuft ab) und roter Bildrand
+			var balken := Rect2(m.x - 90.0, y - 6.0, 180.0, 8.0)
+			bild.draw_rect(balken, Color(0.05, 0.02, 0.03, 0.8))
+			bild.draw_rect(Rect2(balken.position, Vector2(balken.size.x * herausforderer.anvisiert_balken, balken.size.y)), puls)
+			bild.draw_rect(balken, Color("ff3b3b"), false, 1.5)
+			y += 14.0
+			var gross: Vector2 = bild.size
+			var rand := Color(Color("ff2a2a"), 0.18 + 0.22 * herausforderer.anvisiert_balken)
+			for r: Rect2 in [Rect2(0, 0, gross.x, 14), Rect2(0, gross.y - 14, gross.x, 14), Rect2(0, 0, 14, gross.y), Rect2(gross.x - 14, 0, 14, gross.y)]:
+				bild.draw_rect(r, rand)
 	if herausforderer != null and herausforderer.saeule_ueber_brakk():
 		Stil.schreibe_mittig(bild, Vector2(m.x, y + 4.0), "Lichtsäule über dir – raus aus dem Kreis!", 22, Color(Color("d6b3ff"), 0.7 + 0.3 * sin(float(Time.get_ticks_msec()) / 70.0)))
 		y += 28.0

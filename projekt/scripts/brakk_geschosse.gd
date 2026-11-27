@@ -29,6 +29,8 @@ var treffer_von := Vector2.INF # woher der letzte Treffer kam (für den Randblit
 var treffer_ms := -100000      # … und wann (ms)
 var abgefeuert := 0            # Zähler für den Test
 var getroffen := 0
+var gruppen_treffer := {}      # I-3: Treffer je Gruppe (Salve des Herausforderers)
+var verglueht := 0               # J-3: Prüfung – so viele Geschosse sind am Ende ihrer Lebensdauer verglüht
 
 var _knoten: Array = []        # 3D-Bilder: [Node3D, Restzeit, Dauer, Art]
 var _mat: StandardMaterial3D = null
@@ -141,7 +143,7 @@ func scharf(wer: Node2D, von: Vector2, von_h: float, weite: float, schaden: floa
 ## 22.11. (Nemesis Teil 3): Wurf auf eine Stelle – Sperrbrand (flach, kurz) und Ausräuchern (hoher Bogen über einen Wall,
 ## langsam, mit Schatten am Boden). Vorwarnkreis für die ganze Flugzeit; beim Aufschlag Schaden im Umkreis (nicht im
 ## Sprung, nicht im Tumble) und ein Brandfeld für `brand_sek`.
-func wurf(von: Vector2, punkt: Vector2, flug: float, radius: float, brand_sek: float, dps: float, schaden: float, quelle: String, hoch: bool) -> void:
+func wurf(von: Vector2, punkt: Vector2, flug: float, radius: float, brand_sek: float, dps: float, schaden: float, quelle: String, hoch: bool, ring_h: float = 0.04) -> void:
 	abgefeuert += 1
 	var wand := _lichtwand(von, punkt)
 	if wand != Vector2.INF:   # C1: landet an der Lichtwand und tut drinnen niemandem etwas
@@ -153,7 +155,7 @@ func wurf(von: Vector2, punkt: Vector2, flug: float, radius: float, brand_sek: f
 		"quelle": quelle, "hoch": hoch, "bild": null, "schatten": null}
 	if spiel != null:
 		spiel.effekte.warnung(punkt, flug * Werte.BRAKK_TEMPO)
-		_ring(_zu3d(punkt, 0.04), radius / Werte.ZELLE, _farbe("plasma"), flug)
+		_ring(_zu3d(punkt, ring_h), radius / Werte.ZELLE, _farbe("plasma"), flug)   # J-1: auf der Krone in Kronenhöhe
 		w["bild"] = _geschoss_bild("plasma", float((Werte.BRAKK_GESCHOSS["plasma"] as Dictionary)["dicke"]) * (1.4 if hoch else 1.0))
 		if hoch:
 			w["schatten"] = _schatten_bild()
@@ -278,7 +280,7 @@ func weiter(dt: float) -> void:
 		b["rest"] = float(b["rest"]) - dt
 		if not z.is_empty() and not bool(z["durchlass"]) and float(z["sprung"]) <= Werte.BRAKK_SPRUNG_BODEN \
 				and (z["pos"] as Vector2).distance_to(b["mitte"]) <= float(b["r"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
-			_treffe_brakk(float(b["dps"]) * dt, str(b.get("typ", "plasmawerfer")), str(b["quelle"]), b["mitte"], false)   # C2: Brandfächer zählt wie seine Treffer
+			_treffe_gezaehlt("brand" if bool(b.get("boss", false)) else "", float(b["dps"]) * dt, str(b.get("typ", "plasmawerfer")), str(b["quelle"]), b["mitte"], false)   # C2: Brandfächer zählt wie seine Treffer (J-7: als „brand“)
 	braende = braende.filter(func(b: Dictionary) -> bool: return float(b["rest"]) > 0.0)
 	noch = []
 	for w: Dictionary in wuerfe:
@@ -311,7 +313,7 @@ func _wurf_landet(w: Dictionary, z: Dictionary) -> void:
 	if not z.is_empty() and not bool(z["durchlass"]) and float(z["sprung"]) <= Werte.BRAKK_SPRUNG_BODEN \
 			and (z["pos"] as Vector2).distance_to(wo) <= r + Werte.BRAKK_RUMPF * Werte.ZELLE:
 		getroffen += 1
-		_treffe_brakk(float(w["schaden"]), str(w.get("typ", "plasmawerfer")), str(w["quelle"]), w["von"], true)   # C2: Mörser zählt wie seine Treffer
+		_treffe_gezaehlt(str(w.get("zaehl", "")), float(w["schaden"]), str(w.get("typ", "plasmawerfer")), str(w["quelle"]), w["von"], true)   # C2: Mörser zählt wie seine Treffer (J-7: als „moerser“)
 	if float(w["brand"]) > 0.0:
 		braende.append({"mitte": wo, "r": r, "rest": float(w["brand"]), "dps": float(w["dps"]), "quelle": w["quelle"]})
 	if spiel != null:
@@ -361,6 +363,15 @@ func _schatten_bild() -> Node3D:
 func _geschoss_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
 	if g.has("lenk"):
 		return _lenk_weiter(g, dt, z)   # C3: Lenkgeschoss von Sonde 7
+	if g.has("rest_sek"):   # J-3: begrenzte Lebensdauer (Abpraller des Plasmawerfers) – dann verglüht er
+		g["rest_sek"] = float(g["rest_sek"]) - dt
+		if float(g["rest_sek"]) <= 0.0:
+			var wo := (g["von"] as Vector2) + (g["r"] as Vector2) * float(g["s"])
+			_bild_weg(g)
+			if spiel != null:
+				_blitz(_zu3d(wo, _hoehe(g, float(g["s"]))), _farbe(str(g["art"])), 0.3)
+			verglueht += 1
+			return false
 	var von: Vector2 = g["von"]
 	var r: Vector2 = g["r"]
 	var s_alt := float(g["s"])
@@ -370,12 +381,15 @@ func _geschoss_weiter(g: Dictionary, dt: float, z: Dictionary) -> bool:
 		var p := Geometry2D.get_closest_point_to_segment(z["pos"], von + r * s_alt, von + r * s_neu)
 		if p.distance_to(z["pos"]) <= float(g["radius"]) + Werte.BRAKK_RUMPF * Werte.ZELLE:
 			getroffen += 1
-			_treffe_brakk(float(g["schaden"]), str(g["typ"]), str(g["quelle"]), von, true)
+			_treffe_gezaehlt(str(g.get("zaehl", "")), float(g["schaden"]), str(g["typ"]), str(g["quelle"]), von, true)   # H-11: Treffer zählen unter ihrer Art
 			_einschlag_bild(p, _hoehe(g, von.distance_to(p)), g, true)
-			if g.has("gruppe"):   # 26.11.: die Salve des Herausforderers trifft nur einmal
-				for x: Dictionary in geschosse:
-					if x.get("gruppe", -1) == g["gruppe"]:
-						x["harmlos"] = true
+			if g.has("gruppe"):   # 26.11.: die Salve des Herausforderers trifft nur einmal (I-3: höchstens „gruppe_max“-mal)
+				var schon := int(gruppen_treffer.get(g["gruppe"], 0)) + 1
+				gruppen_treffer[g["gruppe"]] = schon
+				if schon >= int(g.get("gruppe_max", 1)):
+					for x: Dictionary in geschosse:
+						if x.get("gruppe", -1) == g["gruppe"]:
+							x["harmlos"] = true
 			if bool(g["boden"]):
 				_plasma_landet(g, p, z, false)
 			return false
@@ -571,6 +585,16 @@ func _treffe_brakk(menge: float, typ: String, quelle: String, von: Vector2, blit
 		spiel.brakk_quelle = alt_b
 	else:
 		k.nimm_fernschaden(menge)   # Ruine deckt wie bisher
+
+
+## H-11/J-7: Ein Treffer an Brakk, für die Zählung des Herausforderers unter `zaehl` (leer: unter dem laufenden Angriff).
+func _treffe_gezaehlt(zaehl: String, menge: float, typ: String, quelle: String, von: Vector2, blitz: bool) -> void:
+	var hf: NemesisHerausforderer = spiel.order24.herausforderer if zaehl != "" and spiel != null and spiel.order24 != null else null
+	if hf != null:
+		hf.zaehl_art = zaehl
+	_treffe_brakk(menge, typ, quelle, von, blitz)
+	if hf != null:
+		hf.zaehl_art = ""
 
 
 ## Brakks Lage: Bodenpunkt, Füße über dem Boden (Sprung), absolute Fußhöhe, ob Geschosse durchgehen. {} = kein Ziel.
@@ -770,6 +794,18 @@ func _geschoss_bild(art: String, dicke: float) -> Node3D:
 	n.add_child(schweif)
 	hd.add_child(n)
 	return n
+
+
+## Paul (27.11.): ein fliegendes Geschoss umfärben (Klon: blau).
+func faerben(g: Dictionary, farbe: Color) -> void:
+	var n: Variant = g.get("bild")
+	if n == null or not is_instance_valid(n) or (n as Node).get_child_count() < 2:
+		return
+	var kopf := (n as Node).get_child(0) as MeshInstance3D
+	kopf.material_override = _leucht_mat(farbe, 0.7)
+	if kopf.get_child_count() > 0:
+		(kopf.get_child(0) as MeshInstance3D).material_override = _leucht_mat(farbe.lightened(0.7), 1.0)
+	((n as Node).get_child(1) as MeshInstance3D).material_override = _leucht_mat(farbe, 0.55)
 
 
 func _geschoss_bild_setzen(g: Dictionary) -> void:

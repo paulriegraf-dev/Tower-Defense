@@ -1313,6 +1313,7 @@ static func _guete(p: Dictionary) -> float:
 
 const VERSION := 1
 static var datei := "user://nemesis.json"   # Tests setzen eine eigene Datei
+var nur_arena := false              # 27.11. (Paul): Partie der Bossarena – schreibt nemesis.json nie, auch nicht beim Verlassen (der Hangar bleibt)
 ## gespeicherte Felder je Person und ihr Standard (fehlt ein Feld in einer alten Datei, gilt der Standard)
 const FELDER := {
 	"id": 0, "art": "technogunner", "rang": 1, "name": "?", "beiname": "", "titel": [], "tat": "", "faehigkeit": "", "angewohnheit": "",
@@ -1425,7 +1426,7 @@ func laden() -> void:
 
 ## Liste schreiben (Benannte, ohne die Laufdaten). Im Balance-Labor nie.
 func speichern() -> void:
-	if Labor.aktiv or BrakkBossarena.aktiv():   # G2: die Bossarena schreibt nichts
+	if Labor.aktiv or BrakkBossarena.aktiv() or nur_arena:   # G2: die Bossarena schreibt nichts (27.11.: auch nicht, wenn sie beim Verlassen schon aus ist)
 		return
 	var liste: Array = []
 	for p: Dictionary in benannte():

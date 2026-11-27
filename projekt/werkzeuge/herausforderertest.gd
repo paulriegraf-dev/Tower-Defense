@@ -1070,9 +1070,17 @@ func _punkt6_wahl_und_waffen() -> void:
 	t = _angriff_ausfuehren("strahl", 2.2, Vector2(0, 1.2 * Z), 0.4)
 	pruefe(t < 0.01, "Ladestrahl: ein Schritt aus der Linie – %.2f Treffer" % t)
 	_stelle(6.0)
-	t = _angriff_ausfuehren("saeule", 2.8)
-	pruefe(absf(t - 1.0) < 0.05 and _letzte_ansage() >= 1.45, "Lichtsäule: stehend %.2f Treffer, Vorschau %.2f s wie bei Brakk" % [t, _letzte_ansage()])
+	# H-7 (27.11., Paul): die Säule steht BOSS_SAEULE_SEK s mit BOSS_SAEULE_JE_SEK je Sekunde (vorher ein Einschlag mit einem Treffer)
+	var soll_saeule := Werte.BOSS_SAEULE_SEK * Werte.BOSS_SAEULE_JE_SEK
+	var saeule_vor := h.saeule_schaden
+	_angriff_ausfuehren("saeule", Werte.BOSS_SAEULE_ANSAGE + Werte.BOSS_SAEULE_SEK + 0.4)
+	t = h.saeule_schaden - saeule_vor   # nur die Säule (danach greift er weiter an)
+	var s_ans := h.protokoll.filter(func(x: Dictionary) -> bool: return str(x["was"]) == "angriff" and str(x["art"]) == "saeule")
+	var s_vor := float(s_ans.back()["angesagt"]) if not s_ans.is_empty() else 0.0
+	pruefe(absf(t - soll_saeule) < 0.08 and s_vor >= 1.45, "Lichtsäule: stehend %.2f Treffer (Soll %.2f), Vorschau %.2f s wie bei Brakk" % [t, soll_saeule, s_vor])
+	h._saeule_weg()
 	_stelle(6.0)
+	h._saeule_weg()
 	h.beginne_angriff("saeule")
 	var warnt := h.saeule_ueber_brakk()
 	(spiel.kommandant as Kommandant).position += Vector2(0, 2.2 * Z)
@@ -1080,7 +1088,11 @@ func _punkt6_wahl_und_waffen() -> void:
 	h.angriff = {}
 	h._marke_weg()
 	_stelle(6.0)
-	t = _angriff_ausfuehren("saeule", 2.8, Vector2(0, 2.2 * Z), 0.7)
+	h._saeule_weg()
+	var saeule_vor2 := h.saeule_schaden
+	_angriff_ausfuehren("saeule", Werte.BOSS_SAEULE_ANSAGE + Werte.BOSS_SAEULE_SEK + 0.4, Vector2(0, 2.2 * Z), 0.7)
+	t = h.saeule_schaden - saeule_vor2   # nur die Säule
+	h._saeule_weg()
 	pruefe(t < 0.01, "Lichtsäule: aus dem Kreis – %.2f Treffer" % t)
 	_stelle(6.0)
 	t = _angriff_ausfuehren("doppel", 3.4)
@@ -1211,14 +1223,16 @@ func _punkt6_takt_start() -> void:
 func _punkt6_takt_an() -> void:
 	var h := o.herausforderer
 	var t := _tafeln("vergeltung")
-	pruefe(str(h.vergeltung.get("name", "")) == "Ladestrahl" and not t.is_empty() and str(t[0]["titel"]) == "Vergeltung: Ladestrahl", "Ansage „Vergeltung: Ladestrahl“")
+	# H-7 (27.11., Paul): die Vergeltung ist immer die Lichtsäule (die meistgenutzte Quelle – hier der Ladestrahl – zählt nicht mehr)
+	var v := h.protokoll.filter(func(x: Dictionary) -> bool: return str(x["was"]) == "vergeltung")
+	pruefe(not v.is_empty() and str(v.back()["art"]) == "saeule" and not t.is_empty() and str(t[0]["titel"]) == "Vergeltung: Lichtsäule", "Ansage „Vergeltung: Lichtsäule“")
 	pruefe((h.einheit.get_meta("nemesis_umriss") as Color).is_equal_approx(NemesisHerausforderer.VERGELTUNG_UMRISS), "lila Umriss")
-	pruefe(Hangar.karten_zeilen_alle(h.person).any(func(z: Array) -> bool: return str(z[0]) == "Vergeltung" and str(z[1]) == "kopiert Ladestrahl"), "ab jetzt in der Karte")
+	pruefe(Hangar.karten_zeilen_alle(h.person).any(func(z: Array) -> bool: return str(z[0]) == "Vergeltung" and str(z[1]).ends_with("Lichtsäule")), "ab jetzt in der Karte")
 
 
 func _punkt6_takt_aus() -> void:
 	var h := o.herausforderer
-	pruefe(h.vergeltung.is_empty() and not (h.einheit.get_meta("nemesis_umriss") as Color).is_equal_approx(NemesisHerausforderer.VERGELTUNG_UMRISS), "nach 10 s vorbei, Umriss wie vorher")
+	pruefe(h.stehende_saeule.is_empty() and not (h.einheit.get_meta("nemesis_umriss") as Color).is_equal_approx(NemesisHerausforderer.VERGELTUNG_UMRISS), "Säule erloschen, Umriss wie vorher")
 	var rest := Werte.HERAUSFORDERER_VERGELTUNG_ABKLING - (o.zeit - float(merk["v_ab"]) - 0.5)
 	pruefe(absf(h._vergeltung_in - rest) < 0.7, "die nächste erst 20 s nach Beginn (noch %.1f s)" % h._vergeltung_in)
 

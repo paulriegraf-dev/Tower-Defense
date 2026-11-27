@@ -48,6 +48,14 @@ var _vergeltung_in := 12.0
 var marke_rest := 0.0            # Zielring: Brakk ist markiert
 var gel_rest := 0.0              # Gelring: Brakk ist gebremst
 var _marke: Node3D = null        # Vorschau der kopierten Lichtsäule
+var stehende_saeule := {}         # H-7: die stehende Lichtsäule der Vergeltung: {"pos", "rest", "bild"}
+var saeule_schaden := 0.0         # Prüfung (Anteile eines Treffers)
+var _saeule_verzug := 0.0         # H-7: so lange wartet die fällige Säule schon auf freien Boden
+var _saeule_ziel := Vector2.INF   # H-7: Ziel der nächsten Ansage (statt Brakks Position)
+var _saeule_umriss_bis := -1.0    # H-7: so lange (uhr) trägt er den lila Umriss der Vergeltung
+var klon: NemesisKlon = null      # H-8: die Klonmaschine dieses Duells
+var klon_erzwingen := false        # H-8: Bossarena-Schalter bzw. Prüfung: der Klon kommt sicher
+var gesagt := {}                   # I-1: Hinweise, die je Lauf nur einmal kommen (z. B. „jagdanker“)
 ## C1 (26.11., Paul): Kampfplatz und Auftritt als Sequenz
 var kampfplatz: BrakkKampfplatz = null
 var einzug := {}                 # er kommt von außen: {"teil": "lauf"|"sprung"|"ladung"|"durch", "t", "vor", "wall", "drinnen", "weg"}
@@ -78,9 +86,19 @@ var abfolge_log: Array = []      # Prüfung: je {"i", "art", "bei", "druck"} (i 
 const DRUCK_UMRISS := Color("c46bff")
 var druck := false               # läuft gerade eine Druckphase?
 var _druck_seit := 0.0
-var bodenfeuer := {}             # Anker-Zwang: {"t", "zellen": {Feld: Sekunde, ab der es warnt}, "bild": {Feld: Node3D}}
-var bodenfeuer_schaden := 0.0    # Prüfung (Anteile eines Treffers)
-var _hoch_gesagt := false        # Sonde 7 kommentiert den ersten Anker-Zwang
+var reihe: NemesisReihenwelle = null   # H-1: die laufende Reihenwelle (Anker-Zwang, lesbar; ersetzt das Bodenfeuer)
+var zaehl_art := ""               # H-1: Treffer zählen unter dieser Art (Reihenwelle, Säule, Klon – laufen neben den Angriffen)
+var _hoch_gesagt := false        # Sonde 7 kommentiert die erste Reihenwelle im Lauf
+## H-6 (27.11., Paul): nie zwei Bodeneffekte zugleich (alle Bosse) – wer markiert den Boden bis wann (Duell-Sekunden)
+var boden := {}                  # Besitzer ("boss", "reihe", "saeule", "klon") → bis (uhr)
+var uhr := 0.0                    # H-6: Duell-Sekunden im Takt von schritt() (für boden)
+var boden_log: Array = []        # Prüfung: je {"wer", "von", "bis"}
+var _wartend := ""               # dieser Angriff der Abfolge wartet, bis der Boden frei (bzw. er bereit) ist
+var _wartet_seit := 0.0
+var anvisiert_balken := -1.0     # HUD unter „ANVISIERT“: Balken 0..1 (-1 = keiner) …
+var anvisiert_text := ""         # … und sein Text ("" = „ANVISIERT“)
+var brakk_v := Vector2.ZERO        # H-2: Brakks Geschwindigkeit (Bildpunkte je echter Sekunde, geglättet) …
+var _brakk_vorher := Vector2.INF  # … aus seiner Lage im letzten Schritt
 
 
 func einrichten(p_nem: Nemesis) -> void:
@@ -208,12 +226,24 @@ func _auftritt() -> void:
 	zaehler = {"sprung": 0, "tumble": 0, "ausweichen": 0, "wall": 0}
 	angriffe_je_art = {}
 	zaehlung = {"boss": "sonde" if ist_sonde() else str(p["art"]), "name": Nemesis.voller_name(p), "angriffe": angriffe_je_art, "treffer": {},
-		"boss_schaden": 0.0, "fenster_schaden": 0.0, "vergeltungen": 0, "druckphasen": 0, "dauer": 0.0, "ausgang": ""}   # G2
+		"boss_schaden": 0.0, "fenster_schaden": 0.0, "vergeltungen": 0, "druckphasen": 0, "dauer": 0.0, "ausgang": "",
+		"doppelstuerme": 0, "fenster_zeit": 0.0, "fenster_getroffen_zeit": 0.0, "abstand_summe": 0.0, "abstand_zeit": 0.0, "boden_anteil": 0}   # G2; H-11
 	kennwerte = nem.lernen.kennwerte()
 	_aktion_in = float(kennwerte["takt"])
 	angriff = {}
 	wut = false
 	_letzte.clear()
+	boden = {}   # H-6
+	brakk_v = Vector2.ZERO   # H-2
+	_brakk_vorher = Vector2.INF
+	uhr = 0.0
+	_saeule_umriss_bis = -1.0   # H-7
+	klon = NemesisKlon.new(self)   # H-8
+	klon.duell_beginnt(klon_erzwingen or (o24.arena != null and bool(BrakkBossarena.wahl.get("klon", false))))
+	_saeule_verzug = 0.0
+	stehende_saeule = {}
+	boden_log = []
+	_wartend = ""
 	_abf = []   # G2-2
 	_abf_vorn = []
 	schritt_jetzt = {}
@@ -257,6 +287,9 @@ func ende(wie: String) -> void:
 	if not zaehlung.is_empty():   # G2: Zählung abschließen (Bossarena-Tafel, Protokoll)
 		zaehlung["angriffe"] = angriffe_je_art.duplicate()
 		zaehlung["dauer"] = snappedf(seit, 0.1)
+		zaehlung["boden_anteil"] = boden_anteil()   # H-11
+		if typ != null:
+			zaehlung.merge(typ.zaehlung_extra(), true)   # I-8
 		if str(zaehlung["ausgang"]) == "":
 			zaehlung["ausgang"] = wie
 		if o24.arena == null and spiel.has_method("befehl24_protokoll"):   # G2-6: im echten Lauf ins Partieprotokoll
@@ -277,6 +310,10 @@ func ende(wie: String) -> void:
 	_drohne_aus(1.0)
 	vergeltung_aus()
 	_druck_aus()   # G2-3
+	_reihe_aus()   # H-1
+	_saeule_weg()   # H-7
+	if klon != null:
+		klon.ende()   # H-8
 	if typ != null:
 		typ.ende()   # C2: Stellungen, Bunker, Gel- und Brandflächen weg
 	marke_rest = 0.0
@@ -304,7 +341,10 @@ func duell_protokoll() -> Dictionary:
 	return {"boss": str(zaehlung.get("boss", "")), "name": str(zaehlung.get("name", "")), "dauer": float(zaehlung.get("dauer", 0.0)),
 		"angriffe": (zaehlung.get("angriffe", {}) as Dictionary).duplicate(), "treffer_je_art": treffer,
 		"fenster_genutzt": BrakkBossarena.fenster_prozent(zaehlung), "druckphasen": int(zaehlung.get("druckphasen", 0)),
-		"vergeltungen": int(zaehlung.get("vergeltungen", 0)), "ausgang": str(zaehlung.get("ausgang", ""))}
+		"vergeltungen": int(zaehlung.get("vergeltungen", 0)), "ausgang": str(zaehlung.get("ausgang", "")),
+		"doppelstuerme": int(zaehlung.get("doppelstuerme", 0)), "boden_anteil": int(zaehlung.get("boden_anteil", 0)),   # H-11
+		"abstand_mittel": BrakkBossarena.abstand_mittel(zaehlung), "fenster_zeit_genutzt": BrakkBossarena.fenster_zeit_prozent(zaehlung),
+		"typ": typ.zaehlung_extra() if typ != null else {}}   # I-8
 
 
 ## G2: Order24.BrakkZiel – einer seiner Treffer kam bei Brakk an (`menge` nach allen Faktoren). Gezählt je Angriffsart
@@ -313,6 +353,8 @@ func zaehle_treffer(menge: float) -> void:
 	if zustand != "duell" or zaehlung.is_empty():
 		return
 	var art := str(angriff.get("art", "")) if not angriff.is_empty() else (str(_letzte.back()) if not _letzte.is_empty() else "sonst")
+	if zaehl_art != "":
+		art = zaehl_art   # H-1: Reihenwelle, Säule, Klon
 	var t: Dictionary = zaehlung["treffer"]
 	var e: Dictionary = t.get(art, {"n": 0, "schaden": 0.0})
 	e["schaden"] = float(e["schaden"]) + menge
@@ -332,6 +374,7 @@ func zaehle_boss_schaden(menge: float) -> void:
 	zaehlung["boss_schaden"] = float(zaehlung["boss_schaden"]) + menge
 	if str(angriff.get("teil", "")) == "fenster":
 		zaehlung["fenster_schaden"] = float(zaehlung["fenster_schaden"]) + menge
+		angriff["getroffen"] = true   # H-11: dieses Fenster hat Brakk genutzt
 
 
 ## Schaden eines seiner Treffer – fest, unabhängig von den Regeln für die Verteidigung (Brakks Wallring schützt weiter).
@@ -653,18 +696,30 @@ func schritt(dt: float) -> void:
 		return
 	if kampfplatz.zu() and _aktion.is_empty() and not kampfplatz.innen_px(einheit.position):
 		einheit.position = o24.karte.mitte(kampfplatz._frei_innen(o24.karte.zelle_bei(einheit.position)))   # C1: geschoben – zurück hinein
+	uhr += dt   # H-6
+	if _brakk_vorher != Vector2.INF and dt > 0.0:
+		brakk_v = brakk_v.lerp(((k.position - _brakk_vorher) / dt).limit_length(6.0 * Werte.ZELLE), 0.35)   # H-2: für vorausberechnete Ziele (Sprünge des Ankers gedeckelt)
+	_brakk_vorher = k.position
 	_ausweich_rest -= dt
 	_wall_abkling -= dt
 	_aktion_in -= dt   # sein Takt läuft auch während der Angriffe; ausgeführt wird erst in der nächsten Bewegung
 	einheit.halt = true   # nichts anderes steuert ihn
 	_wut_pruefen()
+	if not zaehlung.is_empty() and str(angriff.get("art", "")) != "sturm":   # H-11: mittlerer Abstand außerhalb der Stürme
+		zaehlung["abstand_summe"] = float(zaehlung.get("abstand_summe", 0.0)) + einheit.position.distance_to(k.position) / Werte.ZELLE * dt
+		zaehlung["abstand_zeit"] = float(zaehlung.get("abstand_zeit", 0.0)) + dt
 	_vergeltung_weiter(dt)
 	anvisiert = Vector2.INF
+	anvisiert_balken = -1.0
+	anvisiert_text = ""
 	gebunden_rest = maxf(0.0, gebunden_rest - dt)
 	if druck:   # G2-3: lila Puls-Umriss
 		_druck_seit += dt
 		einheit.set_meta("nemesis_umriss", DRUCK_UMRISS.lerp(Color("4a2470"), 0.5 + 0.5 * sin(_druck_seit * 9.0)))
-	_bodenfeuer_weiter(dt, k)
+	_reihe_weiter(dt)   # H-1
+	_saeule_steht_weiter(dt)   # H-7
+	if klon != null:
+		klon.weiter(dt, k)   # H-8
 	typ.immer(dt, k)
 	if greift_an():
 		_angriff_weiter(dt, k)
@@ -676,8 +731,15 @@ func schritt(dt: float) -> void:
 		_bis_angriff -= dt
 		var d := einheit.position.distance_to(k.position) / Werte.ZELLE
 		if _bis_angriff <= 0.0 and d <= Werte.HERAUSFORDERER_ANGRIFF_WEITE and sieht(einheit.position, k.position):
-			var art := naechster_angriff(d)
-			if art != "":
+			var art := _wartend if _wartend != "" else naechster_angriff(d)
+			if art != "" and not darf_beginnen(art, d):
+				if _wartend == "":
+					_wartet_seit = 0.0
+				_wartend = art   # H-6: der Boden ist markiert (oder er ist noch nicht bereit) – er bewegt sich und wartet
+				_wartet_seit += dt
+				_bewegen(dt, k)
+			elif art != "":
+				_wartend = ""
 				beginne_angriff(art)
 			# "" = G2-2: erst auf die Krone (der Angriff folgt oben)
 		else:
@@ -717,7 +779,7 @@ func _bewegen(dt: float, k: Kommandant) -> void:
 		else:
 			tumble(seite)
 		return
-	_laufe(dt, k, typ.abstand(float(kennwerte.get("abstand", Werte.HERAUSFORDERER_ABSTAND_SONST))) * (Werte.BOSS_DRUCK_ABSTAND_MAL if druck else 1.0), tempo())   # G2-3: in der Druckphase näher
+	_laufe(dt, k, typ.abstand(float(kennwerte.get("abstand", Werte.HERAUSFORDERER_ABSTAND_SONST))) * (typ.druck_abstand_mal() if druck else 1.0), tempo())   # G2-3: in der Druckphase näher (H-4: der Scharfschütze nicht)
 
 
 ## Auf Lieblingsabstand gehen: alle halbe Sekunde ein Feld mit Sicht in der Nähe wählen, dessen Abstand passt.
@@ -939,10 +1001,15 @@ func beginne_angriff(art: String) -> void:
 	einheit.set_meta("hebt_ab", 0.0)
 	_letzte.append(art)
 	angriffe_je_art[art] = int(angriffe_je_art.get(art, 0)) + 1   # F5
+	if art == "sturm" and _letzte.size() >= 2 and str(_letzte[-2]) == "sturm" and not zaehlung.is_empty():
+		zaehlung["doppelstuerme"] = int(zaehlung.get("doppelstuerme", 0)) + 1   # H-11
 	if einheit.zustand == Einheit.Zustand.AUF_POSTEN:
 		_krone_angriffe += 1
 	angriff = {"art": art, "teil": "ansage", "t": 0.0, "um": 0.0, "angesagt": 0.0, "ziel": k.position, "richtung": (k.position - einheit.position).normalized(),
 		"nr": _letzte.size()}   # G2: Nummer im Duell (Zählung)
+	var boden_sek := typ.boden_sek(art) if typ != null else -1.0
+	if boden_sek >= 0.0:
+		boden_belegen("boss", boden_sek)   # H-6: seine Markierung am Boden (Linien, Kreis, Mörser …)
 	if typ != null and typ.beginne(art):
 		return   # C2: ein Angriff des Bosstyps
 	match art:
@@ -983,6 +1050,9 @@ func _angriff_weiter(dt: float, k: Kommandant) -> void:
 			if t >= float(a["um"]):
 				a["angesagt"] = t
 				einheit._sprite.modulate = Color.WHITE
+				if braucht_sicht(art) and not sieht(einheit.position, k.position):
+					_ohne_sicht(art)   # H-5: keine Sicht aus seiner Höhe – Schritt überspringen, Schussfeld suchen
+					return
 				if typ != null and typ.feuer(art, k):
 					pass   # C2: ein Angriff des Bosstyps
 				else:
@@ -1001,6 +1071,8 @@ func _angriff_weiter(dt: float, k: Kommandant) -> void:
 							_saeule_feuer(k)
 				if str(a["teil"]) == "typ":
 					pass   # C2: der Bosstyp führt weiter und ruft fenster()
+				elif art == "saeule" and typ != null and typ.nach_saeule(k):
+					pass   # H-7: der Scharfschütze legt das Laservisier nach (Kombo)
 				elif art == "salve" and ring_kopie() == "minigun" and not bool(a.get("zweite", false)):
 					_zweite_salve(k)
 				else:
@@ -1011,6 +1083,10 @@ func _angriff_weiter(dt: float, k: Kommandant) -> void:
 			einheit._sprite.bewegt(false)
 			if t >= float(a["um"]):
 				protokoll.append({"was": "fenster_ende", "bei": o24.zeit, "dauer": t})
+				if not zaehlung.is_empty():   # H-11: verwundbare Zeit und die davon mit Treffern
+					zaehlung["fenster_zeit"] = float(zaehlung.get("fenster_zeit", 0.0)) + t
+					if bool(a.get("getroffen", false)):
+						zaehlung["fenster_getroffen_zeit"] = float(zaehlung.get("fenster_getroffen_zeit", 0.0)) + t
 				angriff = {}
 				_bis_angriff = float(schritt_jetzt["bewegung"]) if schritt_jetzt.has("bewegung") else randf_range(Werte.HERAUSFORDERER_BEWEGEN.x, Werte.HERAUSFORDERER_BEWEGEN.y)   # G2-2
 
@@ -1040,13 +1116,184 @@ func fenster(mal: float = 1.0) -> void:
 	angriff["um"] = dauer
 
 
+## H-5: Kein Schuss in den Wall – der Angriff fällt aus (kein Fenster), er sucht ein Schussfeld: eine Rand-Krone mit
+## Sicht oder seitwärts (der Lauf geht ohne Sicht ohnehin auf Brakk zu).
+func _ohne_sicht(art: String) -> void:
+	protokoll.append({"was": "ohne_sicht", "bei": o24.zeit, "art": art})
+	angriff = {}
+	_bis_angriff = 0.4
+	if typ.wall_abkling() < INF and einheit.zustand != Einheit.Zustand.AUF_POSTEN and _auf_den_wall(spiel.kommandant):
+		return
+	tumble("links" if randf() < 0.5 else "rechts")
+
+
 ## Mündung (Bildpunkte) – etwas vor ihm in Schussrichtung.
 func _muendung(richtung: Vector2) -> Vector2:
 	return einheit.position + richtung * 0.35 * Werte.ZELLE
 
 
+## H-5 (27.11., Paul): Mündungshöhe – in der aktuellen Höhe des Bosses (Krone aus der HD-Ansicht, Schweben, Sprung).
 func _hoehe_er() -> float:
-	return 0.5 + (spiel.hd.H if spiel.hd != null and einheit.in_stellung() else 0.0)
+	return 0.5 + boden_h(einheit.position) + float(einheit.get_meta("hebt_ab", 0.0))
+
+
+## H-5: Bodenhöhe an einem Punkt (Felder): auf einer Wallkrone die Wandhöhe der HD-Ansicht, sonst 0.
+func boden_h(p: Vector2) -> float:
+	var hd: HdAnsicht = spiel.hd
+	return hd.H if hd != null and hd.ist_hoch(o24.karte.zelle_bei(p)) else 0.0
+
+
+## H-5: Ziel = Mitte von Brakks Trefferzone in seiner aktuellen Höhe (Krone, Boden, Sprung).
+func ziel_h() -> float:
+	var ego: EgoModus = spiel.ego
+	return (ego.hoehe if ego != null else 0.0) + 0.5
+
+
+## H-5: Bodenmarkierungen liegen auf der Fläche, auf der Brakk steht (Krone oder Boden).
+func markierung_h() -> float:
+	var ego: EgoModus = spiel.ego
+	return (ego._boden() if ego != null else 0.0) + 0.05
+
+
+## H-2: Brakks vorausberechnete Position in `sek` Sekunden (aktuelle Position + Geschwindigkeit × Zeit), höchstens
+## `max_felder` voraus.
+func vorhersage(sek: float, max_felder: float) -> Vector2:
+	var k: Kommandant = spiel.kommandant
+	return k.position + (brakk_v * maxf(0.0, sek)).limit_length(max_felder * Werte.ZELLE)
+
+
+## H-2 (27.11., Paul): Drei dünne Linien am Boden vom Schützen `e` aus = die Flugbahnen einer Welle, `vor` s vor dem Schuss:
+## die mittlere durch Brakks vorausberechnete Position (Ansage + Flug, höchstens `vorhalt_max` Felder), die äußeren ±`winkel`°
+## um seine aktuelle – Stehenbleiben und Weiterlaufen sind beide nicht sicher, der Tumble quer dazu schon. Gibt
+## {"m": Mündung, "dirs": [3 Richtungen], "lang": [3 Längen]} zurück; salve_feuern() schießt genau darauf.
+func salve_linien(e: Einheit, vor: float, winkel: float, vorhalt_max: float, tempo_felder: float, farbe: Color) -> Dictionary:
+	var k: Kommandant = spiel.kommandant
+	var zu := (k.position - e.position).normalized() if k.position.distance_to(e.position) > 1.0 else Vector2.RIGHT
+	var m := e.position + zu * 0.35 * Werte.ZELLE
+	var flug := m.distance_to(k.position) / maxf(1.0, tempo_felder * Werte.ZELLE)
+	var ziel := vorhersage(vor + flug, vorhalt_max)
+	var mitte := (ziel - m).normalized() if ziel.distance_to(m) > 1.0 else zu
+	var jetzt := (k.position - m).normalized() if k.position.distance_to(m) > 1.0 else zu
+	var dirs: Array = [jetzt.rotated(deg_to_rad(-winkel)), mitte, jetzt.rotated(deg_to_rad(winkel))]
+	var laengen: Array = []
+	var bg: BrakkGeschosse = spiel.brakk_geschosse
+	var hoch := markierung_h()
+	var weit := m.distance_to(k.position) + 2.0 * Werte.ZELLE
+	for r: Vector2 in dirs:
+		var lang := weit if k.oben else weite_bis_wand(m, r, weit)
+		laengen.append(lang)
+		bg._balken(bg._zu3d(m, hoch), bg._zu3d(m + r * lang, hoch), farbe, 0.035, _bg(vor + 0.12))
+	return {"m": m, "dirs": dirs, "lang": laengen, "e": e}
+
+
+## H-2: Die drei Schüsse einer Welle exakt entlang ihrer Linien (Mündung → Linienrichtung, Höhe nach H-5), Flug mit
+## `tempo_felder` Feldern je echter Sekunde; die Welle trifft höchstens einmal.
+func salve_feuern(l: Dictionary, menge: float, tempo_felder: float, zaehl: String = "", gruppe: int = -1, gruppe_max: int = 1, farbe: Color = Color(0, 0, 0, 0)) -> void:
+	var bg: BrakkGeschosse = spiel.brakk_geschosse
+	var e: Einheit = l.get("e", einheit)
+	var m: Vector2 = l["m"]
+	if gruppe < 0:
+		_salven += 1
+		gruppe = _salven
+	var h0 := 0.5 + boden_h(e.position) + float(e.get_meta("hebt_ab", 0.0))
+	for r: Vector2 in l["dirs"]:
+		var vor := bg.geschosse.size()
+		bg.schiesse("hf_salve", m, h0, menge, "herausforderer", quelle(), 1.0, m + r * 4.0 * Werte.ZELLE)
+		if bg.geschosse.size() == vor:
+			continue
+		var g: Dictionary = bg.geschosse.back()
+		g["r"] = r   # exakt die angesagte Linie
+		g["d_ziel"] = maxf(1.0, m.distance_to((spiel.kommandant as Kommandant).position))
+		g["lang"] = bg._bahn_ende(m, r, float(g["d_ziel"]))
+		g["tempo"] = tempo_felder * Werte.ZELLE / Werte.SPIELTEMPO   # brakk_geschosse rechnet in seinen Sekunden (NemesisHerausforderer._bg)
+		g["gruppe"] = gruppe
+		g["gruppe_max"] = gruppe_max   # I-3: die 4er-Salve trifft höchstens zweimal
+		if zaehl != "":
+			g["zaehl"] = zaehl   # H-11: Treffer zählen unter dieser Art (z. B. „klon“)
+		if farbe.a > 0.0:
+			bg.faerben(g, farbe)   # Paul (27.11.): die Schüsse des Klons blau
+		var wand := bg._lichtwand(m, m + r * float(g["lang"]))
+		if wand != Vector2.INF:
+			g["lang"] = maxf(1.0, m.distance_to(wand))
+		_an_der_wand_enden(g)
+
+
+## H-8: Sieht eine andere Figur (der Klon) Brakk?
+func sieht_von(x: Einheit, nach: Vector2) -> bool:
+	return o24.karte.sicht_frei(x.position, nach)
+
+
+## H-5: Diese Angriffe schießen auf Brakk – vor dem Schuss braucht er Sicht aus seiner Höhe (sonst nie in den Wall).
+func braucht_sicht(art: String) -> bool:
+	if ring_kopie() == "durchschuss":
+		return false   # mit dem Durchschlagring geht seine Salve durch Mauern
+	return art in ["salve", "kugel", "doppel", "strahl", "salve5", "salve4"]
+
+
+# ------------------------------------------------------------------ H-6: ein Bodeneffekt zugleich
+
+## Ist der Boden frei von Markierungen anderer (`ausser` zählt nicht)?
+func boden_frei(ausser: Array = []) -> bool:
+	for wer: String in boden:
+		if not ausser.has(wer) and float(boden[wer]) > uhr:
+			return false
+	return true
+
+
+## `wer` markiert den Boden ab jetzt für `sek` Sekunden (überschreibt seinen bisherigen Eintrag).
+func boden_belegen(wer: String, sek: float) -> void:
+	var bis := uhr + maxf(0.0, sek)
+	if float(boden.get(wer, -1.0)) > uhr:
+		for i in range(boden_log.size() - 1, -1, -1):
+			if str(boden_log[i]["wer"]) == wer:
+				boden_log[i]["bis"] = bis
+				break
+	else:
+		boden_log.append({"wer": wer, "von": uhr, "bis": bis})
+	boden[wer] = bis
+
+
+## `wer` gibt den Boden sofort frei.
+func boden_freigeben(wer: String) -> void:
+	if float(boden.get(wer, -1.0)) > uhr:
+		boden_belegen(wer, 0.0)
+
+
+## H-11 (27.11., Paul): Anteil der Duellzeit mit einer Bodenmarkierung (Prozent; Ziel < 25 %).
+func boden_anteil() -> int:
+	var teile: Array = []
+	for e: Dictionary in boden_log:
+		if float(e["bis"]) > float(e["von"]):
+			teile.append([float(e["von"]), minf(float(e["bis"]), uhr)])
+	teile.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var summe := 0.0
+	var bis := -1.0
+	for t: Array in teile:
+		var von := maxf(float(t[0]), bis)
+		if float(t[1]) > von:
+			summe += float(t[1]) - von
+		bis = maxf(bis, float(t[1]))
+	return roundi(100.0 * summe / uhr) if uhr > 0.0 else 0
+
+
+## Darf der Angriff jetzt beginnen? Mit Bodeneffekt nur auf freiem Boden; dazu fragt er seinen Typ (z. B. der
+## Scharfschütze nach dem Sturm: erst wieder auf Abstand).
+func darf_beginnen(art: String, abstand: float) -> bool:
+	if typ != null and typ.boden_sek(art) >= 0.0 and not boden_frei(["boss"]):
+		return false
+	if _saeule_faellig_vorrang():
+		return false   # H-7: die Vergeltung wartet schon zu lange – sie geht vor
+	return typ == null or typ.bereit(art, abstand, _wartet_seit)
+
+
+## H-6: Die Angriffe des nächsten Schritts der Abfolge (der wartende zuerst) – für Vorschauen wie den Reichweitenring.
+func naechste_arten() -> Array:
+	if _wartend != "":
+		return [_wartend]
+	if _abf.is_empty() or _abf_wut != wut:
+		return []
+	var st: Dictionary = _abf[_abf_i % _abf.size()]
+	return (st["wahl"] as Array).duplicate() if st.has("wahl") else [str(st["a"])]
 
 
 ## a) Salve: drei Schüsse im Fächer. Er hebt die Waffe und leuchtet rot; die Bahnen liegen am Boden – durch die Lücke.
@@ -1123,15 +1370,16 @@ func _sturm_ansage() -> void:
 	angriff["um"] = Werte.HERAUSFORDERER_STURM_ANSAGE
 	einheit._sprite.angriff(Werte.HERAUSFORDERER_STURM_ANSAGE + 0.2)
 	var bg: BrakkGeschosse = spiel.brakk_geschosse
-	bg._ring(bg._zu3d(einheit.position, 0.05), Werte.HERAUSFORDERER_STURM_RADIUS, Color("ff3b3b"), _bg(Werte.HERAUSFORDERER_STURM_ANSAGE))
+	bg._ring(bg._zu3d(einheit.position, markierung_h()), Werte.HERAUSFORDERER_STURM_RADIUS, Color("ff3b3b"), _bg(Werte.HERAUSFORDERER_STURM_ANSAGE))
 	_treffbereich(einheit.position, Werte.HERAUSFORDERER_STURM_RADIUS, Werte.HERAUSFORDERER_STURM_ANSAGE)
+	boden_belegen("boss", Werte.HERAUSFORDERER_STURM_ANSAGE)   # H-6: der Kreis liegt jetzt (der Anlauf war geschätzt)
 	spiel.effekte.warnung(einheit.position, _bg(Werte.HERAUSFORDERER_STURM_ANSAGE) * Werte.BRAKK_TEMPO)
 	Ton.am_ort(spiel, "tc-arc", einheit.position)
 
 
 ## Der Treffbereich als rote Fläche am Boden – sie wird bis zum Schlag immer kräftiger (der dünne Ring allein ging im
 ## Gras unter).
-func _treffbereich(pos: Vector2, radius: float, sek: float) -> void:
+func _treffbereich(pos: Vector2, radius: float, sek: float, hoehe: float = -1.0) -> void:
 	var hd: HdAnsicht = spiel.hd
 	if hd == null:
 		return
@@ -1144,7 +1392,7 @@ func _treffbereich(pos: Vector2, radius: float, sek: float) -> void:
 	var stoff := o24._leucht(Color("ff2a2a"), 0.2)
 	scheibe.material_override = stoff
 	hd.add_child(scheibe)
-	scheibe.position = Vector3(pos.x / Werte.ZELLE, 0.04, (pos.y - Werte.KARTE_OBEN) / Werte.ZELLE)
+	scheibe.position = Vector3(pos.x / Werte.ZELLE, (hoehe if hoehe >= 0.0 else markierung_h()) - 0.01, (pos.y - Werte.KARTE_OBEN) / Werte.ZELLE)   # H-5: auf Brakks Fläche (J-1: oder der angegebenen)
 	var tw := scheibe.create_tween()
 	tw.set_ignore_time_scale(true)   # echte Sekunden, wie die Ankündigung
 	tw.tween_property(stoff, "albedo_color:a", 0.5, sek)
@@ -1236,17 +1484,90 @@ func ring_kopie() -> String:
 	return str(vergeltung.get("ring", ""))
 
 
+## H-7 (27.11., Paul): Die Vergeltung ist immer die Lichtsäule (alle Bosse) – die Statistik der meistgenutzten Quelle
+## entfällt für die Wahl (waehle_vergeltung, VERGELTUNG_TEXT, RING_ANGRIFF und WAFFEN_ANGRIFF bleiben im Code; nemesis_lernen
+## behält die Zahlen für die Karte). Takt wie bisher (erstmals HERAUSFORDERER_VERGELTUNG_ERSTE, dann alle …_ABKLING s),
+## aber sie wartet, bis der Boden frei ist – höchstens BOSS_SAEULE_VERZUG s, dann geht sie dem nächsten Schritt vor.
 func _vergeltung_weiter(dt: float) -> void:
 	marke_rest = maxf(0.0, marke_rest - dt)
 	gel_rest = maxf(0.0, gel_rest - dt)
 	_vergeltung_in -= dt
-	if not vergeltung.is_empty():
+	if not vergeltung.is_empty():   # nur noch aus dem Test (vergeltung_an)
 		vergeltung["rest"] = float(vergeltung["rest"]) - dt
 		if float(vergeltung["rest"]) <= 0.0:
 			vergeltung_aus()
-	elif _vergeltung_in <= 0.0 and not greift_an() and _aktion.is_empty():
-		var f: BrakkFortschritt = spiel.kommandant.fortschritt
-		vergeltung_an(waehle_vergeltung(f.schaden_quellen if f != null else {}, f.zaehler if f != null else {}))
+		return
+	if _saeule_umriss_bis >= 0.0 and uhr >= _saeule_umriss_bis and stehende_saeule.is_empty():
+		_saeule_umriss_bis = -1.0
+		einheit.set_meta("nemesis_umriss", DRUCK_UMRISS if druck else Nemesis.umriss_farbe(person))
+	if _vergeltung_in > 0.0:
+		_saeule_verzug = 0.0
+		return
+	_saeule_verzug += dt
+	if not greift_an() and _aktion.is_empty() and boden_frei() and not typ.steht() and typ.vergeltung_ok():
+		lichtsaeule_an()
+
+
+## H-7: Wartet die fällige Säule schon länger als BOSS_SAEULE_VERZUG s? Dann beginnt kein neuer Schritt mehr vor ihr.
+func _saeule_faellig_vorrang() -> bool:
+	return _vergeltung_in <= 0.0 and vergeltung.is_empty() and _saeule_verzug >= Werte.BOSS_SAEULE_VERZUG
+
+
+## H-7: Vergeltung: Lichtsäule – Ansage BOSS_SAEULE_ANSAGE s mit derselben Vorschau wie Brakks Lichtsäule (Standardkreis –
+## die Bosse tragen keinen Ring) auf dem Ziel des Bosstyps (typ.saeule_ziel: Brakks vorausberechnete Position, beim
+## Technogunner und Plasmawerfer als Wegsperre), dann steht sie BOSS_SAEULE_SEK s mit BOSS_SAEULE_JE_SEK je Sekunde.
+func lichtsaeule_an() -> void:
+	var k: Kommandant = spiel.kommandant
+	_vergeltung_in = Werte.HERAUSFORDERER_VERGELTUNG_ABKLING
+	_saeule_verzug = 0.0
+	schritt_jetzt = {}   # kein Schritt der Abfolge
+	var ziel := typ.saeule_ziel(k)
+	_saeule_ziel = ziel
+	beginne_angriff("saeule")   # Ansage mit Vorschau (_saeule_ansage) auf _saeule_ziel
+	_saeule_ziel = Vector2.INF
+	boden_belegen("saeule", Werte.BOSS_SAEULE_ANSAGE + Werte.BOSS_SAEULE_SEK)
+	einheit.set_meta("nemesis_umriss", VERGELTUNG_UMRISS)   # lila, bis die Säule erlischt
+	_saeule_umriss_bis = uhr + Werte.BOSS_SAEULE_ANSAGE + Werte.BOSS_SAEULE_SEK
+	person["vergeltung"] = tr("Lichtsäule")   # steht in seiner Karte
+	o24.tafeln.zeige({"art": "vergeltung", "titel": tr("Vergeltung: %s") % tr("Lichtsäule"), "zeilen": [tr("raus aus dem Kreis")],
+		"farbe": VERGELTUNG_UMRISS, "sek": Werte.HERAUSFORDERER_VERGELTUNG_TAFEL_SEK, "pause": 0.2})
+	Ton.spiele(spiel, "alert", -3.0)
+	protokoll.append({"was": "vergeltung", "bei": o24.zeit, "name": tr("Lichtsäule"), "art": "saeule", "ring": "", "ziel": ziel,
+		"abstand": einheit.position.distance_to(k.position) / Werte.ZELLE})
+	if not zaehlung.is_empty():
+		zaehlung["vergeltungen"] = int(zaehlung["vergeltungen"]) + 1   # G2
+
+
+## H-7: Die stehende Säule – Schaden je Sekunde im Kreis (auch auf einer Krone und im Sprung: sie steht vom Boden bis
+## in den Himmel).
+func _saeule_steht_weiter(dt: float) -> void:
+	if stehende_saeule.is_empty():
+		return
+	stehende_saeule["rest"] = float(stehende_saeule["rest"]) - dt
+	var k: Kommandant = spiel.kommandant
+	var z: Vector2 = stehende_saeule["pos"]
+	if k.unverwundbar <= 0.0 and k.position.distance_to(z) <= (EgoModus.SAEULE_RADIUS + Werte.BRAKK_RUMPF) * Werte.ZELLE:
+		saeule_schaden += Werte.BOSS_SAEULE_JE_SEK * dt
+		treffe_als("saeule", schaden() * Werte.BOSS_SAEULE_JE_SEK * dt, z, false)
+	var bild: Variant = stehende_saeule.get("bild")
+	if is_instance_valid(bild) and bild is MeshInstance3D:
+		var stoff := (bild as MeshInstance3D).material_override as StandardMaterial3D
+		stoff.albedo_color.a = 0.35 + 0.15 * sin(float(stehende_saeule["rest"]) * 12.0)
+	if float(stehende_saeule["rest"]) <= 0.0:
+		_saeule_weg()
+
+
+func _saeule_weg() -> void:
+	if stehende_saeule.is_empty():
+		return
+	var bild: Variant = stehende_saeule.get("bild")
+	if is_instance_valid(bild) and bild is MeshInstance3D:
+		var stoff := (bild as MeshInstance3D).material_override as StandardMaterial3D
+		var tw := (bild as Node).create_tween()
+		tw.tween_property(stoff, "albedo_color:a", 0.0, 0.4)
+		tw.tween_callback((bild as Node).queue_free)
+	protokoll.append({"was": "saeule_ende", "bei": o24.zeit, "schaden": saeule_schaden})
+	stehende_saeule = {}
 
 
 ## Beginnt die Vergeltung (auch für den Test).
@@ -1296,6 +1617,12 @@ func naechster_angriff(abstand: float) -> String:
 		return zwang
 	var s := _abfolge_schritt(abstand)
 	if not s.is_empty():
+		if str(s["art"]) == "kronesprung":   # I-6: ein Schritt ohne Angriff – nur auf eine Rand-Krone
+			if einheit.zustand != Einheit.Zustand.AUF_POSTEN and _aktion.is_empty():
+				_auf_den_wall(spiel.kommandant)
+			protokoll.append({"was": "kronesprung", "bei": o24.zeit, "oben": einheit.zustand == Einheit.Zustand.AUF_POSTEN})
+			_bis_angriff = float(s.get("bewegung", 0.6))
+			return ""
 		if bool(s.get("krone", false)) and einheit.zustand != Einheit.Zustand.AUF_POSTEN and _aktion.is_empty() and _auf_den_wall(spiel.kommandant):
 			_nach_krone = str(s["art"])   # Kronenwechsel: erst hinauf, der Angriff folgt oben
 			_bis_angriff = 0.0
@@ -1319,10 +1646,12 @@ func _abfolge_schritt(abstand: float) -> Dictionary:
 		_abf_wut = wut
 		_abf_i = randi() % tabelle.size()
 		_abf_vorn = typ.eroeffnung(wut).duplicate()
+	elif tabelle.size() == _abf.size():
+		_abf = tabelle   # H-10: Werte der Tafel (Fenster, Bewegung) gelten sofort
 	while not _abf_vorn.is_empty():
 		var v: Dictionary = _abf_vorn.pop_front()
 		if typ.kann(str(v["a"]), abstand):
-			return _schritt_nehmen(v, -1, str(v["a"]))
+			return _schritt_nehmen(v, -1, str(v["a"]), abstand)
 	for versuch in _abf.size():
 		var i := (_abf_i + versuch) % _abf.size()
 		var st: Dictionary = _abf[i]
@@ -1331,16 +1660,25 @@ func _abfolge_schritt(abstand: float) -> Dictionary:
 		for art: String in arten:
 			if typ.kann(art, abstand):
 				_abf_i = (i + 1) % _abf.size()
-				return _schritt_nehmen(st, i, art)
+				return _schritt_nehmen(st, i, art, abstand)
 	return {}
 
 
-func _schritt_nehmen(st: Dictionary, i: int, art: String) -> Dictionary:
+func _schritt_nehmen(st: Dictionary, i: int, art: String, abstand: float = -1.0) -> Dictionary:
+	# I-1 (27.11., Paul): der Bosstyp kann den Schritt nach dem Abstand ersetzen (Technogunner: Jagdanker aus der Nähe wird
+	# zum Sturmring, Sturmring aus der Ferne bekommt den Jagdanker davor)
+	if abstand < 0.0:
+		abstand = einheit.position.distance_to((spiel.kommandant as Kommandant).position) / Werte.ZELLE
+	var ersatz: Array = typ.ersatz(art, abstand) if typ != null else [art, ""]
+	art = str(ersatz[0])
 	schritt_jetzt = st.duplicate()
 	schritt_jetzt["art"] = art
 	schritt_jetzt["i"] = i
 	if schritt_jetzt.has("dann_fuer") and str(schritt_jetzt["dann_fuer"]) != art:
 		schritt_jetzt.erase("dann")   # die Kopplung gilt nur für eine der beiden Wahlen
+	if str(ersatz[1]) != "":
+		schritt_jetzt["dann"] = str(ersatz[1])   # I-2: gekoppelt danach (mit vollem Ablauf)
+		schritt_jetzt.erase("dann_sek")
 	if (st.get("fenster_je", {}) as Dictionary).has(art):
 		schritt_jetzt["fenster"] = float(st["fenster_je"][art])
 	if bool(st.get("druck", false)):   # G2-3: kurze Fenster, keine Bewegung; nach dem letzten Druck-Schritt die Belohnung
@@ -1357,7 +1695,7 @@ func _schritt_nehmen(st: Dictionary, i: int, art: String) -> Dictionary:
 	return schritt_jetzt
 
 
-## G2-3: Eine Druckphase beginnt – lila Puls-Umriss, HUD „DRUCK“, beim Scharfschützen und bei Sonde 7 brennt der Boden.
+## G2-3: Eine Druckphase beginnt – lila Puls-Umriss, HUD „DRUCK“; H-1: bei Sonde 7 beginnt eine Reihenwelle.
 func _druck_an() -> void:
 	druck = true
 	_druck_seit = 0.0
@@ -1366,110 +1704,71 @@ func _druck_an() -> void:
 	protokoll.append({"was": "druck", "bei": o24.zeit})
 	Ton.spiele(spiel, "alert", -4.0)
 	if typ != null and typ.anker_zwang():
-		bodenfeuer_an()
+		reihenwelle_an(einheit.position)   # H-1: Sonde 7 – die Reihenwelle von ihr aus (statt des Bodenfeuers)
 
 
 func _druck_aus() -> void:
 	if not druck:
 		return
 	druck = false
-	_bodenfeuer_aus()
 	if einheit != null and is_instance_valid(einheit):
 		einheit.set_meta("nemesis_umriss", VERGELTUNG_UMRISS if not vergeltung.is_empty() else Nemesis.umriss_farbe(person))
 	protokoll.append({"was": "druck_ende", "bei": o24.zeit})
 
 
-## G2-3: HUD-Zeile des Duells: „DRUCK“ zu Beginn einer Druckphase, „Boden brennt – hoch!“ beim Anker-Zwang, sonst die des Typs.
+## G2-3: HUD-Zeile des Duells: „DRUCK“ zu Beginn einer Druckphase; H-1: „Boden bricht“ bei der Reihenwelle (auch schon
+## während der Ansage); sonst die des Typs.
 func hud_zeile() -> String:
 	if druck and _druck_seit < Werte.BOSS_DRUCK_HUD_SEK:
 		return tr("DRUCK")
-	if not bodenfeuer.is_empty():
-		return tr("Boden brennt – hoch auf eine Krone!")
+	if reihe != null or (str(angriff.get("art", "")) == "reihe" and str(angriff.get("teil", "")) == "ansage"):
+		return tr("Boden bricht – hoch oder drüber!")
 	return typ.hud_zeile() if typ != null else ""
 
 
-## G2-3: Anker-Zwang – von Brakk aus warnt in BOSS_DRUCK_BODEN_AUSBREITUNG s jedes Bodenfeld im Platz (je
-## BOSS_DRUCK_BODEN_WARNUNG s rot), dann brennt es. Die Wälle (Kronen am Rand) bleiben frei.
-func bodenfeuer_an() -> void:
-	if not kampfplatz.aktiv():
+## H-1 (27.11., Paul): Die Reihenwelle beginnt bei `von` (der Boss) und läuft von ihm weg in Richtung Brakk bis zur
+## Lichtwand (nemesis_reihenwelle.gd). Höchstens eine zugleich; sie belegt den Boden (Besitzer „reihe“), solange sie läuft.
+func reihenwelle_an(von: Vector2) -> void:
+	if not kampfplatz.aktiv() or reihe != null:
 		return
-	_bodenfeuer_aus()
-	var karte: Karte = o24.karte
-	var von := karte.zelle_bei((spiel.kommandant as Kommandant).position)
-	var hb := BrakkKampfplatz._halb()
-	var zellen := {}
-	var weit := 1.0
-	for y in range(kampfplatz.mitte.y - hb.y, kampfplatz.mitte.y + hb.y):
-		for x in range(kampfplatz.mitte.x - hb.x, kampfplatz.mitte.x + hb.x):
-			var z := Vector2i(x, y)
-			if kampfplatz.im_innern(z) and karte.inhalt(z) != Karte.WALL:
-				zellen[z] = Vector2(z - von).length()
-				weit = maxf(weit, float(zellen[z]))
-	for z: Vector2i in zellen:
-		zellen[z] = float(zellen[z]) / weit * Werte.BOSS_DRUCK_BODEN_AUSBREITUNG
-	bodenfeuer = {"t": 0.0, "zellen": zellen, "bild": {}}
-	protokoll.append({"was": "bodenfeuer", "bei": o24.zeit, "felder": zellen.size()})
+	if not boden_frei(["boss", "reihe"]):
+		protokoll.append({"was": "reihenwelle_aus", "bei": o24.zeit})   # H-6: eine Säule (oder der Klon) markiert den Boden
+		return
+	reihe = NemesisReihenwelle.new(self)
+	reihe.planen(von, (spiel.kommandant as Kommandant).position)
+	if reihe.reihen.is_empty():
+		reihe = null
+		return
+	boden_belegen("reihe", reihe.dauer())
+	protokoll.append({"was": "reihenwelle", "bei": o24.zeit, "reihen": reihe.reihen.size(), "dauer": reihe.dauer(), "von": von,
+		"schritt": reihe.schritt})
 	if not _hoch_gesagt:
 		_hoch_gesagt = true
 		spiel.melde(tr("Sonde 7: „Hoch mit dir, Kommandant.“"), 3.0)
 
 
-## Brennt das Feld gerade?
-func brennt(z: Vector2i) -> bool:
-	return not bodenfeuer.is_empty() and (bodenfeuer["zellen"] as Dictionary).has(z) \
-		and float(bodenfeuer["t"]) >= float(bodenfeuer["zellen"][z]) + Werte.BOSS_DRUCK_BODEN_WARNUNG
-
-
-func _bodenfeuer_weiter(dt: float, k: Kommandant) -> void:
-	if bodenfeuer.is_empty():
+func _reihe_weiter(dt: float) -> void:
+	if reihe == null:
 		return
-	var t := float(bodenfeuer["t"]) + dt
-	bodenfeuer["t"] = t
-	var zellen: Dictionary = bodenfeuer["zellen"]
-	var bild: Dictionary = bodenfeuer["bild"]
-	var karte: Karte = o24.karte
-	for z: Vector2i in zellen:
-		var ab := float(zellen[z])
-		if t >= ab and not bild.has(z):
-			bild[z] = "warnt"
-			_treffbereich(karte.mitte(z), 0.5, Werte.BOSS_DRUCK_BODEN_WARNUNG)   # rot, wird kräftiger
-		elif t >= ab + Werte.BOSS_DRUCK_BODEN_WARNUNG and bild.get(z) is String and str(bild[z]) == "warnt":
-			var g := _glut(karte.mitte(z))
-			bild[z] = g if g != null else "brennt"
-	var ego: EgoModus = spiel.ego
-	var sprung := (ego.hoehe - ego._boden()) if ego != null else 0.0
-	if brennt(karte.zelle_bei(k.position)) and not k.oben and sprung <= Werte.BRAKK_SPRUNG_BODEN and k.unverwundbar <= 0.0:
-		var menge := Werte.BOSS_DRUCK_BODEN_JE_SEK * dt
-		bodenfeuer_schaden += menge
-		(spiel.brakk_geschosse as BrakkGeschosse)._treffe_brakk(schaden() * menge, "herausforderer", quelle(), k.position, false)
-	if t >= Werte.BOSS_DRUCK_BODEN_MAX:
-		_bodenfeuer_aus()
+	reihe.weiter(dt)
+	if reihe.fertig():
+		protokoll.append({"was": "reihenwelle_ende", "bei": o24.zeit, "getroffen": reihe.getroffen, "explosionen": reihe.protokoll.duplicate()})
+		reihe = null
 
 
-func _bodenfeuer_aus() -> void:
-	if bodenfeuer.is_empty():
-		return
-	for n: Variant in (bodenfeuer["bild"] as Dictionary).values():
-		if n is Node and is_instance_valid(n):
-			(n as Node).queue_free()
-	bodenfeuer = {}
+func _reihe_aus() -> void:
+	if reihe != null:
+		reihe.abbrechen()
+		boden_freigeben("reihe")
+	reihe = null
 
 
-## Ein brennendes Bodenfeld (orange Scheibe, bleibt bis zum Ende des Bodenfeuers).
-func _glut(pos: Vector2) -> Node3D:
-	var hd: HdAnsicht = spiel.hd
-	if hd == null:
-		return null
-	var scheibe := MeshInstance3D.new()
-	var form := CylinderMesh.new()
-	form.top_radius = 0.5
-	form.bottom_radius = 0.5
-	form.height = 0.02
-	scheibe.mesh = form
-	scheibe.material_override = o24._leucht(Color("ff7a2a"), 0.45)
-	hd.add_child(scheibe)
-	scheibe.position = Vector3(pos.x / Werte.ZELLE, 0.05, (pos.y - Werte.KARTE_OBEN) / Werte.ZELLE)
-	return scheibe
+## H-1: Ein Treffer an Brakk, gezählt unter `art` (auch wenn gerade ein anderer Angriff läuft – Reihenwelle, Säule, Klon).
+func treffe_als(art: String, menge: float, von: Vector2, blitz: bool = true) -> void:
+	var alt := zaehl_art
+	zaehl_art = art
+	(spiel.brakk_geschosse as BrakkGeschosse)._treffe_brakk(menge, "herausforderer", quelle(), von, blitz)
+	zaehl_art = alt
 
 
 ## Order24 (Brakks Stellvertreter): einer seiner Treffer landet. Gibt den Faktor auf den Schaden zurück und setzt, was
@@ -1602,9 +1901,11 @@ func _strahl_feuer() -> void:
 ## Lichtsäule: dieselbe Vorschau am Boden wie bei Brakk (ein Ring zieht sich zusammen und blinkt immer schneller), dann
 ## der Einschlag.
 func _saeule_ansage() -> void:
-	angriff["um"] = EgoModus.SAEULE_VORLAUF
-	einheit._sprite.angriff(EgoModus.SAEULE_VORLAUF + 0.2)
-	spiel.effekte.warnung(angriff["ziel"] as Vector2, _bg(EgoModus.SAEULE_VORLAUF) * Werte.BRAKK_TEMPO)
+	if _saeule_ziel != Vector2.INF:
+		angriff["ziel"] = _saeule_ziel   # H-7: Ziel des Bosstyps (vorausberechnet bzw. Wegsperre)
+	angriff["um"] = Werte.BOSS_SAEULE_ANSAGE
+	einheit._sprite.angriff(Werte.BOSS_SAEULE_ANSAGE + 0.2)
+	spiel.effekte.warnung(angriff["ziel"] as Vector2, _bg(Werte.BOSS_SAEULE_ANSAGE) * Werte.BRAKK_TEMPO)
 	Ton.am_ort(spiel, "tc-arc", einheit.position)
 	var hd: HdAnsicht = spiel.hd
 	if hd == null:
@@ -1654,8 +1955,9 @@ func _saeule_vorschau(anteil: float, dt: float) -> void:
 	_marke.visible = int(float(angriff["t"]) * (4.0 + 12.0 * anteil)) % 2 == 0 or anteil > 0.9
 
 
-func _saeule_feuer(k: Kommandant) -> void:
+func _saeule_feuer(_k: Kommandant) -> void:
 	_marke_weg()
+	_saeule_weg()
 	var z: Vector2 = angriff["ziel"]
 	var radius := EgoModus.SAEULE_RADIUS * Werte.ZELLE
 	var hd: HdAnsicht = spiel.hd
@@ -1670,18 +1972,20 @@ func _saeule_feuer(k: Kommandant) -> void:
 		saeule.material_override = stoff
 		hd.add_child(saeule)
 		saeule.position = Vector3(z.x / Werte.ZELLE, 4.0, (z.y - Werte.KARTE_OBEN) / Werte.ZELLE)
-		var tw := saeule.create_tween()
-		tw.tween_property(stoff, "albedo_color:a", 0.0, 0.5)
-		tw.tween_callback(saeule.queue_free)
+		stehende_saeule["bild"] = saeule
+	# H-7: sie steht BOSS_SAEULE_SEK s (Schaden je Sekunde in _saeule_steht_weiter) statt eines einzelnen Einschlags
+	stehende_saeule["pos"] = z
+	stehende_saeule["rest"] = Werte.BOSS_SAEULE_SEK
 	spiel.effekte.flaeche(z, radius, VERGELTUNG_UMRISS)
 	Ton.am_ort(spiel, "hit-boom", z)
-	if k.unverwundbar <= 0.0 and k.position.distance_to(z) <= radius + Werte.BRAKK_RUMPF * Werte.ZELLE:
-		(spiel.brakk_geschosse as BrakkGeschosse)._treffe_brakk(schaden(), "herausforderer", quelle(), z, true)
+	protokoll.append({"was": "saeule_steht", "bei": o24.zeit, "pos": z})
 
 
 ## Zielt die Vorschau gerade auf die Stelle, an der Brakk steht? (Warnzeile im HUD)
 func saeule_ueber_brakk() -> bool:
 	var k: Kommandant = spiel.kommandant if spiel != null else null
+	if k != null and not stehende_saeule.is_empty() and k.position.distance_to(stehende_saeule["pos"] as Vector2) <= (EgoModus.SAEULE_RADIUS + Werte.BRAKK_RUMPF) * Werte.ZELLE:
+		return true   # H-7: die Säule steht
 	return k != null and str(angriff.get("art", "")) == "saeule" and str(angriff.get("teil", "")) == "ansage" and k.position.distance_to(angriff["ziel"] as Vector2) <= (EgoModus.SAEULE_RADIUS + Werte.BRAKK_RUMPF) * Werte.ZELLE
 
 

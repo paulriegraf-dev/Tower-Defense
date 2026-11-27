@@ -72,9 +72,9 @@ func _process(_delta: float) -> bool:
 	var k: Kommandant = spiel.kommandant
 	if k != null:
 		k.leben = k.max_leben
-	_pruefe_bodenfeuer()
+	_pruefe_reihe()
 	if schritt >= 1 and h.zustand == "duell" and h.typ != null:   # G2-4: Takt in freier Zeit messen
-		if not h.greift_an() and h._aktion.is_empty() and not h.typ.steht():
+		if not h.greift_an() and h._aktion.is_empty() and not h.typ.steht() and h.einheit.zustand != Einheit.Zustand.AUF_POSTEN:   # I-5: auf der Krone kein Takt
 			frei_sek += 1.0 / 60.0
 		if h._aktion_in > _takt_vorher + 0.3:
 			versuche += 1
@@ -102,10 +102,10 @@ func _process(_delta: float) -> bool:
 			if h.einheit.leben < h.einheit.max_leben * 0.3:
 				h.einheit.leben = h.einheit.max_leben * 0.45   # Phase 2 halten
 			if o.zeit - t0 >= (PHASE2_SEK + 30.0 if art == "sonde" else PHASE2_SEK):   # Sonde 7: der Verstärkungsruf dauert bis zu 25 s
-				var p2: Array = h.abfolge_log.slice(p2_ab)
+				var p2: Array = h.abfolge_log.slice(p2_ab).filter(func(x: Dictionary) -> bool: return not bool(x.get("dann", false)))   # der gekoppelte Rest des letzten P1-Angriffs zählt nicht
 				var vorn: Array = h.typ.eroeffnung(true)
-				if art in ["scharf", "sonde"]:
-					pruefe(not p2.is_empty() and int(p2[0]["i"]) == -1 and str(p2[0]["art"]) == ("zielmarkierung" if art == "scharf" else "heil"), "P2: zuerst die Eröffnung (%s)" % (str(p2[0]["art"]) if not p2.is_empty() else "–"))
+				if art in ["scharf", "sonde", "gunner"]:   # I-6: der Technogunner eröffnet Phase 2 mit Krone → Jagdanker
+					pruefe(not p2.is_empty() and int(p2[0]["i"]) == -1 and ({"scharf": ["zielmarkierung"], "sonde": ["heil"], "gunner": ["anker", "sturmring"]}[art] as Array).has(str(p2[0]["art"])), "P2: zuerst die Eröffnung (%s)" % (str(p2[0]["art"]) if not p2.is_empty() else "–"))
 				else:
 					pruefe(vorn.is_empty(), "P2: keine Eröffnung")
 				_pruefe_folge(p2.filter(func(x: Dictionary) -> bool: return int(x["i"]) >= 0), h.typ.abfolge(true), "P2")
@@ -144,42 +144,52 @@ func _pruefe_folge(log: Array, tabelle: Array, phase: String) -> void:
 	for x: Dictionary in folge:
 		var st: Dictionary = tabelle[int(x["i"])]
 		var arten: Array = st["wahl"] if st.has("wahl") else [st["a"]]
-		passt = passt and arten.has(str(x["art"]))
+		# I-1: der Typ darf einen Schritt nach dem Abstand ersetzen (Jagdanker aus der Nähe → Sturmring, Sturmring aus der Ferne → Jagdanker davor)
+		var erlaubt := arten.duplicate()
+		for a0: String in arten:
+			for d: float in [0.0, 99.0]:
+				erlaubt.append(str(h.typ.ersatz(a0, d)[0]))
+		passt = passt and erlaubt.has(str(x["art"]))
 	pruefe(passt, "%s: jeder Angriff gehört zu seinem Schritt" % phase)
 	var gekoppelt := log.filter(func(x: Dictionary) -> bool: return bool(x.get("dann", false)))
 	if tabelle.any(func(st: Dictionary) -> bool: return st.has("dann")):
 		print("GEKOPPELT %s: %d" % [phase, gekoppelt.size()])
 
 
-var boden_geprueft := ""   # Ergebnis der ersten vollen Bodenfeuer-Prüfung ("" = noch keine)
+var boden_geprueft := ""   # Ergebnis der ersten Reihenwellen-Prüfung ("" = noch keine)
 
 
-## G2-3: Sobald ein Bodenfeuer voll ausgebreitet ist: alle Bodenfelder im Platz brennen, kein Wall (Krone) ist dabei.
-func _pruefe_bodenfeuer() -> void:
-	if boden_geprueft != "" or h == null or h.bodenfeuer.is_empty():
+## H-1 (27.11., Paul): Die erste Reihenwelle – die Reihen laufen vom Boss weg (jede ein Feld weiter in Wellenrichtung,
+## im festen Takt) bis zur Lichtwand (die letzte liegt am Rand des Innern); Wälle sind nie Teil einer Reihe.
+func _pruefe_reihe() -> void:
+	if boden_geprueft != "" or h == null or h.reihe == null:
 		return
-	if float(h.bodenfeuer["t"]) < Werte.BOSS_DRUCK_BODEN_AUSBREITUNG + Werte.BOSS_DRUCK_BODEN_WARNUNG + 0.05:
-		return
+	var w := h.reihe
 	var kp := h.kampfplatz
 	var hb := BrakkKampfplatz._halb()
-	var boden := 0
-	var brennt := 0
-	var kronen_brennen := 0
-	for y in range(kp.mitte.y - hb.y, kp.mitte.y + hb.y):
-		for x in range(kp.mitte.x - hb.x, kp.mitte.x + hb.x):
-			var z := Vector2i(x, y)
+	var quer_x := w.schritt.x != 0
+	var achse := 0 if quer_x else 1
+	var folge_ok := true
+	var walls := 0
+	for i in w.reihen.size():
+		var r: Dictionary = w.reihen[i]
+		var z0: Vector2i = (r["zellen"] as Array)[0]
+		if i > 0:
+			var z_vor: Vector2i = (w.reihen[i - 1]["zellen"] as Array)[0]
+			folge_ok = folge_ok and z0[achse] - z_vor[achse] == w.schritt[achse] and is_equal_approx(float(r["ab"]) - float(w.reihen[i - 1]["ab"]), Werte.BOSS_REIHE_TAKT)
+		for z: Vector2i in r["zellen"]:
 			if o.karte.inhalt(z) == Karte.WALL:
-				if h.brennt(z):
-					kronen_brennen += 1
-			elif kp.im_innern(z):
-				boden += 1
-				if h.brennt(z):
-					brennt += 1
-	boden_geprueft = "Boden %d/%d brennt, Wälle/Kronen brennend %d, Schaden am Boden %.2f" % [brennt, boden, kronen_brennen, h.bodenfeuer_schaden]
-	pruefe(boden > 20 and brennt == boden and kronen_brennen == 0 and h.bodenfeuer_schaden > 0.0, "Anker-Zwang: " + boden_geprueft)
+				walls += 1
+	var letzte: Vector2i = (w.reihen.back()["zellen"] as Array)[0]
+	var rand := (kp.mitte[achse] + hb[achse] - 2) if w.schritt[achse] > 0 else (kp.mitte[achse] - hb[achse] + 1)
+	var boss_z := o.karte.zelle_bei(h.einheit.position)
+	var erste: Vector2i = (w.reihen[0]["zellen"] as Array)[0]
+	var weg_vom_boss := (erste[achse] - boss_z[achse]) * w.schritt[achse] >= 0
+	boden_geprueft = "%d Reihen, Dauer %.2f s, Folge %s, letzte am Rand %s (%d/%d), vom Boss weg %s, Wälle in Reihen %d" % [w.reihen.size(), w.dauer(), str(folge_ok), str(letzte[achse] == rand), letzte[achse], rand, str(weg_vom_boss), walls]
+	pruefe(w.reihen.size() >= 2 and folge_ok and letzte[achse] == rand and weg_vom_boss and walls == 0, "Reihenwelle: " + boden_geprueft)
 
 
-## G2-3: Fenster in der Druckphase kurz, danach die Belohnung; gezählt; Bodenfeuer nur beim Scharfschützen und Sonde 7.
+## G2-3: Fenster in der Druckphase kurz, danach die Belohnung; gezählt; H-1: Reihenwellen nur beim Scharfschützen und Sonde 7.
 func _pruefe_druck() -> void:
 	var kurz: Array = []
 	var lang: Array = []
@@ -189,32 +199,33 @@ func _pruefe_druck() -> void:
 	pruefe(not lang.is_empty() and kurz.all(func(f: float) -> bool: return f <= 0.5) and lang.all(func(f: float) -> bool: return f >= 2.0 and f <= 2.5),
 		"Druck: Fenster %s, danach Belohnung %s" % [str(kurz), str(lang)])
 	pruefe(int(h.zaehlung.get("druckphasen", 0)) >= 1, "Druckphasen gezählt: %d" % int(h.zaehlung.get("druckphasen", 0)))
-	var feuer := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "bodenfeuer").size()
+	var wellen := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "reihenwelle").size()
 	if art in ["scharf", "sonde"]:
 		if boden_geprueft == "":
-			pruefe(false, "Anker-Zwang: kein volles Bodenfeuer (%d begonnen)" % feuer)
+			pruefe(false, "Reihenwelle: keine geprüft (%d begonnen)" % wellen)
 	else:
-		pruefe(feuer == 0, "kein Bodenfeuer beim %s" % art)
+		pruefe(wellen == 0, "keine Reihenwelle beim %s" % art)
 
 
 ## G2-4: Technogunner – Sprint-Salven (1,2 s, drei Schüsse, deutlich schneller als sein Lauf), 5er-Salven im 0,08-s-Takt,
 ## Sprung/Tumble im 1-s-Takt; im Fenster steht er still.
 func _pruefe_gunner() -> void:
-	var ende := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "sprint_ende")
-	var weit := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "sprint")
-	var ok := not ende.is_empty() and ende.all(func(e: Dictionary) -> bool: return int(e["schuesse"]) == Werte.BOSS_GUNNER_SPRINT_SCHUESSE and absf(float(e["dauer"]) - Werte.BOSS_GUNNER_SPRINT_SEK) < 0.05)
-	pruefe(ok, "Sprint-Salven: %d, je %s Schüsse, Weite %s Felder" % [ende.size(), str(ende.map(func(e: Dictionary) -> int: return int(e["schuesse"]))), str(weit.map(func(e: Dictionary) -> float: return snappedf(float(e["weit"]), 0.1)))])
-	var schuesse := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "salve5_schuss").map(func(e: Dictionary) -> float: return float(e["bei"]))
+	# I-2/I-3 (27.11., Paul): Sturmring statt Ringsalve, 4er-Salve statt Sprint- und 5er-Salve
+	var schlaege := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "sturmring_schlag").size()
+	var ringe := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "schussring").size()
+	pruefe(schlaege >= 1 and ringe >= Werte.BOSS_GUNNER_RING_ZAHL, "Sturmringe: %d Schläge, %d Schussringe" % [schlaege, ringe])
+	var schuesse := h.protokoll.filter(func(e: Dictionary) -> bool: return str(e.get("was", "")) == "salve4_schuss").map(func(e: Dictionary) -> float: return float(e["bei"]))
 	var abstaende: Array = []
 	for j in range(1, schuesse.size()):
 		var d: float = schuesse[j] - schuesse[j - 1]
 		if d < 0.3:
 			abstaende.append(snappedf(d, 0.01))
-	pruefe(not abstaende.is_empty() and abstaende.all(func(d: float) -> bool: return d <= 0.1), "5er-Salve im Takt %s s (Soll %.2f)" % [str(abstaende.slice(0, 8)), Werte.BOSS_GUNNER_SALVE5_TAKT])
+	pruefe(not abstaende.is_empty() and abstaende.all(func(d: float) -> bool: return d <= Werte.BOSS_GUNNER_SALVE4_TAKT + 0.03), "4er-Salve im Takt %s s (Soll %.2f)" % [str(abstaende.slice(0, 8)), Werte.BOSS_GUNNER_SALVE4_TAKT])
 	# 27.11. (Paul: „Nur Prüfung korrigieren“): nicht die Zahl in 90 s – die hängt daran, wie lange er angreift (meist 60–75 s) –,
 	# sondern der Takt in freier Zeit: mindestens 0,8 Ansätze je Sekunde (1-s-Takt, ±25 % Zufall)
 	var je_sek := float(versuche) / maxf(0.1, frei_sek)
-	pruefe(is_equal_approx(h.typ.takt(4.0), Werte.BOSS_GUNNER_AKTION_TAKT) and frei_sek >= 3.0 and je_sek >= 0.8,
+	# I-5/I-7 (27.11., Paul): mit Kronen, Sturmringen und 0,6 s Bewegung bleibt kaum freie Zeit am Boden – dann reicht ein Ansatz
+	pruefe(is_equal_approx(h.typ.takt(4.0), Werte.BOSS_GUNNER_AKTION_TAKT) and ((frei_sek >= 3.0 and je_sek >= 0.8) or (frei_sek < 3.0 and versuche >= 1)),
 		"Sprung/Tumble im %.1f-s-Takt: %d Ansätze in %.1f s freier Zeit (%.2f je s), gezählt %d" % [h.typ.takt(4.0), versuche, frei_sek, je_sek, h.zaehler["sprung"] + h.zaehler["tumble"]])
 
 
