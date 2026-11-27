@@ -103,6 +103,13 @@ var _alt := false
 ## 26.11. (Paul): Entwicklerschalter „Tafelstil: Platte / Hologramm“ – Standard Hologramm, die Platte bleibt zum Vergleich
 var _holo_stil := true
 var _letzte_wahl := -1              # Markieren im Hauptmenü: Brakk dreht kurz den Kopf zur Liste
+## 27.11. (Paul): Ansicht „Klippe 2“ = Bühne Klippe, beim Öffnen bleibt Brakk links scharf, die Tafel steht rechts
+var _projektion := false
+var _haupt_weg: Array = []          # Hauptmenü-Zeilen [Text, Rechteck, Farbe], die beim Öffnen ausblenden („Klippe 2“)
+const HAUPT_AUS := 0.2
+## Große Unterseiten: eigener Aufbau über die ganze Breite (Anführerkacheln bzw. zweite Tafel rechts) – „Klippe 2“ zeigt
+## Brakk dort klein am linken Rand.
+const BREITE_SEITEN := ["anfuehrer", "phantom", "herausforderung", "szenarien", "profil"]
 
 
 class Flaeche extends Control:
@@ -132,7 +139,9 @@ func _init() -> void:
 	_buehne_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_buehne = BUEHNE.instantiate() as MenueBuehne
 	_buehne.einfach = Touch.ohne_maus()
-	_buehne.szene = str(Profil.einstellung("buehne", "ausblick"))   # 26.11. (Paul): „Ausblick“ oder „Klippe“
+	var buehne := str(Profil.einstellung("buehne", "ausblick"))   # 26.11. (Paul): „Ausblick“, „Klippe“ oder „Klippe 2“
+	_projektion = buehne == "klippe2"
+	_buehne.szene = "klippe" if _projektion else buehne
 	_buehne_vp.add_child(_buehne)
 	add_child(_buehne_vp)
 	_buehne_bild = TextureRect.new()
@@ -201,6 +210,10 @@ func _zeige(seite: String) -> void:
 	if seite == "haupt" and _seite != "haupt" and _seite != "anfuehrer":
 		_zu_rect = _tafel_rect()   # 26.11.: diese Tafel fällt gleich in den Strahl zurück
 		_zu_seit = _echt
+	if seite != "haupt" and _seite == "haupt":   # 27.11.: „Klippe 2“ – die Hauptliste blendet aus
+		_haupt_weg = []
+		for i in _eintraege.size():
+			_haupt_weg.append([str(_eintraege[i][0]), _zeile(i), _eintraege[i][3]])
 	_seite = seite
 	_seite_seit = _echt   # 26.11.: Tafel blendet ein, Banner fallen
 	_knopf_wahl = -1
@@ -354,7 +367,7 @@ func _baue() -> void:
 			_eintraege.append([tr("Startmenü") + ": " + (tr("Alt") if _alt else tr("Neu")), _stil_umschalten, tr("Zum Vergleich zwischen neuem und altem Startmenü wechseln · auch mit [F2]."), Stil.TEXT])
 			if not _alt:   # Entwicklerschalter (Vergleich)
 				_eintraege.append([tr("Tafelstil") + ": " + (tr("Hologramm") if _holo_stil else tr("Platte")), _tafelstil_umschalten, tr("Entwicklerschalter: Unterseiten als Hologramm aus Brakks Handschuh oder als schlichte Platte."), Stil.TEXT])
-				_eintraege.append([tr("Bühne") + ": " + (tr("Klippe") if _buehne.szene == "klippe" else tr("Ausblick")), _buehne_umschalten, tr("Entwicklerschalter: Hintergrund „Ausblick“ (Wall vorn, Tal) oder „Klippe“ (Fels unten links, Verteidigung oben rechts) · auch mit [F3]."), Stil.TEXT])
+				_eintraege.append([tr("Bühne") + ": " + tr({"ausblick": "Ausblick", "klippe": "Klippe", "klippe2": "Klippe 2"}[_buehne_name()]), _buehne_umschalten, tr("Entwicklerschalter: Hintergrund „Ausblick“ (Wall vorn, Tal), „Klippe“ (Fels unten links, Verteidigung oben rechts) oder „Klippe 2“ (Klippe, Tafeln rechts, Brakk bleibt scharf) · auch mit [F3]."), Stil.TEXT])
 			_eintraege.append(["Zurück", _zeige.bind("haupt"), "", Stil.TEXT_BLASS])
 	_wahl = clampi(_wahl, 0, _eintraege.size() - 1)
 	if _seite == "brakk":   # 22.11. (Paul): Brakk-Tutorial jederzeit wiederholen (brakk_tutorial.gd)
@@ -387,17 +400,21 @@ func _tafelstil_umschalten() -> void:
 	_wahl = clampi(w, 0, _eintraege.size() - 1)
 
 
-## 26.11. (Paul): Bühne „Ausblick“ ↔ „Klippe“ (Entwicklerschalter, gemerkt im Profil) – die Bühne wird neu aufgebaut.
-func _buehne_umschalten() -> void:
-	var neu := "ausblick" if _buehne.szene == "klippe" else "klippe"
+## 26.11. (Paul): Bühne reihum „Ausblick“ → „Klippe“ → „Klippe 2“ (27.11.) oder direkt `ziel` (Entwicklerschalter, gemerkt
+## im Profil). Neu aufgebaut wird die Bühne nur zwischen Ausblick und Klippe – „Klippe 2“ ist dieselbe Klippe.
+func _buehne_umschalten(ziel: String = "") -> void:
+	var neu: String = ziel if ziel != "" else str({"ausblick": "klippe", "klippe": "klippe2"}.get(_buehne_name(), "ausblick"))
 	Profil.setze_einstellung("buehne", neu)
-	_buehne.queue_free()
-	_buehne_vp.remove_child(_buehne)
-	_buehne = BUEHNE.instantiate() as MenueBuehne
-	_buehne.einfach = Touch.ohne_maus()
-	_buehne.szene = neu
-	_buehne_vp.add_child(_buehne)
-	_buehne_bild.material = _buehne.post
+	_projektion = neu == "klippe2"
+	var szene := "klippe" if _projektion else neu
+	if _buehne.szene != szene:
+		_buehne.queue_free()
+		_buehne_vp.remove_child(_buehne)
+		_buehne = BUEHNE.instantiate() as MenueBuehne
+		_buehne.einfach = Touch.ohne_maus()
+		_buehne.szene = szene
+		_buehne_vp.add_child(_buehne)
+		_buehne_bild.material = _buehne.post
 	var w := _wahl
 	_baue()
 	_wahl = clampi(w, 0, _eintraege.size() - 1)
@@ -551,8 +568,9 @@ func _zeige_anfuehrer(zurueck: String, start: Callable, ego: bool = false) -> vo
 
 func _af_kachel(i: int) -> Rect2:
 	var n := maxi(1, _af_liste().size())   # 20.11.: vor dem Brakk-Mode drei breitere Kacheln
-	var w := (600.0 - float(n - 1) * 8.0) / float(n)
-	return Rect2(roundf(20.0 + i * (w + 8.0)), AF_Y, roundf(w), AF_H)
+	var x0 := 56.0 if _projektion and _holo_stil and not _alt else 20.0   # 27.11.: „Klippe 2“ – links steht Brakk
+	var w := (620.0 - x0 - float(n - 1) * 8.0) / float(n)
+	return Rect2(roundf(x0 + i * (w + 8.0)), AF_Y, roundf(w), AF_H)
 
 
 func _anfuehrer_gewaehlt(id: String) -> void:
@@ -1160,11 +1178,25 @@ func _tc_rect() -> Rect2:
 
 
 ## 26.11. (Paul): sichtbarer Umschalter im Hauptmenü, links neben dem Emblem – Alt · Ausblick · Klippe (zum Vergleichen).
-const ANSICHTEN := [["alt", "Alt"], ["ausblick", "Ausblick"], ["klippe", "Klippe"]]
+const ANSICHTEN := [["alt", "Alt"], ["ausblick", "Ausblick"], ["klippe", "Klippe"], ["klippe2", "Klippe 2"]]
 
 
 func _ansicht() -> String:
-	return "alt" if _alt else _buehne.szene
+	return "alt" if _alt else _buehne_name()
+
+
+## Gewählte Bühne: „ausblick“, „klippe“ oder „klippe2“.
+func _buehne_name() -> String:
+	return "klippe2" if _projektion and _buehne.szene == "klippe" else _buehne.szene
+
+
+## 27.11.: „Klippe 2“ mit Hologramm – schmale Unterseiten stehen rechts im weichen Bereich (links bleibt Brakk scharf).
+func _rechts() -> bool:
+	return _projektion and _holo_stil and not _alt and _seite not in BREITE_SEITEN
+
+
+func _liste_x() -> float:
+	return 640.0 - 26.0 - BREITE if _rechts() else LISTE_X
 
 
 func _ansicht_rects() -> Array:
@@ -1184,8 +1216,8 @@ func _ansicht_setzen(id: String) -> void:
 		return
 	if _alt:
 		_stil_umschalten()
-	if _buehne.szene != id:
-		_buehne_umschalten()
+	if _buehne_name() != id:
+		_buehne_umschalten(id)
 
 
 func _male_ansicht(ci: Control) -> void:
@@ -1762,6 +1794,8 @@ func _buehne_weiter(delta: float) -> void:
 		_buehne_vp.size = soll
 	_buehne.nacht_ziel = 1.0 if _seite == "phantom" else 0.0
 	_buehne.unter_ziel = 0.0 if _seite == "haupt" else 1.0
+	_buehne.projektion = _projektion and _holo_stil   # 27.11.: „Klippe 2“ (mit Platte: Vollbild weich wie bisher)
+	_buehne.breit = _seite in BREITE_SEITEN
 	# Inhalt blendet ein (nur Alpha): Unterseiten erst, wenn das Hologramm entfaltet ist; das Hauptmenü, während die
 	# Tafel in den Strahl zurückfällt
 	var t := _echt - _seite_seit
@@ -1796,7 +1830,7 @@ func _zeile(i: int) -> Rect2:
 		return Rect2(LISTE_X, ALT_Y + i * ALT_H, BREITE, ALT_H - 4.0)
 	if _seite == "haupt":   # 26.11.: Hauptmenü rechts mittig
 		return Rect2(HAUPT_X, HAUPT_Y + i * HAUPT_H, HAUPT_B, HAUPT_H - 4.0)
-	return Rect2(LISTE_X, LISTE_Y + i * _zeile_h(), BREITE, _zeile_h() - 2.0)
+	return Rect2(_liste_x(), LISTE_Y + i * _zeile_h(), BREITE, _zeile_h() - 2.0)
 
 
 ## 26.11.: Zeilenhöhe der Unterseiten – lange Listen (Einstellungen) rücken enger zusammen, damit die Tafel ins Bild passt.
@@ -1889,7 +1923,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if k == KEY_F3 and not event.echo and not _alt:
 		_klick()
-		_buehne_umschalten()   # 26.11.: Bühne Ausblick ↔ Klippe
+		_buehne_umschalten()   # 26.11.: Bühne Ausblick → Klippe → Klippe 2
 		get_viewport().set_input_as_handled()
 		return
 	match k:
@@ -2208,7 +2242,7 @@ const SEITEN_TITEL := {"spielen": "Spielen", "phantom": "Phantom-Modus", "einste
 
 ## Rechteck der Hologramm-Tafel einer Unterseite (nach der Zahl der Einträge).
 func _tafel_rect() -> Rect2:
-	return Rect2(LISTE_X - 10.0, LISTE_Y - 30.0, BREITE + 20.0, _eintraege.size() * _zeile_h() + 36.0)
+	return Rect2(_liste_x() - 10.0, LISTE_Y - 30.0, BREITE + 20.0, _eintraege.size() * _zeile_h() + 36.0)
 
 
 ## Inhalt der Unterseite; Rahmen und Grund zeichnet die Hologramm-Ebene darunter (_male_holo_ebene).
@@ -2221,10 +2255,11 @@ func _male_unterseite(ci: Control) -> void:
 		Stil.schreibe(ci, Vector2(LISTE_X, LISTE_Y - 15.0), titel, Stil.GROSS, TUSCHE_HELL)
 	else:
 		# Überschrift als Leuchtzeile
-		Stil.schreibe(ci, Vector2(LISTE_X, LISTE_Y - 15.0), titel, Stil.GROSS, Color.WHITE)
+		var lx := _liste_x()
+		Stil.schreibe(ci, Vector2(lx, LISTE_Y - 15.0), titel, Stil.GROSS, Color.WHITE)
 		var tw := Stil.breite(titel, Stil.GROSS)
-		ci.draw_rect(Rect2(LISTE_X, LISTE_Y - 6.0, tw + 20.0, 1.0), Color(HOLO_TEXT, 0.9))
-		ci.draw_rect(Rect2(LISTE_X, LISTE_Y - 5.0, tw + 20.0, 2.0), Color(HOLO_HELL, 0.25))
+		ci.draw_rect(Rect2(lx, LISTE_Y - 6.0, tw + 20.0, 1.0), Color(HOLO_TEXT, 0.9))
+		ci.draw_rect(Rect2(lx, LISTE_Y - 5.0, tw + 20.0, 2.0), Color(HOLO_HELL, 0.25))
 	for i in n:
 		var e: Array = _eintraege[i]
 		var r := _zeile(i)
@@ -2272,6 +2307,8 @@ func _male_holo_ebene(ci: Control) -> void:
 		# Handschuh leuchtet auf, sobald der Arm oben ist, und glimmt dann weiter
 		var auf := clampf((t - HOLO_ARM * 0.6) / 0.1, 0.0, 1.0)
 		glimmen = auf * (0.45 + 0.55 * maxf(0.0, 1.0 - absf(t - HOLO_ARM - 0.08) / 0.35))
+		if _projektion and t < HAUPT_AUS:
+			_male_haupt_weg(ci, 1.0 - t / HAUPT_AUS)
 		if _seite != "anfuehrer":
 			var r := _tafel_rect()
 			var ts := t - HOLO_ARM
@@ -2295,6 +2332,17 @@ func _male_holo_ebene(ci: Control) -> void:
 	if glimmen > 0.01:
 		for i in 4:   # Leuchten um den Handschuh
 			ci.draw_circle(hand, 2.0 + i * 3.0, Color(HOLO_HELL, glimmen * (0.5 - i * 0.11)))
+
+
+## 27.11.: „Klippe 2“ – die Hauptliste blendet beim Öffnen einer Tafel aus und gleitet dabei leicht nach rechts.
+func _male_haupt_weg(ci: Control, a: float) -> void:
+	for z: Array in _haupt_weg:
+		var r: Rect2 = z[1]
+		var x := r.position.x + 12.0 * (1.0 - a)
+		var cy := r.get_center().y
+		var farbe: Color = z[2]
+		Stil.symbol(ci, "schloss" if farbe == GESPERRT else _symbol_fuer(str(z[0])), Vector2(x + 9.0, cy), 1.0, Color(Stil.TEXT_BLASS, a))
+		Stil.schreibe(ci, Vector2(x + 22.0, cy), _teile(str(z[0]))[0], Stil.GROSS, Color(farbe, a))
 
 
 ## Rechteck beim Entfalten: Breite (bw) von der Mitte aus, Höhe (bh) von einer Linie aus.
@@ -2404,7 +2452,16 @@ func _male_info(ci: Control) -> void:
 	var h := ceilf(Stil.absatz_groesse(text, weite, Stil.NORMAL).y) + (22.0 if titel != "" else 12.0)
 	var r := Rect2(INFO_X, INFO_UNTEN - h, INFO_B, h)
 	var tafel := _tafel_rect()
-	if not _alt and _seite != "haupt" and _seite != "anfuehrer" and tafel.end.y > r.position.y - 4.0:
+	if _rechts() and _seite != "haupt":
+		# 27.11.: „Klippe 2“ – Infofeld unter der Tafel rechts (links steht Brakk); lange Tafel: links oben neben ihr
+		var hoehe := func(b: float) -> float: return ceilf(Stil.absatz_groesse(text, b - 16.0, Stil.NORMAL).y) + (22.0 if titel != "" else 12.0)
+		var unten := _tc_rect().position.y - 4.0 if TC_ADRESSE != "" else INFO_UNTEN   # rechts unten liegt das Emblem
+		r = Rect2(tafel.position.x, unten - hoehe.call(tafel.size.x), tafel.size.x, hoehe.call(tafel.size.x))
+		if tafel.end.y > r.position.y - 4.0:
+			var b := tafel.position.x - 10.0 - INFO_X
+			r = Rect2(INFO_X, tafel.position.y, b, hoehe.call(b))
+		weite = r.size.x - 16.0
+	elif not _alt and _seite != "haupt" and _seite != "anfuehrer" and tafel.end.y > r.position.y - 4.0:
 		# 26.11.: lange Tafel (Einstellungen) – das Infofeld steht oben rechts neben der Tafel
 		r.position = Vector2(tafel.end.x + 10.0, tafel.position.y)
 		r.size.x = 640.0 - INFO_X - r.position.x

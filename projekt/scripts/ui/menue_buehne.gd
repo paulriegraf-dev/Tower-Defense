@@ -12,7 +12,9 @@ extends Node3D
 ## Partikel: Blätter, Funken, Rauch. Alle 6–10 s eine kleine Bewegung auf der Plattform (Brakk blickt herüber, eine Truppe
 ## wechselt den Stand).
 ## Zustände: `nacht_ziel` 0 = Abend, 1 = Nacht (Phantom-Menü: dunkelblau, Leuchtstreifen, Mündungsfeuer, Sterne);
-## `unter_ziel` 1 = eine Unterseite ist offen (Tusche-Ton, Kamera rückt vor, weicher); `arm_ziel` 1 = Brakk hebt den
+## `unter_ziel` 1 = eine Unterseite ist offen (Tusche-Ton, Kamera rückt vor, weicher; mit `projektion` – Ansicht „Klippe 2“,
+## 27.11. – bleibt das linke Drittel mit Brakk scharf und hell, die Kamera zoomt auf ihn, nur rechts wird es dunkler und
+## weicher; `breit` = große Unterseite: Brakk steht klein am linken Rand); `arm_ziel` 1 = Brakk hebt den
 ## linken Arm (Hologramm-Tafeln, startmenue.gd), `hand_leuchten` 0..1 = sein Handschuh leuchtet, `hand_bildpunkt()` sagt,
 ## wo die Handfläche im Bild ist; `blick()` = er dreht kurz den Kopf zur Liste (Markieren eines Punkts).
 ## Der Hintergrund ist eine gemalte Szene, kein Spielfeld: Boden ohne Kachelraster, frei gesetzte Hügel, Wälle als
@@ -69,7 +71,18 @@ const KL_FELS := [[-16.0, 1.4, -6.0, 2.0, -20.0, 1.6], [-16.0, -2.5, -9.0, -2.5,
 const KL_HUEGEL := [[0.36, 0.42, 14.0, 5.0], [0.5, 0.4, 18.0, 6.0], [0.3, 0.5, 10.0, 3.0], [0.62, 0.45, 16.0, 5.0],
 	[0.45, 0.55, 9.0, 2.5], [0.75, 0.6, 14.0, 4.0]]
 
+# „Klippe 2“ (27.11.): Bild bei offener Unterseite – Zoom um einen festen Bildpunkt (Anker, Anteile des Grundbilds; jeder
+# Punkt P rückt nach Anker + (P − Anker) · Zoom), scharf bis `kante`
+const PRJ_ANKER := Vector2(0.5, 0.35)      # schmale Tafel: Brakk rückt etwas nach links unten
+const PRJ_ZOOM := 1.15
+const PRJ_KANTE := 0.333
+const BREIT_ZOOM := 0.85                   # große Unterseite: Brakks Fuß (KL_BRAKK) klein an den linken Rand …
+const BREIT_ZIEL := Vector2(0.04, 0.75)    # … hierhin
+const BREIT_KANTE := 0.1
+
 var szene := "ausblick"
+var projektion := false
+var breit := false
 var nacht_ziel := 0.0
 var unter_ziel := 0.0
 var arm_ziel := 0.0
@@ -87,6 +100,7 @@ var _trupp := Vector2i(1, 1)  # Myriaden je Trupp (von, bis)
 var _takt := Vector2(8.0, 15.0)
 var _nacht := 0.0
 var _unter := 0.0
+var _breit := 0.0
 var _zeit := 0.0
 var _env: Environment
 var _sonne: DirectionalLight3D
@@ -883,16 +897,39 @@ func _weiter(delta: float) -> void:
 	_hand_mat.albedo_color.a = clampf(hand_leuchten * 3.0, 0.0, 1.0)   # aus = unsichtbar
 	for km: StandardMaterial3D in _kanten:
 		km.emission_energy_multiplier = lerpf(0.2, 2.2, _nacht)
-	# Kamera: wiegt leicht; bei einer Unterseite rückt sie etwas vor
+	# Kamera: wiegt leicht; bei einer Unterseite rückt sie etwas vor („Klippe 2“: schwenkt und zoomt auf Brakk)
 	var pos := _kam_pos + Vector3(sin(_zeit * 0.13) * 0.18, sin(_zeit * 0.21) * 0.06, 0.0)
-	pos = pos.lerp(pos + (_kam_blick - pos).normalized() * VORRUECKEN, e)
+	_breit = UiBewegung.naeher(_breit, 1.0 if breit else 0.0, delta, UiBewegung.UEBERBLENDUNG)
+	if not projektion:
+		pos = pos.lerp(pos + (_kam_blick - pos).normalized() * VORRUECKEN, e)
 	kamera.position = pos
-	kamera.fov = KAM_FOV
 	kamera.look_at(_kam_blick, Vector3.UP)
-	# Bild: Tilt-Shift oben/unten, Unterseite = Tusche, dunkler, weicher (nachts bleibt es blau und heller)
-	post.set_shader_parameter("alles", 2.0 * e)
-	post.set_shader_parameter("dunkel", 0.3 * e * (1.0 - 0.6 * _nacht))
-	post.set_shader_parameter("tusche", e * (1.0 - 0.85 * _nacht))
+	if projektion:
+		# Zoom um den Anker als verschobener Bildausschnitt (Frustum mit Versatz) – die Kamera selbst dreht nicht
+		var b := UiBewegung.weich(_breit)
+		var bk := BREIT_ZOOM
+		var anker := PRJ_ANKER.lerp((BREIT_ZIEL - KL_BRAKK * bk) / (1.0 - bk), b)
+		var zoom := lerpf(1.0, lerpf(PRJ_ZOOM, bk, b), e)
+		var t := tan(deg_to_rad(KAM_FOV) / 2.0) * kamera.near
+		var g := Vector2(get_viewport().size)
+		kamera.projection = Camera3D.PROJECTION_FRUSTUM
+		kamera.size = 2.0 * t / zoom
+		kamera.frustum_offset = Vector2((0.5 - anker.x) * g.x / maxf(g.y, 1.0), anker.y - 0.5) * ((1.0 - zoom) * 2.0 * t / zoom)
+		post.set_shader_parameter("kante", lerpf(PRJ_KANTE, BREIT_KANTE, b))
+	else:
+		kamera.projection = Camera3D.PROJECTION_PERSPECTIVE
+		kamera.fov = KAM_FOV
+	# Bild: Tilt-Shift oben/unten, Unterseite = Tusche, dunkler, weicher (nachts bleibt es blau und heller);
+	# „Klippe 2“: nur rechts von der Kante
+	var dunkel := 0.3 * e * (1.0 - 0.6 * _nacht)
+	var tusche := e * (1.0 - 0.85 * _nacht)
+	var s := 0.0 if projektion else 1.0
+	post.set_shader_parameter("alles", 2.0 * e * s)
+	post.set_shader_parameter("dunkel", dunkel * s)
+	post.set_shader_parameter("tusche", tusche * s)
+	post.set_shader_parameter("rechts", 2.4 * e * (1.0 - s))
+	post.set_shader_parameter("dunkel_r", 1.4 * dunkel * (1.0 - s))
+	post.set_shader_parameter("tusche_r", 0.8 * tusche * (1.0 - s))
 
 
 func _figuren_weiter(delta: float) -> void:
@@ -1082,14 +1119,20 @@ uniform vec2 fokus = vec2(0.2, 0.66);
 uniform vec2 fokus_r = vec2(0.24, 0.3);
 uniform vec2 klar = vec2(0.8, 0.27);
 uniform vec2 klar_r = vec2(0.22, 0.07);
+uniform float rechts = 0.0;         // „Klippe 2“: rechts von `kante` weicher, dunkler, Tusche (weicher Übergang kante_b)
+uniform float kante = 0.333;
+uniform float kante_b = 0.0625;
+uniform float dunkel_r = 0.0;
+uniform float tusche_r = 0.0;
 void fragment() {
 	float u;
+	float m = smoothstep(kante - kante_b * 0.5, kante + kante_b * 0.5, UV.x);
 	if (tiefe > 0.0) {
 		float t = smoothstep(0.75, 1.6, length((UV - fokus) / fokus_r)) * tiefe;
 		t *= mix(0.3, 1.0, smoothstep(0.6, 1.3, length((UV - klar) / klar_r)));
-		u = (t + alles) * weich;
+		u = (t + alles + rechts * m) * weich;
 	} else {
-		u = (smoothstep(scharf_oben, scharf_oben - 0.2, UV.y) * oben + smoothstep(scharf_unten, 1.0, UV.y) * unten + alles) * weich;
+		u = (smoothstep(scharf_oben, scharf_oben - 0.2, UV.y) * oben + smoothstep(scharf_unten, 1.0, UV.y) * unten + alles + rechts * m) * weich;
 	}
 	vec3 c = texture(TEXTURE, UV).rgb;
 	if (u > 0.05) {
@@ -1111,9 +1154,10 @@ void fragment() {
 		c = mix(c, vec3(g0) * vec3(0.92, 0.98, 1.04), clamp(u * 0.06, 0.0, 0.3));
 	}
 	float g = dot(c, vec3(0.3, 0.59, 0.11));
-	c = mix(c, vec3(g) * vec3(1.08, 0.97, 0.80), tusche * 0.85);
-	c = mix(c, c * c * 1.4, tusche * 0.3);
-	c *= 1.0 - dunkel;
+	float tu = tusche + tusche_r * m;
+	c = mix(c, vec3(g) * vec3(1.08, 0.97, 0.80), tu * 0.85);
+	c = mix(c, c * c * 1.4, tu * 0.3);
+	c *= 1.0 - (dunkel + dunkel_r * m);
 	vec2 p = UV - vec2(0.5, 0.52);
 	p.x *= 1.35;
 	float r = smoothstep(0.32, 0.78, length(p));
