@@ -213,12 +213,12 @@ func starten(p_spiel: Node) -> void:
 	if Touch.ohne_maus():
 		touch = EgoTouch.new(self)   # 18.11.: Handy – Stick, Wischen, Knöpfe
 		add_child(touch)
-		spiel.melde("Brakk-Mode: links laufen · rechts wischen zum Zielen · Fadenkreuz auf dem Gegner: Brakk schießt · Fähigkeit tippen oder halten und ziehen", 10.0)
+		spiel.melde("Brakk-Modus: links laufen · rechts wischen zum Zielen · Fadenkreuz auf dem Gegner: Brakk schießt · Fähigkeit tippen oder halten und ziehen", 10.0)
 		return
 	if kit != null:
-		spiel.melde("Brakk-Mode mit %s: WASD + Maus · [F] ausbauen, [Entf] abbauen, [Z] zurück, an der Basis Ringe · [I] Übersicht → Brakk-Mode · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
+		spiel.melde("Brakk-Modus mit %s: WASD + Maus · [F] ausbauen, [Entf] abbauen, [Z] zurück, an der Basis Ringe · [I] Übersicht → Brakk-Modus · Enter: Welle" % Anfuehrer.name(brakk.fortschritt.anfuehrer), 10.0)
 		return
-	spiel.melde("Brakk-Mode: WASD + Maus · Klick schießt · Leertaste springt · [E] Lichttreppe · [F] ausbauen, an der Basis Ringe · Enter: Welle" + ("" if spiel.brakk_modus else " · [G] zurück"), 10.0)
+	spiel.melde("Brakk-Modus: WASD + Maus · Klick schießt · Leertaste springt · [E] Lichttreppe · [F] ausbauen, an der Basis Ringe · Enter: Welle" + ("" if spiel.brakk_modus else " · [G] zurück"), 10.0)
 
 
 func beenden() -> void:

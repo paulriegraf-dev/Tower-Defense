@@ -144,6 +144,7 @@ const STANDARD := {
 	"herausforderer": true,     # 26.11. (Paul): zu Minute 9 und 14 tritt ein Benannter allein an (nemesis_herausforderer.gd)
 }
 const SCHILD_RADIUS := 3.2       # Felder um das Technoclan-HQ, in die Brakk nicht hineinkommt
+const WEITER_START_ABSTAND := 7.0   # 27.11. (Paul): Felder – nach dem Classic-Sieg startet Brakk möglichst so weit von jeder Fabrik
 const SICHT_JAEGER := 7.0        # Felder: so weit sieht ein Jäger Brakk (mit freier Sicht)
 # 23.11. (Paul): Zange – Jagdtrupps kommen über eigene Seiten und schlagen gleichzeitig zu; im Angriff fächern sie auf,
 # und wer am Ziel keine Sicht hat, sucht sich ein Schussfeld.
@@ -977,6 +978,8 @@ func _im_schild(p: Vector2) -> bool:
 
 ## 20.11. (Verrat): Brakk startet am Technoclan-HQ – vor dem Schild auf der Seite zum Myriaden-HQ, mit Platz für die drei
 ## Technogunner zwischen ihm und dem Schild. Findet sich nichts, gilt das freie Feld vor dem Myriaden-HQ.
+## 27.11. (Paul): Nach dem Classic-Sieg (weiter) steht dort die eigene Verteidigung – dann zuerst Plätze mit möglichst
+## wenigen Fabriken im Umkreis von WEITER_START_ABSTAND (sonst fiel Brakk neben seiner alten Frontreihe in Sekunden).
 func brakk_start() -> Vector2i:
 	var m := schild_mitten[0] if not schild_mitten.is_empty() else karte.mitte(karte.basis)
 	var zum_myr := (karte.mitte(Werte.ANGRIFFS_ZELLE) - m).normalized()
@@ -989,7 +992,12 @@ func brakk_start() -> Vector2i:
 			var d := p.distance_to(m)
 			if not karte.ist_begehbar(z) or not karte.ist_frei(z) or d < (SCHILD_RADIUS + 1.8) * Werte.ZELLE or d > (SCHILD_RADIUS + 7.0) * Werte.ZELLE:
 				continue
-			kandidaten.append([p.distance_to(soll), z])
+			var nah := 0
+			if weiter:
+				for f: Vector2i in spiel.fabriken:
+					if karte.mitte(f).distance_to(p) < WEITER_START_ABSTAND * Werte.ZELLE:
+						nah += 1
+			kandidaten.append([p.distance_to(soll) + nah * 1000.0 * Werte.ZELLE, z])
 	kandidaten.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 	for k: Array in kandidaten:
 		if _klare_sicht(karte.mitte(k[1] as Vector2i)):

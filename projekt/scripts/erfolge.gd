@@ -24,7 +24,7 @@ const LISTE: Array[Dictionary] = [
 	{"id": "sparfuchs", "name": "Sparfuchs", "text": "Am Rundenende die vollen Zinsen kassiert.", "symbol": "muenze", "versteckt": false, "belohnung": ""},
 	{"id": "doppelgaenger", "name": "Doppelgänger", "text": "Einen Gegner durch die Klonmaschine geschickt.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
 	## 21.11. (Paul): schaltet den Brakk-Mode im Startmenü frei (Profil.brakk_modus_frei); der Phantom-Modus hängt an „gegenangriff“
-	{"id": "aufgestellt", "name": "Zur Stelle", "text": "Brakk einmal in einer Partie aufgestellt – der Brakk-Mode ist frei.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
+	{"id": "aufgestellt", "name": "Zur Stelle", "text": "Brakk einmal in einer Partie aufgestellt – der Brakk-Modus ist frei.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
 	{"id": "kommandant", "name": "Kommandant", "text": "Brakk hat insgesamt 50 Gegner erledigt.", "symbol": "brakk", "versteckt": false, "belohnung": ""},
 	{"id": "gegenangriff", "name": "Gegenangriff", "text": "Das HQ des Gegners in Runde 20 zerstört.", "symbol": "play", "versteckt": false, "belohnung": ""},
 	{"id": "spiegelbild", "name": "Spiegelbild", "text": "Dein Bau ist zum ersten Phantom geworden.", "symbol": "buch", "versteckt": false, "belohnung": ""},
@@ -38,7 +38,7 @@ const LISTE: Array[Dictionary] = [
 	{"id": "ausbilder", "name": "Ausbilder", "text": "Tutorial abgeschlossen und mit mindestens 6 Fabriken gewonnen, eine davon auf Stufe 3.", "symbol": "fabrik", "versteckt": false, "belohnung": ""},
 	{"id": "deutscher_sparer", "name": "Deutscher Sparer", "text": "Eine Runde mit mindestens 1000 Budget begonnen und die Partie gewonnen.", "symbol": "muenze", "versteckt": true, "belohnung": ""},
 	## 20.11. (Paul): Befehl 24 (Brakk-Mode Rogue) – versteckt, gesperrt steht statt der Bedingung eine Anspielung („tipp“)
-	{"id": "befehl24", "name": "Befehl 24", "text": "Vom eigenen Rat zum Verräter erklärt – und die Flucht angetreten (Brakk-Mode Rogue).", "symbol": "brakk", "versteckt": true, "belohnung": "",
+	{"id": "befehl24", "name": "Befehl 24", "text": "Vom eigenen Rat zum Verräter erklärt – und die Flucht angetreten (Brakk-Modus).", "symbol": "brakk", "versteckt": true, "belohnung": "",
 		"tipp": "Wer zu oft gewinnt, wird dem Rat unheimlich …"},
 	{"id": "ueberlaeufer", "name": "Der Feind meines Feindes", "text": "Mit den Myriaden das Technoclan-HQ zerstört – das geheime Ende von Befehl 24.", "symbol": "raster", "versteckt": true, "belohnung": "",
 		"tipp": "1110000 100 010010 1000 1011101010110 01 001"},

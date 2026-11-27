@@ -433,7 +433,7 @@ func _baue_fabrik() -> void:
 	if spiel.brakk_modus:
 		# 18.11. (Paul): im Brakk-Mode keine Ausbauten – Truppe und Stufe kommen über Brakks Ringfelder
 		var ring := str(f.get("ring", ""))
-		_zeile("Im Feld des Rings: baut %s auf Stufe %d." % [d["name"], stufe] if ring != "" else "Brakk-Mode: keine Ausbauten. Ein Ringfeld (Lichtterminal an der Basis, [C] in der Bauphase) gibt Fabriken Truppe und Stufe.", Stil.KLEIN, Stil.LEUCHT)
+		_zeile("Im Feld des Rings: baut %s auf Stufe %d." % [d["name"], stufe] if ring != "" else "Brakk-Modus: keine Ausbauten. Ein Ringfeld (Lichtterminal an der Basis, [C] in der Bauphase) gibt Fabriken Truppe und Stufe.", Stil.KLEIN, Stil.LEUCHT)
 	elif stufe == 0 and Werte.fabrik_direkt_stufe_2():
 		# 20.11. (Paul): Sonde 7 – ohne Spezialisierung gleich auf Stufe 2
 		var pd := Werte.preis_direkt_stufe_2()

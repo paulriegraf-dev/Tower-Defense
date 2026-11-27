@@ -74,6 +74,7 @@ var _aus := false
 var _zurueck := -1                # 25.11. (N4): nach einem Rücksprung geht es bei diesem Schritt weiter
 var _w0 := -1                     # Erdwälle vor dem Erdwall-Schritt (für dessen Bedingung)
 var _gefuehrt := false            # Sperren gelten nur hier (BrakkTutorial erbt von dieser Klasse, hat aber eigene Regeln)
+var _end_frage := false           # 27.11.: Tafel „Weiter ins echte Spiel?“ ist offen
 const GESPERRT := "Später im Tutorial."
 
 var _wurzel: Control
@@ -257,9 +258,33 @@ func _naechster() -> void:
 		return
 	if _index >= _schritte.size() - 1:
 		Profil.setze_einstellung("tutorial_fertig", true)   # 19.11.: bis zum Ende durchgespielt (Erfolg „Ausbilder“)
-		beenden()
+		_frage_ende()
 		return
 	_zeige(_index + 1)
+
+
+## 27.11. (Paul): Am Ende fragt eine Tafel, ob es ins echte Spiel weitergeht (Ja = Partie läuft ohne Sonde 7 weiter)
+## oder ins Hauptmenü (wie „Abbrechen“). Esc = Ja, damit niemand aus Versehen die Partie verliert. Das Tutorial bleibt
+## aktiv, solange die Tafel offen ist – die nächste Welle startet also nicht.
+func _frage_ende() -> void:
+	var tafel: EndTafel = spiel.get("_bestaetigung")
+	if tafel == null:
+		beenden()
+		return
+	_end_frage = true
+	_wurzel.visible = false
+	var ja := func(): tafel.visible = false; beenden()
+	var menue := func(): _aus = true; tafel.visible = false; spiel._zum_menue()
+	tafel.zeige({
+		"kicker": "SONDE 7 · LEITSTELLE", "titel": "AUSBILDUNG ABGESCHLOSSEN", "titel_farbe": HOLO, "rahmen": HOLO,
+		"untertitel": "Weiter ins echte Spiel?",
+		"punkte": [
+			["play", tr("Die Partie läuft weiter – als Nächstes Runde %d von %d.") % [spiel.welle, Werte.LETZTE_RUNDE]],
+			["herz", tr("Deine Leben: %d.") % spiel.leben],
+			["muenze", tr("Budget: %d – mindestens das Startbudget.") % maxi(spiel.budget, Werte.START_BUDGET)]],
+		"knoepfe": [["Ja, weiterspielen", ja, HOLO], ["Hauptmenü", menue, HOLO_TEXT]],
+		"esc": ja,
+	})
 
 
 ## Schritt `i` zeigen. `vorweg`: kurzer Satz davor (Rücksprung).
@@ -377,6 +402,10 @@ func _box_klick(ev: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if _aus:
+		return
+	if _end_frage:
+		if not (spiel._bestaetigung as Control).visible:
+			beenden()   # 27.11.: Tafel anders geschlossen – wie Ja
 		return
 	var echt := delta / maxf(Engine.time_scale, 0.01)   # Tippen und Blinken laufen unabhängig vom Spieltempo
 	_zeit += echt

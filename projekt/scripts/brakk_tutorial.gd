@@ -145,7 +145,7 @@ func beenden() -> void:
 		return
 	if _frage:
 		letzter_ausgang = "spaeter"
-		spiel.melde("Sonde 7 fragt beim nächsten Brakk-Mode wieder – oder jederzeit unter Brakk-Mode → Tutorial.", 5.0)
+		spiel.melde("Sonde 7 fragt beim nächsten Brakk-Modus wieder – oder jederzeit unter Brakk-Modus → Tutorial.", 5.0)
 		_schliessen(false)
 		return
 	letzter_ausgang = "abgebrochen"
@@ -157,7 +157,7 @@ func _ablehnen() -> void:
 		return
 	letzter_ausgang = "abgelehnt"
 	Profil.setze_einstellung(MERKER, "abgelehnt")
-	spiel.melde("Verstanden. Das Tutorial findest du jederzeit unter Brakk-Mode → Tutorial.", 5.0)
+	spiel.melde("Verstanden. Das Tutorial findest du jederzeit unter Brakk-Modus → Tutorial.", 5.0)
 	_schliessen(false)
 
 
@@ -170,7 +170,7 @@ func _schliessen(neu: bool) -> void:
 		spiel.tutorial = null
 	queue_free()
 	if neu and spiel != null and not ohne_neustart:
-		spiel.melde("Übungsgelände beendet – der echte Brakk-Mode beginnt.", 4.0)
+		spiel.melde("Übungsgelände beendet – der echte Brakk-Modus beginnt.", 4.0)
 		spiel._neustart()
 
 
@@ -648,7 +648,7 @@ func _baue_schritte() -> Array:
 			"hinweis": "3 · Linksklick auf einen Erdwall",
 			"start": func(): _merk["n"] = _anzahl_ausbau(Karte.STELLUNG),
 			"fertig": func(): return _anzahl_ausbau(Karte.STELLUNG) > int(_merk.get("n", 0))},
-		{"text": "Jetzt eine Fabrik: 1, dann auf ein freies Feld. Im Brakk-Mode ist sie anders: Jede weitere kostet nur 10 % mehr (sonst 25 %), und du stellst sie nicht im Menü ein – welche Truppe sie baut, bestimmen gleich deine Ringe.",
+		{"text": "Jetzt eine Fabrik: 1, dann auf ein freies Feld. Im Brakk-Modus ist sie anders: Jede weitere kostet nur 10 % mehr (sonst 25 %), und du stellst sie nicht im Menü ein – welche Truppe sie baut, bestimmen gleich deine Ringe.",
 			"hinweis": "1 · Linksklick auf ein freies Feld",
 			"start": func(): _merk["n"] = _anzahl_fabriken(),
 			"fertig": func(): return _anzahl_fabriken() > int(_merk.get("n", 0))},
@@ -661,7 +661,7 @@ func _baue_schritte() -> Array:
 				if _anzahl_fabriken() > int(_merk.get("n", 0)):
 					_merk["hoch"] = true
 				return bool(_merk.get("hoch", false)) and _anzahl_fabriken() <= int(_merk.get("n", 0))},
-		{"text": "Türme, Batterien und Schildgeneratoren baust du mit F aus: anschauen, F, das gewohnte Menü öffnet sich. Bei Fabriken zeigt F nur „Abbauen“ – keine Fabrik-Ausbauten im Brakk-Mode, Stufe 1 gibt dort +20 % Leben statt einer dritten Truppe.",
+		{"text": "Türme, Batterien und Schildgeneratoren baust du mit F aus: anschauen, F, das gewohnte Menü öffnet sich. Bei Fabriken zeigt F nur „Abbauen“ – keine Fabrik-Ausbauten im Brakk-Modus, Stufe 1 gibt dort +20 % Leben statt einer dritten Truppe.",
 			},
 		# --- Ringe
 		{"text": "Deine Ringe kaufst du am Lichtterminal der Basis. Geh zur Basis und drück dort F – das geht nur in der Bauphase.",
@@ -691,9 +691,9 @@ func _baue_schritte() -> Array:
 			"fertig": func(): return _fabrik_im_feld()},
 		{"text": "Die Fabrik baut jetzt die Truppe deines Rings. Ringstufe 1 spezialisiert sie, Stufe 2 bringt ein Wertepaket, Stufe 3 die Fähigkeit des Rings. Im Kampf liegen die Felder fest."},
 		# --- Probewelle und Abschluss
-		{"text": "Zeit für eine Probewelle. Im echten Brakk-Mode kommt die Welle nach 45 Sekunden von selbst; Enter holt sie früher. Starte sie jetzt mit Enter – hier kann nichts passieren.",
+		{"text": "Zeit für eine Probewelle. Im echten Brakk-Modus kommt die Welle nach 45 Sekunden von selbst; Enter holt sie früher. Starte sie jetzt mit Enter – hier kann nichts passieren.",
 			"hinweis": "Enter · Welle",
 			"start": func(): _ziele_weg(),
 			"fertig": func(): return p.phase == BAU and p.welle >= 2, "welle": true},
-		{"text": "Das war's. Im echten Einsatz wird Brakk mit Erfahrung stärker: Tumble und Doppelsprung ab Stufe 2, Anker ab 3, Ladestrahl ab 4, Lichtsäule ab 6, Klonmaschine ab 7, Zeitlupe ab 8. Fällst du, stehst du nach 10 Sekunden an der Basis wieder auf. Rogue · Befehl 24 hat eigene Regeln – dort bist du allein. Viel Erfolg, Brakk. Sonde 7 Ende."},
+		{"text": "Das war's. Im echten Einsatz wird Brakk mit Erfahrung stärker: Tumble und Doppelsprung ab Stufe 2, Anker ab 3, Ladestrahl ab 4, Lichtsäule ab 6, Klonmaschine ab 7, Zeitlupe ab 8. Fällst du, stehst du nach 10 Sekunden an der Basis wieder auf. Befehl 24 hat eigene Regeln – dort bist du allein. Viel Erfolg, Brakk. Sonde 7 Ende."},
 	]

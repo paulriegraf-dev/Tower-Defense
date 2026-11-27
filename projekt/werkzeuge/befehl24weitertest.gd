@@ -75,6 +75,11 @@ func _process(_delta: float) -> bool:
 			pruefe(spiel.fabriken.size() >= int(merk["fabriken"]), "eigene Fabriken bleiben stehen (%d, vorher %d)" % [spiel.fabriken.size(), int(merk["fabriken"])])
 			pruefe(spiel.zonenbauten.size() == 1 and spiel.hq != null, "Myriaden-HQ steht als Zuflucht")
 			pruefe(spiel.gegner.size() <= 1, "keine Myriaden mehr auf der Karte")
+			# 27.11. (Paul): Brakk startet nicht neben der eigenen alten Verteidigung (fiel dort vorher in 4–5 s)
+			var naechste := INF
+			for z: Vector2i in spiel.fabriken:
+				naechste = minf(naechste, spiel.karte.mitte(z).distance_to(spiel.kommandant.position) / Werte.ZELLE)
+			pruefe(naechste >= Order24.WEITER_START_ABSTAND, "Brakk startet bei %s, nächste Fabrik %.1f Felder entfernt (mind. %.0f)" % [str(spiel.karte.zelle_bei(spiel.kommandant.position)), naechste, Order24.WEITER_START_ABSTAND])
 			schritt = 3
 			warte = 0
 		3:

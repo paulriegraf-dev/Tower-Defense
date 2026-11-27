@@ -1910,7 +1910,7 @@ const SITZUNG := "user://sitzung.json"
 func _merke_sitzung(abschnitt: String) -> void:
 	if ohne_spuren:
 		return
-	var modus := "Brakk-Mode" if brakk_modus else ("Sandbox" if sandbox else ("Phantom-" + phantom_modus if phantom_modus != "" else ("Tutorial" if tutorial != null else "Normales Spiel")))
+	var modus := "Brakk-Modus" if brakk_modus else ("Sandbox" if sandbox else ("Phantom-" + phantom_modus if phantom_modus != "" else ("Tutorial" if tutorial != null else "Normales Spiel")))
 	var datei := FileAccess.open(SITZUNG, FileAccess.WRITE)
 	if datei != null:
 		datei.store_string(JSON.stringify({"modus": modus, "runde": welle, "abschnitt": abschnitt, "zeit": Time.get_datetime_string_from_system()}))
@@ -5013,7 +5013,7 @@ func _ego_umschalten() -> void:
 		ego.beenden()
 		return
 	if not brakk_modus:
-		melde("Die Ego-Sicht gibt es im Brakk-Mode (Startmenü).", 4.0)
+		melde("Die Ego-Sicht gibt es im Brakk-Modus (Startmenü).", 4.0)
 		return
 	if hd == null:
 		melde("Die Ego-Sicht gibt es nur in der Grafik HD-2D.", 4.0)
@@ -6447,7 +6447,7 @@ func bau_hindernis_ohne_wunsch(z: Vector2i, typ: int) -> String:
 
 func _tempo_umschalten() -> void:
 	if brakk_modus:
-		melde("Im Brakk-Mode ist das Tempo fest (×%d)." % roundi(Werte.BRAKK_TEMPO), 2.5)   # 18.11.
+		melde("Im Brakk-Modus ist das Tempo fest (×%d)." % roundi(Werte.BRAKK_TEMPO), 2.5)   # 18.11.
 		return
 	_tempo_faktor = _tempo_faktor + 1.0 if _tempo_faktor < 2.5 else 1.0   # ×1 → ×2 → ×3 → ×1
 	Engine.time_scale = Werte.SPIELTEMPO * _tempo_faktor

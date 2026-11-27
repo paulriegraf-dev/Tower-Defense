@@ -235,7 +235,7 @@ static func _zeit(sek: float) -> String:
 ## Den Bericht in `r` zeichnen (UI-Raster). Zwei Spalten: links Kennzahlen, Titel, Ringe, Höhepunkte – rechts die Balken.
 static func male_bericht(ci: CanvasItem, r: Rect2, b: Dictionary, kompakt: bool = false, marken: Array = []) -> void:
 	if b.is_empty():
-		Stil.schreibe(ci, r.position + Vector2(4, 8), "Noch kein Sieg im Brakk-Mode.", Stil.NORMAL, Stil.TEXT_BLASS)
+		Stil.schreibe(ci, r.position + Vector2(4, 8), "Noch kein Sieg im Brakk-Modus.", Stil.NORMAL, Stil.TEXT_BLASS)
 		return
 	var links := r.position.x
 	var af := str(b.get("anfuehrer", "brakk"))   # 20.11.: Quellen und Namen je Anführer

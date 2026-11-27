@@ -226,7 +226,7 @@ static func setze_erfolg(id: String) -> bool:
 const CODES := {
 	"allesfrei": "alle Anführer frei",
 	"erfolge": "alle Erfolge",
-	"befehl24": "Brakk-Mode Rogue (Befehl 24) frei",   # 20.11.
+	"befehl24": "Befehl 24 frei",   # 20.11.
 }
 const PER_CODE := "Code"
 

@@ -450,7 +450,7 @@ static func kurzzeilen(k: Dictionary) -> Array:
 	if modus == "rogue":
 		var o: Dictionary = r.get("order24", {}) if r.get("order24", {}) is Dictionary else {}
 		var sek := int(o.get("ueberleben_sek", Order24.STANDARD["ueberleben_sek"]))
-		aus.append("Brakk-Mode Rogue · %d:%02d überstehen · Gold zu Beginn %d" % [sek / 60, sek % 60, int(r.get("start_budget", 0))])
+		aus.append("Befehl 24 · %d:%02d überstehen · Gold zu Beginn %d" % [sek / 60, sek % 60, int(r.get("start_budget", 0))])
 		aus.append("Truppen: Jagd ab %d s, %d %% in Trupps%s" % [int(o.get("jagd_start", Order24.STANDARD["jagd_start"])), int(o.get("jagd_anteil", Order24.STANDARD["jagd_anteil"])), ", Vorstoß ab %d s" % int(o.get("vorstoss_start", Order24.STANDARD["vorstoss_start"])) if bool(o.get("vorstoss", true)) else ""])
 		return aus
 	aus.append("Startgeld %d · %d Runden%s%s" % [int(r.get("start_budget", Werte.STANDARD_BUDGET)), int(r.get("runden", Werte.STANDARD_RUNDEN)), "" if bool(r.get("einkommen", true)) else " · kein Einkommen", " · Brakk-Ego" if modus == "brakk" else ""])

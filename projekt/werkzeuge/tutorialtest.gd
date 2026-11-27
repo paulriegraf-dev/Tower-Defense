@@ -13,6 +13,8 @@ extends SceneTree
 ##     abreißen → Rücksprung mit kurzem Satz, danach geht es beim selben Schritt weiter
 ##   - der Übersicht-Schritt (22.11., Prompts-Fixes Punkt 4): öffnen (Spiel steht), Esc – dann die nächste Aufgabe
 ##   - kein Schritt hängt; am Ende ist das Tutorial weg, das Budget mindestens das Startbudget, die Welle frei
+##   - 27.11.: am Ende die Tafel „Weiter ins echte Spiel?“ (Sonde 7 weg, Welle gesperrt, Esc belegt); „Ja“ spielt
+##     weiter, „Hauptmenü“ (an einem zweiten Tutorial geprüft) schließt die Tafel und lädt das Menü
 ## Am Ende „TEST TUTORIAL OK“ oder die Fehler. Schreibt ins Profil (user://) – eigenen Benutzerordner nehmen.
 
 const GRENZE_AKTION := 900          # Bilder, die ein Handgriff höchstens braucht
@@ -33,6 +35,7 @@ var uhr := 0
 var turmfeld := Karte.KEINE
 var rueck_gesehen: Array[String] = []
 var bild_spaeter: Array = []        # [Name, Bilder bis zur Aufnahme] – erst wenn Text und Hinweis nachgezogen sind
+var tafel_bilder := 0               # 27.11.: Bilder, seit die Schluss-Tafel offen ist
 
 
 func _initialize() -> void:
@@ -72,6 +75,8 @@ func _process(_delta: float) -> bool:
 		return false
 	if phase_lx != "" and is_instance_valid(tut) and _uebersicht_weiter():
 		return false
+	if is_instance_valid(tut) and tut._end_frage and not tut._aus:
+		return _ende_tafel()
 	if not is_instance_valid(tut) or tut._aus:
 		return _schluss()
 	if spiel.phase == 1:
@@ -276,7 +281,38 @@ func _schluss() -> bool:
 	pruefe(rueck_gesehen.has("fabrik2") and rueck_gesehen.has("stufe1"), "Rücksprünge gesehen: %s" % str(rueck_gesehen))
 	spiel.starte_welle()
 	pruefe(spiel.phase == 1, "Ende: die nächste Welle startet")
+	# 27.11.: der andere Weg – „Hauptmenü“ (an einem zweiten Tutorial, weil das Menü die Szene neu lädt)
+	var t2 := Tutorial.new()
+	t2.spiel = spiel
+	spiel.add_child(t2)
+	t2._frage = false
+	t2._frage_ende()
+	var tafel: EndTafel = spiel.get("_bestaetigung")
+	(tafel.conf["knoepfe"][1][1] as Callable).call()
+	pruefe(t2._aus and not tafel.visible, "Hauptmenü: Tafel zu, Tutorial aus")
+	pruefe(Ladebild._aktiv != null and is_instance_valid(Ladebild._aktiv), "Hauptmenü: das Menü wird geladen")
 	return _ende()
+
+
+## 27.11.: Schluss-Tafel „Weiter ins echte Spiel?“ prüfen, ein Bild machen, dann „Ja“.
+func _ende_tafel() -> bool:
+	tafel_bilder += 1
+	var tafel: EndTafel = spiel.get("_bestaetigung")
+	if tafel_bilder == 1:
+		var k: Array = tafel.conf.get("knoepfe", [])
+		pruefe(tafel.visible and str(tafel.conf.get("untertitel", "")) == "Weiter ins echte Spiel?", "Ende: Tafel „Weiter ins echte Spiel?“ offen")
+		pruefe(k.size() == 2 and str(k[0][0]) == "Ja, weiterspielen" and str(k[1][0]) == "Hauptmenü", "Ende: Knöpfe Ja / Hauptmenü")
+		pruefe(tafel.conf.has("esc"), "Ende: Esc ist belegt (= Ja)")
+		pruefe(not tut._wurzel.visible, "Ende: Sonde-7-Fenster ausgeblendet")
+		pruefe(spiel.get("tutorial") == tut and tut.sperrt_welle(), "Ende: Tutorial noch aktiv, Welle gesperrt")
+		return false
+	if tafel_bilder == 90:
+		_bild("ende_tafel")
+	if tafel_bilder < 100:
+		return false
+	(tafel.conf["knoepfe"][0][1] as Callable).call()
+	pruefe(not tafel.visible, "Ja: Tafel zu")
+	return false
 
 
 ## Im Fenster mit `-- <Ordner>`: Bild der Ansicht dorthin speichern (headless gibt es kein Bild).

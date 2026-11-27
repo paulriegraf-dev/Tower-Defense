@@ -11,7 +11,7 @@ const Stil := preload("res://scripts/ui/ui_stil.gd")
 ## Unterreiter. Geöffnet wird der Modus der laufenden Partie. Je Unterreiter eine Liste in _daten (gleiche Reihenfolge).
 const REITER := ["Gegner", "Truppen", "Bauten", "Regeln", "Anführer", "Brakk", "Irrtürmer", "Sonde 7", "Ringe"]
 const MODI := [[0, 1, 2, 3, 4], [5, 6, 7, 8]]
-const MODUS_NAME := ["Normalmodus", "Brakk-Mode"]
+const MODUS_NAME := ["Normalmodus", "Brakk-Modus"]
 const MODUS_FARBE := [Color("7fe0ff"), Color("ff9a3d")]
 const MODUS_R := [Rect2(108, 11, 92, 20), Rect2(204, 11, 92, 20)]
 const RAHMEN_R := Rect2(8, 8, 624, 344)
@@ -867,7 +867,7 @@ func _baue_daten() -> void:
 				"[R] Klonmaschine, einmal pro Runde: Wer hindurchgeht, wird einmal geklont – auch Gegner. Klone geben keine Prämie.",
 				"Holt verlorene Checkpoints %s-mal so schnell zurück. Fällt er, steht er zur nächsten Runde wieder da." % _z(kd["cp_faktor"])]]]},
 			{"kurz": "Brakk", "bild": _figur(kd), "abschnitte": [
-				["Brakk-Mode (Startmenü)", Stil.LEUCHT, [
+				["Brakk-Modus (Startmenü)", Stil.LEUCHT, [
 				"Du bist Brakk in der Ego-Sicht: [W][A][S][D] + Maus, Klick schießt, Leertaste springt (in der Luft nochmal: Doppelsprung von einer Lichtplattform, vom Wall: Absprung mit Druckwelle).",
 				"Zwei Pistolen im Wechsel. Jede überhitzt bei Dauerfeuer (Bögen am Fadenkreuz) und ist dann kurz gesperrt.",
 				"Runden laufen von selbst: Countdown in der Bauphase, [Enter] startet früher. Keine Fabrik nötig, jede Runde 5 Erdwälle gratis.",
@@ -1260,7 +1260,7 @@ func _held_uebersicht(af: String) -> Dictionary:
 	var titel: Array[String] = []
 	for r: Array in BrakkFortschritt.TITEL_JE.get(af, BrakkFortschritt.TITEL):
 		titel.append("%s – %s" % [str(r[0]), str(r[3])])
-	return {"name": str(a["name"]), "unter": "im Brakk-Mode", "marke": "Held", "marke_farbe": a["farbe"],
+	return {"name": str(a["name"]), "unter": "im Brakk-Modus", "marke": "Held", "marke_farbe": a["farbe"],
 		"bild": {"symbol": str(ANFUEHRER_SYMBOL.get(af, "brakk")), "farbe": a["farbe"]},
 		"werte": [["Leben", "%d %%" % roundi(float(d["leben"]) * 100.0)], ["Tempo", "%d %%" % roundi(float(d["tempo"]) * 100.0)]],
 		"abschnitte": [["Kit", Stil.LEUCHT, d["kit"]], ["Tasten", Stil.GOLD, tasten], ["Spielstil-Titel", Stil.LEUCHT, titel]]}
