@@ -8,7 +8,7 @@ extends SceneTree
 ## nemesis.json bleibt unberührt (Prüfung über die Änderungszeit).
 
 const ARTEN := {"scharf": "scharfschuetze", "gunner": "technogunner", "plasma": "plasmawerfer", "sonde": "sonde"}
-const SOLL := 13
+const SOLL := 14
 
 var spiel: Node
 var o: Order24
@@ -98,6 +98,7 @@ func _process(_delta: float) -> bool:
 				var nl := BrakkGebiete.rechteck("niemandsland")
 				pruefe(nl.grow(1).has_point(o.karte.zelle_bei(k.position)) and k.fortschritt.stufe == 6 and k.fortschritt.ringe.size() == 3 and o.ladungen == 2,
 					"Brakk im Niemandsland %s, Stufe %d, Ringe %s, Ladungen %d" % [str(o.karte.zelle_bei(k.position)), k.fortschritt.stufe, str(k.fortschritt.ringe), o.ladungen])
+				pruefe(not o.flucht_sperre() and not o.ego_taste(spiel.ego, "Q", true) and not o.ego_taste(spiel.ego, "E", true) and not o.ego_taste(spiel.ego, "R", true), "keine Fluchtsperre: Q, E und R gehen an Brakk durch")
 				t0 = o.zeit
 				schritt = 1
 			elif o.zeit > 20.0:

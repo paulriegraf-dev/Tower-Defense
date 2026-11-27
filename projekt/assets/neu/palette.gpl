@@ -1,0 +1,49 @@
+GIMP Palette
+Name: TD Neue Grafik
+Columns: 8
+# Reihen wie assets/neu/STIL.md
+ 11  10  16	#0b0a10 Neutral (Rückgrat, kühl)
+ 27  26  40	#1b1a28 Neutral (Rückgrat, kühl)
+ 51  62  72	#333e48 Neutral (Rückgrat, kühl)
+ 78 101 113	#4e6571 Neutral (Rückgrat, kühl)
+111 132 145	#6f8491 Neutral (Rückgrat, kühl)
+138 148 159	#8a949f Neutral (Rückgrat, kühl)
+184 192 198	#b8c0c6 Neutral (Rückgrat, kühl)
+229 232 231	#e5e8e7 Neutral (Rückgrat, kühl)
+ 23   7  32	#170720 Technoclan Violett
+ 40  21  62	#28153e Technoclan Violett
+ 74  49  80	#4a3150 Technoclan Violett
+100  65 112	#644170 Technoclan Violett
+133  99 145	#856391 Technoclan Violett
+176 143 176	#b08fb0 Technoclan Violett
+ 63 124 134	#3f7c86 Technoclan Akzent
+116 179 187	#74b3bb Technoclan Akzent
+112 208 218	#70d0da Technoclan Akzent
+227 212 182	#e3d4b6 Technoclan Akzent
+200 119  67	#c87743 Technoclan Akzent
+ 24   6  16	#180610 Myriaden Kupfer
+ 51  28  21	#331c15 Myriaden Kupfer
+ 87  54  38	#573626 Myriaden Kupfer
+123  80  52	#7b5034 Myriaden Kupfer
+161 112  69	#a17045 Myriaden Kupfer
+210 168 102	#d2a866 Myriaden Kupfer
+232 148  90	#e8945a Myriaden Kupfer
+238 215 209	#eed7d1 Myriaden Kupfer
+ 38  37  32	#262520 Gelände Grün
+ 64  61  28	#403d1c Gelände Grün
+ 86 106  49	#566a31 Gelände Grün
+107 132  65	#6b8441 Gelände Grün
+143 168  88	#8fa858 Gelände Grün
+ 70  72  65	#464841 Gelände Erde/Fels
+122  74  47	#7a4a2f Gelände Erde/Fels
+180 144  92	#b4905c Gelände Erde/Fels
+ 92  99 107	#5c636b Gelände Erde/Fels
+134 156 180	#869cb4 Gelände Erde/Fels
+200  50  46	#c8322e Signal (nur Zweck)
+ 37 124  78	#257c4e Signal (nur Zweck)
+194  29 193	#c21dc1 Signal (nur Zweck)
+240 192  64	#f0c040 Signal (nur Zweck)
+255 255 255	#ffffff Signal (nur Zweck)
+ 21   5  32	#150520 Outline
+ 12   1   3	#0c0103 Outline
+  0   0   0	#000000 Outline

@@ -164,6 +164,7 @@ func _aufstellen() -> void:
 		f.lade({"stufe": int(wahl["stufe"]), "ringe": ringe, "ring_stufen": stufen}, k)
 		f.stufen_fest = true
 	o24.ladungen = int(wahl["ladungen"])
+	o24._terminal_erklaert = true   # 27.11. (Paul): keine Fluchtsperre – Q, E und R gehen sofort (sonst erst nach dem Myriaden-HQ)
 	var nl := BrakkGebiete.rechteck("niemandsland")
 	var z := o24._freies_feld_bei(o24.karte.mitte(nl.get_center()), nl.get_center())
 	if spiel.ego != null:

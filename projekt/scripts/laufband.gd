@@ -958,7 +958,7 @@ class Marken extends Node2D:
 		if not spiel._wurfziel_fuer.is_empty():
 			for z: Vector2i in spiel.wurf_standorte():
 				draw_arc(spiel.karte.mitte(z), float(Werte.WURF["weit"]) * Werte.ZELLE, 0.0, TAU, 64, Color("ef9f27"), 2.0)
-		var plan: Array = spiel._plaene.get(spiel.welle, [])
+		var plan: Array = spiel.phantom_partie.plaene.get(spiel.welle, [])
 		var nummern := Laufband.wurf_nummern(plan)
 		for i in plan.size():
 			var t: Dictionary = plan[i]

@@ -49,22 +49,22 @@ func _los() -> void:
 	pruefe(int(Phantom.aus_partie(partie).get("portrait", -1)) == 3, "Verteidigungs-Phantom nimmt das Portrait mit")
 	# Verteidiger, altes Phantom ohne Portrait
 	await _neues_spiel()
-	spiel.starte_phantom_verteidigung(_angriff(1, null))
-	pruefe(spiel._phantom_banner(1) != "" and spiel._phantom_banner(2) == "" and spiel._phantom_banner(20) == "", "Band nur in Runde 1")
-	pruefe(spiel.gegner_portrait() == {"name": "Testgegner", "portrait": 0}, "ohne Angabe Portrait 0: %s" % str(spiel.gegner_portrait()))
+	spiel.phantom_partie.starte_verteidigung(_angriff(1, null))
+	pruefe(spiel.phantom_partie.banner(1) != "" and spiel.phantom_partie.banner(2) == "" and spiel.phantom_partie.banner(20) == "", "Band nur in Runde 1")
+	pruefe(spiel.phantom_partie.gegner_portrait() == {"name": "Testgegner", "portrait": 0}, "ohne Angabe Portrait 0: %s" % str(spiel.phantom_partie.gegner_portrait()))
 	# Verteidiger, Phantom ab Runde 8 mit Portrait 2
 	await _neues_spiel()
-	spiel.starte_phantom_verteidigung(_angriff(8, 2))
-	pruefe(spiel.gegner_portrait().is_empty(), "vor Runde 8 kein Portrait")
+	spiel.phantom_partie.starte_verteidigung(_angriff(8, 2))
+	pruefe(spiel.phantom_partie.gegner_portrait().is_empty(), "vor Runde 8 kein Portrait")
 	spiel.welle = 8
-	pruefe(int(spiel.gegner_portrait().get("portrait", -1)) == 2, "ab Runde 8 das Portrait des Phantoms")
-	pruefe(spiel._phantom_banner(8) != "" and spiel._phantom_banner(9) == "", "Band nur in Runde 8")
+	pruefe(int(spiel.phantom_partie.gegner_portrait().get("portrait", -1)) == 2, "ab Runde 8 das Portrait des Phantoms")
+	pruefe(spiel.phantom_partie.banner(8) != "" and spiel.phantom_partie.banner(9) == "", "Band nur in Runde 8")
 	pruefe(Profil.portrait_gueltig(99.0) == 0 and Profil.portrait_gueltig("x") == 0, "ungültige Werte ergeben 0")
 	# Angreifer: Portrait des Verteidigers
 	await _neues_spiel()
 	var bau: Dictionary = Phantom.liste("verteidigung")[0]
-	spiel.starte_phantom_angriff(str(bau["pfad"]))
-	pruefe(str(spiel.gegner_portrait().get("name", "")) == str(Phantom.lade(bau["pfad"]).get("spieler", "")), "Angreifer sieht den Verteidiger")
+	spiel.phantom_partie.starte_angriff(str(bau["pfad"]))
+	pruefe(str(spiel.phantom_partie.gegner_portrait().get("name", "")) == str(Phantom.lade(bau["pfad"]).get("spieler", "")), "Angreifer sieht den Verteidiger")
 	Profil.setze_einstellung("portrait", 0)
 	print("TEST PORTRAIT OK" if fehler.is_empty() else "TEST PORTRAIT FEHLER: %s" % ", ".join(fehler))
 	quit(0 if fehler.is_empty() else 1)

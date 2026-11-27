@@ -405,7 +405,7 @@ func _karte_aufbauen() -> void:
 				return
 			zuflucht = BrakkZuflucht.new(self, form["zufluchten"])
 		else:
-			stellungen = spiel.formation_aufbauen(wahl, 0, 0, 0)   # 20.11.: Fabriken und Stellungen setzt Order24 (Lager)
+			stellungen = spiel.partie_start.formation_aufbauen(wahl, 0, 0, 0)   # 20.11.: Fabriken und Stellungen setzt Order24 (Lager)
 	print("ORDER24 Karte: %s" % wahl)
 	# Schild um das HQ, darin Fabriken (20.11., Paul: mindestens drei, ausgebaut wie im normalen Spiel)
 	var basis_mitte: Vector2 = karte.mitte(karte.basis) + Vector2(0, -Werte.ZELLE * 0.5)

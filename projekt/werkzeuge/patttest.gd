@@ -76,10 +76,10 @@ func _los() -> void:
 		if (Phantom.lade(f["pfad"])["runden"] as Array).size() >= 20:
 			bau = f["pfad"]
 			break
-	spiel.starte_phantom_angriff(bau)
+	spiel.phantom_partie.starte_angriff(bau)
 	spiel._setze_runde(20)
-	spiel._lade_phantom_stand()
-	spiel._zeige_laufband()
+	spiel.phantom_partie.lade_stand()
+	spiel.phantom_partie.zeige_laufband()
 	spiel._laufband._vorlage()
 	spiel.starte_welle()
 	_anhalten()
@@ -110,10 +110,10 @@ func _los() -> void:
 	pruefe(spiel.phase == 2 and spiel.patt, "nach 60 s ohne Fortschritt ist Schluss")
 	var conf: Dictionary = spiel._tafel.conf
 	pruefe(str(conf.get("titel")) == "RUNDE 20 GEHALTEN" and (conf.get("zeilen", []) as Array).has("Patt – Verteidigung hat gehalten"), "Endtafel: %s / %s" % [conf.get("titel"), str(conf.get("zeilen"))])
-	var letzte: Dictionary = spiel._angriff_log.back()
+	var letzte: Dictionary = spiel.phantom_partie.angriff_log.back()
 	pruefe(int(letzte["runde"]) == 20 and not letzte["geknackt"], "Runde 20 gebucht als nicht geknackt")
 	var genommen := 0
-	for e: Dictionary in spiel._angriff_log:
+	for e: Dictionary in spiel.phantom_partie.angriff_log:
 		genommen += int(e["leben_genommen"])
 	spiel.process_mode = Node.PROCESS_MODE_INHERIT
 	for i in 60:
@@ -136,7 +136,7 @@ func _los() -> void:
 	var f := FileAccess.open(pfad, FileAccess.WRITE)
 	f.store_string(JSON.stringify({"art": "angriff", "spieler": "Testgegner", "phantom_version": Phantom.PHANTOM_VERSION, "runden": runden}))
 	f.close()
-	spiel.starte_phantom_verteidigung(pfad)
+	spiel.phantom_partie.starte_verteidigung(pfad)
 	spiel._setze_runde(20)
 	spiel.starte_welle(true)
 	_anhalten()

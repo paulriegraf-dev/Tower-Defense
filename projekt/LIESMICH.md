@@ -539,7 +539,7 @@ Szenarien → Stellschrauben (Abschnitte Ablauf, Jagdtrupps, Fabriken und Türme
 - Prüfen: `werkzeuge/b24kartetest.gd` (Ringe aus Erdwällen, Platz räumt und baut sie zurück), `werkzeuge/bosstest.gd -- gunner`.
 
 **Nachtrag 13 (27.11., Paul): Bossarena, feste Abfolgen, Druckphasen (G2)** – geht Nachtrag 11 (Gewichte des Scharfschützen) vor
-- **Bossarena (G2-1, `brakk_bossarena.gd`):** Testmodus nur mit Entwicklercode `bossarena` (oder `allesfrei`): im Brakk-Modus-Menü „Bossarena“. Tafel davor: Boss (Scharfschütze / Technogunner / Plasmawerfer / Sonde 7 / zufällig), Brakks Stufe (4/6/8/10), Ringe (keins / Standard: Durchschlag 2 + Wirbel 2 + Wall 1 / frei: drei Ringe mit Stufe 1–3), Sprengladungen 0–3, Phase-2-Start (Boss mit 49 %). Start auf der großen Karte nur mit Wällen (keine Fabriken, Türme, Stellungen, Zufluchten, keine Wellen, kein Fahrplan; `REGELN`), Brakk im Niemandsland, Kampfplatz wie im Lauf mit 3 s Ansage. Danach Tafel „Nochmal / Anderer Boss / Zurück“ mit Dauer, Angriffen je Art, Treffern auf Brakk je Art (Zahl und % Leben), „Fenster genutzt“ (Anteil von Brakks Schaden am Boss, der in dessen verwundbaren Fenstern ankam), Vergeltungen, Druckphasen. **[R] halten (0,8 s)** startet dasselbe Setup neu – kurz gedrückt bleibt [R] Brakks Ulti. `nemesis.json` wird weder gelesen noch geschrieben, kein Partieprotokoll, keine Erfolge (der Verrat entfällt); der Boss ist ein frischer Benannter Rang 3 mit Zufallsnamen bzw. Sonde 7.
+- **Bossarena (G2-1, `brakk_bossarena.gd`):** Testmodus nur mit Entwicklercode `bossarena` (oder `allesfrei`): im Brakk-Modus-Menü „Bossarena“. Tafel davor: Boss (Scharfschütze / Technogunner / Plasmawerfer / Sonde 7 / zufällig), Brakks Stufe (4/6/8/10), Ringe (keins / Standard: Durchschlag 2 + Wirbel 2 + Wall 1 / frei: drei Ringe mit Stufe 1–3), Sprengladungen 0–3, Phase-2-Start (Boss mit 49 %). Start auf der großen Karte nur mit Wällen (keine Fabriken, Türme, Stellungen, Zufluchten, keine Wellen, kein Fahrplan; `REGELN`), Brakk im Niemandsland ohne Fluchtsperre (Q, E und R gehen sofort), Kampfplatz wie im Lauf mit 3 s Ansage. Danach Tafel „Nochmal / Anderer Boss / Zurück“ mit Dauer, Angriffen je Art, Treffern auf Brakk je Art (Zahl und % Leben), „Fenster genutzt“ (Anteil von Brakks Schaden am Boss, der in dessen verwundbaren Fenstern ankam), Vergeltungen, Druckphasen. **[R] halten (0,8 s)** startet dasselbe Setup neu – kurz gedrückt bleibt [R] Brakks Ulti. `nemesis.json` wird weder gelesen noch geschrieben, kein Partieprotokoll, keine Erfolge (der Verrat entfällt); der Boss ist ein frischer Benannter Rang 3 mit Zufallsnamen bzw. Sonde 7.
 - **Feste Abfolgen (G2-2):** je Boss und Phase eine Tabelle (`NemesisBoss.abfolge`, Schritt = Angriff oder Wahl aus zwei, Fenster, Bewegung, optional gekoppelt/Krone/Druck), läuft im Kreis ab zufälligem Start; Phase 2 beginnt mit ihrer Eröffnung (Scharfschütze: Zielmarkierung, Sonde 7: Heil-Impuls). Nicht ausführbare Schritte (Reichweite, einmalig schon genutzt) werden übersprungen; die alten Gewichte gelten nur, wenn gar nichts geht. Grundwerte `BOSS_ABFOLGE_FENSTER` 1,25 s, `BOSS_ABFOLGE_BEWEGUNG` 1,2 s, Phase 2 Fenster × 0,7.
   - Scharfschütze P1: Salve · Laservisier · Kronenwechsel + Salve · Sturm · Laservisier · [Salve | Sturm]; P2: Zielmarkierung, dann Salve · Laser · Laser · Krone + Salve · Sturm · [Salve | Sturm].
   - Technogunner P1: Ringsalve · Ankerwurf → 2 s Minigun · Sprint-Salve · Ringsalve · [Anker → Minigun | Sprint-Salve]; P2 (Bunker wie bisher): 5er-Salve · Ringsalve · 5er-Salve · Ankerwurf (Seil in P2 über den ganzen Platz, `BOSS_GUNNER_P2_ANKER_WEITE`).
@@ -641,6 +641,9 @@ Die Browserfassung liegt im Nachbarordner `td-web` (GitHub Pages, Repo `paulrieg
 
 ## Dateien
 - `scripts/main.gd` Ablauf, Eingabe, Anzeige
+- Knoten-Umbau (27.11.): Teile von `main.gd` ziehen in eigene Kindknoten um, ohne Regeländerung; Zugriff über `spiel.<knoten>.*`.
+- `scripts/phantom_partie.gd` (`phantom_partie`) Phantom-Modus. In `main.gd` bleiben `phantom_modus`, der Startmenü-Anschluss und `_setze_stand`.
+- `scripts/partie_start.gd` (`partie_start`) Spielbeginn: Startlage, Alarmstart/Formation, vorgebaute Szenario-Bauten, Einführungsfenster, „Trupp unterwegs“
 - `scripts/karte.gd` Raster, Wegsuche, Zeichnen
 - `scripts/einheit.gd`, `scripts/gegner.gd` Verhalten der Figuren
 - `scripts/figur.gd` Animation aus den Terrain-Conquester-Blättern
@@ -744,6 +747,8 @@ Werkzeuge: `werkzeuge/angrifftest.gd` (greift ein Phantom ohne Bild mit den entw
 - **Grund-Leben:** Ab Runde 6 hat jeder Gegner 10 Leben mehr, vor dem Rundenfaktor. Werte: `GEGNER_GRUND_LEBEN`, `GRUND_LEBEN_AB_RUNDE` in `werte.gd`.
 
 ## Grafik: Klassisch / Neu (2D) / HD-2D (16.11.)
+
+Palette, Outline, Lesbarkeitsregeln, Maßstäbe und Blickwinkel je Modus stehen gebündelt in `assets/neu/STIL.md` (27.11.); für neue Bilder gilt dieses Blatt.
 
 Im Startmenü schaltet der Knopf **„Grafik: …“** zwischen drei Darstellungen um. Die Wahl wird in `user://einstellungen.cfg` gespeichert. Spielregeln und Werte sind in allen drei gleich, nur die Darstellung ändert sich.
 

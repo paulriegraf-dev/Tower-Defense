@@ -223,6 +223,11 @@ func _bei_neuem_knoten(n: Node) -> void:
 
 func _process(delta: float) -> void:
 	var echt := delta / maxf(Engine.time_scale, 0.01)   # Kamera unabhängig vom Spieltempo
+	# 27.11. (Web-Leistung): Boden und Decke nicht zeichnen, solange das Startmenü davor liegt (es schaltet dann das 3D ab)
+	var modus := SubViewport.UPDATE_DISABLED if get_viewport().disable_3d else SubViewport.UPDATE_ALWAYS
+	if _boden_vp != null and _boden_vp.render_target_update_mode != modus:
+		_boden_vp.render_target_update_mode = modus
+		_decke_vp.render_target_update_mode = modus
 	if ego == null:
 		_kamera_weiter(echt)
 	_wand_in -= echt
@@ -1622,7 +1627,7 @@ func _kulisse() -> void:
 	aussen.position = Vector3(sw / 2.0, -1.8, zh / 2.0)   # tief genug für die Wiese unterhalb der vorderen Böschung
 	# Nah: das gemalte Umland als Gelände mit Höhen (hinten ein Hang, an den Seiten Hügel, vorn eine flache Böschung)
 	var umland_mat := _farbmaterial(Color.WHITE)
-	umland_mat.albedo_texture = ImageTexture.create_from_image(_umland_bild())
+	umland_mat.albedo_texture = ImageTexture.create_from_image(_umland_bild_gemerkt())   # 27.11.: Web – aus dem Zwischenspeicher
 	umland_mat.vertex_color_use_as_albedo = true
 	var gelaende := MeshInstance3D.new()
 	_plan = _plane_stuecke(r)   # vorher: große Stücke bekommen ebenen Grund (gelaende_hoehe)
@@ -2076,6 +2081,39 @@ func _abseits(x: float, z: float) -> float:
 	return sqrt(dx * dx + dz * dz)
 
 
+## 27.11. (Web-Ladezeit): Das Umland-Bild hängt nur von Kartengröße, Zonenbreite und Kacheln ab und kostet beim Start
+## über eine Sekunde. Im exportierten Spiel (Web/Desktop) wird es deshalb einmal je Spielversion in user:// gemerkt und danach
+## nur noch gelesen. Im Editor wird immer neu gemalt (dort zählt jede Änderung am Code sofort).
+const UMLAND_ORDNER := "user://zwischenspeicher"
+
+
+func _umland_bild_gemerkt() -> Image:
+	if not OS.has_feature("template"):
+		return _umland_bild()
+	var name := "umland_v%d_%dx%d_r%d_z%d.bin" % [Werte.VERSION, Werte.SPALTEN, Werte.ZEILEN, UMLAND, Werte.ZONE_SPALTEN]
+	var pfad := UMLAND_ORDNER.path_join(name)
+	var f := FileAccess.open_compressed(pfad, FileAccess.READ, FileAccess.COMPRESSION_ZSTD)
+	if f != null:
+		var w := f.get_32()
+		var h := f.get_32()
+		var daten := f.get_buffer(w * h * 4)
+		f.close()
+		if w > 0 and h > 0 and daten.size() == w * h * 4:
+			return Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, daten)
+	var bild := _umland_bild()
+	DirAccess.make_dir_recursive_absolute(UMLAND_ORDNER)
+	for alt in DirAccess.get_files_at(UMLAND_ORDNER):
+		if alt.begins_with("umland_") and alt != name:
+			DirAccess.remove_absolute(UMLAND_ORDNER.path_join(alt))   # ältere Spielversion
+	var g := FileAccess.open_compressed(pfad, FileAccess.WRITE, FileAccess.COMPRESSION_ZSTD)
+	if g != null:
+		g.store_32(bild.get_width())
+		g.store_32(bild.get_height())
+		g.store_buffer(bild.get_data())
+		g.close()
+	return bild
+
+
 ## Malt das Umland als ein Bild (32 Bildpunkte je Feld wie die Grasfliesen): Gras, Erde- und Felsflecken, Brut-Gelände links,
 ## Bewuchs und zum Rand hin abgedunkelt. Die Flecken auf dem Gras laufen nahtlos aus der Karte weiter (gleiches Rauschen).
 func _umland_bild() -> Image:
@@ -2151,14 +2189,25 @@ func _umland_bild() -> Image:
 	bild.blit_rect_mask(erde, m_erde, ganz, Vector2i.ZERO)
 	# Flecken wie auf der Karte (gleiches Rauschen, Karten-Koordinaten): nah fein, weiter draußen gröber
 	var fein := Image.create(bw / 2, bh / 2, false, Image.FORMAT_RGBA8)
-	for py in bh / 2:
-		for px in bw / 2:
-			var fx := (px + 0.5) / 16.0 - m
-			var fy := (py + 0.5) / 16.0 - m
-			var d := _abseits(fx, fy)
-			if d <= 0.0 or d > 3.0:
+	# 27.11. (Web-Ladezeit): nur der Ring 0 < Abstand <= 3 Felder um die Karte wird gemalt – vorher lief die Schleife über alle
+	# 600 000 Punkte (≈ 0,5 s beim Start). Gleiches Ergebnis: außerhalb des Rahmens ist der Abstand > 3, die Karte selbst hat 0.
+	var p_min := maxi(0, (m - 3) * 16)
+	var px_max := mini(bw / 2 - 1, (m + Werte.SPALTEN + 3) * 16 - 1)
+	var py_max := mini(bh / 2 - 1, (m + Werte.ZEILEN + 3) * 16 - 1)
+	var innen_a := m * 16
+	var innen_b := (m + Werte.SPALTEN) * 16 - 1
+	for py in range(p_min, py_max + 1):
+		var fy := (py + 0.5) / 16.0 - m
+		var zeile_innen := fy >= 0.0 and fy <= float(Werte.ZEILEN)
+		var px := p_min
+		while px <= px_max:
+			if zeile_innen and px == innen_a:
+				px = innen_b + 1   # Kartenfläche überspringen (Abstand 0)
 				continue
-			fein.set_pixel(px, py, karte.flecken_farbe(px - m * 16, py - m * 16))
+			var d := _abseits((px + 0.5) / 16.0 - m, fy)
+			if d > 0.0 and d <= 3.0:
+				fein.set_pixel(px, py, karte.flecken_farbe(px - m * 16, py - m * 16))
+			px += 1
 	var grob := Image.create(mw, mh, false, Image.FORMAT_RGBA8)
 	for by in mh:
 		for bx in mw:

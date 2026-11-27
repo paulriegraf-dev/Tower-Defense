@@ -48,7 +48,7 @@ func _los() -> void:
 	var angriffe := Phantom.liste("angriff")
 	var gegner: String = angriffe[0]["pfad"]
 	var name := str(Phantom.lade(gegner).get("spieler", ""))
-	pruefe(spiel.starte_phantom_verteidigung(gegner), "Verteidigung gestartet gegen %s" % gegner.get_file())
+	pruefe(spiel.phantom_partie.starte_verteidigung(gegner), "Verteidigung gestartet gegen %s" % gegner.get_file())
 	for nr in 3:
 		spiel.leben = 0
 		spiel._zeige_niederlage("", 0, 0)
@@ -56,8 +56,8 @@ func _los() -> void:
 			break
 		pruefe(_knopf_text(0) == "Revanche gegen %s" % name, "Knopf %d: %s" % [nr + 1, _knopf_text(0)])
 		await _druecke(0)
-		pruefe(spiel.phantom_modus == "verteidigung" and spiel._angriff_pfad == gegner and str(spiel._angriff_phantom.get("begonnen")) == str(Phantom.lade(gegner).get("begonnen")),
-			"Revanche %d lädt dasselbe Angriffs-Phantom (%s, Modus '%s')" % [nr + 1, spiel._angriff_pfad.get_file(), spiel.phantom_modus])
+		pruefe(spiel.phantom_modus == "verteidigung" and spiel.phantom_partie.angriff_pfad == gegner and str(spiel.phantom_partie.angriff_phantom.get("begonnen")) == str(Phantom.lade(gegner).get("begonnen")),
+			"Revanche %d lädt dasselbe Angriffs-Phantom (%s, Modus '%s')" % [nr + 1, spiel.phantom_partie.angriff_pfad.get_file(), spiel.phantom_modus])
 	pruefe(_knopf_text(1) == "Revanche verbraucht" and _knopf_text(0) == "Startmenü", "nach 2 Revanchen verbraucht: %s / %s" % [_knopf_text(0), _knopf_text(1)])
 	var vorher := spiel
 	(spiel._tafel.conf["knoepfe"][1][1] as Callable).call()
@@ -73,20 +73,20 @@ func _los() -> void:
 	var c: String = da[2]["pfad"]
 	var name_a := str(Phantom.lade(a).get("spieler", ""))
 	Online.ersatz_pfade = [b, c]
-	pruefe(spiel.starte_phantom_angriff(a), "Angriff gestartet gegen %s" % a.get_file())
+	pruefe(spiel.phantom_partie.starte_angriff(a), "Angriff gestartet gegen %s" % a.get_file())
 	spiel.welle = 9
 	spiel.leben = 0
-	spiel._phantom_gefallen()
+	spiel.phantom_partie.gefallen()
 	(spiel._tafel.conf["knoepfe"][0][1] as Callable).call()   # weiter gegen das Ersatz-Phantom
 	await _bilder(5)
-	pruefe(spiel._aktiv_pfad == b, "Ersatz B steht")
+	pruefe(spiel.phantom_partie.aktiv_pfad == b, "Ersatz B steht")
 	for nr in 2:
-		spiel._angriff_ende("beendet")
+		spiel.phantom_partie.angriff_ende("beendet")
 		pruefe(_knopf_text(0) == "Revanche gegen %s" % name_a, "Angriff, Knopf %d: %s" % [nr + 1, _knopf_text(0)])
 		await _druecke(0)
-		pruefe(spiel.phantom_modus == "angriff" and spiel._phantom_pfad == a and spiel._aktiv_pfad == a and spiel.welle == Phantom.ANGRIFF_AB_RUNDE, "Revanche %d: dieselbe Verteidigung A" % (nr + 1))
-		pruefe(spiel._ersatz == [b, c], "Ersatz-Reihenfolge bleibt: %s" % str(spiel._ersatz.map(func(p: String) -> String: return p.get_file())))
-	spiel._angriff_ende("beendet")
+		pruefe(spiel.phantom_modus == "angriff" and spiel.phantom_partie.phantom_pfad == a and spiel.phantom_partie.aktiv_pfad == a and spiel.welle == Phantom.ANGRIFF_AB_RUNDE, "Revanche %d: dieselbe Verteidigung A" % (nr + 1))
+		pruefe(spiel.phantom_partie.ersatz == [b, c], "Ersatz-Reihenfolge bleibt: %s" % str(spiel.phantom_partie.ersatz.map(func(p: String) -> String: return p.get_file())))
+	spiel.phantom_partie.angriff_ende("beendet")
 	pruefe(_knopf_text(1) == "Revanche verbraucht", "Angriff: nach 2 Revanchen verbraucht")
 
 	print("TEST REVANCHE OK" if fehler.is_empty() else "TEST REVANCHE FEHLER: %s" % ", ".join(fehler))

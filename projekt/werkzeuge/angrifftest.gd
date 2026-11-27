@@ -19,10 +19,10 @@ var start_geprueft := false
 func _budget_pruefen() -> void:
 	var ist := 0
 	var soll := 0
-	for i in spiel._angriff_log.size():
-		ist += int(spiel._angriff_log[i]["budget"])
+	for i in spiel.phantom_partie.angriff_log.size():
+		ist += int(spiel.phantom_partie.angriff_log[i]["budget"])
 		soll += Phantom.budget(Phantom.ANGRIFF_AB_RUNDE + i)
-	var erste := int(spiel._angriff_log[0]["runde"]) if not spiel._angriff_log.is_empty() else 0
+	var erste := int(spiel.phantom_partie.angriff_log[0]["runde"]) if not spiel.phantom_partie.angriff_log.is_empty() else 0
 	print("%s Budgetsumme %d (soll %d), erste gebuchte Runde %d" % ["OK  " if ist == soll and erste == Phantom.ANGRIFF_AB_RUNDE else "FEHL", ist, soll, erste])
 
 
@@ -47,7 +47,7 @@ func _process(delta: float) -> bool:
 	if spiel.phantom_modus != "angriff":
 		print("Phantom nicht geladen.")
 		return true
-	var log: Array = spiel._angriff_log
+	var log: Array = spiel.phantom_partie.angriff_log
 	while gemeldet < log.size():
 		var e: Dictionary = log[gemeldet]
 		print("Runde %2d | Punkte %4d/%4d | Leben genommen %2d | Checkpoints %d | %5.1f s | Verteidigung noch %d" % [e["runde"], e["punkte"], e["budget"], e["leben_genommen"], e["checkpoints_genommen"], e["sekunden"], spiel.leben])

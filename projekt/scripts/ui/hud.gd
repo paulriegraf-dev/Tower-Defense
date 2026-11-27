@@ -378,7 +378,7 @@ func aktualisiere(_delta: float) -> void:
 	_leben = s.leben
 	_budget_text = "∞" if s.sandbox else str(s.budget)
 	_zins = Werte.zinsen(s.budget)
-	_gegenueber_info = s.gegner_portrait()   # 25.11.
+	_gegenueber_info = s.phantom_partie.gegner_portrait()   # 25.11.
 	_gegenueber.visible = not _gegenueber_info.is_empty()
 
 	# --- Welle
@@ -420,8 +420,8 @@ func aktualisiere(_delta: float) -> void:
 	_neu_text = ""
 	if _bauphase and s.phantom_modus == "":
 		_neu_text = Werte.ansage(s.welle)   # 20.11.: Szenario-Wellen bringen ihre eigene Ansage
-	elif _bauphase and s.phantom_modus == "verteidigung" and not s._phantom_trupps(s.welle).is_empty():
-		_neu_text = "Plan des Angreifers: " + Phantom.plan_text(s._phantom_trupps(s.welle))
+	elif _bauphase and s.phantom_modus == "verteidigung" and not s.phantom_partie.trupps(s.welle).is_empty():
+		_neu_text = "Plan des Angreifers: " + Phantom.plan_text(s.phantom_partie.trupps(s.welle))
 
 	_aktualisiere_kacheln()
 	_aktualisiere_oben_rechts()

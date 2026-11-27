@@ -22,7 +22,7 @@ func _bild(name: String) -> void:
 	print("BILD ", name)
 
 func _f() -> Funkfenster:
-	return spiel._funk
+	return spiel.phantom_partie.funk
 
 func _process(_d: float) -> bool:
 	if warte > 0:
@@ -54,11 +54,11 @@ func _process(_d: float) -> bool:
 			root.add_child(spiel)
 		70:
 			spiel.phantom_modus = "verteidigung"
-			spiel._angriff_phantom = {"spieler": "Mira", "runden": [{"runde": 1, "trupps": Werte.wellen_plan(1)["trupps"]}]}
+			spiel.phantom_partie.angriff_phantom = {"spieler": "Mira", "runden": [{"runde": 1, "trupps": Werte.wellen_plan(1)["trupps"]}]}
 		85:
 			spiel.starte_welle(true)
 		100:
-			print("E phase=", spiel.phase, " trupps=", spiel._phantom_trupps(spiel.welle).size())
+			print("E phase=", spiel.phase, " trupps=", spiel.phantom_partie.trupps(spiel.welle).size())
 			_bild("e_banner.png")
 			quit()
 	schritt += 1
